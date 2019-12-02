@@ -1,5 +1,5 @@
 ### yaswm
-Yet another simple window manager, written in C using xcb.
+Yet another simple window manager, yaswm uses the xcb.
 
 #### Installation
 Run `make clean install` *(as root if needed)*.

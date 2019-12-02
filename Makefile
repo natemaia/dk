@@ -16,7 +16,7 @@ clean:
 install: all
 	mkdir -p ${DESTDIR}${PREFIX}/bin
 	cp -f yaswm ${DESTDIR}${PREFIX}/bin
-	chmod 755 ${DESTDIR}${PREFIX}/bin/dwm
+	chmod 755 ${DESTDIR}${PREFIX}/bin/yaswm
 
 uninstall:
 	rm -f ${DESTDIR}${PREFIX}/bin/yaswm

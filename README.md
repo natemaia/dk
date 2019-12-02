@@ -1,5 +1,5 @@
 ### yaswm
-Yet another simple window manager, yaswm uses the xcb.
+Yet another simple window manager
 
 #### Installation
 Run `make clean install` *(as root if needed)*.

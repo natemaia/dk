@@ -3,7 +3,8 @@
 PREFIX = /usr
 MANPREFIX = ${PREFIX}/share/man
 
-LDFLAGS = -lX11 -lxcb -lxcb-keysyms -lxcb-util # -lxcb-randr -lxcb-icccm -lxcb-ewmh -lxcb-aux
+LDFLAGS = -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor
+# -lX11 -lX11-xcb -lxcb-randr -lxcb-icccm -lxcb-ewmh -lxcb-aux
 
 all: yaswm
 

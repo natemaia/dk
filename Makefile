@@ -14,7 +14,6 @@ clean:
 	rm -f yaxwm
 
 install: all
-	mkdir -p ${DESTDIR}${PREFIX}/bin
 	cp -f yaxwm ${DESTDIR}${PREFIX}/bin
 	chmod 755 ${DESTDIR}${PREFIX}/bin/yaxwm
 

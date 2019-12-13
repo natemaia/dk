@@ -25,10 +25,6 @@
 /* for whatever reason xcb_keysyms.h doesn't have any actual keysym definitions */
 #include <X11/keysym.h>
 
-#define XK_VolDn      0x1008ff11
-#define XK_VolTg      0x1008ff12
-#define XK_VolUp      0x1008ff13
-
 #define W(x)          ((x)->w + 2 * (x)->bw)
 #define H(x)          ((x)->h + 2 * (x)->bw)
 #define MAX(a, b)     ((a) > (b) ? (a) : (b))
@@ -214,6 +210,10 @@ static void debug(const char *fmt, ...)
 #else
 #define DBG(fmt, ...)
 #endif
+
+#define XK_VolDn      0x1008ff11
+#define XK_VolTg      0x1008ff12
+#define XK_VolUp      0x1008ff13
 
 #define MODKEY XCB_MOD_MASK_1                        /* modifier used for most binds */
 static uint border = 1;                              /* window border width in pixels */

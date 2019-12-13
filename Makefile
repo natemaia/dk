@@ -1,14 +1,16 @@
 # yaxwm - yet another x window manager
 
 PREFIX = /usr
-CCFLAGS = -Wall -Wextra -Os
+
+CC = gcc
+CCFLAGS = -Wall -Wextra -O3
 LDFLAGS = -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr -lxcb-ewmh
 # -lX11 -lX11-xcb -lxcb-ewmh -lxcb-aux
 
 all: yaxwm
 
 yaxwm:
-	cc ${DFLAGS} yaxwm.c ${CCFLAGS} -o yaxwm ${LDFLAGS}
+	${CC} ${DFLAGS} yaxwm.c ${CCFLAGS} -o yaxwm ${LDFLAGS}
 
 clean:
 	rm -f yaxwm

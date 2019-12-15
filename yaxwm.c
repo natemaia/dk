@@ -1,10 +1,11 @@
 /*
-* In order to compile you will need the xcb headers, then run
-*     cc yaxwm.c -Wall -o yaxwm -lxcb -lxcb-keysyms -lxcb-util
+* events are handled directly in the event loop, initialization functions are named such
+*
 */
 
 #include <err.h>
 #include <stdio.h>
+#include <regex.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -20,26 +21,25 @@
 #include <xcb/xcb_icccm.h>
 #include <xcb/xcb_cursor.h>
 #include <xcb/xcb_keysyms.h>
-/* #include <xcb/randr.h> */
-
-/* for whatever reason xcb_keysyms.h doesn't have any actual keysym definitions */
 #include <X11/keysym.h>
+
+#include "debug.h"
 
 #define W(x)          ((x)->w + 2 * (x)->bw)
 #define H(x)          ((x)->h + 2 * (x)->bw)
 #define MAX(a, b)     ((a) > (b) ? (a) : (b))
 #define MIN(a, b)     ((a) < (b) ? (a) : (b))
-#define KEY(k)        (k & ~(numlockmask|XCB_MOD_MASK_LOCK))
 #define LEN(x)        (sizeof(x) / sizeof(x[0]))
-#define EVENTTYPE(e)  (e->response_type &  0x7f)
+#define EVTYPE(e)     (e->response_type &  0x7f)
+#define CLNMOD(m)     (m & ~(numlockmask|XCB_MOD_MASK_LOCK))
 #define BUTTONMASK    XCB_EVENT_MASK_BUTTON_PRESS|XCB_EVENT_MASK_BUTTON_RELEASE
 #define MOTIONMASK    XCB_EVENT_MASK_BUTTON_RELEASE|XCB_EVENT_MASK_BUTTON_MOTION|XCB_EVENT_MASK_POINTER_MOTION_HINT
 
 typedef unsigned int uint;
 typedef unsigned char uchar;
-
 typedef union Arg Arg;
 typedef struct Key Key;
+typedef struct Rule Rule;
 typedef struct Client Client;
 typedef struct Layout Layout;
 typedef struct Monitor Monitor;
@@ -68,13 +68,14 @@ static const char *wmatomnames[] = {
 enum {
 	NetSupported, NetWMName, NetWMState, NetWMCheck, NetWMFullscreen, NetNumDesktops,
 	NetCurrentDesktop, NetActiveWindow, NetWMWindowType, NetWMWindowTypeDialog,
-	NetClientList, NetDesktopViewport, NetLast
+	NetWMDesktop, NetClientList, NetDesktopViewport, NetLast
 };
 
 static const char *netatomnames[] = {
 	[NetWMName] = "_NET_WM_NAME",
 	[NetWMState] = "_NET_WM_STATE",
 	[NetSupported] = "_NET_SUPPORTED",
+	[NetWMDesktop] = "_NET_WM_DESKTOP",
 	[NetClientList] = "_NET_CLIENT_LIST",
 	[NetActiveWindow] = "_NET_ACTIVE_WINDOW",
 	[NetWMCheck] = "_NET_SUPPORTING_WM_CHECK",
@@ -94,10 +95,18 @@ union Arg {
 };
 
 struct Key {
+	int type;
 	uint mod;
 	xcb_keysym_t keysym;
 	void (*func)(const Arg *);
 	const Arg arg;
+};
+
+struct Rule {
+	char *regex;
+	int workspace, floating;
+	uint mon;
+	regex_t regcomp;
 };
 
 struct Client {
@@ -106,7 +115,7 @@ struct Client {
 	float min_aspect, max_aspect;
 	int old_x, old_y, old_w, old_h, old_bw;
 	int base_w, base_h, increment_w, increment_h, max_w, max_h, min_w, min_h;
-	int fixed, floating, fullscreen, urgent, oldstate;
+	int fixed, floating, fullscreen, urgent, nofocus, oldstate;
 	Client *next, *snext;
 	Monitor *mon;
 	xcb_window_t win;
@@ -131,8 +140,7 @@ static int scr_h;
 static char *argv0;
 static int running = 1;
 static uint numlockmask = 0;
-
-static xcb_window_t root;
+static xcb_window_t root, wmcheck;
 static xcb_screen_t *scr;
 static xcb_connection_t *con;
 static Monitor *mons, *selmon;
@@ -140,20 +148,31 @@ static xcb_key_symbols_t *keysyms;
 static xcb_cursor_t cursor[CurLast];
 static xcb_atom_t wmatoms[WMLast], netatoms[NetLast];
 
+/* user interactive functions bound to key/button presses */
+static void floatc(const Arg *arg);
+static void follow(const Arg *arg);
+static void killc(const Arg *arg);
+static void layout(const Arg *arg);
+static void quitres(const Arg *arg);
+static void runcmd(const Arg *arg);
+static void send(const Arg *arg);
+static void setfocus(const Arg *arg);
+static void setsplit(const Arg *arg);
+static void swap(const Arg *arg);
+static void view(const Arg *arg);
+
+/* internal functions */
 static void attach(Client *c);
-static void attach_stack(Client *c);
-static void cleanup(void);
-static void config(Client *c);
+static void freewm(void);
+static void configure(Client *c);
 static void detach(Client *c, int reattach);
-static void detachstack(Client *c);
 static void eventloop(void);
 static void initexisting(void);
+static void focus(Client *c);
 static void focusclient(Client *c);
-static void follow(const Arg *arg);
 static void freeclient(Client *c, int destroyed);
 static void freemonitor(Monitor *m);
 static void geometry(Client *c);
-static void hintresize(Client *c, int x, int y, int w, int h, int interact);
 static void initatoms(xcb_atom_t *atoms, const char **names, int num);
 static void initbinds(int onlykeys);
 static void initclient(xcb_window_t win);
@@ -161,95 +180,34 @@ static void initscreen(void);
 static Monitor *initmon(int num);
 static int initmons(void);
 static void initwm(void);
-static void killc(const Arg *arg);
-static void layout(const Arg *arg);
 static void layoutmon(Monitor *m);
 static Client *nexttiled(Client *c);
 static void pointerxy(int *x, int *y);
-static void toggle(const Arg *arg);
 static Monitor *ptrtomon(int x, int y);
-static void quit(const Arg *arg);
-static void reset(const Arg *arg);
 static void resize(Client *c, int x, int y, int w, int h);
+static void resizehint(Client *c, int x, int y, int w, int h, int interact);
 static void restack(Monitor *m);
-static void send(const Arg *arg);
 static int sendevent(Client *c, xcb_atom_t proto);
+static void setclientstate(Client *c, long state);
 static void setcurdesktop(void);
 static void setfield(int *dst, int val, int *old);
-static void setfocus(const Arg *arg);
 static void setfullscreen(Client *c, int fullscreen);
 static int setsizehints(Client *c, int *x, int *y, int *w, int *h, int interact);
-static void setsplit(const Arg *arg);
 static void showhide(Client *c);
 static void sigchld(int unused);
 static void sizehints(Client *c);
-static void swap(const Arg *arg);
-static void runcmd(const Arg *arg);
 static void tile(Monitor *m);
-static void unfocus(Client *c, int setfocus);
+static void unfocus(Client *c, int focusroot);
 static void updateclientlist(void);
-static void updatewindowtype(Client *c);
-static void view(const Arg *arg);
 static xcb_get_window_attributes_reply_t *windowattr(xcb_window_t win);
 static xcb_atom_t windowprop(xcb_window_t win, xcb_atom_t prop);
 static xcb_window_t windowtrans(xcb_window_t win, Client *c);
+static void windowtype(Client *c);
 static Client *wintoclient(xcb_window_t win);
 static Monitor *wintomon(xcb_window_t win);
 static void wmhints(Client *c);
 
-#ifdef DEBUG
-static void debug(const char *fmt, ...)
-{
-	va_list ap;
-	va_start(ap, fmt);
-	vfprintf(stderr, fmt, ap);
-	va_end(ap);
-	fprintf(stderr, "\n");
-}
-#define DBG(fmt, ...) debug("%s:%d - " fmt, __FUNCTION__, __LINE__, ##__VA_ARGS__);
-#else
-#define DBG(fmt, ...)
-#endif
-
-#define XK_VolDn      0x1008ff11
-#define XK_VolTg      0x1008ff12
-#define XK_VolUp      0x1008ff13
-
-#define MODKEY XCB_MOD_MASK_1                        /* modifier used for most binds */
-static uint border = 1;                              /* window border width in pixels */
-static uint nmaster = 1;                             /* number of clients in the master area */
-static uint nworkspace = 10;                         /* number of workspace or virtual desktops */
-static float splitratio = 0.5;                       /* ratio of space between master/stack */
-static const int focuscol = 0x4682b4;                /* focused border colour, hex 0x000000-0xffffff */
-static const int unfocuscol = 0x000000;              /* unfocused border colour, hex 0x000000-0xffffff */
-static const Layout layouts[] = { {tile}, {NULL}, }; /* layout functions, first is default, NULL is floating */
-
-#define WSKEYS(ws, key) { MODKEY,                      key, view,   {.ui = ws} },\
-                        { MODKEY|XCB_MOD_MASK_SHIFT,   key, send,   {.ui = ws} },\
-                        { MODKEY|XCB_MOD_MASK_CONTROL, key, follow, {.ui = ws} }
-
-static const Key keys[] = {
-	/* modifier(s)               keysym     function  arg */
-	{ MODKEY,                    XK_q,      killc,    {0} },
-	{ MODKEY|XCB_MOD_MASK_SHIFT, XK_q,      quit,     {0} },
-	{ MODKEY|XCB_MOD_MASK_SHIFT, XK_r,      reset,    {0} },
-	{ MODKEY|XCB_MOD_MASK_SHIFT, XK_space,  toggle,   {0} },
-	{ MODKEY,                    XK_Tab,    swap,     {0} },
-	{ MODKEY,                    XK_j,      setfocus, {.i = +1 } },
-	{ MODKEY,                    XK_k,      setfocus, {.i = -1 } },
-	{ MODKEY,                    XK_h,      setsplit, {.f = -0.01} },
-	{ MODKEY,                    XK_l,      setsplit, {.f = +0.01} },
-	{ MODKEY,                    XK_t,      layout,   {.v = &layouts[0]} },
-	{ MODKEY,                    XK_f,      layout,   {.v = &layouts[1]} },
-	{ MODKEY|XCB_MOD_MASK_SHIFT, XK_Return, runcmd,      {.v = (char *[]){"st", NULL}} },
-	{ MODKEY,                    XK_p,      runcmd,      {.v = (char *[]){"dmenu_run", NULL}} },
-	{ 0,                         XK_VolTg,  runcmd,      {.v = (char *[]){"pamixer", "-t", NULL}} },
-	{ 0,                         XK_VolUp,  runcmd,      {.v = (char *[]){"pamixer", "-i", "2", NULL}} },
-	{ 0,                         XK_VolDn,  runcmd,      {.v = (char *[]){"pamixer", "-d", "2", NULL}} },
-	WSKEYS(1, XK_1), WSKEYS(2, XK_2), WSKEYS(3, XK_3), WSKEYS(4, XK_4), WSKEYS(5, XK_5),
-	WSKEYS(6, XK_6), WSKEYS(7, XK_7), WSKEYS(8, XK_8), WSKEYS(9, XK_9), WSKEYS(10, XK_0),
-};
-
+#include "yaxwm.h"
 
 static void attach(Client *c)
 {
@@ -265,36 +223,13 @@ static void attach(Client *c)
 	}
 }
 
-static void attach_stack(Client *c)
+static void attachstack(Client *c)
 {
 	c->snext = c->mon->stack;
 	c->mon->stack = c;
 }
 
-static void cleanup(void)
-{
-	Monitor *m;
-	uint i;
-
-	for (m = mons; m; m = m->next)
-		for (i = 0; i <= nworkspace; i++) {
-			view(&(const Arg){.ui = i});
-			while (m->stack)
-				freeclient(m->stack, 0);
-		}
-	xcb_ungrab_button(con, XCB_BUTTON_INDEX_ANY, root, XCB_MOD_MASK_ANY);
-	xcb_ungrab_key(con, XCB_GRAB_ANY, root, XCB_MOD_MASK_ANY);
-	xcb_key_symbols_free(keysyms);
-	while (mons)
-		freemonitor(mons);
-	for (i = 0; i < LEN(cursors); i++)
-		xcb_free_cursor(con, cursor[i]);
-	xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, XCB_INPUT_FOCUS_POINTER_ROOT, XCB_CURRENT_TIME);
-	xcb_aux_sync(con);
-	xcb_disconnect(con);
-}
-
-static void config(Client *c)
+static void configure(Client *c)
 {
 	xcb_configure_notify_event_t ce;
 
@@ -330,7 +265,6 @@ static void detachstack(Client *c)
 
 	for (tc = &c->mon->stack; *tc && *tc != c; tc = &(*tc)->snext);
 	*tc = c->snext;
-
 	if (c == c->mon->sel) {
 		for (t = c->mon->stack; t && t->workspace != t->mon->workspace; t = t->snext);
 		c->mon->sel = t;
@@ -342,19 +276,19 @@ static void eventloop(void)
 	int x, y;
 	Client *c;
 	Monitor *m;
+	uint i, mousebtn = 0;
 	xcb_generic_event_t *ev;
 	static Monitor *mon = NULL;
-	uint i, mousebtn = 0;
 
 	while (running && (ev = xcb_wait_for_event(con))) {
-		switch (EVENTTYPE(ev)) {
+		switch (EVTYPE(ev)) {
 		case XCB_FOCUS_IN:
 			{
 				xcb_focus_in_event_t *e = (xcb_focus_in_event_t *)ev;
 
 				if (selmon->sel && e->event != selmon->sel->win) {
 					DBG("focus in event for unfocused window: %d", selmon->sel->win);
-					xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, selmon->sel->win, XCB_CURRENT_TIME);
+					focus(selmon->sel);
 				}
 				break;
 			}
@@ -383,7 +317,7 @@ static void eventloop(void)
 
 				if (e->request == XCB_MAPPING_KEYBOARD) {
 					xcb_refresh_keyboard_mapping(keysyms, e);
-					initbinds(0);
+					initbinds(1);
 				}
 				break;
 			}
@@ -406,11 +340,11 @@ static void eventloop(void)
 						if ((c->x + c->w) > m->x + m->w)              setfield(&c->y, m->x + (m->w / 2 - c->w / 2), &c->old_y);
 						if ((c->y + c->h) > m->y + m->h)              setfield(&c->y, m->y + (m->h / 2 - c->h / 2), &c->old_y);
 						if ((e->value_mask & (xy)) && !(e->value_mask & (wh)))
-							config(c);
+							configure(c);
 						if (c->workspace == c->mon->workspace)
 							resize(c, c->x, c->y, c->w, c->h);
 					} else {
-						config(c);
+						configure(c);
 					}
 				} else {
 					DBG("configure request event for unmanaged window: %d", e->window);
@@ -460,7 +394,7 @@ static void eventloop(void)
 				if (!b->child || b->child == root || !selmon->sel)
 					break;
 				if (b->detail == XCB_BUTTON_INDEX_1 || b->detail == XCB_BUTTON_INDEX_3) {
-					DBG("button press event - button: %d", selmon->sel->win);
+					DBG("button press event - button: %d", b->detail);
 					restack(selmon);
 					if ((mousebtn = b->detail) == XCB_BUTTON_INDEX_1)
 						xcb_warp_pointer(con, XCB_NONE, selmon->sel->win, 0, 0, 0, 0, selmon->sel->w/2, selmon->sel->h/2);
@@ -470,7 +404,7 @@ static void eventloop(void)
 					xcb_grab_pointer(con, 0, root, MOTIONMASK, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
 							root, cursor[b->detail == 1 ? Move : Resize], XCB_CURRENT_TIME);
 				} else if (b->detail == XCB_BUTTON_INDEX_2)
-					toggle(NULL);
+					floatc(NULL);
 				break;
 			}
 		case XCB_BUTTON_RELEASE:
@@ -484,36 +418,54 @@ static void eventloop(void)
 			{
 				xcb_motion_notify_event_t *e = (xcb_motion_notify_event_t *)ev;
 
-				if (e->event != root)
+				if (e->child == root) {
+					DBG("motion notify event - window: %d - child: %d - cord: %d,%d", e->event, e->child, e->root_x, e->root_y);
+					if ((m = ptrtomon(e->root_x, e->root_y)) != mon && mon) {
+						unfocus(selmon->sel, 1);
+						selmon = m;
+						focusclient(NULL);
+					}
+					mon = m;
 					break;
-				if ((m = ptrtomon(e->root_x, e->root_y)) != mon && mon) {
-					unfocus(selmon->sel, 1);
-					selmon = m;
-					focusclient(NULL);
 				}
-				mon = m;
 				if (!selmon->sel || !mousebtn || selmon->sel->fullscreen)
 					break;
 				if (!selmon->sel->floating && selmon->layout->func)
-					toggle(NULL);
+					floatc(NULL);
 				pointerxy(&x, &y);
 				if (!selmon->layout->func || selmon->sel->floating) {
 					if (mousebtn == 1)
-						hintresize(selmon->sel, x - selmon->sel->w / 2, y - selmon->sel->h / 2, selmon->sel->w, selmon->sel->h, 1);
-					else
-						hintresize(selmon->sel, selmon->sel->x, selmon->sel->y, x - selmon->sel->x, y - selmon->sel->y, 1);
+						resizehint(selmon->sel, x - selmon->sel->w / 2, y - selmon->sel->h / 2, selmon->sel->w, selmon->sel->h, 1);
+					else {
+						resizehint(selmon->sel, selmon->sel->x, selmon->sel->y, x - selmon->sel->x, y - selmon->sel->y, 1);
+						while ((ev = xcb_poll_for_event(con)) && EVTYPE(ev) == XCB_ENTER_NOTIFY);
+					}
 				}
+				break;
+			}
+		case XCB_KEY_RELEASE:
+			{
+				xcb_keysym_t sym;
+				xcb_key_release_event_t *e = (xcb_key_release_event_t *)ev;
+
+				sym = xcb_key_release_lookup_keysym(keysyms, e, 0);
+				for (i = 0; i < LEN(keys); i++)
+					if (sym == keys[i].keysym && CLNMOD(keys[i].mod) == CLNMOD(e->state) && keys[i].type == XCB_KEY_RELEASE && keys[i].func) {
+						DBG("key press event for key: %u - modifier: %u", e->detail, CLNMOD(keys[i].mod));
+						keys[i].func(&(keys[i].arg));
+						break;
+					}
 				break;
 			}
 		case XCB_KEY_PRESS:
 			{
 				xcb_keysym_t sym;
-				xcb_key_press_event_t *e = (xcb_key_press_event_t*)ev;
+				xcb_key_press_event_t *e = (xcb_key_press_event_t *)ev;
 
 				sym = xcb_key_press_lookup_keysym(keysyms, e, 0);
 				for (i = 0; i < LEN(keys); i++)
-					if (sym == keys[i].keysym && KEY(keys[i].mod) == KEY(e->state) && keys[i].func) {
-						DBG("key press event for key: %u - modifier: %u", e->detail, KEY(keys[i].mod));
+					if (sym == keys[i].keysym && CLNMOD(keys[i].mod) == CLNMOD(e->state) && keys[i].type == XCB_KEY_PRESS && keys[i].func) {
+						DBG("key press event for key: %u - modifier: %u", e->detail, CLNMOD(keys[i].mod));
 						keys[i].func(&(keys[i].arg));
 						break;
 					}
@@ -525,8 +477,7 @@ static void eventloop(void)
 				xcb_map_request_event_t *e = (xcb_map_request_event_t *)ev;
 
 				DBG("map request event for window: %i", e->window);
-				wa = windowattr(e->window);
-				if (!wa->override_redirect && !wintoclient(e->window))
+				if ((wa = windowattr(e->window)) && !wa->override_redirect && !wintoclient(e->window))
 					initclient(e->window);
 				free(wa);
 				break;
@@ -581,10 +532,30 @@ static void eventloop(void)
 	}
 }
 
+static void floatc(const Arg *arg)
+{
+	Client *c;
+
+	if (!(c = selmon->sel))
+		return;
+	DBG("toggling selected window floating state: %d -> %d", c->floating, !c->floating);
+	(void)(arg);
+	if ((c->floating = !c->floating || c->fixed))
+		resizehint(c, c->x, c->y, c->w, c->h, 0);
+	layoutmon(selmon);
+}
+
+static void focus(Client *c)
+{
+	if (!c->nofocus) {
+		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, c->win, XCB_CURRENT_TIME);
+		xcb_change_property(con, XCB_PROP_MODE_REPLACE, c->win, netatoms[NetActiveWindow], XCB_ATOM_WINDOW, 32, 1, (uchar*)&(c->win));
+	}
+	sendevent(c, wmatoms[WMTakeFocus]);
+}
+
 static void focusclient(Client *c)
 {
-	uint32_t v[] = { focuscol };
-
 	if (!c || c->workspace != c->mon->workspace)
 		for (c = selmon->stack; c && c->workspace != c->mon->workspace; c = c->snext);
 	if (selmon->sel)
@@ -593,9 +564,10 @@ static void focusclient(Client *c)
 		DBG("focusing client: %d", c->win);
 		if (c->mon != selmon)
 			selmon = c->mon;
-		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, v);
-		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, c->win, XCB_CURRENT_TIME);
-		xcb_change_property(con, XCB_PROP_MODE_REPLACE, c->win, netatoms[NetActiveWindow], XCB_ATOM_WINDOW, 32, 1, (uchar*)&(c->win));
+		detachstack(c);
+		attachstack(c);
+		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, (uint32_t []){ focuscol });
+		focus(c);
 	} else {
 		DBG("focusing root window");
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, root, XCB_CURRENT_TIME);
@@ -606,15 +578,16 @@ static void focusclient(Client *c)
 
 static void follow(const Arg *arg)
 {
-	send(arg);
-	view(arg);
+	if (selmon->sel && arg->ui != selmon->sel->workspace) {
+		send(arg);
+		view(arg);
+	}
 }
 
 static void freeclient(Client *c, int destroyed)
 {
 	Monitor *m = c->mon;
 	uint32_t v[] = { c->old_bw };
-	long d[] = { XCB_ICCCM_WM_STATE_WITHDRAWN, XCB_ATOM_NONE };
 
 	DBG("freeing client: %d - destroyed: %i", c->win, destroyed);
 	detach(c, 0);
@@ -622,8 +595,7 @@ static void freeclient(Client *c, int destroyed)
 	if (!destroyed) {
 		xcb_grab_server(con);
 		xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_BORDER_WIDTH, v);
-		xcb_ungrab_button(con, XCB_BUTTON_INDEX_ANY, c->win, XCB_GRAB_ANY);
-		xcb_change_property(con, XCB_PROP_MODE_REPLACE, c->win, wmatoms[WMState], wmatoms[WMState], 32, 2, (uchar *)d);
+		setclientstate(c, XCB_ICCCM_WM_STATE_WITHDRAWN);
 		xcb_aux_sync(con);
 		xcb_ungrab_server(con);
 	}
@@ -637,14 +609,39 @@ static void freemonitor(Monitor *m)
 {
 	Monitor *mon;
 
-	DBG("freeing monitor");
 	if (m == mons)
 		mons = mons->next;
 	else {
 		for (mon = mons; mon && mon->next != m; mon = mon->next);
 		mon->next = m->next;
 	}
+	DBG("freeing monitor: %d", m->num);
 	free(m);
+}
+
+static void freewm(void)
+{
+	uint i;
+	Monitor *m;
+
+	for (m = mons; m; m = m->next)
+		for (i = 0; i < nworkspace; i++) {
+			view(&(const Arg){.ui = i});
+			while (m->stack)
+				freeclient(m->stack, 0);
+		}
+	xcb_ungrab_button(con, XCB_BUTTON_INDEX_ANY, root, XCB_MOD_MASK_ANY);
+	xcb_ungrab_key(con, XCB_GRAB_ANY, root, XCB_MOD_MASK_ANY);
+	xcb_key_symbols_free(keysyms);
+	while (mons)
+		freemonitor(mons);
+	for (i = 0; i < LEN(cursors); i++)
+		xcb_free_cursor(con, cursor[i]);
+	xcb_destroy_window(con, wmcheck);
+	xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, XCB_INPUT_FOCUS_POINTER_ROOT, XCB_CURRENT_TIME);
+	xcb_aux_sync(con);
+	xcb_delete_property(con, root, netatoms[NetActiveWindow]);
+	xcb_disconnect(con);
 }
 
 static void geometry(Client *c)
@@ -670,12 +667,6 @@ static void geometry(Client *c)
 	c->bw = border;
 }
 
-static void hintresize(Client *c, int x, int y, int w, int h, int interact)
-{
-	if (setsizehints(c, &x, &y, &w, &h, interact))
-		resize(c, x, y, w, h);
-}
-
 static void initatoms(xcb_atom_t *atoms, const char **names, int num)
 {
 	int i;
@@ -686,6 +677,7 @@ static void initatoms(xcb_atom_t *atoms, const char **names, int num)
         c[i] = xcb_intern_atom(con, 0, strlen(names[i]), names[i]);
     for (i = 0; i < num; ++i) {
 		if ((r = xcb_intern_atom_reply(con, c[i], NULL))) {
+			DBG("initializing atom: %s - value: %d", names[i], r->atom)
 			atoms[i] = r->atom;
 			free(r);
 		} else {
@@ -697,10 +689,9 @@ static void initatoms(xcb_atom_t *atoms, const char **names, int num)
 static void initbinds(int onlykeys)
 {
 	xcb_keycode_t *c, *t, *cd;
-	uint8_t async = XCB_GRAB_MODE_ASYNC;
 	xcb_get_modifier_mapping_reply_t *m;
-	uint i, j, btns[] = { XCB_BUTTON_INDEX_1, XCB_BUTTON_INDEX_2, XCB_BUTTON_INDEX_3 };
-	uint mods[] = { 0, XCB_MOD_MASK_LOCK, numlockmask, numlockmask|XCB_MOD_MASK_LOCK };
+	uint i, j, mods[] = { 0, XCB_MOD_MASK_LOCK, numlockmask, numlockmask|XCB_MOD_MASK_LOCK };
+	static const uint btns[] = { XCB_BUTTON_INDEX_1, XCB_BUTTON_INDEX_2, XCB_BUTTON_INDEX_3 };
 
 	DBG("updating numlock modifier mask");
 	if ((m = xcb_get_modifier_mapping_reply(con, xcb_get_modifier_mapping(con), NULL))) {
@@ -722,12 +713,12 @@ static void initbinds(int onlykeys)
 		if (!onlykeys)
 			for (j = 0; j < LEN(btns); j++) {
 				DBG("window: %d - grabbing button: %u modifier: %u", root, btns[j], MODKEY|mods[i]);
-				xcb_grab_button(con, 0, root, BUTTONMASK, async, XCB_GRAB_MODE_SYNC, 0, XCB_NONE, btns[j], MODKEY|mods[i]);
+				xcb_grab_button(con, 0, root, BUTTONMASK, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_SYNC, 0, XCB_NONE, btns[j], MODKEY|mods[i]);
 			}
 		for (j = 0; j < LEN(keys); j++) {
 			if ((c = xcb_key_symbols_get_keycode(keysyms, keys[j].keysym))) {
 				DBG("window: %d - grabbing key: %u modifier: %u", root, *c, keys[j].mod|mods[i]);
-				xcb_grab_key(con, 1, root, keys[j].mod|mods[i], *c, async, async);
+				xcb_grab_key(con, 1, root, keys[j].mod|mods[i], *c, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
 				free(c);
 			}
 		}
@@ -737,38 +728,30 @@ static void initbinds(int onlykeys)
 static void initclient(xcb_window_t win)
 {
 	Client *c;
-	uint32_t borderwidth[] = { border };
-	uint32_t stackmode[] = { XCB_STACK_MODE_ABOVE };
-	long data[] = { XCB_ICCCM_WM_STATE_NORMAL, XCB_ATOM_NONE };
-	uint32_t windowchanges[] = { focuscol,
-		XCB_EVENT_MASK_ENTER_WINDOW|XCB_EVENT_MASK_FOCUS_CHANGE|
-			XCB_EVENT_MASK_PROPERTY_CHANGE|XCB_EVENT_MASK_STRUCTURE_NOTIFY
-	};
 
 	DBG("initializing new client from window: %d", win);
-
 	if (!(c = (Client *)calloc(1, sizeof(Client)))) /* zero initialized */
 		errx(1, "unable to allocate space for new client");
 	c->win = win;
-	windowtrans(win, c); /* transient of another window? also set initial monitor & workspace */
-	geometry(c);         /* set initial geom and border */
-	if (c->x <= c->mon->x || c->x + W(c) >= c->mon->x + c->mon->w)
+	windowtrans(c->win, c); /* transient window? also sets client defaults & rules */
+	geometry(c);            /* set client geom and border width and old_ values */
+	if (c->x <= c->mon->x || c->x + W(c) >= c->mon->x + c->mon->w) /* center in x when outside the monitor bounds */
 		c->x = (c->mon->x + c->mon->w - W(c)) / 2;
-	if (c->y <= c->mon->y || c->y + H(c) >= c->mon->y + c->mon->h)
+	if (c->y <= c->mon->y || c->y + H(c) >= c->mon->y + c->mon->h) /* center in y when outside the monitor bounds */
 		c->y = (c->mon->y + c->mon->h - H(c)) / 2;
-	xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_BORDER_WIDTH, borderwidth);
-	config(c);
-	updatewindowtype(c);
-	wmhints(c);
+	xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_BORDER_WIDTH, (uint32_t []){ c->bw });
+	configure(c);
+	windowtype(c);
 	sizehints(c);
-	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK|XCB_CW_BORDER_PIXEL, windowchanges);
+	wmhints(c);
+	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK|XCB_CW_BORDER_PIXEL, (uint32_t []){ focuscol,
+			XCB_EVENT_MASK_ENTER_WINDOW|XCB_EVENT_MASK_FOCUS_CHANGE|XCB_EVENT_MASK_PROPERTY_CHANGE|XCB_EVENT_MASK_STRUCTURE_NOTIFY });
 	if (c->floating || (c->floating = c->oldstate = c->fixed))
-		xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_STACK_MODE, stackmode);
+		xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_STACK_MODE, (uint32_t []){ XCB_STACK_MODE_ABOVE });
 	attach(c);
-	attach_stack(c);
+	attachstack(c);
 	xcb_change_property(con, XCB_PROP_MODE_APPEND, root, netatoms[NetClientList], XCB_ATOM_WINDOW, 32, 1, (uchar *)&(c->win));
-	xcb_change_property(con, XCB_PROP_MODE_REPLACE, c->win, wmatoms[WMState], wmatoms[WMState], 32, 2, (uchar *)data);
-	resize(c, c->x, c->y, c->w, c->h);
+	setclientstate(c, XCB_ICCCM_WM_STATE_NORMAL);
 	if (c->mon == selmon && selmon->sel)
 		unfocus(selmon->sel, 0);
 	c->mon->sel = c;
@@ -815,7 +798,7 @@ static Monitor *initmon(int num)
 	if (!(m = calloc(1, sizeof(Monitor)))) /* zero initialized */
 		errx(1, "unable to allocate space for new monitor: %d", num);
 	m->num = num;
-	m->workspace = 1;
+	m->workspace = 0;
 	m->nmaster = nmaster;
 	m->layout = &layouts[0];
 	m->splitratio = splitratio;
@@ -853,12 +836,14 @@ static void initscreen(void)
 
 static void initwm(void)
 {
+	int r;
 	uint i;
+	char errbuf[256];
+	xcb_atom_t utf8str;
 	xcb_void_cookie_t c;
 	xcb_generic_error_t *e;
 	xcb_cursor_context_t *ctx;
-	long vp[] = { 0, 0 };
-	long nws[] = { nworkspace };
+	long vp[] = { 0, 0 }, nws[] = { nworkspace };
 	uint32_t mask = XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT|XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY|
 		XCB_EVENT_MASK_BUTTON_PRESS|XCB_EVENT_MASK_POINTER_MOTION|XCB_EVENT_MASK_ENTER_WINDOW|
 		XCB_EVENT_MASK_LEAVE_WINDOW|XCB_EVENT_MASK_STRUCTURE_NOTIFY|XCB_EVENT_MASK_PROPERTY_CHANGE;
@@ -873,26 +858,45 @@ static void initwm(void)
 		DBG("initialized cursor: %s", cursors[i]);
 	}
 	xcb_cursor_context_free(ctx);
+
+	for (i = 0; i < LEN(rules); i++) {
+		DBG("compiling rules[%d] regex: %s", i, rules[i].regex);
+		if ((r = regcomp(&rules[i].regcomp, rules[i].regex, REG_NOSUB|REG_EXTENDED|REG_ICASE))) {
+			regerror(r, &rules[i].regcomp, errbuf, sizeof(errbuf));
+			errx(1, "invalid regex rules[%d]: %s: %s\n", i, rules[i].regex, errbuf);
+		}
+	}
+
+	DBG("initializing atoms");
+	initatoms(&utf8str, &(const char *){"UTF8_STRING"}, 1);
 	initatoms(wmatoms, wmatomnames, LEN(wmatomnames));
 	initatoms(netatoms, netatomnames, LEN(netatomnames));
-	setcurdesktop();
+
+	DBG("creating wm check window");
+	wmcheck = xcb_generate_id(con);
+	xcb_create_window(con, XCB_COPY_FROM_PARENT, wmcheck, root, 0, 0, 1, 1, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, scr->root_visual, 0, NULL);
+
+	DBG("setting wm check window atoms: _NET_SUPPORTING_WM_CHECK, _NET_WM_NAME")
+	xcb_change_property(con, XCB_PROP_MODE_REPLACE, wmcheck, netatoms[NetWMCheck], XCB_ATOM_WINDOW, 32, 1, (uchar *)&wmcheck);
+	xcb_change_property(con, XCB_PROP_MODE_REPLACE, wmcheck, netatoms[NetWMName], utf8str, 8, 5, (uchar *)"yaxwm");
+
+	DBG("setting root window atoms: _NET_SUPPORTING_WM_CHECK, _NET_NUMBER_OF_DESKTOPS, _NET_DESKTOP_VIEWPORT, _NET_SUPPORTED")
+	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetWMCheck], XCB_ATOM_WINDOW, 32, 1, (uchar *)&wmcheck);
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetNumDesktops], XCB_ATOM_CARDINAL, 32, 1, (uchar *)nws);
-	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetDesktopViewport], XCB_ATOM_CARDINAL, 32, 1, (uchar *)vp);
+	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetDesktopViewport], XCB_ATOM_CARDINAL, 32, 2, (uchar *)vp);
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetSupported], XCB_ATOM_ATOM, 32, NetLast, (uchar *)netatoms);
 	xcb_delete_property(con, root, netatoms[NetClientList]);
-
+	setcurdesktop();
 
 	DBG("setting root window event mask and cursor");
-	uint32_t v[] = { mask, cursor[Normal] };
-	c = xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK|XCB_CW_CURSOR, v);
+	c = xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK|XCB_CW_CURSOR, (uint32_t []){ mask, cursor[Normal] });
 	if ((e = xcb_request_check(con, c))) {
 		free(e);
 		errx(1, "unable to change root window event mask and cursor");
 	}
-
 	if (!(keysyms = xcb_key_symbols_alloc(con)))
 		errx(1, "error unable to get keysyms from X connection");
-	initbinds(1);
+	initbinds(0);
 	focusclient(NULL);
 }
 
@@ -937,9 +941,6 @@ static void layoutmon(Monitor *m)
 
 static Client *nexttiled(Client *c)
 {
-	if (c) {
-		DBG("returning next tiled client from window: %d", c->win);
-	}
 	for (; c && (c->floating || c->workspace != c->mon->workspace); c = c->next);
 	return c;
 }
@@ -969,19 +970,12 @@ static Monitor *ptrtomon(int x, int y)
 	return selmon;
 }
 
-static void quit(const Arg *arg)
+static void quitres(const Arg *arg)
 {
-	(void)(arg);
-	DBG("user requested quit");
-	running = 0;
-}
-
-static void reset(const Arg *arg)
-{
-	(void)(arg);
-	char *const argv[] = { argv0, NULL };
-	DBG("user requested restart, running command: %s", argv0);
-	execvp(argv[0], argv);
+	if ((running = arg->i)) {
+		char *const argv[] = { argv0, NULL };
+		execvp(argv[0], argv);
+	}
 }
 
 static void resize(Client *c, int x, int y, int w, int h)
@@ -995,13 +989,19 @@ static void resize(Client *c, int x, int y, int w, int h)
 	setfield(&c->y, y, &c->old_y);
 	setfield(&c->w, w, &c->old_w);
 	setfield(&c->h, h, &c->old_h);
-	if ((nexttiled(c->mon->clients) == c && !nexttiled(c->next)) && !c->floating) {
+	if ((nexttiled(c->mon->clients) == c && !nexttiled(c->next)) && !(c->floating || c->fullscreen)) {
 		v[2] = W(c);
 		v[3] = H(c);
 		v[4] = 0;
 	}
 	xcb_configure_window(con, c->win, mask, v);
-	config(c);
+	configure(c);
+}
+
+static void resizehint(Client *c, int x, int y, int w, int h, int interact)
+{
+	if (setsizehints(c, &x, &y, &w, &h, interact))
+		resize(c, x, y, w, h);
 }
 
 static void restack(Monitor *m)
@@ -1025,26 +1025,24 @@ static void restack(Monitor *m)
 				xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_STACK_MODE, stackmode);
 	}
 	xcb_aux_sync(con);
-	while ((ev = xcb_poll_for_event(con)) && EVENTTYPE(ev) == XCB_ENTER_NOTIFY);
+	while ((ev = xcb_poll_for_event(con)) && EVTYPE(ev) == XCB_ENTER_NOTIFY);
 }
 
 static void runcmd(const Arg *arg)
 {
 	DBG("user run command: %s", ((char **)arg->v)[0]);
-	if (fork() == 0) {
-		if (con)
-			close(xcb_get_file_descriptor(con));
-		setsid();
-		execvp(((char **)arg->v)[0], (char **)arg->v);
-		fprintf(stderr, "dwm: execvp %s", ((char **)arg->v)[0]);
-		perror(" failed");
-		exit(0);
-	}
+	if (fork())
+		return;
+	if (con)
+		close(xcb_get_file_descriptor(con));
+	setsid();
+	execvp(((char **)arg->v)[0], (char **)arg->v);
+	errx(0, "execvp: %s", ((char **)arg->v)[0]);
 }
 
 static void send(const Arg *arg)
 {
-	if (arg->ui && arg->ui != selmon->sel->workspace) {
+	if (selmon->sel && arg->ui != selmon->sel->workspace) {
 		selmon->sel->workspace = arg->ui;
 		focusclient(NULL);
 		layoutmon(selmon);
@@ -1213,24 +1211,27 @@ static void setsplit(const Arg *arg)
 	layoutmon(selmon);
 }
 
+static void setclientstate(Client *c, long state)
+{
+	long data[] = { state, XCB_ATOM_NONE };
+
+	xcb_change_property(con, XCB_PROP_MODE_REPLACE, c->win, wmatoms[WMState], wmatoms[WMState], 32, 2, (uchar *)data);
+}
+
 static void showhide(Client *c)
 {
-	uint16_t mask = XCB_CONFIG_WINDOW_X|XCB_CONFIG_WINDOW_Y;
-
 	if (!c)
 		return;
 	if (c->workspace == c->mon->workspace) {
 		DBG("showing clients breadthfirst");
-		uint32_t geom[] = { c->x, c->y };
-		xcb_configure_window(con, c->win, mask, geom);
+		xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_X|XCB_CONFIG_WINDOW_Y, (uint32_t []){ c->x, c->y });
 		if ((!c->mon->layout->func || c->floating) && !c->fullscreen)
-			hintresize(c, c->x, c->y, c->w, c->h, 0);
+			resizehint(c, c->x, c->y, c->w, c->h, 0);
 		showhide(c->snext);
 	} else {
 		DBG("hiding clients depthfirst");
 		showhide(c->snext);
-		uint32_t geom[] = { W(c) * -2, c->y };
-		xcb_configure_window(con, c->win, mask, geom);
+		xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_X|XCB_CONFIG_WINDOW_Y, (uint32_t []){ W(c) * -2, c->y });
 	}
 }
 
@@ -1332,27 +1333,13 @@ static void tile(Monitor *m)
 		}
 }
 
-static void toggle(const Arg *arg)
+static void unfocus(Client *c, int focusroot)
 {
-	Client *c;
-
-	if (!(c = selmon->sel))
-		return;
-	DBG("toggling selected window floating state: %d -> %d", c->floating, !c->floating);
-	(void)(arg);
-	if ((c->floating = !c->floating || c->fixed))
-		hintresize(c, c->x, c->y, c->w, c->h, 0);
-	layoutmon(selmon);
-}
-
-static void unfocus(Client *c, int setfocus)
-{
-	uint32_t bordercol[] = { unfocuscol };
 	if (!c)
 		return;
 	DBG("unfocusing client: %d", c->win);
-	xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, bordercol);
-	if (setfocus) {
+	xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, (uint32_t []){ unfocuscol });
+	if (focusroot) {
 		DBG("focusing root window");
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, root, XCB_CURRENT_TIME);
 		xcb_delete_property(con, root, netatoms[NetActiveWindow]);
@@ -1370,22 +1357,15 @@ static void updateclientlist(void)
 			xcb_change_property(con, XCB_PROP_MODE_APPEND, root, netatoms[NetClientList], XCB_ATOM_WINDOW, 32, 1, (uchar *)&(c->win));
 }
 
-static void updatewindowtype(Client *c)
-{
-	if (windowprop(c->win, netatoms[NetWMState]) == netatoms[NetWMFullscreen])
-		setfullscreen(c, 1);
-	if (windowprop(c->win, netatoms[NetWMWindowType]) == netatoms[NetWMWindowTypeDialog])
-		c->floating = 1;
-}
-
 static void view(const Arg *arg)
 {
-	if (!arg->ui || arg->ui == selmon->workspace)
-		return;
-	selmon->workspace = arg->ui;
-	setcurdesktop();
-	focusclient(NULL);
-	layoutmon(selmon);
+	if (arg->ui != selmon->workspace) {
+		DBG("viewing workspace: %d", arg->ui);
+		selmon->workspace = arg->ui;
+		setcurdesktop();
+		focusclient(NULL);
+		layoutmon(selmon);
+	}
 }
 
 static xcb_get_window_attributes_reply_t *windowattr(xcb_window_t win)
@@ -1405,7 +1385,7 @@ static xcb_atom_t windowprop(xcb_window_t win, xcb_atom_t prop)
 
 	DBG("getting window property atom from window: %d", win);
 	if (!(r = xcb_get_property_reply(con, xcb_get_property(con, 0, win, prop, XCB_ATOM_ATOM, 0, 0), NULL)))
-		errx(1, "unable to get window state property reply");
+		errx(1, "unable to get window property reply");
 	if (xcb_get_property_value_length(r))
 		ret = *(xcb_atom_t *)xcb_get_property_value(r);
 	free(r);
@@ -1414,22 +1394,55 @@ static xcb_atom_t windowprop(xcb_window_t win, xcb_atom_t prop)
 
 static xcb_window_t windowtrans(xcb_window_t win, Client *c)
 {
+	uint i;
 	Client *t;
-	xcb_window_t trans = XCB_WINDOW_NONE;
-
-	xcb_get_property_cookie_t pc = xcb_icccm_get_wm_transient_for(con, win);
+	Monitor *m;
+	const Rule *r;
+	xcb_window_t trans;
+	xcb_get_property_cookie_t pc;
+	xcb_icccm_get_wm_class_reply_t prop;
+	
+	pc = xcb_icccm_get_wm_transient_for(con, win);
+	trans = XCB_WINDOW_NONE;
 	DBG("getting transient hints for window: %d", win);
 	if (xcb_icccm_get_wm_transient_for_reply(con, pc, &trans, NULL) && c && (t = wintoclient(trans))) {
 		DBG("window is transient, setting workspace and monitor to match");
-		c->floating = 1;
 		c->mon = t->mon;
+		c->floating = 1;
 		c->workspace = t->workspace;
 	} else if (c) {
-		c->floating = 0;
+		DBG("window is not transient, setting client defaults and rule matching")
 		c->mon = selmon;
+		c->floating = 0;
 		c->workspace = c->mon->workspace;
+		if (xcb_icccm_get_wm_class_reply(con, xcb_icccm_get_wm_class(con, c->win), &prop, NULL)) {
+			DBG("got window class: %s", prop.class_name);
+			for (i = 0; i < LEN(rules); i++) {
+				r = &rules[i];
+				if (!regexec(&rules[i].regcomp, prop.class_name, 0, NULL, 0)) {
+					DBG("found matching rule")
+					c->floating = r->floating;
+					if (r->workspace >= 0)
+						c->workspace = r->workspace;
+					for (m = mons; m && m->num != r->mon; m = m->next);
+					if (m)
+						c->mon = m;
+					break;
+				}
+			}
+			xcb_icccm_get_wm_class_reply_wipe(&prop);
+		}
 	}
 	return trans;
+}
+
+static void windowtype(Client *c)
+{
+	DBG("checking window type for window: %d", c->win)
+	if (windowprop(c->win, netatoms[NetWMState]) == netatoms[NetWMFullscreen])
+		setfullscreen(c, 1);
+	if (windowprop(c->win, netatoms[NetWMWindowType]) == netatoms[NetWMWindowTypeDialog])
+		c->floating = 1;
 }
 
 static Client *wintoclient(xcb_window_t win)
@@ -1471,13 +1484,19 @@ static Monitor *wintomon(xcb_window_t win)
 static void wmhints(Client *c)
 {
 	xcb_icccm_wm_hints_t wmh;
-
+	
+	DBG("setting window manager hints for window: %d", c->win);
 	if (xcb_icccm_get_wm_hints_reply(con, xcb_icccm_get_wm_hints(con, c->win), &wmh, NULL)) {
+		DBG("got hints reply")
 		if (c == selmon->sel && wmh.flags & XCB_ICCCM_WM_HINT_X_URGENCY) {
 			wmh.flags &= ~XCB_ICCCM_WM_HINT_X_URGENCY;
 			xcb_icccm_set_wm_hints(con, c->win, &wmh);
 		} else
 			c->urgent = (wmh.flags & XCB_ICCCM_WM_HINT_X_URGENCY) ? 1 : 0;
+		if (wmh.flags & XCB_ICCCM_WM_HINT_INPUT)
+			c->nofocus = !wmh.input;
+		else
+			c->nofocus = 0;
 	}
 }
 
@@ -1494,7 +1513,7 @@ int main(int argc, char *argv[])
 		errx(1, "no locale support");
 	if (xcb_connection_has_error((con = xcb_connect(NULL, NULL))))
 		errx(1, "error connecting to X");
-	atexit(cleanup);
+	atexit(freewm);
 	initscreen();
 	if (xcb_request_check(con, xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK, v)))
 		errx(1, "is another window manager already running?");

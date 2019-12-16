@@ -5,7 +5,6 @@ PREFIX = /usr
 CC = cc
 CCFLAGS = -Wall -Wextra -O3
 LDFLAGS = -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr -lxcb-ewmh
-# -lX11 -lX11-xcb -lxcb-ewmh -lxcb-aux
 
 all: yaxwm
 

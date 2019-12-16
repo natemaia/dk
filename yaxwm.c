@@ -1018,6 +1018,12 @@ static void setlayout(const Arg *arg)
 		layoutmon(selmon);
 }
 
+static void setnmaster(const Arg *arg)
+{
+	selmon->nmaster = MAX(selmon->nmaster + arg->i, 0);
+	layoutmon(selmon);
+}
+
 static int setsizehints(Client *c, int *x, int *y, int *w, int *h, int interact)
 {
 	int baseismin;

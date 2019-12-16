@@ -130,6 +130,7 @@ static void runcmd(const Arg *arg);
 static void send(const Arg *arg);
 static void setfocus(const Arg *arg);
 static void setlayout(const Arg *arg);
+static void setnmaster(const Arg *arg);
 static void setsplit(const Arg *arg);
 static void swapclient(const Arg *arg);
 static void togglefloat(const Arg *arg);

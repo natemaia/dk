@@ -15,14 +15,11 @@ Run `make clean install` *(as root if needed)*.
 To start yaxwm you can add `exec yaxwm` to your xinitrc.
 
 #### Configuration
-Edit the source and recompile.
+Create or edit a `config.h` file *(running make will also do this)* and recompile.
 
 ### Credits
 Obviously a huge thanks to [dwm](https://dmw.suckless.org)
 
 
-[i3wm](https://github.com/i3/i3) for some of the less documented xcb ewmh/icccm setup.
-
-
-[mcwm](https://github.com/mchackorg/mcwm)
+Also thanks to [i3wm](https://github.com/i3/i3).
 

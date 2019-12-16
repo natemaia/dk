@@ -202,7 +202,6 @@ static void sigchld(int unused);
 static void sizehints(Client *c);
 static void tile(Monitor *m);
 static void unfocus(Client *c, int focusroot);
-static void updateclientlist(void);
 static xcb_get_window_attributes_reply_t *windowattr(xcb_window_t win);
 static xcb_atom_t windowprop(xcb_window_t win, xcb_atom_t prop);
 static xcb_window_t windowtrans(xcb_window_t win, Client *c);
@@ -604,7 +603,7 @@ static void focus(Client *c)
 {
 	if (!c->nofocus) {
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, c->win, XCB_CURRENT_TIME);
-		xcb_change_property(con, XCB_PROP_MODE_REPLACE, c->win, netatoms[NetActiveWindow], XCB_ATOM_WINDOW, 32, 1, (uchar*)&(c->win));
+		xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetActiveWindow], XCB_ATOM_WINDOW, 32, 1, &c->win);
 	}
 	sendevent(c, wmatoms[WMTakeFocus]);
 }
@@ -612,7 +611,7 @@ static void focus(Client *c)
 static void focusclient(Client *c)
 {
 	if (!c || c->workspace != c->mon->workspace)
-		for (c = selmon->stack; c && c->workspace != c->mon->workspace; c = c->snext);
+		for (c = selmon->stack; c && c->workspace != c->mon->workspace && windowprop(root, netatoms[NetActiveWindow]) != c->win; c = c->snext);
 	if (selmon->sel && selmon->sel != c)
 		unfocus(selmon->sel, 0);
 	if (c) {
@@ -621,7 +620,7 @@ static void focusclient(Client *c)
 			selmon = c->mon;
 		detachstack(c);
 		attachstack(c);
-		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, (uint32_t []){ focuscol });
+		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, &focuscol);
 		focus(c);
 	} else {
 		DBG("focusing root window");
@@ -641,22 +640,26 @@ static void follow(const Arg *arg)
 
 static void freeclient(Client *c, int destroyed)
 {
-	Monitor *m = c->mon;
+	Client *n;
+	Monitor *focusmon = c->mon, *m;
 
 	DBG("freeing client: %d - destroyed: %i", c->win, destroyed);
 	detach(c, 0);
 	detachstack(c);
 	if (!destroyed) {
 		xcb_grab_server(con);
-		xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_BORDER_WIDTH, (uint32_t []){ c->old_bw });
+		xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_BORDER_WIDTH, &c->old_bw);
 		setclientstate(c, XCB_ICCCM_WM_STATE_WITHDRAWN);
 		xcb_aux_sync(con);
 		xcb_ungrab_server(con);
 	}
 	free(c);
 	focusclient(NULL);
-	updateclientlist();
-	layoutmon(m);
+	xcb_delete_property(con, root, netatoms[NetClientList]);
+	for (m = mons; m; m = m->next)
+		for (n = m->clients; n; n = n->next)
+			xcb_change_property(con, XCB_PROP_MODE_APPEND, root, netatoms[NetClientList], XCB_ATOM_WINDOW, 32, 1, &n->win);
+	layoutmon(focusmon);
 }
 
 static void freemonitor(Monitor *m)
@@ -833,7 +836,7 @@ static void initclient(xcb_window_t win)
 		c->x = (c->mon->x + c->mon->w - W(c)) / 2;
 	if (c->y <= c->mon->y || c->y + H(c) >= c->mon->y + c->mon->h)
 		c->y = (c->mon->y + c->mon->h - H(c)) / 2;
-	xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_BORDER_WIDTH, (uint32_t []){ c->bw });
+	xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_BORDER_WIDTH, &c->bw);
 	configure(c);
 	windowtype(c);
 	sizehints(c);
@@ -841,7 +844,7 @@ static void initclient(xcb_window_t win)
 	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK|XCB_CW_BORDER_PIXEL, (uint32_t []){ focuscol,
 			XCB_EVENT_MASK_ENTER_WINDOW|XCB_EVENT_MASK_FOCUS_CHANGE|XCB_EVENT_MASK_PROPERTY_CHANGE|XCB_EVENT_MASK_STRUCTURE_NOTIFY });
 	if (c->floating || (c->floating = c->oldstate = c->fixed))
-		xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_STACK_MODE, (uint32_t []){ XCB_STACK_MODE_ABOVE });
+		xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_STACK_MODE, (uint32_t []){XCB_STACK_MODE_ABOVE});
 	attach(c);
 	attachstack(c);
 	xcb_change_property(con, XCB_PROP_MODE_APPEND, root, netatoms[NetClientList], XCB_ATOM_WINDOW, 32, 1, (uchar *)&(c->win));
@@ -990,11 +993,11 @@ static void initwm(void)
 	for (i = 0, len = 0; i < LEN(workspaces); i++)
 		for (j = 0; (wsnames[len++] = workspaces[i][j++]););
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetDesktopNames], utf8str, 8, --len, wsnames);
-	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetSupported], XCB_ATOM_ATOM, 32, NetLast, (uchar *)netatoms);
+	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetSupported], XCB_ATOM_ATOM, 32, NetLast, netatoms);
 	xcb_delete_property(con, root, netatoms[NetClientList]);
 
 	DBG("setting root window event mask and cursor");
-	c = xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK|XCB_CW_CURSOR, (uint32_t []){ mask, cursor[Normal] });
+	c = xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK|XCB_CW_CURSOR, (uint32_t []){mask, cursor[Normal]});
 	if ((e = xcb_request_check(con, c))) {
 		free(e);
 		errx(1, "unable to change root window event mask and cursor");
@@ -1120,7 +1123,6 @@ static void restack(Monitor *m)
 				xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_STACK_MODE, (uint32_t []){ XCB_STACK_MODE_BELOW });
 	}
 	xcb_aux_sync(con);
-	ignoreevent(XCB_ENTER_NOTIFY);
 }
 
 static void runcmd(const Arg *arg)
@@ -1451,23 +1453,12 @@ static void unfocus(Client *c, int focusroot)
 	if (!c)
 		return;
 	DBG("unfocusing client: %d", c->win);
-	xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, (uint32_t []){ unfocuscol });
+	xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, &unfocuscol);
 	if (focusroot) {
 		DBG("focusing root window");
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, root, XCB_CURRENT_TIME);
 		xcb_delete_property(con, root, netatoms[NetActiveWindow]);
 	}
-}
-
-static void updateclientlist(void)
-{
-	Client *c;
-	Monitor *m;
-
-	xcb_delete_property(con, root, netatoms[NetClientList]);
-	for (m = mons; m; m = m->next)
-		for (c = m->clients; c; c = c->next)
-			xcb_change_property(con, XCB_PROP_MODE_APPEND, root, netatoms[NetClientList], XCB_ATOM_WINDOW, 32, 1, (uchar *)&(c->win));
 }
 
 static void view(const Arg *arg)
@@ -1478,8 +1469,8 @@ static void view(const Arg *arg)
 		xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetCurrentDesktop], XCB_ATOM_CARDINAL, 32, 1, (uchar *)&arg->ui);
 		focusclient(NULL);
 		layoutmon(selmon);
-		/* if (selmon->sel) /1* shit hack to fix focus on workspace change *1/ */
-		/* 	xcb_warp_pointer(con, XCB_NONE, selmon->sel->win, 0, 0, 0, 0, selmon->sel->w - 10, selmon->sel->h - 10); */
+		xcb_aux_sync(con);
+		ignoreevent(XCB_ENTER_NOTIFY); /* ignore enter notify events when switching workspace to preserve last focused client */
 	}
 }
 

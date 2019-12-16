@@ -13,7 +13,7 @@ typedef unsigned int uint;
 typedef unsigned char uchar;
 
 typedef union Arg Arg;
-typedef struct Key Key;
+typedef struct Bind Bind;
 typedef struct Rule Rule;
 typedef struct Client Client;
 typedef struct Layout Layout;
@@ -30,7 +30,7 @@ enum { /* WM atoms */
 enum { /* EWMH atoms */
 	NetSupported, NetWMName, NetWMState, NetWMCheck, NetWMFullscreen, NetNumDesktops,
 	NetCurrentDesktop, NetActiveWindow, NetWMWindowType, NetWMWindowTypeDialog,
-	NetWMDesktop, NetClientList, NetDesktopViewport, NetLast
+	NetWMDesktop, NetClientList, NetDesktopViewport, NetDesktopGeometry, NetDesktopNames, NetLast
 };
 
 union Arg {
@@ -40,7 +40,7 @@ union Arg {
 	const void *v;
 };
 
-struct Key {
+struct Bind {
 	int type;
 	uint mod;
 	xcb_keysym_t keysym;
@@ -78,7 +78,7 @@ struct Monitor {
 	int winarea_x, winarea_y, winarea_w, winarea_h;
 	Client *clients, *stack, *sel;
 	Monitor *next;
-	const Layout *layout;
+	Layout *layout;
 };
 
 static const char *cursors[] = {
@@ -100,12 +100,14 @@ static const char *netatomnames[] = {
 	[NetSupported] = "_NET_SUPPORTED",
 	[NetWMDesktop] = "_NET_WM_DESKTOP",
 	[NetClientList] = "_NET_CLIENT_LIST",
+	[NetDesktopNames] = "_NET_DESKTOP_NAMES",
 	[NetActiveWindow] = "_NET_ACTIVE_WINDOW",
 	[NetWMCheck] = "_NET_SUPPORTING_WM_CHECK",
 	[NetWMWindowType] = "_NET_WM_WINDOW_TYPE",
 	[NetCurrentDesktop] = "_NET_CURRENT_DESKTOP",
 	[NetNumDesktops] = "_NET_NUMBER_OF_DESKTOPS",
 	[NetDesktopViewport] = "_NET_DESKTOP_VIEWPORT",
+	[NetDesktopGeometry] = "_NET_DESKTOP_GEOMETRY",
 	[NetWMFullscreen] = "_NET_WM_STATE_FULLSCREEN",
 	[NetWMWindowTypeDialog] = "_NET_WM_WINDOW_TYPE_DIALOG",
 };
@@ -142,9 +144,9 @@ static void attachstack(Client *c);
 static void freewm(void);
 static void configure(Client *c);
 static void clientrules(Client *c);
-static int clientwmprotoexists(Client *c, xcb_atom_t proto);
 static void detach(Client *c, int reattach);
 static void detachstack(Client *c);
+static int eventerr(xcb_generic_event_t *ev);
 static void eventloop(void);
 static void initexisting(void);
 static void focus(Client *c);
@@ -153,6 +155,7 @@ static void freeclient(Client *c, int destroyed);
 static void freemonitor(Monitor *m);
 static void geometry(Client *c);
 static int grabpointer(xcb_cursor_t cursor);
+static int hasproto(Client *c, xcb_atom_t proto);
 static void initatoms(xcb_atom_t *atoms, const char **names, int num);
 static void initbinds(int onlykeys);
 static void initclient(xcb_window_t win);
@@ -170,7 +173,6 @@ static void restack(Monitor *m);
 static int sendevent(Client *c, xcb_atom_t proto);
 static void setclientdesktop(Client *c, int num);
 static void setclientstate(Client *c, long state);
-static void setcurdesktop(void);
 static void setfield(int *dst, int val, int *old);
 static void setfullscreen(Client *c, int fullscreen);
 static int setsizehints(Client *c, int *x, int *y, int *w, int *h, int interact);
@@ -187,7 +189,6 @@ static void windowtype(Client *c);
 static Client *wintoclient(xcb_window_t win);
 static Monitor *wintomon(xcb_window_t win);
 static void wmhints(Client *c);
-static int xcbeventerr(xcb_generic_event_t *ev);
 
 #ifdef DEBUG
 static void dprint(const char *fmt, ...)

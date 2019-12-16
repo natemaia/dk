@@ -10,13 +10,15 @@
 
 static uint nmaster = 1;        /* number of clients in the master area, min/max 0-? */
 static float splitratio = 0.5;  /* ratio of space between master/stack, min/max 0.1-0.9 */
-static uint nworkspace = 10;    /* number of workspace or virtual desktops, default 0-9 */
+
+/* names of workspaces and how many to have, default is 10 */
+static const char *workspaces[] = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" };
 
 static uint border = 1;           /* window border width in pixels 0-? */
 static int focuscol = 0x6699cc;   /* focused border colour,   hex 0x000000-0xffffff */
 static int unfocuscol = 0x000000; /* unfocused border colour, hex 0x000000-0xffffff */
 
-static const Layout layouts[] = {
+static Layout layouts[] = {
 	{ tile }, { NULL }, /* layout functions, first is default */
 };
 
@@ -25,7 +27,7 @@ static Rule rules[] = {
 	{ "(Steam|Lxappearance|Pavucontrol|Transmission-gtk)", -1,         1,          -1,            {0} },
 };
 
-static Key keys[] = {
+static Bind binds[] = {
 	/* type            modifier(s)                keysym     function      arg */
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_q,      killclient,   {0} },
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_Tab,    swapclient,   {0} },

@@ -168,6 +168,7 @@ static void detach(Client *c, int reattach);
 static void detachstack(Client *c);
 static int eventerr(xcb_generic_event_t *ev);
 static void eventloop(void);
+static void ignoreevent(int type);
 static void initexisting(void);
 static void focus(Client *c);
 static void focusclient(Client *c);
@@ -470,11 +471,13 @@ static void eventloop(void)
 			case XCB_BUTTON_RELEASE:
 			{
 				DBG("button release event, ungrabbing pointer");
-				mousebtn = 0;
 				if ((err = xcb_request_check(con, xcb_ungrab_pointer_checked(con, XCB_CURRENT_TIME)))) {
 					free(err);
 					errx(1, "failed to ungrab pointer");
 				}
+				if (mousebtn == 3)
+					ignoreevent(XCB_ENTER_NOTIFY);
+				mousebtn = 0;
 				break;
 			}
 			case XCB_MOTION_NOTIFY:
@@ -747,17 +750,26 @@ static int hasproto(Client *c, xcb_atom_t proto)
 	return exists;
 }
 
+static void ignoreevent(int type)
+{
+	xcb_generic_event_t *ev = NULL;
+
+	while ((ev = xcb_poll_for_event(con)) && EVTYPE(ev) != type)
+		;
+	free(ev);
+}
+
 static void initatoms(xcb_atom_t *atoms, const char **names, int num)
 {
 	int i;
 	xcb_intern_atom_reply_t *r;
-    xcb_intern_atom_cookie_t c[num];
+	xcb_intern_atom_cookie_t c[num];
 
-    for (i = 0; i < num; ++i)
-        c[i] = xcb_intern_atom(con, 0, strlen(names[i]), names[i]);
-    for (i = 0; i < num; ++i) {
+	for (i = 0; i < num; ++i)
+		c[i] = xcb_intern_atom(con, 0, strlen(names[i]), names[i]);
+	for (i = 0; i < num; ++i) {
 		if ((r = xcb_intern_atom_reply(con, c[i], NULL))) {
-			DBG("initializing atom: %s - value: %d", names[i], r->atom)
+			DBG("initializing atom: %s - value: %d", names[i], r->atom);
 			atoms[i] = r->atom;
 			free(r);
 		} else {
@@ -1108,6 +1120,7 @@ static void restack(Monitor *m)
 				xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_STACK_MODE, (uint32_t []){ XCB_STACK_MODE_BELOW });
 	}
 	xcb_aux_sync(con);
+	ignoreevent(XCB_ENTER_NOTIFY);
 }
 
 static void runcmd(const Arg *arg)
@@ -1463,8 +1476,8 @@ static void view(const Arg *arg)
 		DBG("viewing workspace: %d", arg->ui);
 		selmon->workspace = arg->ui;
 		xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetCurrentDesktop], XCB_ATOM_CARDINAL, 32, 1, (uchar *)&arg->ui);
-		layoutmon(selmon);
 		focusclient(NULL);
+		layoutmon(selmon);
 		/* if (selmon->sel) /1* shit hack to fix focus on workspace change *1/ */
 		/* 	xcb_warp_pointer(con, XCB_NONE, selmon->sel->win, 0, 0, 0, 0, selmon->sel->w - 10, selmon->sel->h - 10); */
 	}

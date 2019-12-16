@@ -44,7 +44,7 @@ enum { /* cursors */
 };
 
 enum { /* WM atoms */
-	WMProtocols, WMDelete, WMState, WMTakeFocus, WMLast
+	WMProtocols, WMDelete, WMState, WMTakeFocus, utf8str, WMLast
 };
 
 enum { /* EWMH atoms */
@@ -111,7 +111,8 @@ static const char *wmatomnames[] = {
 	[WMState] = "WM_STATE",
 	[WMDelete] = "WM_DELETE_WINDOW",
 	[WMProtocols] = "WM_PROTOCOLS",
-	[WMTakeFocus] = "WM_TAKE_FOCUS"
+	[WMTakeFocus] = "WM_TAKE_FOCUS",
+	[utf8str] = "UTF8_STRING"
 };
 
 static const char *netatomnames[] = {
@@ -230,7 +231,8 @@ static void attach(Client *c)
 {
 	Client *n = c->mon->clients;
 
-	for (; n && (n->floating || n->workspace != n->mon->workspace); n = n->next);
+	while (n && (n->floating || n->workspace != n->mon->workspace))
+		n = n->next;
 	if (n) {
 		c->next = n->next;
 		n->next = c;
@@ -267,7 +269,7 @@ static void configure(Client *c)
 static void clientrules(Client *c)
 {
 	uint i;
-	Monitor *m;
+	Monitor *m = mons;
 	xcb_get_property_cookie_t pc;
 	xcb_icccm_get_wm_class_reply_t prop;
 
@@ -283,7 +285,8 @@ static void clientrules(Client *c)
 				c->floating = rules[i].floating;
 				if (rules[i].workspace >= 0)
 					setclientdesktop(c, rules[i].workspace);
-				for (m = mons; m && m->num != rules[i].mon; m = m->next);
+				while (m && m->num != rules[i].mon)
+					m = m->next;
 				if (m)
 					c->mon = m;
 				break;
@@ -294,9 +297,10 @@ static void clientrules(Client *c)
 
 static void detach(Client *c, int reattach)
 {
-	Client **tc;
+	Client **tc = &c->mon->clients;
 
-	for (tc = &c->mon->clients; *tc && *tc != c; tc = &(*tc)->next);
+	while (*tc && *tc != c)
+		tc = &(*tc)->next;
 	*tc = c->next;
 	if (reattach) {
 		c->next = c->mon->clients;
@@ -306,12 +310,15 @@ static void detach(Client *c, int reattach)
 
 static void detachstack(Client *c)
 {
-	Client **tc, *t;
+	Client **tc = &c->mon->stack, *t;
 
-	for (tc = &c->mon->stack; *tc && *tc != c; tc = &(*tc)->snext);
+	while (*tc && *tc != c)
+		tc = &(*tc)->snext;
 	*tc = c->snext;
 	if (c == c->mon->sel) {
-		for (t = c->mon->stack; t && t->workspace != t->mon->workspace; t = t->snext);
+		t = c->mon->stack;
+		while (t && t->workspace != t->mon->workspace)
+			t = t->next;
 		c->mon->sel = t;
 	}
 }
@@ -611,7 +618,8 @@ static void focus(Client *c)
 static void focusclient(Client *c)
 {
 	if (!c || c->workspace != c->mon->workspace)
-		for (c = selmon->stack; c && c->workspace != c->mon->workspace && windowprop(root, netatoms[NetActiveWindow]) != c->win; c = c->snext);
+		for (c = selmon->stack; c && c->workspace != c->mon->workspace; c = c->snext)
+			;
 	if (selmon->sel && selmon->sel != c)
 		unfocus(selmon->sel, 0);
 	if (c) {
@@ -935,7 +943,6 @@ static void initwm(void)
 {
 	int r, len = 0;
 	char errbuf[256];
-	xcb_atom_t utf8str;
 	xcb_void_cookie_t c;
 	xcb_generic_error_t *e;
 	xcb_cursor_context_t *ctx;
@@ -964,7 +971,6 @@ static void initwm(void)
 	}
 
 	DBG("initializing atoms");
-	initatoms(&utf8str, &(const char *){"UTF8_STRING"}, 1);
 	initatoms(wmatoms, wmatomnames, LEN(wmatomnames));
 	initatoms(netatoms, netatomnames, LEN(netatomnames));
 
@@ -973,8 +979,8 @@ static void initwm(void)
 	xcb_create_window(con, XCB_COPY_FROM_PARENT, wmcheck, root, -1, -1, 1, 1, 0, XCB_WINDOW_CLASS_INPUT_ONLY, scr->root_visual, 0, NULL);
 
 	DBG("setting wm check window atoms: _NET_SUPPORTING_WM_CHECK, _NET_WM_NAME")
-	xcb_change_property(con, XCB_PROP_MODE_REPLACE, wmcheck, netatoms[NetWMCheck], XCB_ATOM_WINDOW, 32, 1, (uchar *)&wmcheck);
-	xcb_change_property(con, XCB_PROP_MODE_REPLACE, wmcheck, netatoms[NetWMName],  utf8str, 8, 5, (uchar *)"yaxwm");
+	xcb_change_property(con, XCB_PROP_MODE_REPLACE, wmcheck, netatoms[NetWMCheck], XCB_ATOM_WINDOW, 32, 1, &wmcheck);
+	xcb_change_property(con, XCB_PROP_MODE_REPLACE, wmcheck, netatoms[NetWMName],  wmatoms[utf8str], 8, 5, "yaxwm");
 
 	DBG("setting root window atoms: _NET_SUPPORTING_WM_CHECK, _NET_NUMBER_OF_DESKTOPS, _NET_DESKTOP_VIEWPORT,\n"
 		"                           _NET_DESKTOP_GEOMETRY, _NET_CURRENT_DESKTOP, _NET_DESKTOP_NAMES, _NET_SUPPORTED")
@@ -983,16 +989,17 @@ static void initwm(void)
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetDesktopViewport], XCB_ATOM_CARDINAL, 32, 2, (uint32_t []){0, 0});
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetDesktopGeometry], XCB_ATOM_CARDINAL, 32, 2, (uint32_t []){scr_w, scr_h});
 	if ((i = windowprop(root, netatoms[NetCurrentDesktop])))
-		xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetCurrentDesktop], XCB_ATOM_CARDINAL, 32, 1, (uchar *)&i);
+		xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetCurrentDesktop], XCB_ATOM_CARDINAL, 32, 1, &i);
 	else
-		xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetCurrentDesktop], XCB_ATOM_CARDINAL, 32, 1, (uchar *)&selmon->workspace);
+		xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetCurrentDesktop], XCB_ATOM_CARDINAL, 32, 1, &selmon->workspace);
 
 	for (i = 0; i < LEN(workspaces); i++)
 		len += strlen(workspaces[i]) + 1;
 	char wsnames[len];
 	for (i = 0, len = 0; i < LEN(workspaces); i++)
-		for (j = 0; (wsnames[len++] = workspaces[i][j++]););
-	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetDesktopNames], utf8str, 8, --len, wsnames);
+		for (j = 0; (wsnames[len++] = workspaces[i][j]); j++)
+			;
+	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetDesktopNames], wmatoms[utf8str], 8, --len, wsnames);
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetSupported], XCB_ATOM_ATOM, 32, NetLast, netatoms);
 	xcb_delete_property(con, root, netatoms[NetClientList]);
 
@@ -1040,7 +1047,8 @@ static void layoutmon(Monitor *m)
 
 static Client *nexttiled(Client *c)
 {
-	for (; c && (c->floating || c->workspace != c->mon->workspace); c = c->next);
+	while (c && (c->floating || c->workspace != c->mon->workspace))
+		c = c->next;
 	return c;
 }
 
@@ -1197,9 +1205,11 @@ static void setfocus(const Arg *arg)
 		return;
 	DBG("finding %s client from window: %d", arg->i > 0 ? "next" : "previous", selmon->sel->win);
 	if (arg->i > 0) {
-		for (c = selmon->sel->next; c && c->workspace != c->mon->workspace; c = c->next);
+		for (c = selmon->sel->next; c && c->workspace != c->mon->workspace; c = c->next)
+			;
 		if (!c) /* end of list reached */
-			for (c = selmon->clients; c && c->workspace != c->mon->workspace; c = c->next);
+			for (c = selmon->clients; c && c->workspace != c->mon->workspace; c = c->next)
+				;
 	} else {
 		for (i = selmon->clients; i != selmon->sel; i = i->next)
 			if (i->workspace == i->mon->workspace)
@@ -1342,7 +1352,8 @@ static void sigchld(int unused)
 	(void)(unused);
 	if (signal(SIGCHLD, sigchld) == SIG_ERR)
 		errx(1, "can't install SIGCHLD handler");
-	while(0 < waitpid(-1, NULL, WNOHANG));
+	while(0 < waitpid(-1, NULL, WNOHANG))
+		;
 }
 
 static void sizehints(Client *c)
@@ -1415,7 +1426,8 @@ static void tile(Monitor *m)
 	Client *c;
 	uint i, n, h, mw, my, ty;
 
-	for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
+	for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++)
+		;
 	if (n == 0)
 		return;
 	DBG("tiling monitor: %d", m->num);

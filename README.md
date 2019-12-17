@@ -1,4 +1,5 @@
 ### yaxwm
+
 Yet Another X Window Manager
 
 After using dwm for a long time and making a lot of my own modifications *(and learning a fair bit of C)* I decided
@@ -8,18 +9,36 @@ specification for the most part, this makes incorporating external programs poss
 
 Currently there are no set goals or limitations for what I want to achieve with this so suggestions and PRs are welcome.
 
+
 #### Installation
+
 Run `make clean install` *(as root if needed)*.
 
+
 #### Usage
+
 To start yaxwm you can add `exec yaxwm` to your xinitrc.
 
+
 #### Configuration
-Create or edit a `config.h` file *(running make will also do this)* and recompile.
+
+Create a `config.h` file *by copying the default `config.def.h` (running make will also do this)*, edit it to suit your liking, and recompile.
+
+
+#### Todo
+
+- Proper multihead support *(xinerama/randr)*
+
+- Workspaces; assign to monitor, layouts, etc.
+
+- Simplifications and Better error handling.
+
+- New layouts, dual stack?
+
+- Config?
 
 ### Credits
-Obviously a huge thanks to [dwm](https://dmw.suckless.org)
-
+Huge thanks to [dwm](https://dmw.suckless.org) and the suckless community.
 
 Also thanks to [i3wm](https://github.com/i3/i3).
 

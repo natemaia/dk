@@ -274,15 +274,15 @@ static void clientrules(Client *c)
 	pc = xcb_icccm_get_wm_class(con, c->win);
 	DBG("setting client defaults and rule matching");
 	c->floating = 0;
-	i = windowprop(c->win, netatoms[NetWMDesktop]); /* get window's current desktop if any */
+	setclientdesktop(c, (i = windowprop(c->win, netatoms[NetWMDesktop])) ? i : selmon->workspace);
 	if (xcb_icccm_get_wm_class_reply(con, pc, &prop, &e)) {
 		DBG("got window class: %s", prop.class_name);
 		for (i = 0; i < LEN(rules); i++)
 			if (!regexec(&rules[i].regcomp, prop.class_name, 0, NULL, 0)) {
 				DBG("found matching rule");
 				c->floating = rules[i].floating;
-				if (rules[i].workspace >= 0 && i == XCB_ATOM_NONE) /* apply the rule workspace if the window isn't on another */
-					i = rules[i].workspace;
+				if (rules[i].workspace >= 0)
+					setclientdesktop(c, rules[i].workspace);
 				while (m && m->num != rules[i].mon)
 					m = m->next;
 				if (m)
@@ -290,11 +290,10 @@ static void clientrules(Client *c)
 				break;
 			}
 		xcb_icccm_get_wm_class_reply_wipe(&prop);
-	} else {
+	} else if (e) {
 		warnx("failed to get window class - X11 error: %d: %s", e->error_code, xcb_event_get_error_label(e->error_code));
 		free(e);
 	}
-	setclientdesktop(c, i != XCB_ATOM_NONE ? i : c->mon->workspace);
 }
 
 static void detach(Client *c, int reattach)
@@ -722,8 +721,10 @@ static void geometry(Client *c)
 		setfield(&c->bw, g->border_width, &c->old_bw);
 		free(g);
 	} else {
-		warnx("failed to get window geometry - X11 error: %d: %s", e->error_code, xcb_event_get_error_label(e->error_code));
-		free(e);
+		if (e) {
+			warnx("failed to get window geometry - X11 error: %d: %s", e->error_code, xcb_event_get_error_label(e->error_code));
+			free(e);
+		}
 		setfield(&c->w, c->mon->w / 2, &c->old_w);
 		setfield(&c->h, c->mon->h / 2, &c->old_h);
 		setfield(&c->x, c->mon->x + (c->mon->w - c->w / 2), &c->old_x);
@@ -744,7 +745,7 @@ static int grabpointer(xcb_cursor_t cursor)
 	if ((ptr = xcb_grab_pointer_reply(con, pc, &e))) {
 		r = ptr->status == XCB_GRAB_STATUS_SUCCESS ? 1 : 0;
 		free(ptr);
-	} else {
+	} else if (e) {
 		warnx("unable to grab pointer - X11 error: %d: %s", e->error_code, xcb_event_get_error_label(e->error_code));
 		free(e);
 	}
@@ -774,7 +775,7 @@ static void initatoms(xcb_atom_t *atoms, const char **names, int num)
 			DBG("initializing atom: %s - value: %d", names[i], r->atom);
 			atoms[i] = r->atom;
 			free(r);
-		} else {
+		} else if (e) {
 			warnx("unable to initialize atom: %s - X11 error: %d: %s", names[i], e->error_code, xcb_event_get_error_label(e->error_code));
 			free(e);
 		}
@@ -799,7 +800,7 @@ static void initbinds(int onlykeys)
 			free(t);
 		}
 		free(m);
-	} else {
+	} else if (e) {
 		warnx("unable to get modifier mapping for numlockmask - X11 error: %d: %s", e->error_code, xcb_event_get_error_label(e->error_code));
 		free(e);
 	}
@@ -851,7 +852,7 @@ static void initclient(xcb_window_t win)
 		xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_STACK_MODE, (uint32_t []){XCB_STACK_MODE_ABOVE});
 	attach(c);
 	attachstack(c);
-	xcb_change_property(con, XCB_PROP_MODE_APPEND, root, netatoms[NetClientList], XCB_ATOM_WINDOW, 32, 1, (uchar *)&(c->win));
+	xcb_change_property(con, XCB_PROP_MODE_APPEND, root, netatoms[NetClientList], XCB_ATOM_WINDOW, 32, 1, &c->win);
 	setclientstate(c, XCB_ICCCM_WM_STATE_NORMAL);
 	if (c->mon == selmon && selmon->sel)
 		unfocus(selmon->sel, 0);
@@ -889,7 +890,7 @@ static void initexisting(void)
 			free(wa);
 		}
 		free(tree);
-	} else {
+	} else if (e) {
 		warnx("FATAL: unable to query tree from root window - X11 error: %d: %s", e->error_code, xcb_event_get_error_label(e->error_code));
 		free(e);
 		exit(1);
@@ -979,16 +980,17 @@ static void initwm(void)
 	wmcheck = xcb_generate_id(con);
 	xcb_create_window(con, XCB_COPY_FROM_PARENT, wmcheck, root, -1, -1, 1, 1, 0, XCB_WINDOW_CLASS_INPUT_ONLY, scr->root_visual, 0, NULL);
 
-	DBG("setting wm check window atoms: _NET_SUPPORTING_WM_CHECK, _NET_WM_NAME")
+	DBG("setting wm check window atoms: _NET_SUPPORTING_WM_CHECK, _NET_WM_NAME");
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, wmcheck, netatoms[NetWMCheck], XCB_ATOM_WINDOW, 32, 1, &wmcheck);
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, wmcheck, netatoms[NetWMName],  wmatoms[utf8str], 8, 5, "yaxwm");
 
 	DBG("setting root window atoms: _NET_SUPPORTING_WM_CHECK, _NET_NUMBER_OF_DESKTOPS, _NET_DESKTOP_VIEWPORT,\n"
-		"                           _NET_DESKTOP_GEOMETRY, _NET_CURRENT_DESKTOP, _NET_DESKTOP_NAMES, _NET_SUPPORTED")
+		"                           _NET_DESKTOP_GEOMETRY, _NET_CURRENT_DESKTOP, _NET_DESKTOP_NAMES, _NET_SUPPORTED");
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetWMCheck], XCB_ATOM_WINDOW, 32, 1, &wmcheck);
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetNumDesktops], XCB_ATOM_CARDINAL, 32, 1, &nworkspace);
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetDesktopViewport], XCB_ATOM_CARDINAL, 32, 2, (uint32_t []){0, 0});
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetDesktopGeometry], XCB_ATOM_CARDINAL, 32, 2, (uint32_t []){scr_w, scr_h});
+
 	if ((i = windowprop(root, netatoms[NetCurrentDesktop])))
 		xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetCurrentDesktop], XCB_ATOM_CARDINAL, 32, 1, &i);
 	else
@@ -1063,7 +1065,7 @@ static int pointerxy(int *x, int *y)
 		*y = p->root_y;
 		free(p);
 		return 1;
-	} else {
+	} else if (e) {
 		warnx("unable to query pointer - X11 error: %d: %s", e->error_code, xcb_event_get_error_label(e->error_code));
 		free(e);
 	}
@@ -1074,13 +1076,9 @@ static Monitor *ptrtomon(int x, int y)
 {
 	Monitor *m;
 
-	DBG("finding monitor at pointer location: %d,%d", x, y);
 	for (m = mons; m; m = m->next)
-		if (x >= m->winarea_x && x < m->winarea_x + m->winarea_w && y >= m->winarea_y && y < m->winarea_y + m->winarea_h) {
-			DBG("returning monitor: %d", m->num);
+		if (x >= m->winarea_x && x < m->winarea_x + m->winarea_w && y >= m->winarea_y && y < m->winarea_y + m->winarea_h)
 			return m;
-		}
-	DBG("unable to find monitor, returning selected monitor: %d", selmon->num);
 	return selmon;
 }
 
@@ -1137,6 +1135,7 @@ static void restack(Monitor *m)
 				xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_STACK_MODE, (uint32_t []){ XCB_STACK_MODE_BELOW });
 	}
 	xcb_aux_sync(con);
+	ignoreevent(XCB_ENTER_NOTIFY);
 }
 
 static void runcmd(const Arg *arg)
@@ -1174,7 +1173,7 @@ static int sendevent(Client *c, int wmproto)
 		while (!exists && n--)
 			exists = proto.atoms[n] == wmatoms[wmproto];
 		xcb_icccm_get_wm_protocols_reply_wipe(&proto);
-	} else {
+	} else if (e) {
 		warnx("unable to get wm protocol: %s - X11 error: %d: %s", wmatomnames[wmproto], e->error_code, xcb_event_get_error_label(e->error_code));
 		free(e);
 	}
@@ -1385,8 +1384,10 @@ static void sizehints(Client *c)
 	c->increment_w = c->increment_h = 0;
 
 	if (!xcb_icccm_get_wm_normal_hints_reply(con, pc, &s, &e)) {
-		warnx("unable to get wm normal hints - X11 error: %d: %s", e->error_code, xcb_event_get_error_label(e->error_code));
-		free(e);
+		if (e) {
+			warnx("unable to get wm normal hints - X11 error: %d: %s", e->error_code, xcb_event_get_error_label(e->error_code));
+			free(e);
+		}
 		s.flags = XCB_ICCCM_SIZE_HINT_P_SIZE;
 	}
 	if (s.flags & XCB_ICCCM_SIZE_HINT_P_ASPECT) {
@@ -1499,8 +1500,6 @@ static void view(const Arg *arg)
 		xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetCurrentDesktop], XCB_ATOM_CARDINAL, 32, 1, (uchar *)&arg->ui);
 		focusclient(NULL);
 		layoutmon(selmon);
-		xcb_aux_sync(con);
-		ignoreevent(XCB_ENTER_NOTIFY); /* ignore enter notify events when switching workspace to preserve last focused client */
 	}
 }
 
@@ -1511,8 +1510,10 @@ static xcb_get_window_attributes_reply_t *windowattr(xcb_window_t win)
 
 	DBG("getting window attributes from window: %d", win);
 	if (!(wa = xcb_get_window_attributes_reply(con, xcb_get_window_attributes(con, win), &e))) {
-		warnx("unable to get window attributes - X11 error: %d: %s", e->error_code, xcb_event_get_error_label(e->error_code));
-		free(e);
+		if (e) {
+			warnx("unable to get window attributes - X11 error: %d: %s", e->error_code, xcb_event_get_error_label(e->error_code));
+			free(e);
+		}
 	}
 	return wa;
 }
@@ -1528,7 +1529,7 @@ static xcb_atom_t windowprop(xcb_window_t win, xcb_atom_t prop)
 		if (xcb_get_property_value_length(r))
 			ret = *(xcb_atom_t *)xcb_get_property_value(r);
 		free(r);
-	} else {
+	} else if (e) {
 		warnx("unable to get window property - X11 error: %d: %s", e->error_code, xcb_event_get_error_label(e->error_code));
 		free(e);
 	}
@@ -1539,8 +1540,8 @@ static xcb_window_t windowtrans(xcb_window_t win, Client *c)
 {
 	Client *t;
 	xcb_window_t trans;
-	xcb_generic_error_t *e;
 	xcb_get_property_cookie_t pc;
+	xcb_generic_error_t *e = NULL;
 
 	pc = xcb_icccm_get_wm_transient_for(con, win);
 	trans = XCB_WINDOW_NONE;
@@ -1552,7 +1553,7 @@ static xcb_window_t windowtrans(xcb_window_t win, Client *c)
 			c->floating = 1;
 			setclientdesktop(c, t->workspace);
 		}
-	} else {
+	} else if (e) {
 		warnx("unable to get wm transient for hint - X11 error: %d: %s", e->error_code, xcb_event_get_error_label(e->error_code));
 		free(e);
 	}
@@ -1561,10 +1562,10 @@ static xcb_window_t windowtrans(xcb_window_t win, Client *c)
 
 static void windowtype(Client *c)
 {
-	DBG("checking window type for window: %d", c->win)
+	DBG("checking window type for window: %d", c->win);
 	if (windowprop(c->win, netatoms[NetWMState]) == netatoms[NetWMFullscreen])
 		setfullscreen(c, 1);
-	if (windowprop(c->win, netatoms[NetWMWindowType]) == netatoms[NetWMWindowTypeDialog])
+	else if (windowprop(c->win, netatoms[NetWMWindowType]) == netatoms[NetWMWindowTypeDialog])
 		c->floating = 1;
 }
 
@@ -1573,16 +1574,11 @@ static Client *wintoclient(xcb_window_t win)
 	Monitor *m;
 	Client *c = NULL;
 
-	if (win != root) {
-		DBG("finding client from window: %d", win);
+	if (win != root)
 		for (m = mons; m; m = m->next)
 			for (c = m->clients; c; c = c->next)
-				if (c->win == win) {
-					DBG("returning matching client");
+				if (c->win == win)
 					return c;
-				}
-		DBG("unable to find existing client");
-	}
 	return c;
 }
 
@@ -1591,16 +1587,10 @@ static Monitor *wintomon(xcb_window_t win)
 	int x, y;
 	Client *c;
 
-	DBG("finding monitor from window: %d", win);
-	if (win == root) {
-		DBG("root window, returning monitor at pointer location");
+	if (win == root)
 		return pointerxy(&x, &y) ? ptrtomon(x, y) : selmon;
-	}
-	if ((c = wintoclient(win))) {
-		DBG("returning matching monitor");
+	if ((c = wintoclient(win)))
 		return c->mon;
-	}
-	DBG("unable to find monitor");
 	return selmon;
 }
 
@@ -1611,7 +1601,7 @@ static void wmhints(Client *c)
 	
 	DBG("setting wm hints for window: %d", c->win);
 	if (xcb_icccm_get_wm_hints_reply(con, xcb_icccm_get_wm_hints(con, c->win), &wmh, &e)) {
-		DBG("got hints reply")
+		DBG("got hints reply");
 		if (c == selmon->sel && wmh.flags & XCB_ICCCM_WM_HINT_X_URGENCY) {
 			wmh.flags &= ~XCB_ICCCM_WM_HINT_X_URGENCY;
 			xcb_icccm_set_wm_hints(con, c->win, &wmh);
@@ -1621,7 +1611,7 @@ static void wmhints(Client *c)
 			c->nofocus = !wmh.input;
 		else
 			c->nofocus = 0;
-	} else {
+	} else if (e) {
 		warnx("unable to get wm hints - X11 error: %d: %s", e->error_code, xcb_event_get_error_label(e->error_code));
 		free(e);
 	}

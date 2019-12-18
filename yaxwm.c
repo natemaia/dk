@@ -21,8 +21,6 @@
 #define H(x)          ((x)->h + 2 * (x)->bw)
 #define MAX(a, b)     ((a) > (b) ? (a) : (b))
 #define MIN(a, b)     ((a) < (b) ? (a) : (b))
-#define EVTYPE(e)     (e->response_type & 0x7f)
-#define EVISSEND(e)   (e->response_type & ~0x7f)
 #define LEN(x)        (sizeof(x) / sizeof(x[0]))
 #define CLNMOD(m)     (m & ~(numlockmask|XCB_MOD_MASK_LOCK))
 #define BUTTONMASK    XCB_EVENT_MASK_BUTTON_PRESS|XCB_EVENT_MASK_BUTTON_RELEASE
@@ -53,7 +51,8 @@ enum { /* WM atoms */
 enum { /* EWMH atoms */
 	NetSupported, NetWMName, NetWMState, NetWMCheck, NetWMFullscreen, NetNumDesktops,
 	NetCurrentDesktop, NetActiveWindow, NetWMWindowType, NetWMWindowTypeDialog,
-	NetWMDesktop, NetClientList, NetDesktopViewport, NetDesktopGeometry, NetDesktopNames, NetLast
+	NetWMDesktop, NetClientList, NetDesktopViewport, NetDesktopGeometry, NetDesktopNames,
+	NetWMWindowTypeDock, NetLast
 };
 
 union Arg {
@@ -64,7 +63,7 @@ union Arg {
 };
 
 struct Bind {
-	int type;
+	uint type;
 	uint mod;
 	xcb_keysym_t keysym;
 	void (*func)(const Arg *);
@@ -133,6 +132,7 @@ static const char *netatomnames[] = {
 	[NetDesktopViewport] = "_NET_DESKTOP_VIEWPORT",
 	[NetDesktopGeometry] = "_NET_DESKTOP_GEOMETRY",
 	[NetWMFullscreen] = "_NET_WM_STATE_FULLSCREEN",
+	[NetWMWindowTypeDock] = "_NET_WM_WINDOW_TYPE_DOCK",
 	[NetWMWindowTypeDialog] = "_NET_WM_WINDOW_TYPE_DIALOG",
 };
 
@@ -176,7 +176,7 @@ static void freeclient(Client *c, int destroyed);
 static void freemonitor(Monitor *m);
 static void geometry(Client *c);
 static int grabpointer(xcb_cursor_t cursor);
-static void ignoreevent(int type);
+static inline void ignoreevent(int type);
 static void initatoms(xcb_atom_t *atoms, const char **names, int num);
 static void initbinds(int onlykeys);
 static void initclient(xcb_window_t win, xcb_window_t trans);
@@ -193,9 +193,9 @@ static void resize(Client *c, int x, int y, int w, int h);
 static void resizehint(Client *c, int x, int y, int w, int h, int interact);
 static void restack(Monitor *m);
 static int sendevent(Client *c, int wmproto);
-static void setclientdesktop(Client *c, int num);
-static void setclientstate(Client *c, long state);
-static void setfield(int *dst, int val, int *old);
+static inline void setclientdesktop(Client *c, int num);
+static inline void setclientstate(Client *c, long state);
+static inline void setfield(int *dst, int val, int *old);
 static void setfocus(Client *c);
 static void setfullscreen(Client *c, int fullscreen);
 static int setsizehints(Client *c, int *x, int *y, int *w, int *h, int interact);
@@ -374,7 +374,7 @@ static void eventloop(void)
 
 	xcb_aux_sync(con);
 	while (running && (ev = xcb_wait_for_event(con)) != NULL) {
-		switch (EVTYPE(ev)) {
+		switch (XCB_EVENT_RESPONSE_TYPE(ev)) {
 			case XCB_FOCUS_IN:
 			{
 				xcb_focus_in_event_t *e = (xcb_focus_in_event_t *)ev;
@@ -532,23 +532,29 @@ static void eventloop(void)
 				}
 				break;
 			}
-			case XCB_KEY_RELEASE: /* fallthrough */
+			case XCB_KEY_RELEASE:
+			{
+				xcb_keysym_t sym;
+				xcb_key_release_event_t *e = (xcb_key_release_event_t *)ev;
+
+				sym = xcb_key_release_lookup_keysym(keysyms, e, 0);
+				for (i = 0; i < LEN(binds); i++)
+					if (sym == binds[i].keysym && binds[i].type == XCB_KEY_RELEASE && binds[i].func && CLNMOD(binds[i].mod) == CLNMOD(e->state)) {
+						DBG("%s event - key: %u - mod: %u", xcb_event_get_label(ev->response_type), e->detail, CLNMOD(binds[i].mod));
+						binds[i].func(&(binds[i].arg));
+						break;
+					}
+				break;
+			}
 			case XCB_KEY_PRESS:
 			{
 				xcb_keysym_t sym;
-				xcb_key_press_event_t *press = (xcb_key_press_event_t *)ev;
-				xcb_key_release_event_t *release = (xcb_key_release_event_t *)ev;
+				xcb_key_press_event_t *e = (xcb_key_press_event_t *)ev;
 
-				if (EVTYPE(ev) == XCB_KEY_PRESS)
-					sym = xcb_key_press_lookup_keysym(keysyms, press, 0);
-				else
-					sym = xcb_key_release_lookup_keysym(keysyms, release, 0);
+				sym = xcb_key_press_lookup_keysym(keysyms, e, 0);
 				for (i = 0; i < LEN(binds); i++)
-					if (sym == binds[i].keysym && binds[i].type == EVTYPE(ev) && binds[i].func
-							&& ((EVTYPE(ev) == XCB_KEY_PRESS && CLNMOD(binds[i].mod) == CLNMOD(press->state))
-								|| (EVTYPE(ev) == XCB_KEY_RELEASE && CLNMOD(binds[i].mod) == CLNMOD(release->state)))) {
-						DBG("%s event - key: %u - mod: %u", xcb_event_get_label(ev->response_type),
-								EVTYPE(ev) == XCB_KEY_PRESS ? press->detail : release->detail, CLNMOD(binds[i].mod));
+					if (sym == binds[i].keysym && binds[i].type == XCB_KEY_PRESS && binds[i].func && CLNMOD(binds[i].mod) == CLNMOD(e->state)) {
+						DBG("%s event - key: %u - mod: %u", xcb_event_get_label(ev->response_type), e->detail, CLNMOD(binds[i].mod));
 						binds[i].func(&(binds[i].arg));
 						break;
 					}
@@ -560,6 +566,8 @@ static void eventloop(void)
 				xcb_map_request_event_t *e = (xcb_map_request_event_t *)ev;
 
 				DBG("map request event for window: %i", e->window);
+				if (windowprop(e->window, netatoms[NetWMWindowType]) == netatoms[NetWMWindowTypeDock])
+					xcb_map_window(con, e->window);
 				if ((wa = windowattr(e->window)) && !wa->override_redirect && !wintoclient(e->window))
 					initclient(e->window, 0);
 				free(wa);
@@ -570,7 +578,7 @@ static void eventloop(void)
 				xcb_unmap_notify_event_t *e = (xcb_unmap_notify_event_t *)ev;
 
 				if ((c = wintoclient(e->window))) {
-					if (EVISSEND(e)) {
+					if (XCB_EVENT_SENT(e)) {
 						DBG("unmap notify event resulted from a SendEvent for managed window: %i - setting state to withdrawn", e->window);
 						setclientstate(c, XCB_ICCCM_WM_STATE_WITHDRAWN);
 					} else {
@@ -771,11 +779,11 @@ static int grabpointer(xcb_cursor_t cursor)
 	return r;
 }
 
-static void ignoreevent(int type)
+static inline void ignoreevent(int type)
 {
 	xcb_generic_event_t *ev = NULL;
 
-	while ((ev = xcb_poll_for_event(con)) && EVTYPE(ev) != type)
+	while ((ev = xcb_poll_for_event(con)) && XCB_EVENT_RESPONSE_TYPE(ev) != type)
 		;
 	free(ev);
 }
@@ -909,12 +917,16 @@ static void initexisting(void)
 
 		for (i = 0; i < num; i++) { /* non transient */
 			trans[i] = state[i] = XCB_WINDOW_NONE;
+			if (windowprop(wins[i], netatoms[NetWMWindowType]) == netatoms[NetWMWindowTypeDock])
+				continue;
 			if (!(wa[i] = windowattr(wins[i])) || wa[i]->override_redirect || (trans[i] = windowtrans(wins[i])) != XCB_WINDOW_NONE)
 				continue;
 			if (wa[i]->map_state == XCB_MAP_STATE_VIEWABLE || (state[i] = windowprop(wins[i], wmatoms[WMState])) == XCB_ICCCM_WM_STATE_ICONIC)
 				initclient(wins[i], 0);
 		}
 		for (i = 0; i < num; i++) { /* transients */
+			if (windowprop(wins[i], netatoms[NetWMWindowType]) == netatoms[NetWMWindowTypeDock])
+				continue;
 			if (wa[i] && trans[i] && (wa[i]->map_state == XCB_MAP_STATE_VIEWABLE || state[i] == XCB_ICCCM_WM_STATE_ICONIC))
 				initclient(wins[i], trans[i]);
 			free(wa[i]);
@@ -1028,9 +1040,9 @@ static void initwm(void)
 		len += sstrlen(workspaces[i]) + 1;
 	char names[len];
 	for (i = 0, len = 0; i < LEN(workspaces); i++)
-		for (j = 0; (names[len] = workspaces[i][j]); j++, len++) /* assign then check (copy terminating null) */
+		for (j = 0; (names[len++] = workspaces[i][j]); j++) /* assign then check (copy terminating null) */
 			;
-	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetDesktopNames], wmatoms[utf8str], 8, len, names);
+	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetDesktopNames], wmatoms[utf8str], 8, --len, names);
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetSupported], XCB_ATOM_ATOM, 32, NetLast, netatoms);
 	xcb_delete_property(con, root, netatoms[NetClientList]);
 
@@ -1219,20 +1231,18 @@ static int sendevent(Client *c, int wmproto)
 	return exists;
 }
 
-static void setclientdesktop(Client *c, int num)
+static inline void setclientdesktop(Client *c, int num)
 {
 	c->workspace = num;
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, c->win, netatoms[NetWMDesktop], XCB_ATOM_CARDINAL, 32, 1, &num);
 }
 
-static void setclientstate(Client *c, long state)
+static inline void setclientstate(Client *c, long state)
 {
-	long data[] = { state, XCB_ATOM_NONE };
-
-	xcb_change_property(con, XCB_PROP_MODE_REPLACE, c->win, wmatoms[WMState], wmatoms[WMState], 32, 2, (uchar *)data);
+	xcb_change_property(con, XCB_PROP_MODE_REPLACE, c->win, wmatoms[WMState], wmatoms[WMState], 32, 2, (long []){state, XCB_ATOM_NONE});
 }
 
-static void setfield(int *dst, int val, int *old)
+static inline void setfield(int *dst, int val, int *old)
 {
 	if (old)
 		*old = *dst;

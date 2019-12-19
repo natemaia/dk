@@ -566,9 +566,11 @@ static void eventloop(void)
 				xcb_map_request_event_t *e = (xcb_map_request_event_t *)ev;
 
 				DBG("map request event for window: %i", e->window);
-				if (windowprop(e->window, netatoms[NetWMWindowType]) == netatoms[NetWMWindowTypeDock])
+				if (windowprop(e->window, netatoms[NetWMWindowType]) == netatoms[NetWMWindowTypeDock]) {
+					fprintf(stderr, "map request window is type: _NET_WM_WINDOW_TYPE_DOCK");
 					xcb_map_window(con, e->window);
-				if ((wa = windowattr(e->window)) && !wa->override_redirect && !wintoclient(e->window))
+					break;
+				} else if ((wa = windowattr(e->window)) && !wa->override_redirect && !wintoclient(e->window))
 					initclient(e->window, 0);
 				free(wa);
 				break;

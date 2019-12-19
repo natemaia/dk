@@ -35,6 +35,7 @@ typedef struct Rule Rule;
 typedef struct Client Client;
 typedef struct Layout Layout;
 typedef struct Monitor Monitor;
+typedef struct Workspace Workspace;
 
 enum { /* cursors */
 	Normal, Move, Resize, CurLast
@@ -77,30 +78,57 @@ struct Rule {
 	regex_t regcomp;
 };
 
-struct Client {
-	int x, y, w, h, bw;
-	uint workspace;
-	float min_aspect, max_aspect;
-	int old_x, old_y, old_w, old_h, old_bw;
-	int base_w, base_h, increment_w, increment_h, max_w, max_h, min_w, min_h;
-	int fixed, floating, fullscreen, urgent, nofocus, oldstate;
-	Client *next, *snext;
-	Monitor *mon;
-	xcb_window_t win;
-};
-
 struct Layout {
 	void (*func)(Monitor *);
 };
 
+struct Client {
+	/* geometry */
+	int x, y, w, h, bw;
+	int old_x, old_y, old_w, old_h, old_bw;
+
+	/* size hints */
+	int max_w, max_h;
+	int min_w, min_h;
+	int base_w, base_h;
+	int increment_w, increment_h;
+	float min_aspect, max_aspect;
+
+	/* state */
+	int fixed, floating, fullscreen, urgent, nofocus, oldstate;
+
+	/* linkage */
+	Client *next;
+	Workspace *ws;
+	xcb_window_t win;
+};
+
 struct Monitor {
+	uint num;
+
+	/* geometry */
 	int x, y, w, h;
-	float splitratio;
-	uint num, workspace, nmaster;
 	int winarea_x, winarea_y, winarea_w, winarea_h;
-	Client *clients, *stack, *sel;
-	Monitor *next;
-	Layout *layout;
+
+	/* linkage */
+	Monitor *next; /* next monitor - for looping */
+	Workspace *ws; /* currently selected workspace on this monitor */
+};
+
+struct Workspace {
+	uint num;
+
+	/* configuration */
+	char *name;
+	uint nmaster;
+	float ratio;
+
+	/* linkage */
+	Client *sel;     /* selected client on this workspace */
+	Client *clients; /* this workspaces client list */
+	Monitor *mon;    /* monitor this workspace is attached to */
+	Layout *layout;  /* the layout currently set on this workspace */
+	Workspace *next; /* next workspace - for looping */
 };
 
 static const char *cursors[] = {
@@ -141,7 +169,11 @@ static int scr_h;
 static char *argv0;
 static xcb_screen_t *scr;
 static xcb_connection_t *con;
-static Monitor *mons, *selmon;
+
+static Monitor *monhead, *selmon;
+
+static Workspace *wshead, *selws;
+
 static xcb_window_t root, wmcheck;
 static xcb_key_symbols_t *keysyms;
 static xcb_cursor_t cursor[CurLast];
@@ -185,6 +217,8 @@ static void initscreen(void);
 static Monitor *initmon(int num);
 static int initmons(void);
 static void initwm(void);
+static Workspace *initworkspace(char *name, int num, Monitor *mon);
+static void initworkspaces(void);
 static void layoutmon(Monitor *m);
 static Client *nexttiled(Client *c);
 static int pointerxy(int *x, int *y);
@@ -301,7 +335,7 @@ static void clientrules(Client *c)
 {
 	int ws;
 	uint i;
-	Monitor *m = mons;
+	Monitor *m = monhead;
 	xcb_generic_error_t *e;
 	xcb_get_property_cookie_t pc;
 	xcb_icccm_get_wm_class_reply_t prop;
@@ -394,7 +428,7 @@ static void eventloop(void)
 					scr_w = e->width;
 					scr_h = e->height;
 					if (initmons()) {
-						for (m = mons; m; m = m->next)
+						for (m = monhead; m; m = m->next)
 							for (c = m->clients; c; c = c->next)
 								if (c->fullscreen)
 									resize(c, m->x, m->y, m->w, m->h);
@@ -694,7 +728,7 @@ static void freeclient(Client *c, int destroyed)
 	free(c);
 	focus(NULL);
 	xcb_delete_property(con, root, netatoms[NetClientList]);
-	for (m = mons; m; m = m->next)
+	for (m = monhead; m; m = m->next)
 		for (n = m->clients; n; n = n->next)
 			xcb_change_property(con, XCB_PROP_MODE_APPEND, root, netatoms[NetClientList], XCB_ATOM_WINDOW, 32, 1, &n->win);
 	layoutmon(focusmon);
@@ -704,10 +738,10 @@ static void freemonitor(Monitor *m)
 {
 	Monitor *mon;
 
-	if (m == mons)
-		mons = mons->next;
+	if (m == monhead)
+		monhead = monhead->next;
 	else {
-		for (mon = mons; mon && mon->next != m; mon = mon->next);
+		for (mon = monhead; mon && mon->next != m; mon = mon->next);
 		mon->next = m->next;
 	}
 	DBG("freeing monitor: %d", m->num);
@@ -719,14 +753,14 @@ static void freewm(void)
 	uint i;
 	Monitor *m;
 
-	for (m = mons; m; m = m->next)
+	for (m = monhead; m; m = m->next)
 		while (m->stack)
 			freeclient(m->stack, 0);
 	xcb_ungrab_button(con, XCB_BUTTON_INDEX_ANY, root, XCB_MOD_MASK_ANY);
 	xcb_ungrab_key(con, XCB_GRAB_ANY, root, XCB_MOD_MASK_ANY);
 	xcb_key_symbols_free(keysyms);
-	while (mons)
-		freemonitor(mons);
+	while (monhead)
+		freemonitor(monhead);
 	for (i = 0; i < LEN(cursors); i++)
 		xcb_free_cursor(con, cursor[i]);
 	xcb_destroy_window(con, wmcheck);
@@ -949,10 +983,6 @@ static Monitor *initmon(int num)
 	if (!(m = calloc(1, sizeof(Monitor))))
 		errx(1, "unable to allocate space for new monitor: %d", num);
 	m->num = num;
-	m->workspace = 0;
-	m->nmaster = nmaster;
-	m->layout = &layouts[0];
-	m->splitratio = splitratio;
 	return m;
 }
 
@@ -961,17 +991,18 @@ static int initmons(void)
 	int dirty = 0, num = 0;
 
 	DBG("updating monitor(s)");
-	if (!mons)
-		mons = initmon(num++);
-	if (mons->w != scr_w || mons->h != scr_h) {
+	if (!monhead)
+		monhead = initmon(num++);
+	if (monhead->w != scr_w || monhead->h != scr_h) {
 		dirty = 1;
-		mons->w = mons->winarea_w = scr_w;
-		mons->h = mons->winarea_h = scr_h;
+		monhead->w = monhead->winarea_w = scr_w;
+		monhead->h = monhead->winarea_h = scr_h;
 	}
 	if (dirty) {
-		selmon = mons;
+		selmon = monhead;
 		selmon = wintomon(root);
 	}
+
 	return dirty;
 }
 
@@ -987,6 +1018,7 @@ static void initscreen(void)
 
 static void initwm(void)
 {
+	Monitor *m;
 	int r, len = 0;
 	char errbuf[256];
 	xcb_void_cookie_t c;
@@ -998,7 +1030,12 @@ static void initwm(void)
 
 	DBG("initializing %s", argv0);
 	sigchld(0);
+
+	/* monitors & workspaces */
 	initmons();
+	initworkspaces();
+
+	/* cursors */
 	if (xcb_cursor_context_new(con, scr, &ctx) < 0)
 		errx(1, "unable to create cursor context");
 	for (i = 0; i < LEN(cursors); i++) {
@@ -1007,28 +1044,20 @@ static void initwm(void)
 	}
 	xcb_cursor_context_free(ctx);
 
-	for (i = 0; i < LEN(rules); i++) {
+	/* rules regex */
+	for (i = 0; i < LEN(rules); i++)
 		if ((r = regcomp(&rules[i].regcomp, rules[i].regex, REG_NOSUB|REG_EXTENDED|REG_ICASE))) {
 			regerror(r, &rules[i].regcomp, errbuf, sizeof(errbuf));
 			errx(1, "invalid regex rules[%d]: %s: %s\n", i, rules[i].regex, errbuf);
 		}
-		DBG("compiled rules[%d] regex: %s", i, rules[i].regex);
-	}
 
-	DBG("initializing atoms");
+	/* atoms */
 	initatoms(wmatoms, wmatomnames, LEN(wmatomnames));
 	initatoms(netatoms, netatomnames, LEN(netatomnames));
-
-	DBG("creating wm check window");
 	wmcheck = xcb_generate_id(con);
 	xcb_create_window(con, XCB_COPY_FROM_PARENT, wmcheck, root, -1, -1, 1, 1, 0, XCB_WINDOW_CLASS_INPUT_ONLY, scr->root_visual, 0, NULL);
-
-	DBG("setting wm check window atoms: _NET_SUPPORTING_WM_CHECK, _NET_WM_NAME");
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, wmcheck, netatoms[NetWMCheck], XCB_ATOM_WINDOW, 32, 1, &wmcheck);
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, wmcheck, netatoms[NetWMName],  wmatoms[utf8str], 8, 5, "yaxwm");
-
-	DBG("setting root window atoms: _NET_SUPPORTING_WM_CHECK, _NET_NUMBER_OF_DESKTOPS, _NET_DESKTOP_VIEWPORT,\n"
-		"                           _NET_DESKTOP_GEOMETRY, _NET_CURRENT_DESKTOP, _NET_DESKTOP_NAMES, _NET_SUPPORTED");
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetWMCheck], XCB_ATOM_WINDOW, 32, 1, &wmcheck);
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetNumDesktops], XCB_ATOM_CARDINAL, 32, 1, &nworkspace);
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetDesktopViewport], XCB_ATOM_CARDINAL, 32, 2, (uint32_t []){0, 0});
@@ -1042,22 +1071,67 @@ static void initwm(void)
 		len += sstrlen(workspaces[i]) + 1;
 	char names[len];
 	for (i = 0, len = 0; i < LEN(workspaces); i++)
-		for (j = 0; (names[len++] = workspaces[i][j]); j++) /* assign then check (copy terminating null) */
+		for (j = 0; (names[len++] = workspaces[i][j]); j++)
 			;
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetDesktopNames], wmatoms[utf8str], 8, --len, names);
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetSupported], XCB_ATOM_ATOM, 32, NetLast, netatoms);
 	xcb_delete_property(con, root, netatoms[NetClientList]);
 
-	DBG("setting root window event mask and cursor");
+	/* root window event mask & cursor */
 	c = xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK|XCB_CW_CURSOR, (uint32_t []){mask, cursor[Normal]});
 	if ((e = xcb_request_check(con, c))) {
 		free(e);
 		errx(1, "unable to change root window event mask and cursor");
 	}
+
+	/* mouse & keybinds */
 	if (!(keysyms = xcb_key_symbols_alloc(con)))
 		errx(1, "error unable to get keysyms from X connection");
 	initbinds(0);
+
 	focus(NULL);
+}
+
+static Workspace *initworkspace(char *name, int num, Monitor *mon)
+{
+	Workspace *ws;
+
+	DBG("initializing new workspace: %s: %d", name, num);
+	if (!(ws = calloc(1, sizeof(Workspace))))
+		errx(1, "unable to allocate space for new workspace: %s: %d", name, num);
+	ws->num = num;
+	ws->mon = mon;
+	ws->name = name;
+	ws->nmaster = nmaster;
+	ws->ratio = splitratio;
+	ws->layout = &layouts[0];
+	return ws;
+}
+
+static void initworkspaces(void)
+{
+	Monitor *m;
+	Workspace *ws, *tws;
+	uint total = LEN(workspaces);
+	uint i, total, n = 0, assigned = 0, wspermon;
+
+	for (m = monhead; m; m = m->next)
+		 ++n;
+	wspermon = total / n;
+	for (m = monhead; m && assigned < total; m = m->next)
+		for (i = 0; i < wspermon && assigned < total; ++i) {
+			ws = initworkspace(workspaces[assigned], assigned++, m);
+			if (wshead) {
+				tws->next = ws; /* attach */
+				tws = ws;       /* new tail */
+				if (!i)
+					m->ws = ws;
+			} else {
+				wshead = ws;
+				tws = ws; /* initial tail */
+				monhead->ws = ws;
+			}
+		}
 }
 
 static void killclient(const Arg *arg)
@@ -1080,13 +1154,13 @@ static void layoutmon(Monitor *m)
 {
 	if (m)
 		showhide(m->stack);
-	else for (m = mons; m; m = m->next)
+	else for (m = monhead; m; m = m->next)
 		showhide(m->stack);
 	if (m) {
 		if (m->layout->func)
 			m->layout->func(m);
 		restack(m);
-	} else for (m = mons; m; m = m->next)
+	} else for (m = monhead; m; m = m->next)
 		if (m->layout->func)
 			m->layout->func(m);
 }
@@ -1119,7 +1193,7 @@ static Monitor *ptrtomon(int x, int y)
 {
 	Monitor *m;
 
-	for (m = mons; m; m = m->next)
+	for (m = monhead; m; m = m->next)
 		if (x >= m->winarea_x && x < m->winarea_x + m->winarea_w && y >= m->winarea_y && y < m->winarea_y + m->winarea_h)
 			return m;
 	return selmon;
@@ -1630,7 +1704,7 @@ static Client *wintoclient(xcb_window_t win)
 	Client *c = NULL;
 
 	if (win != root)
-		for (m = mons; m; m = m->next)
+		for (m = monhead; m; m = m->next)
 			for (c = m->clients; c; c = c->next)
 				if (c->win == win)
 					return c;

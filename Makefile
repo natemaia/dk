@@ -1,6 +1,6 @@
 # yaxwm - yet another x window manager
 
-PREFIX = /usr
+PREFIX = /usr/local
 
 CC = cc
 CCFLAGS = -Wall -Wextra -O3

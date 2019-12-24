@@ -79,7 +79,7 @@ struct Rule {
 };
 
 struct Layout {
-	void (*func)(Monitor *);
+	void (*func)(Workspace *);
 };
 
 struct Client {
@@ -201,6 +201,7 @@ static void assignworkspaces(void);
 static void configure(Client *c);
 static void clientrules(Client *c);
 static void detach(Client *c, int reattach);
+static inline void *ecalloc(size_t nmemb, size_t size);
 static void eventloop(void);
 static void focus(Client *c);
 static void freewm(void);
@@ -217,8 +218,9 @@ static void initscreen(void);
 static Monitor *initmon(int num);
 static int initmons(void);
 static void initwm(void);
-static Workspace *initworkspace(char *name, int num, Monitor *mon);
+static Workspace *initworkspace(char *name, int num);
 static void initworkspaces(void);
+static Workspace *itows(uint num);
 static void layoutws(Workspace *ws);
 static Client *nexttiled(Client *c);
 static int pointerxy(int *x, int *y);
@@ -227,7 +229,7 @@ static void resize(Client *c, int x, int y, int w, int h);
 static void resizehint(Client *c, int x, int y, int w, int h, int interact);
 static void restack(Workspace *ws);
 static int sendevent(Client *c, int wmproto);
-static inline void setclientdesktop(Client *c, int num);
+static inline void setclientdesktop(Client *c, uint num);
 static inline void setclientstate(Client *c, long state);
 static inline void setfield(int *dst, int val, int *old);
 static void setfocus(Client *c);
@@ -237,7 +239,7 @@ static void showhide(Client *c);
 static void sigchld(int unused);
 static void sizehints(Client *c);
 static int sstrlen(const char *str);
-static void tile(Monitor *m);
+static void tile(Workspace *ws);
 static void unfocus(Client *c, int focusroot);
 static xcb_get_window_attributes_reply_t *windowattr(xcb_window_t win);
 static void windowhints(Client *c);
@@ -285,18 +287,32 @@ static void attachstack(Client *c)
 static void assignworkspaces(void)
 {
 	Monitor *m;
+	Workspace *ws;
 	uint i, j, n = 0;
-	Workspace *ws, *tws;
 
 	for (m = mons; m; m = m->next)
 		 ++n;
 	j = LEN(workspaces) / n;
+	DBG("assigning workspaces: %d workspaces - %d per monitor", LEN(workspaces), j);
+	/* this works well when the number of workspaces can be evenly divided by the number of monitors (not that often) */
 	for (m = mons, ws = wses; m; m = m->next)
 		for (i = 0; ws && i < j; ++i, ws = ws->next) {
 			ws->mon = m;
-			if (!i) /* first of each loop is an initial workspace */
+			DBG("workspace: %d - monitor: %d - %s workspace", ws->num, m->num, i ? "inactive" : "active");
+			if (!i)
 				m->ws = ws;
 		}
+	if (j * n != LEN(workspaces)) {
+		DBG("remaining workspace(s) left over from division between monitors, assigning one to each monitor until exhausted");
+		for (m = mons; ws; m = mons) { /* continuously walk the monitor list until we exhaust all workspaces */
+			while (ws && m) { /* still workspaces to assign and not at the end of the monitor list yet */
+				DBG("assigning workspace: %d to monitor: %d", ws->num, m->num);
+				ws->mon = m;
+				ws = ws->next;
+				m = m->next;
+			}
+		}
+	}
 }
 
 static void changefocus(const Arg *arg)
@@ -341,7 +357,6 @@ static void clientrules(Client *c)
 {
 	int ws;
 	uint i;
-	Monitor *m = mons;
 	xcb_generic_error_t *e;
 	xcb_get_property_cookie_t pc;
 	xcb_icccm_get_wm_class_reply_t prop;
@@ -384,13 +399,22 @@ static void detach(Client *c, int reattach)
 
 static void detachstack(Client *c)
 {
-	Client *t, **tc = &c->ws->stack;
+	Client **tc = &c->ws->stack;
 
 	while (*tc && *tc != c)
 		tc = &(*tc)->snext;
 	*tc = c->snext;
 	if (c == c->ws->sel)
 		c->ws->sel = c->ws->stack;
+}
+
+static inline void *ecalloc(size_t nmemb, size_t size)
+{
+	void *p;
+
+	if (!(p = calloc(nmemb, size))) /* calloc(3) is crucial because it zeroes the memory, linked list ->next will always be NULL */
+		err(1, "unable to allocate space");
+	return p;
 }
 
 static void eventloop(void)
@@ -542,6 +566,13 @@ static void eventloop(void)
 				}
 				if (mousebtn == 3)
 					ignoreevent(XCB_ENTER_NOTIFY);
+				else if (mousebtn == 1) {
+					if ((m = ptrtomon(selws->sel->x + selws->sel->w / 2, selws->sel->y + selws->sel->h / 2)) != selmon) {
+						sendmon(selws->sel, m);
+						selmon = m;
+						focus(NULL);
+					}
+				}
 				mousebtn = 0;
 				break;
 			}
@@ -913,8 +944,7 @@ static void initclient(xcb_window_t win, xcb_window_t trans)
 	uint32_t mask = XCB_EVENT_MASK_ENTER_WINDOW|XCB_EVENT_MASK_FOCUS_CHANGE|XCB_EVENT_MASK_PROPERTY_CHANGE|XCB_EVENT_MASK_STRUCTURE_NOTIFY;
 
 	DBG("initializing new client from window: %d", win);
-	if (!(c = (Client *)calloc(1, sizeof(Client))))
-		errx(1, "unable to allocate space for new client");
+	c = ecalloc(1, sizeof(Client));
 	c->win = win;
 	if ((!w || w == XCB_WINDOW_NONE) && (w = windowtrans(c->win)) == XCB_WINDOW_NONE)
 		clientrules(c);
@@ -922,7 +952,7 @@ static void initclient(xcb_window_t win, xcb_window_t trans)
 		DBG("window is transient of managed client, setting workspace and monitor to match");
 		c->ws = t->ws;
 		c->floating = 1;
-		setclientdesktop(c, t->ws);
+		setclientdesktop(c, c->ws->num);
 	}
 	m = c->ws->mon;
 	geometry(c);
@@ -998,8 +1028,7 @@ static Monitor *initmon(int num)
 	Monitor *m;
 
 	DBG("initializing new monitor: %d", num);
-	if (!(m = calloc(1, sizeof(Monitor))))
-		errx(1, "unable to allocate space for new monitor: %d", num);
+	m = ecalloc(1, sizeof(Monitor));
 	m->num = num;
 	return m;
 }
@@ -1036,14 +1065,13 @@ static void initscreen(void)
 
 static void initwm(void)
 {
-	Monitor *m;
 	Workspace *ws;
 	int r, len = 0;
 	char errbuf[256];
 	xcb_void_cookie_t c;
 	xcb_generic_error_t *e;
 	xcb_cursor_context_t *ctx;
-	uint i, j, nworkspace = LEN(workspaces);
+	uint i, j, cws = 0, nworkspace = LEN(workspaces);
 	uint32_t mask = XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT|XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY
 		|XCB_EVENT_MASK_ENTER_WINDOW|XCB_EVENT_MASK_STRUCTURE_NOTIFY|XCB_EVENT_MASK_PROPERTY_CHANGE;
 
@@ -1082,12 +1110,16 @@ static void initwm(void)
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetNumDesktops], XCB_ATOM_CARDINAL, 32, 1, &nworkspace);
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetDesktopViewport], XCB_ATOM_CARDINAL, 32, 2, (uint32_t []){0, 0});
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetDesktopGeometry], XCB_ATOM_CARDINAL, 32, 2, (uint32_t []){scr_w, scr_h});
-	if ((r = windowprop(root, netatoms[NetCurrentDesktop])) < 0)
-		r = 0;
-	for (ws = wses; ws && ws->num != r; ws = ws->next)
+
+	/* NetCurrentDesktop */
+	if ((r = windowprop(root, netatoms[NetCurrentDesktop])) >= 0)
+		cws = r;
+	for (ws = wses; ws && ws->num != cws; ws = ws->next)
 		;
 	selmon->ws = ws;
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetCurrentDesktop], XCB_ATOM_CARDINAL, 32, 1, &selmon->ws->num);
+
+	/* NetDesktopNames */
 	for (i = 0; i < LEN(workspaces); i++)
 		len += sstrlen(workspaces[i]) + 1;
 	char names[len];
@@ -1118,8 +1150,7 @@ static Workspace *initworkspace(char *name, int num)
 	Workspace *ws;
 
 	DBG("initializing new workspace: %s: %d", name, num);
-	if (!(ws = calloc(1, sizeof(Workspace))))
-		errx(1, "unable to allocate space for new workspace: %s: %d", name, num);
+	ws = ecalloc(1, sizeof(Workspace));
 	ws->num = num;
 	ws->name = name;
 	ws->nmaster = nmaster;
@@ -1133,13 +1164,15 @@ static void initworkspaces(void)
 	uint i = 0;
 	Workspace *ws;
 
-	if (!wses)
-		wses = initworkspace(workspaces[i], i++)
-	for (ws = wses; i < LEN(workspaces); ws = ws->next)
-		ws->next = initworkspace(workspaces[i], i++);
+	if (!wses) {
+		wses = initworkspace(workspaces[i], i);
+		i++;
+	}
+	for (ws = wses; i < LEN(workspaces); ws = ws->next, i++)
+		ws->next = initworkspace(workspaces[i], i);
 }
 
-static Workspace *itows(int num)
+static Workspace *itows(uint num)
 {
 	Workspace *ws = wses;
 
@@ -1334,7 +1367,7 @@ static void sendmon(Client *c, Monitor *m)
 	layoutws(NULL);
 }
 
-static inline void setclientdesktop(Client *c, int num)
+static inline void setclientdesktop(Client *c, uint num)
 {
 	c->ws = itows(num);
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, c->win, netatoms[NetWMDesktop], XCB_ATOM_CARDINAL, 32, 1, &num);
@@ -1404,7 +1437,7 @@ static void setnmaster(const Arg *arg)
 static int setsizehints(Client *c, int *x, int *y, int *w, int *h, int interact)
 {
 	int baseismin;
-	Monitor *m = c->mon;
+	Monitor *m = c->ws->mon;
 
 	/* set minimum possible */
 	*w = MAX(1, *w);
@@ -1420,7 +1453,7 @@ static int setsizehints(Client *c, int *x, int *y, int *w, int *h, int interact)
 		if (*x + *w + 2 * c->bw < m->x) *x = m->x;
 		if (*y + *h + 2 * c->bw < m->y) *y = m->y;
 	}
-	if (c->floating || !m->layout->func) {
+	if (c->floating || !c->ws->layout->func) {
 		if (!(baseismin = c->base_w == c->min_w && c->base_h == c->min_h)) { /* temporarily remove base dimensions */
 			*w -= c->base_w;
 			*h -= c->base_h;
@@ -1566,7 +1599,7 @@ static void swapclient(const Arg *arg)
 	DBG("swapping current client window: %d", c->win);
 	detach(c, 1);
 	focus(c);
-	layoutws(c->mon);
+	layoutws(c->ws);
 }
 
 static void tile(Workspace *ws)

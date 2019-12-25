@@ -194,7 +194,7 @@ static void eventloop(void);
 static void focus(Client *c);
 static void follow(const Arg *arg);
 static void freeclient(Client *c, int destroyed);
-static void freemonitor(Monitor *m);
+static void freemon(Monitor *m);
 static void freewm(void);
 static void geometry(Client *c);
 static void initatoms(xcb_atom_t *atoms, const char **names, int num);
@@ -752,7 +752,7 @@ static void freeclient(Client *c, int destroyed)
 	layoutws(focusws);
 }
 
-static void freemonitor(Monitor *m)
+static void freemon(Monitor *m)
 {
 	Monitor *mon;
 
@@ -764,20 +764,6 @@ static void freemonitor(Monitor *m)
 	}
 	DBG("freeing monitor: %d", m->num);
 	free(m);
-}
-
-static void freeworkspace(Workspace *ws)
-{
-	Workspace *workspace;
-
-	if (ws == wses)
-		wses = wses->next;
-	else {
-		for (workspace = wses; workspace && workspace->next != ws; workspace = workspace->next);
-		workspace->next = ws->next;
-	}
-	DBG("freeing workspace: %d", ws->num);
-	free(ws);
 }
 
 static void freewm(void)
@@ -792,16 +778,32 @@ static void freewm(void)
 	xcb_ungrab_key(con, XCB_GRAB_ANY, root, XCB_MOD_MASK_ANY);
 	xcb_key_symbols_free(keysyms);
 	while (mons)
-		freemonitor(mons);
+		freemon(mons);
 	while (wses)
-		freeworkspace(wses);
+		freews(wses);
 	for (i = 0; i < LEN(cursors); i++)
 		xcb_free_cursor(con, cursor[i]);
+	for (i = 0; i < LEN(rules); i++)
+		regfree(&rules[i].regcomp);
 	xcb_destroy_window(con, wmcheck);
 	xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, XCB_INPUT_FOCUS_POINTER_ROOT, XCB_CURRENT_TIME);
 	xcb_aux_sync(con);
 	xcb_delete_property(con, root, netatoms[NetActiveWindow]);
 	xcb_disconnect(con);
+}
+
+static void freews(Workspace *ws)
+{
+	Workspace *workspace;
+
+	if (ws == wses)
+		wses = wses->next;
+	else {
+		for (workspace = wses; workspace && workspace->next != ws; workspace = workspace->next);
+		workspace->next = ws->next;
+	}
+	DBG("freeing workspace: %d", ws->num);
+	free(ws);
 }
 
 static void geometry(Client *c)

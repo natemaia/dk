@@ -25,12 +25,12 @@ static char *workspaces[] = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" }
 static int borders[] = { [Width] = 1, [Focus] = 0x6699cc, [Unfocus] = 0x000000 };
 
 /* layout functions, first is default */
-static Layout layouts[] = { { tile }, { NULL } };
+static void (*layouts[])(Workspace *) = { tile, NULL };
 
 /* client rule matching */
 static Rule rules[] = {
-	/* window class/instance regex (case insensitive)      workspace  floating   monitor   compiled regex */
-	{ "^(steam|lxappearance|pavucontrol|transmission-gtk)$",  -1,        1,        -1,         {0} },
+	/* window class/instance regex (case insensitive)      workspace  floating */
+	{ "^(steam|lxappearance|pavucontrol|transmission-gtk)$",  -1,        1 },
 };
 
 static Bind binds[] = {
@@ -48,13 +48,13 @@ static Bind binds[] = {
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_l,      setsplit,     {.f = +0.01} },
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_t,      setlayout,    {.v = &layouts[0]} },
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_f,      setlayout,    {.v = &layouts[1]} },
-	{ XCB_KEY_PRESS,   MODKEY|XCB_MOD_MASK_SHIFT, XK_Return, runcmd,       {.v = (char *[]){"st", NULL} } },
-	{ XCB_KEY_PRESS,   MODKEY,                    XK_Print,  runcmd,       {.v = (char *[]){"scrot", NULL} } },
-	{ XCB_KEY_PRESS,   MODKEY,                    XK_p,      runcmd,       {.v = (char *[]){"dmenu_run", NULL} } },
-	{ XCB_KEY_RELEASE, MODKEY|XCB_MOD_MASK_SHIFT, XK_Print,  runcmd,       {.v = (char *[]){"scrot", "-s", NULL} } },
-	{ XCB_KEY_PRESS,   0,                         XK_VolTg,  runcmd,       {.v = (char *[]){"pamixer", "-t", NULL} } },
-	{ XCB_KEY_PRESS,   0,                         XK_VolUp,  runcmd,       {.v = (char *[]){"pamixer", "-i", "2", NULL} } },
-	{ XCB_KEY_PRESS,   0,                         XK_VolDn,  runcmd,       {.v = (char *[]){"pamixer", "-d", "2", NULL} } },
+	{ XCB_KEY_PRESS,   MODKEY|XCB_MOD_MASK_SHIFT, XK_Return, runcmd,       {.v = (char *[]){"st", NULL}} },
+	{ XCB_KEY_PRESS,   MODKEY,                    XK_Print,  runcmd,       {.v = (char *[]){"scrot", NULL}} },
+	{ XCB_KEY_PRESS,   MODKEY,                    XK_p,      runcmd,       {.v = (char *[]){"dmenu_run", NULL}} },
+	{ XCB_KEY_RELEASE, MODKEY|XCB_MOD_MASK_SHIFT, XK_Print,  runcmd,       {.v = (char *[]){"scrot", "-s", NULL}} },
+	{ XCB_KEY_PRESS,   0,                         XK_VolTg,  runcmd,       {.v = (char *[]){"pamixer", "-t", NULL}} },
+	{ XCB_KEY_PRESS,   0,                         XK_VolUp,  runcmd,       {.v = (char *[]){"pamixer", "-i", "2", NULL}} },
+	{ XCB_KEY_PRESS,   0,                         XK_VolDn,  runcmd,       {.v = (char *[]){"pamixer", "-d", "2", NULL}} },
 	WSKEYS(0, XK_1), WSKEYS(1, XK_2), WSKEYS(2, XK_3), WSKEYS(3, XK_4), WSKEYS(4, XK_5),
 	WSKEYS(5, XK_6), WSKEYS(6, XK_7), WSKEYS(7, XK_8), WSKEYS(8, XK_9), WSKEYS(9, XK_0),
 };

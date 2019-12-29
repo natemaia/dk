@@ -169,7 +169,7 @@ static Client *nexttiled(Client *c);
 static Client *wintoclient(xcb_window_t win);
 static Monitor *initmon(int num);
 static Monitor *ptrtomon(int x, int y);
-static Workspace *initworkspace(char *name, int num);
+static Workspace *initws(char *name, int num);
 static Workspace *itows(uint num);
 static Workspace *wintows(xcb_window_t win);
 static inline void *ecalloc(size_t nmemb, size_t size);
@@ -196,6 +196,7 @@ static void follow(const Arg *arg);
 static void freeclient(Client *c, int destroyed);
 static void freemon(Monitor *m);
 static void freewm(void);
+static void freews(Workspace *ws);
 static void geometry(Client *c);
 static void initatoms(xcb_atom_t *atoms, const char **names, int num);
 static void initbinds(int onlykeys);
@@ -232,7 +233,7 @@ static xcb_get_window_attributes_reply_t *windowattr(xcb_window_t win);
 static xcb_window_t windowtrans(xcb_window_t win);
 
 #ifdef DEBUG
-static void dprint(const char *fmt, ...)
+static void print(const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
@@ -240,7 +241,7 @@ static void dprint(const char *fmt, ...)
 	va_end(ap);
 	fprintf(stderr, "\n");
 }
-#define DBG(fmt, ...) dprint("%s:%d - " fmt, __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define DBG(fmt, ...) print("%s:%d - " fmt, __FUNCTION__, __LINE__, ##__VA_ARGS__)
 #else
 #define DBG(fmt, ...)
 #endif
@@ -277,24 +278,23 @@ static void assignworkspaces(void)
 	if (!n)
 		errx(1, "fatal error: no monitors available, exiting..");
 	j = LEN(workspaces) / n;
-	DBG("assigning workspaces: %d workspaces - %d per monitor", LEN(workspaces), j);
+	DBG("%d workspaces - %d per monitor", LEN(workspaces), j);
 	for (m = mons, ws = wses; m; m = m->next)
 		for (i = 0; ws && i < j; ++i, ws = ws->next) {
 			ws->mon = m;
-			DBG("workspace: %d - monitor: %d - %s workspace", ws->num, m->num, i ? "inactive" : "active");
+			DBG("workspace: %d - monitor: %d", ws->num, m->num);
 			if (!i)
 				m->ws = ws;
 		}
 	if (j * n != LEN(workspaces)) {
-		DBG("remaining workspace(s) left over after dividing between monitors, assigning one per monitor until exhausted");
-		for (m = mons; ws; m = mons) {
+		DBG("leftovers after dividing between monitors, assigning one per monitor until exhausted");
+		for (m = mons; ws; m = mons)
 			while (ws && m) {
-				DBG("assigning workspace: %d to monitor: %d", ws->num, m->num);
+				DBG("workspace: %d - monitor: %d", ws->num, m->num);
 				ws->mon = m;
 				ws = ws->next;
 				m = m->next;
 			}
-		}
 	}
 }
 
@@ -433,6 +433,8 @@ static void eventloop(void)
 					scr_w = e->width;
 					scr_h = e->height;
 					if (initmons() || i) {
+						xcb_change_property(con, XCB_PROP_MODE_REPLACE, root,
+								netatoms[NetDesktopGeometry], XCB_ATOM_CARDINAL, 32, 2, (uint32_t []){scr_w, scr_h});
 						assignworkspaces();
 						for (ws = wses; ws; ws = ws->next)
 							for (c = ws->clients; c; c = c->next)
@@ -530,9 +532,11 @@ static void eventloop(void)
 				if (b->detail == XCB_BUTTON_INDEX_1 || b->detail == XCB_BUTTON_INDEX_3) {
 					DBG("button press event - button: %d", b->detail);
 					restack(selws);
-					if ((mousebtn = b->detail) == XCB_BUTTON_INDEX_1)
+					if ((mousebtn = b->detail) == XCB_BUTTON_INDEX_1) {
+						if (CLNMOD(0) == CLNMOD(b->state))
+							break;
 						xcb_warp_pointer(con, XCB_NONE, c->win, 0, 0, 0, 0, c->w/2, c->h/2);
-					else
+					} else
 						xcb_warp_pointer(con, XCB_NONE, c->win, 0, 0, 0, 0, c->w, c->h);
 					if (!grabpointer(cursor[b->detail == XCB_BUTTON_INDEX_1 ? Move : Resize]))
 						break;
@@ -857,6 +861,7 @@ static inline void ignoreevent(int type)
 
 	while ((ev = xcb_poll_for_event(con)) && XCB_EVENT_RESPONSE_TYPE(ev) != type)
 		;
+	xcb_poll_for_event(con);
 	free(ev);
 }
 
@@ -1051,7 +1056,7 @@ static void initwm(void)
 	xcb_void_cookie_t c;
 	xcb_generic_error_t *e;
 	xcb_cursor_context_t *ctx;
-	uint i, j, cws = 0, nworkspace = LEN(workspaces);
+	uint i, j, cws, n = LEN(workspaces);
 	uint32_t mask = XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT|XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY
 		|XCB_EVENT_MASK_ENTER_WINDOW|XCB_EVENT_MASK_STRUCTURE_NOTIFY|XCB_EVENT_MASK_PROPERTY_CHANGE;
 
@@ -1066,10 +1071,8 @@ static void initwm(void)
 	/* cursors */
 	if (xcb_cursor_context_new(con, scr, &ctx) < 0)
 		errx(1, "unable to create cursor context");
-	for (i = 0; i < LEN(cursors); i++) {
+	for (i = 0; i < LEN(cursors); i++)
 		cursor[i] = xcb_cursor_load_cursor(ctx, cursors[i]);
-		DBG("initialized cursor: %s", cursors[i]);
-	}
 	xcb_cursor_context_free(ctx);
 
 	/* rules regex */
@@ -1087,28 +1090,30 @@ static void initwm(void)
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, wmcheck, netatoms[NetWMCheck], XCB_ATOM_WINDOW, 32, 1, &wmcheck);
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, wmcheck, netatoms[NetWMName],  wmatoms[utf8str], 8, 5, "yaxwm");
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetWMCheck], XCB_ATOM_WINDOW, 32, 1, &wmcheck);
-	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetNumDesktops], XCB_ATOM_CARDINAL, 32, 1, &nworkspace);
+	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetNumDesktops], XCB_ATOM_CARDINAL, 32, 1, &n);
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetDesktopViewport], XCB_ATOM_CARDINAL, 32, 2, (uint32_t []){0, 0});
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetDesktopGeometry], XCB_ATOM_CARDINAL, 32, 2, (uint32_t []){scr_w, scr_h});
+	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetSupported], XCB_ATOM_ATOM, 32, NetLast, netatoms);
+	xcb_delete_property(con, root, netatoms[NetClientList]);
 
 	/* NetCurrentDesktop */
-	if ((r = windowprop(root, netatoms[NetCurrentDesktop])) >= 0)
-		cws = r;
+	if ((r = windowprop(root, netatoms[NetCurrentDesktop])) < 0)
+		r = 0;
+	cws = r;
 	for (ws = wses; ws && ws->num != cws; ws = ws->next)
 		;
 	selws = ws;
+	selws->mon->ws = ws;
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetCurrentDesktop], XCB_ATOM_CARDINAL, 32, 1, &selws->num);
 
 	/* NetDesktopNames */
-	for (i = 0; i < LEN(workspaces); i++)
+	for (i = 0; i < n; i++)
 		len += sstrlen(workspaces[i]) + 1;
 	char names[len];
-	for (i = 0, len = 0; i < LEN(workspaces); i++)
+	for (i = 0, len = 0; i < n; i++)
 		for (j = 0; (names[len++] = workspaces[i][j]); j++)
 			;
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetDesktopNames], wmatoms[utf8str], 8, --len, names);
-	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetSupported], XCB_ATOM_ATOM, 32, NetLast, netatoms);
-	xcb_delete_property(con, root, netatoms[NetClientList]);
 
 	/* root window event mask & cursor */
 	c = xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK|XCB_CW_CURSOR, (uint32_t []){mask, cursor[Normal]});
@@ -1121,11 +1126,23 @@ static void initwm(void)
 	if (!(keysyms = xcb_key_symbols_alloc(con)))
 		errx(1, "error unable to get keysyms from X connection");
 	initbinds(0);
-
 	focus(NULL);
 }
 
-static Workspace *initworkspace(char *name, int num)
+static void initworkspaces(void)
+{
+	uint i = 0;
+	Workspace *ws;
+
+	if (!wses) {
+		wses = initws(workspaces[i], i);
+		i++;
+	}
+	for (ws = wses; i < LEN(workspaces); ws = ws->next, i++)
+		ws->next = initws(workspaces[i], i);
+}
+
+static Workspace *initws(char *name, int num)
 {
 	Workspace *ws;
 
@@ -1137,20 +1154,6 @@ static Workspace *initworkspace(char *name, int num)
 	ws->ratio = splitratio;
 	ws->layout = layouts[0];
 	return ws;
-}
-
-static void initworkspaces(void)
-{
-	uint i = 0;
-	Workspace *ws;
-
-	if (!wses) {
-		wses = initworkspace(workspaces[i], i);
-		i++;
-	}
-	for (ws = wses; i < LEN(workspaces); ws = ws->next, i++)
-		ws->next = initworkspace(workspaces[i], i);
-	selws = wses;
 }
 
 static Workspace *itows(uint num)
@@ -1180,17 +1183,20 @@ static void killclient(const Arg *arg)
 
 static void layoutws(Workspace *ws)
 {
-	if (ws)
-		showhide(ws->stack);
-	else for (ws = wses; ws; ws = ws->next)
-		showhide(ws->stack);
 	if (ws) {
+		showhide(ws->stack);
 		if (ws->layout)
 			ws->layout(ws);
 		restack(ws);
-	} else for (ws = wses; ws; ws = ws->next)
-		if (ws->layout)
+	} else for (ws = wses; ws; ws = ws->next) {
+		showhide(ws->stack);
+		if (ws == ws->mon->ws && ws->layout) {
 			ws->layout(ws);
+			restack(ws);
+		}
+	}
+	xcb_aux_sync(con);
+	ignoreevent(XCB_ENTER_NOTIFY);
 }
 
 static Client *nexttiled(Client *c)
@@ -1276,8 +1282,6 @@ static void restack(Workspace *ws)
 			if (!c->floating && c->ws == c->ws->mon->ws)
 				xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_STACK_MODE, (uint32_t []){ XCB_STACK_MODE_BELOW });
 	}
-	xcb_aux_sync(con);
-	ignoreevent(XCB_ENTER_NOTIFY);
 }
 
 static void runcmd(const Arg *arg)
@@ -1294,10 +1298,17 @@ static void runcmd(const Arg *arg)
 
 static void send(const Arg *arg)
 {
-	if (selws->sel && arg->ui != selws->num) {
-		setclientdesktop(selws->sel, arg->ui);
+	Client *c;
+
+	if ((c = selws->sel) && arg->ui != selws->num) {
+		unfocus(c, 1);
+		detach(c, 0);
+		detachstack(c);
+		setclientdesktop(c, arg->ui);
+		attach(c, 0);
+		attachstack(c);
 		focus(NULL);
-		layoutws(selws);
+		layoutws(NULL);
 	}
 }
 
@@ -1339,7 +1350,7 @@ static void sendmon(Client *c, Monitor *m)
 	unfocus(c, 1);
 	detach(c, 0);
 	detachstack(c);
-	c->ws = m->ws;
+	setclientdesktop(c, m->ws->num);
 	attach(c, 0);
 	attachstack(c);
 	focus(NULL);
@@ -1480,14 +1491,14 @@ static void showhide(Client *c)
 	if (!c)
 		return;
 	if (c->ws == c->ws->mon->ws) {
-		DBG("showing clients breadthfirst");
+		DBG("showing client: %d - workspace: %d", c->win, c->ws->num);
 		xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_X|XCB_CONFIG_WINDOW_Y, (uint32_t []){ c->x, c->y });
 		if ((!c->ws->layout || c->floating) && !c->fullscreen)
 			resizehint(c, c->x, c->y, c->w, c->h, 0);
 		showhide(c->snext);
 	} else {
-		DBG("hiding clients depthfirst");
 		showhide(c->snext);
+		DBG("hiding client: %d - workspace: %d", c->win, c->ws->num);
 		xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_X|XCB_CONFIG_WINDOW_Y, (uint32_t []){ W(c) * -2, c->y });
 	}
 }
@@ -1651,12 +1662,12 @@ static void view(const Arg *arg)
 		if (!ws)
 			errx(1, "fatal error: reached the end of workspaces without finding a match for %d", arg->ui);
 		selws = ws;
-		if (ws != selws->mon->ws)
-			selws->mon->ws = ws;
+		selws->mon->ws = ws;
 		xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetCurrentDesktop], XCB_ATOM_CARDINAL, 32, 1, (uchar *)&arg->ui);
 		focus(NULL);
-		layoutws(selws);
-		xcb_aux_sync(con);
+		layoutws(NULL);
+		if (!ws->stack)
+			xcb_aux_sync(con);
 	}
 }
 

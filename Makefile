@@ -4,7 +4,7 @@ PREFIX = /usr/local
 
 CC = cc
 CCFLAGS = -Wall -Wextra -Wno-missing-field-initializers -O3
-LDFLAGS = -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr -lxcb-ewmh
+LDFLAGS = -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
 
 all: yaxwm
 

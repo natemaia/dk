@@ -8,8 +8,6 @@
 #include <locale.h>
 #include <sys/wait.h>
 
-#include <assert.h>
-
 #include <xcb/xcb.h>
 #include <xcb/xproto.h>
 #include <xcb/xcb_util.h>
@@ -532,11 +530,9 @@ static void eventloop(void)
 				if (b->detail == XCB_BUTTON_INDEX_1 || b->detail == XCB_BUTTON_INDEX_3) {
 					DBG("button press event - button: %d", b->detail);
 					restack(selws);
-					if ((mousebtn = b->detail) == XCB_BUTTON_INDEX_1) {
-						if (CLNMOD(0) == CLNMOD(b->state))
-							break;
+					if ((mousebtn = b->detail) == XCB_BUTTON_INDEX_1)
 						xcb_warp_pointer(con, XCB_NONE, c->win, 0, 0, 0, 0, c->w/2, c->h/2);
-					} else
+					else
 						xcb_warp_pointer(con, XCB_NONE, c->win, 0, 0, 0, 0, c->w, c->h);
 					if (!grabpointer(cursor[b->detail == XCB_BUTTON_INDEX_1 ? Move : Resize]))
 						break;
@@ -551,15 +547,13 @@ static void eventloop(void)
 					free(err);
 					errx(1, "failed to ungrab pointer");
 				}
-				if (mousebtn == 3)
-					ignoreevent(XCB_ENTER_NOTIFY);
-				else if (mousebtn == 1) {
-					if ((m = ptrtomon(selws->sel->x + selws->sel->w / 2, selws->sel->y + selws->sel->h / 2)) != selws->mon) {
-						sendmon(selws->sel, m);
-						selws = m->ws;
-						focus(NULL);
-					}
+				if (selws->sel && (m = ptrtomon(selws->sel->x + selws->sel->w / 2, selws->sel->y + selws->sel->h / 2)) != selws->mon) {
+					sendmon(selws->sel, m);
+					selws = m->ws;
+					focus(NULL);
 				}
+				if (mousebtn == XCB_BUTTON_INDEX_3)
+					ignoreevent(XCB_ENTER_NOTIFY);
 				mousebtn = 0;
 				break;
 			}

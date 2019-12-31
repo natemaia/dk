@@ -9,6 +9,7 @@
 #include <sys/wait.h>
 
 #include <xcb/xcb.h>
+#include <xcb/randr.h>
 #include <xcb/xproto.h>
 #include <xcb/xcb_util.h>
 #include <xcb/xcb_atom.h>
@@ -88,6 +89,8 @@ struct Client {
 
 struct Monitor {
 	uint num;
+    char *name;
+    xcb_randr_output_t id;
 
 	/* geometry */
 	int x, y, w, h;
@@ -298,21 +301,19 @@ static void assignworkspaces(void)
 
 static void changefocus(const Arg *arg)
 {
-	Client *c = NULL, *i;
+	Client *c;
 
 	if (!selws->sel || selws->sel->fullscreen)
 		return;
-	DBG("finding %s client from window: %d", arg->i > 0 ? "next" : "previous", selws->sel->win);
 	if (arg->i > 0)
 		c = selws->sel->next ? selws->sel->next : selws->clients;
-	else for (i = selws->clients; i != selws->sel; i = i->next)
-		c = i;
+	else for (c = selws->clients; c && c != selws->sel; c = c->next)
+		if (c->next == selws->sel)
+			break;
 	if (c) {
-		DBG("found client window: %d", c->win);
+		DBG("focusing %s client", arg->i > 0 ? "next" : "previous");
 		focus(c);
 		restack(c->ws);
-	} else {
-		DBG("unable to find next client");
 	}
 }
 
@@ -575,28 +576,15 @@ static void eventloop(void)
 				}
 				break;
 			}
-			case XCB_KEY_RELEASE:
-			{
-				xcb_keysym_t sym;
-				xcb_key_release_event_t *e = (xcb_key_release_event_t *)ev;
-
-				sym = xcb_key_release_lookup_keysym(keysyms, e, 0);
-				for (i = 0; i < LEN(binds); i++)
-					if (sym == binds[i].keysym && binds[i].type == XCB_KEY_RELEASE && binds[i].func && CLNMOD(binds[i].mod) == CLNMOD(e->state)) {
-						DBG("%s event - key: %u - mod: %u", xcb_event_get_label(ev->response_type), e->detail, CLNMOD(binds[i].mod));
-						binds[i].func(&(binds[i].arg));
-						break;
-					}
-				break;
-			}
+			case XCB_KEY_RELEASE: /* fallthrough */
 			case XCB_KEY_PRESS:
 			{
 				xcb_keysym_t sym;
 				xcb_key_press_event_t *e = (xcb_key_press_event_t *)ev;
 
-				sym = xcb_key_press_lookup_keysym(keysyms, e, 0);
+				sym = xcb_key_symbols_get_keysym(keysyms, e->detail, 0);
 				for (i = 0; i < LEN(binds); i++)
-					if (sym == binds[i].keysym && binds[i].type == XCB_KEY_PRESS && binds[i].func && CLNMOD(binds[i].mod) == CLNMOD(e->state)) {
+					if (sym == binds[i].keysym && binds[i].type == XCB_EVENT_RESPONSE_TYPE(ev) && binds[i].func && CLNMOD(binds[i].mod) == CLNMOD(e->state)) {
 						DBG("%s event - key: %u - mod: %u", xcb_event_get_label(ev->response_type), e->detail, CLNMOD(binds[i].mod));
 						binds[i].func(&(binds[i].arg));
 						break;
@@ -1026,6 +1014,8 @@ static int initmons(void)
 		mons = initmon(num++);
 	if (mons->w != scr_w || mons->h != scr_h) {
 		dirty = 1;
+		mons->x = mons->winarea_x = 0;
+		mons->y = mons->winarea_y = 0;
 		mons->w = mons->winarea_w = scr_w;
 		mons->h = mons->winarea_h = scr_h;
 	}

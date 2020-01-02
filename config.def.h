@@ -27,10 +27,17 @@ static int borders[] = { [Width] = 1, [Focus] = 0x6699cc, [Unfocus] = 0x000000 }
 /* layout functions, first is default */
 static void (*layouts[])(Workspace *) = { tile, NULL };
 
-/* client rule matching */
+/* client rule matching, when monitor and workspace are -1 then use the current workspace
+ *                       when workspace is -1 and monitor is >-1 use the current workspace on that monitor
+ *                       when workspace is >-1 and monitor is >-1 then the workspace takes precedence
+ * eg.
+ * { "regex",  NULL,           -1, 1 },  - set to the current workspace
+ * { "regex", "HDMI-A-0",       5, 1 },  - set to workspace 5 regardless what monitor it's on
+ * { "regex", "DisplayPort-0", -1, 1 },  - set to the active workspace on monitor DisplayPort-0
+ */
 static Rule rules[] = {
-	/* window class/instance regex (case insensitive)      workspace  floating */
-	{ "^(steam|lxappearance|pavucontrol|transmission-gtk)$",  -1,        1 },
+	/* window class/instance regex (case insensitive)        monitor  workspace  floating */
+	{ "^(steam|lxappearance|pavucontrol|transmission-gtk)$",  NULL,      -1,        1 },
 };
 
 static Bind binds[] = {

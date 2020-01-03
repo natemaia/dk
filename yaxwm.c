@@ -181,7 +181,7 @@ static inline void resizehint(Client *c, int x, int y, int w, int h, int interac
 static inline void setclientdesktop(Client *c, uint num);
 static inline void setclientstate(Client *c, long state);
 static int grabpointer(xcb_cursor_t cursor);
-static int initmons(xcb_randr_output_t *outputs, int len, xcb_timestamp_t t);
+static int initmons(xcb_randr_output_t *outputs, int len);
 static int initrandr(void);
 static int pointerxy(int *x, int *y);
 static int sendevent(Client *c, int wmproto);
@@ -312,13 +312,8 @@ static void changefocus(const Arg *arg)
 		return;
 	if (arg->i > 0)
 		c = selws->sel->next ? selws->sel->next : selws->clients;
-	else {
-		for (c = selws->clients; c && c->next != selws->sel; c = c->next)
-			;
-		if (!c)
-			for (c = selws->clients; c && c->next; c = c->next)
-				;
-	}
+	else for (c = selws->clients; c && c->next && c->next != selws->sel; c = c->next)
+		;
 	if (c) {
 		DBG("focusing %s client", arg->i > 0 ? "next" : "previous");
 		focus(c);
@@ -531,12 +526,12 @@ static void eventloop(void)
 			{
 				xcb_enter_notify_event_t *e = (xcb_enter_notify_event_t *)ev;
 				
+				if (e->event != root && (e->mode != XCB_NOTIFY_MODE_NORMAL || e->detail == XCB_NOTIFY_DETAIL_INFERIOR))
+					break;
 				if (ignoreenter) {
 					ignoreenter--;
 					break;
 				}
-				if (e->event != root && (e->mode != XCB_NOTIFY_MODE_NORMAL || e->detail == XCB_NOTIFY_DETAIL_INFERIOR))
-					break;
 				DBG("enter notify event - window: %d", e->event);
 				c = wintoclient(e->event);
 				if ((ws = c ? c->ws : wintows(e->event)) != selws) {
@@ -1048,7 +1043,7 @@ static Monitor *initmon(char *name, int namelen, xcb_randr_output_t id, int x, i
 	return m;
 }
 
-static int initmons(xcb_randr_output_t *outputs, int len, xcb_timestamp_t t)
+static int initmons(xcb_randr_output_t *outputs, int len)
 {
     char *name;
 	int i, changed = 0, namelen = 256, nlen;
@@ -1060,7 +1055,7 @@ static int initmons(xcb_randr_output_t *outputs, int len, xcb_timestamp_t t)
 	name = ecalloc(1, namelen);
 	DBG("got %d outputs, requesting info for each");
 	for (i = 0; i < len; i++)
-		oc[i] = xcb_randr_get_output_info(con, outputs[i], t);
+		oc[i] = xcb_randr_get_output_info(con, outputs[i], XCB_CURRENT_TIME);
 	for (i = 0; i < len; i++) {
 		if (!(outp = xcb_randr_get_output_info_reply(con, oc[i], NULL))) {
 			DBG("unable to get monitor info for output: %d", outputs[i]);
@@ -1068,7 +1063,7 @@ static int initmons(xcb_randr_output_t *outputs, int len, xcb_timestamp_t t)
 		}
 		for (m = mons; m && m->next; m = m->next) /* find the tail */
 			;
-		if (outp->crtc != XCB_NONE && (crtc = xcb_randr_get_crtc_info_reply(con, xcb_randr_get_crtc_info(con, outp->crtc, t), NULL))) {
+		if (outp->crtc != XCB_NONE && (crtc = xcb_randr_get_crtc_info_reply(con, xcb_randr_get_crtc_info(con, outp->crtc, XCB_CURRENT_TIME), NULL))) {
 			nlen = snprintf(name, namelen, "%.*s", xcb_randr_get_output_info_name_length(outp), xcb_randr_get_output_info_name(outp));
 			DBG("crtc: %s -- location: %d,%d -- size: %dx%d -- status: %d", name, crtc->x, crtc->y, crtc->width, crtc->height, crtc->status);
 			if ((clone = randrclone(outputs[i], crtc->x, crtc->y, crtc->width, crtc->height))) {
@@ -1128,8 +1123,7 @@ static int initrandr(void)
 		warnx("unable to get screen resources, using entire screen");
 		return (randrbase = -1);
 	}
-	changed = initmons(xcb_randr_get_screen_resources_current_outputs(r),
-			xcb_randr_get_screen_resources_current_outputs_length(r), r->config_timestamp);
+	changed = initmons(xcb_randr_get_screen_resources_current_outputs(r), xcb_randr_get_screen_resources_current_outputs_length(r));
 	free(r);
 	if (changed != -1) {
 		randrbase = ext->first_event;

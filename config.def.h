@@ -1,11 +1,9 @@
 /* In order to configure yaxwm, copy this file to config.h and edit it */
 
-/* modifier for most binds including mouse move/resize */
-#define MODKEY  XCB_MOD_MASK_1
-
-#define XK_VolDn  0x1008ff11  /* dedicated volume down on most keyboards */
-#define XK_VolTg  0x1008ff12  /* dedicated mute toggle on most keyboards */
-#define XK_VolUp  0x1008ff13  /* dedicated volume up on most keyboards */
+#define MODKEY    XCB_MOD_MASK_1 /* modifier for most binds including mouse move/resize */
+#define XK_VolDn  0x1008ff11     /* dedicated volume down on most keyboards */
+#define XK_VolTg  0x1008ff12     /* dedicated mute toggle on most keyboards */
+#define XK_VolUp  0x1008ff13     /* dedicated volume up on most keyboards */
 
 /* save some repetitive typing with the workspace keybinds */
 #define WSKEYS(ws, key) { XCB_KEY_PRESS, MODKEY,                      key, view,   {.ui = ws} },\
@@ -28,12 +26,12 @@ static int borders[] = { [Width] = 1, [Focus] = 0x6699cc, [Unfocus] = 0x000000 }
 static void (*layouts[])(Workspace *) = { tile, NULL };
 
 /* client rule matching, when monitor and workspace are -1 then use the current workspace
- *                       when workspace is -1 and monitor is >-1 use the current workspace on that monitor
- *                       when workspace is >-1 and monitor is >-1 then the workspace takes precedence
+ *                       when workspace is > -1 and monitor is > -1 the workspace takes precedence
+ *                       when workspace is -1 and monitor is > -1 use the active workspace on that monitor
  * eg.
- * { "regex",  NULL,           -1, 1 },  - set to the current workspace
- * { "regex", "HDMI-A-0",       5, 1 },  - set to workspace 5 regardless what monitor it's on
- * { "regex", "DisplayPort-0", -1, 1 },  - set to the active workspace on monitor DisplayPort-0
+ * { "regex",  NULL,           -1, 0 },  - set to the current workspace, tiled
+ * { "regex", "HDMI-A-0",       5, 1 },  - set to workspace 5 regardless what monitor it's on, floating
+ * { "regex", "DisplayPort-0", -1, 1 },  - set to the active workspace on monitor DisplayPort-0, floating
  */
 static Rule rules[] = {
 	/* window class/instance regex (case insensitive)        monitor  workspace  floating */

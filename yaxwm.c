@@ -153,8 +153,9 @@ static const char *netatomnames[] = {
 static char *argv0; /* argv[0] from main (program name) */
 static Monitor *mons; /* monitor linked list head */
 static int scr_w, scr_h; /* root window size */
-static int randrbase; /* first randr extension response, -1 on failure */
+static int randrbase = -1; /* first randr extension response */
 static uint running = 1; /* exit cleanly when 0 */
+static uint ignoreenter = 0; /* number of enter notify events we want to ignore */
 static xcb_screen_t *scr; /* the X screen */
 static uint numlockmask = 0; /* numlock modifier bit mask */
 static xcb_connection_t *con; /* xcb connection to the X server */
@@ -176,7 +177,6 @@ static Workspace *initws(char *name, int num);
 static Workspace *itows(uint num);
 static Workspace *wintows(xcb_window_t win);
 static inline void *ecalloc(size_t nmemb, size_t size);
-static inline void ignoreevent(int type);
 static inline void resizehint(Client *c, int x, int y, int w, int h, int interact);
 static inline void setclientdesktop(Client *c, uint num);
 static inline void setclientstate(Client *c, long state);
@@ -312,9 +312,13 @@ static void changefocus(const Arg *arg)
 		return;
 	if (arg->i > 0)
 		c = selws->sel->next ? selws->sel->next : selws->clients;
-	else for (c = selws->clients; c && c != selws->sel; c = c->next)
-		if (c->next == selws->sel)
-			break;
+	else {
+		for (c = selws->clients; c && c->next != selws->sel; c = c->next)
+			;
+		if (!c)
+			for (c = selws->clients; c && c->next; c = c->next)
+				;
+	}
 	if (c) {
 		DBG("focusing %s client", arg->i > 0 ? "next" : "previous");
 		focus(c);
@@ -424,7 +428,7 @@ static void eventloop(void)
 	while (running && (ev = xcb_wait_for_event(con)) != NULL) {
 		if (randrbase != -1 && ev->response_type == randrbase + XCB_RANDR_SCREEN_CHANGE_NOTIFY) {
 			DBG("RANDR screen change notify, updating monitors");
-			if (initrandr())
+			if (initrandr() > 0)
 				fixupworkspaces();
 			free(ev);
 			continue;
@@ -434,7 +438,7 @@ static void eventloop(void)
 			{
 				xcb_focus_in_event_t *e = (xcb_focus_in_event_t *)ev;
 
-				if (selws->sel && e->event != selws->sel->win) {
+				if (selws->sel && e->event != selws->sel->win && (c = wintoclient(e->event))) {
 					DBG("focus in event for window: %d - focusing selected window: %d", e->event, selws->sel->win);
 					setfocus(selws->sel);
 				}
@@ -526,7 +530,11 @@ static void eventloop(void)
 			case XCB_ENTER_NOTIFY:
 			{
 				xcb_enter_notify_event_t *e = (xcb_enter_notify_event_t *)ev;
-
+				
+				if (ignoreenter) {
+					ignoreenter--;
+					break;
+				}
 				if (e->event != root && (e->mode != XCB_NOTIFY_MODE_NORMAL || e->detail == XCB_NOTIFY_DETAIL_INFERIOR))
 					break;
 				DBG("enter notify event - window: %d", e->event);
@@ -572,7 +580,7 @@ static void eventloop(void)
 					focus(NULL);
 				}
 				if (mousebtn == XCB_BUTTON_INDEX_3)
-					ignoreevent(XCB_ENTER_NOTIFY);
+					ignoreenter++;
 				mousebtn = 0;
 				break;
 			}
@@ -874,16 +882,6 @@ static int grabpointer(xcb_cursor_t cursor)
 	return r;
 }
 
-static inline void ignoreevent(int type)
-{
-	xcb_generic_event_t *ev = NULL;
-
-	while ((ev = xcb_poll_for_event(con)) && XCB_EVENT_RESPONSE_TYPE(ev) != type)
-		;
-	xcb_poll_for_event(con);
-	free(ev);
-}
-
 static void initatoms(xcb_atom_t *atoms, const char **names, int num)
 {
 	int i;
@@ -1052,13 +1050,15 @@ static Monitor *initmon(char *name, int namelen, xcb_randr_output_t id, int x, i
 
 static int initmons(xcb_randr_output_t *outputs, int len, xcb_timestamp_t t)
 {
-    char name[256];
-	int i, changed = 0, nlen;
+    char *name;
+	int i, changed = 0, namelen = 256, nlen;
 	Monitor *m, *exists, *clone;
     xcb_randr_get_output_info_reply_t *outp;
     xcb_randr_get_output_info_cookie_t oc[len];
     xcb_randr_get_crtc_info_reply_t *crtc = NULL;
 
+	name = ecalloc(1, namelen);
+	DBG("got %d outputs, requesting info for each");
 	for (i = 0; i < len; i++)
 		oc[i] = xcb_randr_get_output_info(con, outputs[i], t);
 	for (i = 0; i < len; i++) {
@@ -1066,10 +1066,10 @@ static int initmons(xcb_randr_output_t *outputs, int len, xcb_timestamp_t t)
 			DBG("unable to get monitor info for output: %d", outputs[i]);
 			continue;
 		}
-		for (m = mons; m && m->next; m = m->next)
+		for (m = mons; m && m->next; m = m->next) /* find the tail */
 			;
 		if (outp->crtc != XCB_NONE && (crtc = xcb_randr_get_crtc_info_reply(con, xcb_randr_get_crtc_info(con, outp->crtc, t), NULL))) {
-			nlen = snprintf(name, sizeof(name), "%.*s", xcb_randr_get_output_info_name_length(outp), xcb_randr_get_output_info_name(outp));
+			nlen = snprintf(name, namelen, "%.*s", xcb_randr_get_output_info_name_length(outp), xcb_randr_get_output_info_name(outp));
 			DBG("crtc: %s -- location: %d,%d -- size: %dx%d -- status: %d", name, crtc->x, crtc->y, crtc->width, crtc->height, crtc->status);
 			if ((clone = randrclone(outputs[i], crtc->x, crtc->y, crtc->width, crtc->height))) {
 				DBG("monitor %s, id %d is a clone of %s, id %d, skipping", name, outputs[i], clone->name, clone->id);
@@ -1104,32 +1104,41 @@ static int initmons(xcb_randr_output_t *outputs, int len, xcb_timestamp_t t)
 		}
         free(outp);
     }
-	if (!mons) /* randr is active but no outputs were available or active, Xnest, Xephyr, etc. */
+	free(name);
+	if (!mons) {
+		DBG("RANDR extension is active but no monitors were initialized, using entire screen");
 		return -1;
+	}
 	return changed;
 }
 
 static int initrandr(void)
 {
 	int changed;
-    const xcb_query_extension_reply_t *ext; /* this should not be freed by us and is managed by the extension cache */
+    const xcb_query_extension_reply_t *ext;
     xcb_randr_get_screen_resources_current_reply_t *r;
+    xcb_randr_get_screen_resources_current_cookie_t rc;
 
-	if (!(ext = xcb_get_extension_data(con, &xcb_randr_id)) || !ext->present
-			|| !(r = xcb_randr_get_screen_resources_current_reply(con, xcb_randr_get_screen_resources_current(con, root), NULL))) {
-		warnx("RANDR extension is not available, using entire root window area");
+	ext = xcb_get_extension_data(con, &xcb_randr_id);
+	rc = xcb_randr_get_screen_resources_current(con, root);
+	if (!ext || !ext->present) {
+		warnx("RANDR extension is not available, using entire screen");
+		return (randrbase = -1);
+	} else if (!(r = xcb_randr_get_screen_resources_current_reply(con, rc, NULL))) {
+		warnx("unable to get screen resources, using entire screen");
 		return (randrbase = -1);
 	}
-	DBG("getting RANDR screen resources for root window");
-	changed = initmons(xcb_randr_get_screen_resources_current_outputs(r), xcb_randr_get_screen_resources_current_outputs_length(r), r->config_timestamp);
+	changed = initmons(xcb_randr_get_screen_resources_current_outputs(r),
+			xcb_randr_get_screen_resources_current_outputs_length(r), r->config_timestamp);
 	free(r);
-	randrbase = ext->first_event;
 	if (changed != -1) {
-		xcb_randr_select_input(con, root, XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE|XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE|
-				XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE|XCB_RANDR_NOTIFY_MASK_OUTPUT_PROPERTY);
-		xcb_aux_sync(con);
+		randrbase = ext->first_event;
+		xcb_randr_select_input(con, root,
+				XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE|XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE
+				|XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE|XCB_RANDR_NOTIFY_MASK_OUTPUT_PROPERTY);
+		DBG("RANDR extension active and monitors initialized");
 	}
-    return changed;
+	return changed;
 }
 
 static void initwm(void)
@@ -1142,17 +1151,13 @@ static void initwm(void)
 	xcb_generic_error_t *e;
 	xcb_cursor_context_t *ctx;
 	uint i, j, cws, n = LEN(workspaces);
-	uint32_t mask = XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT|XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY
-		|XCB_EVENT_MASK_ENTER_WINDOW|XCB_EVENT_MASK_STRUCTURE_NOTIFY|XCB_EVENT_MASK_PROPERTY_CHANGE;
 
 	DBG("initializing %s", argv0);
 	sigchld(0);
 
 	/* monitor(s) & workspaces */
-	if (initrandr() < 0) {
-		randrbase = -1;
+	if (initrandr() < 0)
 		mons = initmon("default", 8, 0, 0, 0, scr_w, scr_h);
-	}
 	initworkspaces();
 	assignworkspaces();
 
@@ -1204,13 +1209,16 @@ static void initwm(void)
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetDesktopNames], wmatoms[utf8str], 8, --len, names);
 
 	/* root window event mask & cursor */
-	c = xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK|XCB_CW_CURSOR, (uint32_t []){mask, cursor[Normal]});
+	c = xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK|XCB_CW_CURSOR,
+			(uint32_t []){ XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT|XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY
+				|XCB_EVENT_MASK_ENTER_WINDOW|XCB_EVENT_MASK_STRUCTURE_NOTIFY|XCB_EVENT_MASK_PROPERTY_CHANGE,
+			cursor[Normal] });
 	if ((e = xcb_request_check(con, c))) {
 		free(e);
 		errx(1, "unable to change root window event mask and cursor");
 	}
 
-	/* mouse & keybinds */
+	/* binds */
 	if (!(keysyms = xcb_key_symbols_alloc(con)))
 		errx(1, "error unable to get keysyms from X connection");
 	initbinds(0);
@@ -1284,7 +1292,6 @@ static void layoutws(Workspace *ws)
 		}
 	}
 	xcb_aux_sync(con);
-	ignoreevent(XCB_ENTER_NOTIFY);
 }
 
 static Client *nexttiled(Client *c)
@@ -1379,7 +1386,7 @@ static inline void resizehint(Client *c, int x, int y, int w, int h, int interac
 static void restack(Workspace *ws)
 {
 	Client *c;
-	
+
 	if (!(c = ws->sel))
 		return;
 	DBG("restacking clients on workspace: %d", ws->num);
@@ -1514,7 +1521,7 @@ static void setfullscreen(Client *c, int fullscreen)
 static void setlayout(const Arg *arg)
 {
 	DBG("setting current monitor layout");
-	if (arg && arg->v)	
+	if (arg && arg->v)
 		selws->layout = (void (*)(Workspace *))arg->v;
 	if (selws->sel)
 		layoutws(selws);
@@ -1610,6 +1617,7 @@ static void showhide(Client *c)
 		if ((!c->ws->layout || c->floating) && !c->fullscreen)
 			resizehint(c, c->x, c->y, c->w, c->h, 0);
 		showhide(c->snext);
+		ignoreenter++;
 	} else {
 		showhide(c->snext);
 		DBG("hiding client: %d - workspace: %d", c->win, c->ws->num);
@@ -1789,9 +1797,6 @@ static void view(const Arg *arg)
 		xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetCurrentDesktop], XCB_ATOM_CARDINAL, 32, 1, (uchar *)&arg->ui);
 		focus(NULL);
 		layoutws(NULL);
-		/* no windows exist on the new workspace, sync the server to redraw the screen or old windows will be visible */
-		if (!ws->stack)
-			xcb_aux_sync(con);
 	}
 }
 
@@ -1816,7 +1821,7 @@ static void windowhints(Client *c)
 	xcb_generic_error_t *e;
 	xcb_icccm_wm_hints_t wmh;
 	xcb_get_property_cookie_t pc;
-	
+
 	pc = xcb_icccm_get_wm_hints(con, c->win);
 	DBG("checking and setting wm hints for window: %d", c->win);
 	if (xcb_icccm_get_wm_hints_reply(con, pc, &wmh, &e)) {

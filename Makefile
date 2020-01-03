@@ -1,6 +1,6 @@
 # yaxwm - yet another x window manager
 
-PREFIX = /usr/local
+PREFIX = /usr
 
 CC = cc
 CCFLAGS = -Wall -Wextra -Wno-missing-field-initializers -O3

@@ -1,34 +1,31 @@
 /* In order to configure yaxwm, copy this file to config.h and edit it */
 
-/* number of clients in the master area, min/max 0-? */
-static uint nmaster = 1;
+static WorkspaceDefault default_workspaces[] = {
+	/* name  nmaster  splitratio  layout function (NULL is floating) */
+	{ "0",     1,       0.5,       tile },
+	{ "1",     1,       0.5,       tile },
+	{ "2",     1,       0.5,       tile },
+	{ "3",     1,       0.5,       tile },
+	{ "4",     1,       0.5,       tile },
+	{ "5",     1,       0.5,       tile },
+	{ "6",     1,       0.5,       tile },
+	{ "7",     1,       0.5,       tile },
+	{ "8",     1,       0.5,       tile },
+	{ "9",     1,       0.5,       tile },
+};
 
-/* ratio of space between master/stack, min/max 0.1-0.9 */
-static float splitratio = 0.5;
-
-/* names of workspaces and how many to have, default is 10 (0-9)
- * if you have less workspaces than monitors expect issues as we have no way */
-static char *workspaces[] = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" };
-
-/* borders width and colour, 256 colour or hex 0x000000-0xffffff */
-static int borders[] = { [Width] = 1, [Focus] = 0x6699cc, [Unfocus] = 0x000000 };
-
-/* layout functions, first is default */
-static void (*layouts[])(Workspace *) = { tile, NULL };
-
-/* client rule matching:
- *	    when monitor and workspace are -1 then use the current workspace
- *      when workspace is > -1 and monitor is > -1 the workspace takes precedence
- *      when workspace is -1 and monitor is > -1 use the active workspace on that monitor
- * eg.
- * { "regex",  NULL,           -1, 0 }, // set to the active workspace on the active monitor, tiled
- * { "regex", "1",             -1, 0 }, // set to the active workspace on monitor 1 (ignore monitor name), tiled
- * { "regex", "DisplayPort-0", -1, 1 }, // set to the active workspace on monitor DisplayPort-0 (if it exists), floating
- * { "regex", "HDMI-A-0",       5, 1 }, // set to workspace 5 regardless what monitor it's on (even though we specified one), floating
- */
 static Rule rules[] = {
-	/* window class/instance regex (case insensitive)        monitor  workspace  floating */
-	{ "^(steam|lxappearance|pavucontrol|transmission-gtk)$",  NULL,      -1,        1 },
+	/* class/instance (case insensitive)   monitor  workspace  floating */
+	{ "^firefox$",                          "0",       -1,       0, /* active workspace on monitor 0, tiled */ {0} },
+	{ "^gimp$",                             NULL,       2,       1, /* workspace 2, floating */                {0} },
+	{ "^(steam|lxappearance)$",             NULL,      -1,       1, /* current workspace, floating */          {0} },
+	{ "^(pavucontrol|transmission-gtk)$",   NULL,      -1,       1, /* current workspace, floating */          {0} },
+};
+
+static int borders[] = {
+	[Width] = 1,         /* border width in pixels */
+	[Focus] = 0x6699cc,  /* focused and unfocused border colours, 0-256 colour or hex 0x000000-0xffffff */
+	[Unfocus] = 0x000000
 };
 
 /* commands */
@@ -71,8 +68,8 @@ static Bind binds[] = {
 	{ MODKEY,                    XK_d,      setnmaster,   {.i = -1} },
 	{ MODKEY,                    XK_h,      setsplit,     {.f = -0.01} },
 	{ MODKEY,                    XK_l,      setsplit,     {.f = +0.01} },
-	{ MODKEY,                    XK_t,      setlayout,    {.v = &layouts[0]} },
-	{ MODKEY,                    XK_f,      setlayout,    {.v = &layouts[1]} },
+	{ MODKEY,                    XK_t,      setlayout,    {.v = tile} },
+	{ MODKEY,                    XK_f,      setlayout,    {.v = NULL} },
 	WSKEYS(0, XK_1),
 	WSKEYS(1, XK_2),
 	WSKEYS(2, XK_3),

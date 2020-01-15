@@ -22,20 +22,40 @@ To start yaxwm you can add `exec yaxwm` to your xinitrc.
 
 #### Configuration
 
-Create a `config.h` file *by copying the default `config.def.h` (running make will also do this)*, edit it to suit your liking, and recompile.
+Copy the default config header `config.def.h` to `config.h`* then edit it to suit your liking and recompile.
 
 
 #### Todo
 
-- Proper multihead support *(xinerama/randr)*
+- Multihead support **(partianlly complete, xrandr support is implimented)**
 
-- Workspaces; assign to monitor, layouts, etc.
+- Simplifications and better error handling
 
-- Simplifications and Better error handling.
+- Extra layouts: dual/dynamic stack
 
-- New layouts, dual stack?
+- Config parser?
 
-- Config?
+- Fifo reader?
+
+
+#### Contributing
+
+As stated above I'm open to PRs and input. I don't use a ton of comments and xcb's documentation is kinda shit,
+but if you're familiar with other window managers most of it will be simple. If you're coming from Xlib, most of
+the calls are easily translated to xcb.
+
+There are some make flags for extra output and leaving in debug symbols *(for debuggers: gdb, valgrind, etc.)*
+
+
+To enable stderr debug output
+```
+make DFLAGS='-DDEBUG'
+```
+
+To leave debug symbols in the final executable
+```
+make DFLAGS='-DNOSTRIP'
+```
 
 ### Credits
 Huge thanks to [dwm](https://dmw.suckless.org) and the suckless community.

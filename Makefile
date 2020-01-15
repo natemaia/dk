@@ -1,10 +1,21 @@
 # yaxwm - yet another x window manager
 
+# installation base directory
 PREFIX = /usr
 
+# compiler and linker flags
 CC = cc
-CCFLAGS = -Wall -Wextra -Wno-missing-field-initializers -O3
-LDFLAGS = -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr -lxkbcommon
+CCFLAGS = -O3 -Wall -Wextra
+LDFLAGS = -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
+
+# is this a debug build (make -DDEBUG ...)
+ifneq ($(findstring DEBUG,$(DFLAGS)),)
+	LDFLAGS += -lxkbcommon
+endif
+
+ifneq ($(findstring NOSTRIP,$(DFLAGS)),)
+	CCFLAGS += -g
+endif
 
 all: yaxwm
 

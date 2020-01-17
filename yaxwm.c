@@ -58,7 +58,7 @@ enum NetAtoms {
 	NetWMFullscreen,    NetNumDesktops,        NetCurrentDesktop, NetActiveWindow,
 	NetWMWindowType,    NetWMWindowTypeDialog, NetWMDesktop,      NetClientList,
 	NetDesktopViewport, NetDesktopGeometry,    NetDesktopNames,   NetWMWindowTypeDock,
-	NetWMStrut,         NetWMStrutPartial,     NetLast
+	NetWMStrut,         NetWMStrutPartial,     NetFramExtents,    NetLast
 };
 
 union Arg {
@@ -143,6 +143,7 @@ static const char *netatomnames[] = {
 	[NetSupported] = "_NET_SUPPORTED",
 	[NetWMDesktop] = "_NET_WM_DESKTOP",
 	[NetClientList] = "_NET_CLIENT_LIST",
+	[NetFramExtents] = "_NET_FRAME_EXTENTS",
 	[NetDesktopNames] = "_NET_DESKTOP_NAMES",
 	[NetActiveWindow] = "_NET_ACTIVE_WINDOW",
 	[NetWMCheck] = "_NET_SUPPORTING_WM_CHECK",
@@ -177,26 +178,26 @@ static xcb_atom_t netatoms[NetLast]; /* array of _NET atoms used both internally
 Client *nexttiled(Client *c);
 Client *wintoclient(xcb_window_t win);
 Monitor *initmon(char *name, xcb_randr_output_t id, int x, int y, int w, int h);
-Workspace *initws(uint num, char *name, uint nmaster, float splitratio, void (*layout)(Workspace *));
 Monitor *ptrtomon(int x, int y);
 Monitor *randrclone(xcb_randr_output_t id, int x, int y, int w, int h);
 Monitor *randrtomon(xcb_randr_output_t id);
+Workspace *initws(uint num, char *name, uint nmaster, float splitratio, void (*layout)(Workspace *));
 Workspace *itows(uint num);
 Workspace *wintows(xcb_window_t win);
 char *masktomods(uint32_t mask, char *out, int outsize);
 int grabpointer(xcb_cursor_t cursor);
 int initmons(xcb_randr_output_t *outputs, int len);
-size_t strlcpy(char *dst, const char *src, size_t size);
-size_t strlcat(char *dst, const char *src, size_t size);
 int initrandr(void);
 int pointerxy(int *x, int *y);
 int sendevent(Client *c, int wmproto);
 int setsizehints(Client *c, int *x, int *y, int *w, int *h, int interact);
+size_t strlcat(char *dst, const char *src, size_t size);
+size_t strlcpy(char *dst, const char *src, size_t size);
 void *ecalloc(size_t nmemb, size_t size);
 void assignworkspaces(void);
-void checkerror(char *prompt, xcb_generic_error_t *e);
 void attach(Client *c, int tohead);
 void changefocus(const Arg *arg);
+void checkerror(char *prompt, xcb_generic_error_t *e);
 void clientrules(Client *c);
 void configure(Client *c);
 void detach(Client *c, int reattach);
@@ -219,14 +220,15 @@ void killclient(const Arg *arg);
 void layoutws(Workspace *ws);
 void print(const char *fmt, ...);
 void resetorquit(const Arg *arg);
-void resize(Client *c, int x, int y, int w, int h);
+void resize(Client *c, int x, int y, int w, int h, int interact);
 void resizehint(Client *c, int x, int y, int w, int h, int interact);
 void restack(Workspace *ws);
 void runcmd(const Arg *arg);
 void send(const Arg *arg);
 void sendmon(Client *c, Monitor *m);
-void setclientws(Client *c, uint num);
+void setclientframeextents(Client *c, uint width);
 void setclientstate(Client *c, long state);
+void setclientws(Client *c, uint num);
 void setfocus(Client *c);
 void setfullscreen(Client *c, int fullscreen);
 void setlayout(const Arg *arg);
@@ -519,7 +521,7 @@ void eventloop(void)
 						if ((e->value_mask & (xy)) && !(e->value_mask & (wh)))
 							configure(c);
 						if (c->ws == c->ws->mon->ws)
-							resize(c, c->x, c->y, c->w, c->h);
+							resize(c, c->x, c->y, c->w, c->h, 0);
 					} else {
 						configure(c);
 					}
@@ -738,7 +740,7 @@ void fixupworkspaces(void)
 	for (ws = workspaces; ws; ws = ws->next)
 		for (c = ws->clients; c; c = c->next)
 			if (c->fullscreen)
-				resize(c, ws->mon->winarea_x, ws->mon->winarea_y, ws->mon->winarea_w, ws->mon->winarea_h);
+				resize(c, ws->mon->winarea_x, ws->mon->winarea_y, ws->mon->winarea_w, ws->mon->winarea_h, 0);
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, root, netatoms[NetDesktopGeometry], XCB_ATOM_CARDINAL, 32, 2, (uint32_t []){scr_w, scr_h});
 	focus(NULL);
 	layoutws(NULL);
@@ -1014,6 +1016,7 @@ void initclient(xcb_window_t win, xcb_window_t trans)
 	attachstack(c);
 	xcb_change_property(con, XCB_PROP_MODE_APPEND, root, netatoms[NetClientList], XCB_ATOM_WINDOW, 32, 1, &c->win);
 	setclientstate(c, XCB_ICCCM_WM_STATE_NORMAL);
+	setclientframeextents(c, c->bw);
 	if (selws && c->ws == selws && selws->sel)
 		unfocus(selws->sel, 0);
 	if (c->ws)
@@ -1431,21 +1434,33 @@ void resetorquit(const Arg *arg)
 	}
 }
 
-void resize(Client *c, int x, int y, int w, int h)
+void resize(Client *c, int x, int y, int w, int h, int interact)
 {
+	xcb_generic_error_t *e;
+	xcb_get_property_reply_t *r;
 	uint32_t v[] = { x, y, w, h, c->bw };
-	uint16_t mask = XCB_CONFIG_WINDOW_X|XCB_CONFIG_WINDOW_Y|XCB_CONFIG_WINDOW_WIDTH|
-		XCB_CONFIG_WINDOW_HEIGHT|XCB_CONFIG_WINDOW_BORDER_WIDTH;
+	uint16_t mask = XCB_CONFIG_WINDOW_X|XCB_CONFIG_WINDOW_Y|XCB_CONFIG_WINDOW_WIDTH|XCB_CONFIG_WINDOW_HEIGHT|XCB_CONFIG_WINDOW_BORDER_WIDTH;
 
 	DBG("window: %d - location: %i,%i - size: %ix%i", c->win, x, y, w, h);
 	c->x = c->old_x = x;
 	c->y = c->old_y = y;
 	c->w = c->old_w = w;
 	c->h = c->old_h = h;
-	if (c->ws && (nexttiled(c->ws->clients) == c && !nexttiled(c->next)) && !c->floating && !c->fullscreen) {
+	if (!interact && c->ws && (nexttiled(c->ws->clients) == c && !nexttiled(c->next)) && !c->floating && !c->fullscreen) {
+		DBG("only one tiled client on this workspace, removing borders");
 		v[2] = W(c);
 		v[3] = H(c);
 		v[4] = 0;
+		setclientframeextents(c, v[4]);
+	} else if (!interact) {
+		DBG("getting frame extents from window: %d", c->win);
+		if ((r = xcb_get_property_reply(con,  xcb_get_property(con, 0, c->win, netatoms[NetFramExtents], XCB_ATOM_CARDINAL, 0, 32), &e))) {
+			if (xcb_get_property_value_length(r) && *(uint *)xcb_get_property_value(r) == 0)
+				setclientframeextents(c, borders[Width]);
+			free(r);
+		} else {
+			checkerror("unable to get window frame extents property", e);
+		}
 	}
 	xcb_configure_window(con, c->win, mask, v);
 	configure(c);
@@ -1455,7 +1470,7 @@ void resize(Client *c, int x, int y, int w, int h)
 void resizehint(Client *c, int x, int y, int w, int h, int interact)
 {
 	if (setsizehints(c, &x, &y, &w, &h, interact))
-		resize(c, x, y, w, h);
+		resize(c, x, y, w, h, interact);
 }
 
 void restack(Workspace *ws)
@@ -1546,6 +1561,11 @@ void sendmon(Client *c, Monitor *m)
 	layoutws(NULL);
 }
 
+void setclientframeextents(Client *c, uint width)
+{
+	xcb_change_property(con, XCB_PROP_MODE_REPLACE, c->win, netatoms[NetFramExtents], XCB_ATOM_CARDINAL, 32, 4, (uint32_t []){ width, width, width, width });
+}
+
 void setclientstate(Client *c, long state)
 {
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, c->win, wmatoms[WMState], wmatoms[WMState], 32, 2, (long []){state, XCB_ATOM_NONE});
@@ -1580,7 +1600,7 @@ void setfullscreen(Client *c, int fullscreen)
 		c->old_bw = c->bw;
 		c->bw = 0;
 		c->floating = 1;
-		resize(c, m->x, m->y, m->w, m->h);
+		resize(c, m->x, m->y, m->w, m->h, 0);
 		xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_STACK_MODE, (uint32_t []){ XCB_STACK_MODE_ABOVE });
 	} else if (!fullscreen && c->fullscreen) {
 		xcb_change_property(con, XCB_PROP_MODE_REPLACE, c->win, netatoms[NetWMState], XCB_ATOM_ATOM, 32, 0, (uchar *)0);
@@ -1591,7 +1611,7 @@ void setfullscreen(Client *c, int fullscreen)
 		c->y = c->old_y;
 		c->w = c->old_w;
 		c->h = c->old_h;
-		resize(c, c->x, c->y, c->w, c->h);
+		resize(c, c->x, c->y, c->w, c->h, 0);
 		layoutws(c->ws);
 	}
 }
@@ -1851,12 +1871,12 @@ void tile(Workspace *ws)
 		if (i < ws->nmaster) {
 			iter = MIN(n, ws->nmaster) - i;
 			h = (m->winarea_h - my) / MAX(1, iter);
-			resize(c, m->winarea_x, m->winarea_y + my, mw - (2*c->bw), h - (2*c->bw));
+			resize(c, m->winarea_x, m->winarea_y + my, mw - (2*c->bw), h - (2*c->bw), 0);
 			my += H(c);
 		} else {
 			iter = n - i;
 			h = (m->winarea_h - ty) / MAX(1, iter);
-			resize(c, m->winarea_x + mw, m->winarea_y + ty, m->winarea_w - mw - (2*c->bw), h - (2*c->bw));
+			resize(c, m->winarea_x + mw, m->winarea_y + ty, m->winarea_w - mw - (2*c->bw), h - (2*c->bw), 0);
 			ty += H(c);
 		}
 }

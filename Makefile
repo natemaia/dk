@@ -1,18 +1,13 @@
 # yaxwm - yet another x window manager
 
-# installation base directory
-PREFIX = /usr
+include config.mk
 
-# compiler and linker flags
-CC = cc
-CCFLAGS = -O3 -Wall -Wextra
-LDFLAGS = -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
-
-# is this a debug build (make -DDEBUG ...)
+# debug build (make -DDEBUG ...)
 ifneq ($(findstring DEBUG,$(DFLAGS)),)
 	LDFLAGS += -lxkbcommon
 endif
 
+# no strip build (make -DNOSTRIP ...)
 ifneq ($(findstring NOSTRIP,$(DFLAGS)),)
 	CCFLAGS += -g
 endif
@@ -23,7 +18,7 @@ config.h:
 	cp config.def.h $@
 
 yaxwm: config.h
-	${CC} ${DFLAGS} yaxwm.c ${CCFLAGS} -o $@ ${LDFLAGS}
+	${CC} ${DFLAGS} ${DDFLAGS} yaxwm.c ${CCFLAGS} -o $@ ${LDFLAGS}
 
 clean:
 	rm -f yaxwm

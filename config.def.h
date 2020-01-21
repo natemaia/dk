@@ -1,25 +1,31 @@
 /* In order to configure yaxwm, copy this file to config.h and edit it */
 
 static WorkspaceDefault default_workspaces[] = {
-	/* name  nmaster  splitratio  layout function (NULL is floating) */
-	{ "0",     1,       0.5,       tile },
-	{ "1",     1,       0.5,       tile },
-	{ "2",     1,       0.5,       tile },
-	{ "3",     1,       0.5,       tile },
-	{ "4",     1,       0.5,       tile },
-	{ "5",     1,       0.5,       tile },
-	{ "6",     1,       0.5,       tile },
-	{ "7",     1,       0.5,       tile },
-	{ "8",     1,       0.5,       tile },
-	{ "9",     1,       0.5,       tile },
+	/* name,  nmaster,  splitratio,   layout function (NULL is floating) */
+	{ "0",     1,        0.5,          tile },
+	{ "1",     1,        0.5,          tile },
+	{ "2",     1,        0.5,          tile },
+	{ "3",     1,        0.5,          tile },
+	{ "4",     1,        0.5,          tile },
+	{ "5",     1,        0.5,          tile },
+	{ "6",     1,        0.5,          tile },
+	{ "7",     1,        0.5,          tile },
+	{ "8",     1,        0.5,          tile },
+	{ "9",     1,        0.5,          tile },
 };
 
 static Rule rules[] = {
-	/* class/instance (case insensitive)   monitor  workspace  floating */
-	{ "^firefox$",                          "0",       -1,       0, /* active workspace on monitor 0, tiled */ {0} },
-	{ "^gimp$",                             NULL,       2,       1, /* workspace 2, floating */                {0} },
-	{ "^(steam|lxappearance)$",             NULL,      -1,       1, /* current workspace, floating */          {0} },
-	{ "^(pavucontrol|transmission-gtk)$",   NULL,      -1,       1, /* current workspace, floating */          {0} },
+	/* In order to get monitor and window info you can use the following commands:
+	 * window class/instance: `xprop` (the regex matching is case insensitive)
+	 * monitor name: `xrandr` (or use an index 0-n, the order is not guaranteed)
+	 *
+	 * class/instance                      monitor     workspace  floating,                                  compiled regex
+	 * eg.
+	 * { "chromium",                        "HDMI-A-0", -1,         1,                                            {0} }, */
+	{ "^firefox$",                          "0",        -1,         0, /* active workspace on monitor 0, tiled */ {0} },
+	{ "^gimp$",                             NULL,        2,         1, /* workspace 2, floating */                {0} },
+	{ "^(steam|lxappearance)$",             NULL,       -1,         1, /* current workspace, floating */          {0} },
+	{ "^(pavucontrol|transmission-gtk)$",   NULL,       -1,         1, /* current workspace, floating */          {0} },
 };
 
 static int borders[] = {
@@ -81,3 +87,6 @@ static Bind binds[] = {
 	WSKEYS(8, XK_9),
 	WSKEYS(9, XK_0),
 };
+
+/* vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
+*/

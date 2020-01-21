@@ -1,3 +1,8 @@
+/* yet another X window manager
+ *
+ * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
+ */
+
 #include <err.h>
 #include <stdio.h>
 #include <ctype.h>

@@ -28,7 +28,7 @@ static const char *voldn[] = { "pamixer", "-d", "2", NULL };
 static int borders[] = {
 	[Width] = 1,         /* border width in pixels */
 	[Focus] = 0x6699cc,  /* focused and unfocused border colours, 0-256 colour or hex 0x000000-0xffffff */
-	[Unfocus] = 0x000000
+	[Unfocus] = 0x000000,
 };
 
 static WsRule wsrules[] = {
@@ -68,9 +68,9 @@ static Bind binds[] = {
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_p,      runcmd,       {.v = menu} },
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_Print,  runcmd,       {.v = scrot} },
 	{ XCB_KEY_RELEASE, MODKEY|XCB_MOD_MASK_SHIFT, XK_Print,  runcmd,       {.v = scrots} },
-	{ XCB_KEY_PRESS,   0,                         XK_VolTg,  runcmd,       {.v = voltg} },
-	{ XCB_KEY_PRESS,   0,                         XK_VolUp,  runcmd,       {.v = volup} },
-	{ XCB_KEY_PRESS,   0,                         XK_VolDn,  runcmd,       {.v = voldn} },
+	{ XCB_KEY_PRESS,   0,                         MUTE,      runcmd,       {.v = voltg} },
+	{ XCB_KEY_PRESS,   0,                         VOLUP,     runcmd,       {.v = volup} },
+	{ XCB_KEY_PRESS,   0,                         VOLDOWN,   runcmd,       {.v = voldn} },
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_q,      killclient,   {0} },          /* close active window */
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_Tab,    swapclient,   {0} },          /* swap window with master and vise versa */
 	{ XCB_KEY_PRESS,   MODKEY|XCB_MOD_MASK_SHIFT, XK_space,  togglefloat,  {0} },          /* toggle active window floating state */

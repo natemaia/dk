@@ -22,8 +22,8 @@ static void updatestruts(Panel *p, int apply);
 
 void applypanelstrut(Panel *p)
 {
-	DBG("%s window area before: %d,%d @ %dx%d",
-			p->mon->name, p->mon->winarea_x, p->mon->winarea_y, p->mon->winarea_w, p->mon->winarea_h);
+	DBG("%s window area before: %d,%d @ %dx%d", p->mon->name, p->mon->winarea_x,
+			p->mon->winarea_y, p->mon->winarea_w, p->mon->winarea_h);
 	if (p->mon->x + p->strut_l > p->mon->winarea_x)
 		p->mon->winarea_x = p->strut_l;
 	if (p->mon->y + p->strut_t > p->mon->winarea_y)
@@ -32,8 +32,8 @@ void applypanelstrut(Panel *p)
 		p->mon->winarea_w = p->mon->w - (p->strut_r + p->strut_l);
 	if (p->mon->h - (p->strut_b + p->strut_t) < p->mon->winarea_h)
 		p->mon->winarea_h = p->mon->h - (p->strut_b + p->strut_t);
-	DBG("%s window area after: %d,%d @ %dx%d",
-			p->mon->name, p->mon->winarea_x, p->mon->winarea_y, p->mon->winarea_w, p->mon->winarea_h);
+	DBG("%s window area after: %d,%d @ %dx%d", p->mon->name, p->mon->winarea_x,
+			p->mon->winarea_y, p->mon->winarea_w, p->mon->winarea_h);
 }
 
 void attachpanel(Panel *p)
@@ -75,21 +75,24 @@ void initpanel(xcb_window_t win)
 	if (windowgeom(p->win, &x, &y, &w, &h, &bw))
 		p->x = x, p->y = y, p->w = w, p->h = h;
 	p->mon = ptrtomon(x, y);
+
 	rc = xcb_get_property(con, 0, p->win, netatoms[StrutPartial], XCB_ATOM_CARDINAL, 0, 4);
 	DBG("checking panel for _NET_WM_STRUT_PARTIAL or _NET_WM_STRUT")
 	if (!(r = xcb_get_property_reply(con, rc, &e)) || r->type == XCB_NONE) {
 		checkerror("unable to get _NET_WM_STRUT_PARTIAL from window", e);
 		rc = xcb_get_property(con, 0, p->win, netatoms[Strut], XCB_ATOM_CARDINAL, 0, 4);
-		r = xcb_get_property_reply(con, rc, &e);
-		checkerror("unable to get _NET_WM_STRUT or _NET_WM_STRUT_PARTIAL from window", e);
+		if (!(r = xcb_get_property_reply(con, rc, &e)))
+			checkerror("unable to get _NET_WM_STRUT or _NET_WM_STRUT_PARTIAL from window", e);
 	}
-	if (r->value_len && (s = xcb_get_property_value(r))) {
-		DBG("panel window has struts: %d, %d, %d, %d", s[0], s[1], s[2], s[3])
-		p->strut_l = s[0], p->strut_r = s[1], p->strut_t = s[2], p->strut_b = s[3];
-		updatestruts(p, 1);
-	}
-	if (r)
+	if (r) {
+		if (r->value_len && (s = xcb_get_property_value(r))) {
+			DBG("panel window has struts: %d, %d, %d, %d", s[0], s[1], s[2], s[3])
+			p->strut_l = s[0], p->strut_r = s[1], p->strut_t = s[2], p->strut_b = s[3];
+			updatestruts(p, 1);
+		}
 		free(r);
+	}
+
 	attachpanel(p);
 	xcb_change_window_attributes(con, p->win, XCB_CW_EVENT_MASK,
 			(uint []){XCB_EVENT_MASK_PROPERTY_CHANGE|XCB_EVENT_MASK_STRUCTURE_NOTIFY});

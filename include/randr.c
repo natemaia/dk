@@ -2,7 +2,6 @@
 
 #ifdef RANDR
 
-
 static Monitor *randrclone(xcb_randr_output_t id, int x, int y, int w, int h);
 static Monitor *outputtomon(xcb_randr_output_t id);
 static int updateoutputs(xcb_randr_output_t *outputs, int len, xcb_timestamp_t timestamp);
@@ -13,42 +12,49 @@ int updateoutputs(xcb_randr_output_t *outs, int len, xcb_timestamp_t timestamp)
 {
 	uint n;
 	Monitor *m;
-    char name[64];
+	char name[64];
 	int i, changed = 0;
-    xcb_randr_get_output_info_reply_t *o;
-    xcb_randr_get_crtc_info_reply_t *crtc;
-    xcb_randr_get_output_info_cookie_t oc[len];
+	xcb_generic_error_t *e;
+	xcb_randr_get_crtc_info_cookie_t c;
+	xcb_randr_get_output_info_reply_t *o;
+	xcb_randr_get_crtc_info_reply_t *crtc;
+	xcb_randr_get_output_info_cookie_t oc[len];
 
 	DBG("%d outputs, requesting info for each")
 	for (i = 0; i < len; i++)
 		oc[i] = xcb_randr_get_output_info(con, outs[i], timestamp);
 	for (i = 0; i < len; i++) {
-		if (!(o = xcb_randr_get_output_info_reply(con, oc[i], NULL))) {
-			DBG("unable to get monitor info for output: %d", outs[i])
+		if (!(o = xcb_randr_get_output_info_reply(con, oc[i], &e))) {
+			checkerror("unable to get monitor info", e);
 			continue;
 		}
-
 		if (o->crtc != XCB_NONE) {
-			if (!(crtc = xcb_randr_get_crtc_info_reply(con, xcb_randr_get_crtc_info(con, o->crtc, timestamp), NULL))) {
-				DBG("crtc info for randr output %d was NULL -- returning error", outs[i])
+			c = xcb_randr_get_crtc_info(con, o->crtc, timestamp);
+			if (!(crtc = xcb_randr_get_crtc_info_reply(con, c, &e))) {
+				checkerror("crtc info for randr output was NULL", e);
 				free(o);
 				return -1;
 			}
 
 			n = xcb_randr_get_output_info_name_length(o) + 1;
 			strlcpy(name, (const char *)xcb_randr_get_output_info_name(o), MIN(sizeof(name), n));
-			DBG("crtc: %s -- location: %d,%d -- size: %dx%d -- status: %d", name, crtc->x, crtc->y, crtc->width, crtc->height, crtc->status)
+			DBG("crtc: %s -- location: %d,%d -- size: %dx%d -- status: %d",
+					name, crtc->x, crtc->y, crtc->width, crtc->height, crtc->status)
 
 			if ((m = randrclone(outs[i], crtc->x, crtc->y, crtc->width, crtc->height))) {
-				DBG("monitor %s, id %d is a clone of %s, id %d, skipping", name, outs[i], m->name, m->id)
+				DBG("monitor %s, id %d is a clone of %s, id %d, skipping",
+						name, outs[i], m->name, m->id)
 			} else if ((m = outputtomon(outs[i]))) {
-				DBG("previously initialized monitor: %s -- location and size: %d,%d @ %dx%d", m->name, m->x, m->y, m->w, m->h)
-				changed = crtc->x != m->x || crtc->y != m->y || crtc->width != m->w || crtc->height != m->h;
+				DBG("previously initialized monitor: %s -- location and size: %d,%d @ %dx%d",
+						m->name, m->x, m->y, m->w, m->h)
+				changed = (crtc->x != m->x || crtc->y != m->y
+						|| crtc->width != m->w || crtc->height != m->h);
 				if (crtc->x != m->x)      m->x = m->winarea_x = crtc->x;
 				if (crtc->y != m->y)      m->y = m->winarea_y = crtc->y;
 				if (crtc->width != m->w)  m->w = m->winarea_w = crtc->width;
 				if (crtc->height != m->h) m->h = m->winarea_h = crtc->height;
-				DBG("size and location for monitor: %s -- %d,%d @ %dx%d -- %s", m->name, m->x, m->y, m->w, m->h, changed ? "updated" : "unchanged")
+				DBG("size and location for monitor: %s -- %d,%d @ %dx%d -- %s",
+						m->name, m->x, m->y, m->w, m->h, changed ? "updated" : "unchanged")
 			} else {
 				FOR_TAIL(m, monitors);
 				if (m)
@@ -63,8 +69,8 @@ int updateoutputs(xcb_randr_output_t *outs, int len, xcb_timestamp_t timestamp)
 			freemon(m);
 			changed = 1;
 		}
-        free(o);
-    }
+		free(o);
+	}
 	return changed;
 }
 
@@ -92,21 +98,22 @@ int initrandr(void)
 int updaterandr(void)
 {
 	int len, changed;
-    xcb_timestamp_t timestamp;
+	xcb_timestamp_t timestamp;
+	xcb_generic_error_t *e;
 	xcb_randr_output_t *outputs;
-    xcb_randr_get_screen_resources_current_reply_t *r;
-    xcb_randr_get_screen_resources_current_cookie_t rc;
+	xcb_randr_get_screen_resources_current_reply_t *r;
+	xcb_randr_get_screen_resources_current_cookie_t rc;
 
 	DBG("querying current randr outputs")
 	rc = xcb_randr_get_screen_resources_current(con, root);
-	if (!(r = xcb_randr_get_screen_resources_current_reply(con, rc, NULL))) {
-		warnx("unable to get screen resources");
+	if (!(r = xcb_randr_get_screen_resources_current_reply(con, rc, &e))) {
+		checkerror("unable to get screen resources", e);
 		return -1;
 	}
 
 	timestamp = r->config_timestamp;
-    len = xcb_randr_get_screen_resources_current_outputs_length(r);
-    outputs = xcb_randr_get_screen_resources_current_outputs(r);
+	len = xcb_randr_get_screen_resources_current_outputs_length(r);
+	outputs = xcb_randr_get_screen_resources_current_outputs(r);
 	changed = updateoutputs(outputs, len, timestamp);
 	free(r);
 	return changed;

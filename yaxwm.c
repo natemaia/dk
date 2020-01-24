@@ -717,7 +717,6 @@ void eventhandle(xcb_generic_event_t *ev)
 						&& ev->response_type == binds[i].type)
 				{
 					DBGBIND(ev, CLNMOD(e->state), sym)
-					xcb_flush(con);
 					binds[i].func(&(binds[i].arg));
 					break;
 				}

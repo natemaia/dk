@@ -1,19 +1,5 @@
 /* ewmh panel support functions */
 
-#ifdef PANEL
-
-typedef struct Panel Panel;
-
-struct Panel {
-	int x, y, w, h;
-	int strut_l, strut_r, strut_t, strut_b;
-	Panel *next;
-	Monitor *mon;
-	xcb_window_t win;
-};
-
-static Panel *panels; /* panel linked list head */
-
 static void attachpanel(Panel *p);
 static void initpanel(xcb_window_t win);
 static Panel *wintopanel(xcb_window_t win);
@@ -129,8 +115,6 @@ Panel *wintopanel(xcb_window_t win)
 		return NULL;
 	FOR_EACH(p, panels)
 		if (p->win == win)
-			return p;
-	return NULL;
+			break;
+	return p;
 }
-
-#endif

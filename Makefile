@@ -18,7 +18,7 @@ config.h:
 	cp config.def.h $@
 
 yaxwm: config.h
-	${CC} ${DFLAGS} ${DDFLAGS} yaxwm.c ${CCFLAGS} -o $@ ${LDFLAGS}
+	${CC} ${DFLAGS} yaxwm.c ${CCFLAGS} -o $@ ${LDFLAGS}
 
 clean:
 	rm -f yaxwm

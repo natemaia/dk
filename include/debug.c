@@ -4,12 +4,16 @@
 
 #include <xkbcommon/xkbcommon.h>
 
+#undef DBGBIND
+#define DBGBIND(event, mod, sym) printbind(event, mod, sym);
+
 #undef DBG
 #define DBG(fmt, ...) print("%s:%d - " fmt, __FUNCTION__, __LINE__, ##__VA_ARGS__);
 
-static void print(const char *fmt, ...);
 static char *masktomods(uint mask, char *out, int outsize);
 static size_t strlcat(char *dst, const char *src, size_t size);
+static void print(const char *fmt, ...);
+static void printbind(xcb_generic_event_t *e, uint modmask, xcb_keysym_t keysym);
 
 char *masktomods(uint mask, char *out, int outsize)
 { /* convert mask to modifier names in out, eg. "Shift, Mod4\0" */
@@ -62,6 +66,15 @@ size_t strlcat(char *dst, const char *src, size_t size)
 	*dst = '\0';
 
 	return dlen + (src - osrc);
+}
+
+void printbind(xcb_generic_event_t *e, uint modmask, xcb_keysym_t keysym)
+{
+	char mod[64], key[64];
+
+	masktomods(modmask, mod, sizeof(mod));
+	xkb_keysym_get_name(keysym, key, sizeof(key));
+	print("%s event - key: %s - mod: %s", xcb_event_get_label(e->response_type), key, mod);
 }
 
 #endif

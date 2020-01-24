@@ -1,8 +1,6 @@
 /* xcb randr support functions */
 
-#ifdef RANDR
-
-static Monitor *randrclone(xcb_randr_output_t id, int x, int y, int w, int h);
+static Monitor *randrclone(xcb_randr_output_t id, int x, int y);
 static Monitor *outputtomon(xcb_randr_output_t id);
 static int updateoutputs(xcb_randr_output_t *outputs, int len, xcb_timestamp_t timestamp);
 static int updaterandr(void);
@@ -41,7 +39,7 @@ int updateoutputs(xcb_randr_output_t *outs, int len, xcb_timestamp_t timestamp)
 			DBG("crtc: %s -- location: %d,%d -- size: %dx%d -- status: %d",
 					name, crtc->x, crtc->y, crtc->width, crtc->height, crtc->status)
 
-			if ((m = randrclone(outs[i], crtc->x, crtc->y, crtc->width, crtc->height))) {
+			if ((m = randrclone(outs[i], crtc->x, crtc->y))) {
 				DBG("monitor %s, id %d is a clone of %s, id %d, skipping",
 						name, outs[i], m->name, m->id)
 			} else if ((m = outputtomon(outs[i]))) {
@@ -119,13 +117,13 @@ int updaterandr(void)
 	return changed;
 }
 
-Monitor *randrclone(xcb_randr_output_t id, int x, int y, int w, int h)
+Monitor *randrclone(xcb_randr_output_t id, int x, int y)
 {
 	Monitor *m;
 
 	FOR_EACH(m, monitors)
-		if (id != m->id && m->x == x && m->y == y && m->w == w && m->h == h)
-			return m;
+		if (id != m->id && m->x == x && m->y == y)
+			break;
 	return m;
 }
 
@@ -135,8 +133,6 @@ Monitor *outputtomon(xcb_randr_output_t id)
 
 	FOR_EACH(m, monitors)
 		if (m->id == id)
-			return m;
+			break;
 	return m;
 }
-
-#endif

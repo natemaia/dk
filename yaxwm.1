@@ -1,0 +1,106 @@
+.TH YAXWM 1 yaxwm\-VERSION
+.SH NAME
+yaxwm \- Yet another X window manager, as if we didn\'t have enough.
+.SH SYNOPSIS
+.B yaxwm
+.RB [ \-v ]
+.SH DESCRIPTION
+.P
+Yaxwm  is a dynamic window manager which differs from dwm in several ways:
+.IP "\(bu" 4
+No built\-in bar\.
+.IP "\(bu" 4
+Based on xcb rather than xlib\.
+.IP "\(bu" 4
+Supports most ewmh standards \fIhttps://specifications\.freedesktop\.org/wm\-spec/wm\-spec\-latest\.html\fR\|\.
+.IP "\(bu" 4
+Likely more bugs/errors\.
+.IP "" 0
+.
+.SH OPTIONS
+.TP
+.B \-v
+prints version information to standard output, then exits.
+.SH USAGE
+.P
+To start yaxwm you can add \fBexec yaxwm\fR to your xinitrc\.
+.TP
+.B Button1
+click on a tag label to display all windows with that tag, click on the layout
+label toggles between tiled and floating layout.
+.TP
+.B Button3
+click on a tag label adds/removes all windows with that tag to/from the view.
+.TP
+.B Mod1\-Button1
+click on a tag label applies that tag to the focused window.
+.TP
+.B Mod1\-Button3
+click on a tag label adds/removes that tag to/from the focused window.
+.SS Keyboard commands
+.TP
+.B Mod1\-Shift\-Return
+Start
+.BR st(1).
+.TP
+.B Mod1\-p
+Spawn
+.BR dmenu(1)
+for launching other programs.
+.TP
+.B Mod1\-t
+Sets tiled layout.
+.TP
+.B Mod1\-f
+Sets floating layout.
+.TP
+.B Mod1\-j
+Focus next window.
+.TP
+.B Mod1\-k
+Focus previous window.
+.TP
+.B Mod1\-i
+Increase number of windows in master area.
+.TP
+.B Mod1\-d
+Decrease number of windows in master area.
+.TP
+.B Mod1\-l
+Increase master area size.
+.TP
+.B Mod1\-h
+Decrease master area size.
+.TP
+.B Mod1\-Tab
+Zooms/cycles focused window to/from master area (tiled layouts only).
+.TP
+.B Mod1\-q
+Close focused window.
+.TP
+.B Mod1\-Shift\-space
+Toggle focused window between tiled and floating state.
+.TP
+.B Mod1\-Shift\-[1..n]
+Move focused window to workspace 1..n
+.TP
+.B Mod1\-[1..n]
+Switch to workspace 1..n
+.TP
+.B Mod1\-Shift\-q
+Quit dwm.
+.SS Mouse commands
+.TP
+.B Mod1\-Button1
+Move focused window while dragging. Tiled windows will be toggled to the floating state.
+.TP
+.B Mod1\-Button3
+Resize focused window while dragging. Tiled windows will be toggled to the floating state.
+.SH CUSTOMIZATION
+yaxwm is customized by creating a custom config.h and (re)compiling the source
+code.
+.SH SEE ALSO
+.BR dmenu (1),
+.BR st (1)
+.SH BUGS
+Send all bug reports with a patch to Issue Tracker.

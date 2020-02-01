@@ -16,6 +16,9 @@
                         { XCB_KEY_PRESS, MODKEY|XCB_MOD_MASK_SHIFT,   key, send,   {.ui = ws} },\
                         { XCB_KEY_PRESS, MODKEY|XCB_MOD_MASK_CONTROL, key, follow, {.ui = ws} }
 
+/* enable focus follows mouse */
+static const int focusmouse = 1;
+
 /* commands */
 static const char *term[] = { "st", NULL };
 static const char *menu[] = { "dmenu_run", NULL };

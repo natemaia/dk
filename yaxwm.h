@@ -37,6 +37,7 @@
 
 /* linked list quick access */
 #define FOR_EACH(v, list)      for ((v) = (list); (v); (v) = (v)->next)
+#define FOR_STACK(v, list)     for ((v) = (list); (v); (v) = (v)->snext)
 #define FOR_TAIL(v, list)      for ((v) = (list); (v) && (v)->next; (v) = (v)->next)
 #define FOR_PREV(v, cur, list) for ((v) = (list); (v) && (v)->next && (v)->next != (cur); (v) = (v)->next)
 #define FOR_WSCLIENTS(c, ws)   FOR_EACH((ws), workspaces) FOR_EACH((c), (ws)->clients)
@@ -46,10 +47,27 @@
 #define DBGBIND(event, mod, sym)
 
 /* less wordy calls to some xcb functions */
+#define MOVE(win, x, y) \
+	xcb_configure_window(con, (win), XYMASK, (uint []){(x), (y)})
 #define PROP_APPEND(win, atom, type, membsize, nmemb, value) \
 	xcb_change_property(con, XCB_PROP_MODE_APPEND, (win), (atom), (type), (membsize), (nmemb), (value))
 #define PROP_REPLACE(win, atom, type, membsize, nmemb, value) \
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, (win), (atom), (type), (membsize), (nmemb), (value))
+
+
+/* bit masks */
+#define STICKYMASK  (0xFFFFFFFF)
+#define BWMASK      (XCB_CONFIG_WINDOW_BORDER_WIDTH)
+#define XYMASK      (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y)
+#define WHMASK      (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT)
+#define BUTTONMASK  (XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE)
+#define GRABMASK    (XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_BUTTON_MOTION | XCB_EVENT_MASK_POINTER_MOTION_HINT)
+
+#define BUTTON1     (XCB_BUTTON_INDEX_1)
+#define BUTTON2     (XCB_BUTTON_INDEX_2)
+#define BUTTON3     (XCB_BUTTON_INDEX_3)
+#define ASYNC       (XCB_GRAB_MODE_ASYNC)
+#define SYNC        (XCB_GRAB_MODE_SYNC)
 
 typedef unsigned int uint;
 typedef unsigned char uchar;
@@ -120,7 +138,7 @@ struct Client {
 	int max_w, max_h, min_w, min_h;
 	int base_w, base_h, increment_w, increment_h;
 	float min_aspect, max_aspect;
-	int fixed, floating, fullscreen, urgent, nofocus, oldstate;
+	int sticky, fixed, floating, fullscreen, urgent, nofocus, oldstate;
 	Client *next, *snext;
 	Workspace *ws;
 	xcb_window_t win;
@@ -227,14 +245,17 @@ static int setsizehints(Client *c, int *x, int *y, int *w, int *h, int interact)
 static int windowgeom(xcb_window_t win, int *x, int *y, int *w, int *h, int *bw);
 static size_t strlcpy(char *dst, const char *src, size_t size);
 static void *ecalloc(size_t elems, size_t size);
+static void updatenumlock(void);
 static void assignworkspaces(void);
 static void attach(Client *c, int tohead);
+static void attachstack(Client *c);
 static void changefocus(const Arg *arg);
 static void changews(Workspace *ws, int usermotion);
 static void checkerror(char *prompt, xcb_generic_error_t *e);
 static void clientrules(Client *c, xcb_window_t trans);
 static void configure(Client *c);
 static void detach(Client *c, int reattach);
+static void detachstack(Client *c);
 static void eventhandle(xcb_generic_event_t *ev);
 static void eventloop(void);
 static void fixupworkspaces(void);
@@ -244,9 +265,10 @@ static void freeclient(Client *c, int destroyed);
 static void freemon(Monitor *m);
 static void freewm(void);
 static void freews(Workspace *ws);
+static void grabbuttons(Client *c, int focused);
+static void grabkeys(void);
 static void ignorefocusevents(void);
 static void initatoms(xcb_atom_t *atoms, const char **names, int num);
-static void initbinds(int onlykeys);
 static void initclient(xcb_window_t win, xcb_window_t trans);
 static void initexisting(void);
 static void initwm(void);

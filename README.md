@@ -9,17 +9,19 @@ it comes to tiling window management.
 
 Yaxwm differs in several ways:
 
+- RANDR support.
+
 - No built-in bar.
+
+- Workspace centric.
 
 - Based on xcb rather than xlib.
 
 - Supports most [ewmh standards](https://specifications.freedesktop.org/wm-spec/wm-spec-latest.html).
 
+- No SLOC restrictions yet.
+
 - Likely more bugs/errors.
-
----
-
-Currently I don't have a ton of goals for what I want to achieve with this so suggestions and PRs are welcome.
 
 
 #### Installation
@@ -54,7 +56,7 @@ Copy the default config header `config.def.h` to `config.h` then edit it to suit
 
 #### Contributing
 
-As mentioned above I'm open to PRs and input/ideas. I don't use a ton of comments and the xcb documentation is kinda shit,
+I'm very open to contributions and input or ideas so feel free. I don't use a ton of comments and the xcb documentation is kinda shit,
 but if you're familiar with other window managers most of it will be simple. If you're coming from xlib, most of
 the calls are easily translated to xcb with minor fiddling. There are some make flags I use often when testing.
 

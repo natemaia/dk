@@ -460,7 +460,7 @@ void eventhandle(xcb_generic_event_t *ev)
 		{
 			xcb_keysym_t sym;
 			xcb_key_press_event_t *e = (xcb_key_press_event_t *)ev;
-			
+
 			e->state &= 0x00ff; /* drop the top 8 bits (status bits) */
 			sym = xcb_key_symbols_get_keysym(keysyms, e->detail, 0);
 			for (i = 0; i < LEN(binds); i++)

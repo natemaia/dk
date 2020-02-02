@@ -6,34 +6,51 @@ yaxwm \- Yet another X window manager, as if we didn\'t have enough.
 .RB [ \-v ]
 .SH DESCRIPTION
 .P
-Yaxwm  is a dynamic window manager which differs from dwm in several ways:
+Yaxwm is a dynamic tiling window manager similar to dwm.
+.P
+Windows are managed in tiled, or floating layouts, and are grouped by workspaces.
+Each window can only be on a single workspace at a time and they will have a small
+border to indicate the focus state and they. Layouts can be applied dynamically to
+workspaces and changes to one will not impact the others. In tiled layouts, windows
+are organized in a master and stack area, the number of master windows can be adjusted
+from 0-n with the stack containing all remaining windows. In floating layout windows
+are not organized or placed in any particular way and can be moved and resized freely.
+.P
+Yaxwm differs from dwm in several ways:
 .IP "\(bu" 4
-No built\-in bar\.
+No built\-in bar.
 .IP "\(bu" 4
-Based on xcb rather than xlib\.
+Workspace centric.
 .IP "\(bu" 4
-Supports most ewmh standards \fIhttps://specifications\.freedesktop\.org/wm\-spec/wm\-spec\-latest\.html\fR\|\.
+RANDR extension support.
 .IP "\(bu" 4
-Likely more bugs/errors\.
-.IP "" 0
-.
+Supports most EWMH standards.
+.IP "\(bu" 4
+Based on xcb rather than xlib.
+.IP "\(bu" 4
+Currently has no SLOC restrictions.
+.IP "\(bu" 4
+Likely more bugs/errors.
 .SH OPTIONS
 .TP
 .B \-v
-prints version information to standard output, then exits.
+prints version information to standard out and exits.
 .SH USAGE
-.P
-To start yaxwm you can add \fBexec yaxwm\fR to your xinitrc\.
 .SS Keyboard commands
 .TP
 .B Mod1\-Shift\-Return
 Start
-.BR st(1).
+.BR st (1)
 .TP
 .B Mod1\-p
 Spawn
-.BR dmenu(1)
+.BR dmenu (1)
 for launching other programs.
+.TP
+\fBPrintScreen\fR and \fBMod1\-PrintScreen\fR
+Spawn
+.BR scrot (1)
+with selection box capture and whole screen capture.
 .TP
 .B Mod1\-t
 Sets tiled layout.
@@ -59,35 +76,48 @@ Increase master area size.
 .B Mod1\-h
 Decrease master area size.
 .TP
-.B Mod1\-Tab
-Zooms/cycles focused window to/from master area (tiled layouts only).
-.TP
 .B Mod1\-q
 Close focused window.
+.TP
+.B Mod1\-Tab
+Zooms/cycles focused window to/from master area (tiled layouts only).
 .TP
 .B Mod1\-Shift\-space
 Toggle focused window between tiled and floating state.
 .TP
-.B Mod1\-Shift\-[1..n]
-Move focused window to workspace 1..n
-.TP
 .B Mod1\-[1..n]
 Switch to workspace 1..n
 .TP
+.B Mod1\-Shift\-[1..n]
+Move focused window to workspace 1..n
+.TP
+.B Mod1\-Shift\-Ctrl-[1..n]
+Follow focused window to workspace 1..n
+.TP
+.B Mod1\-Shift\-r
+Restart yaxwm.
+.TP
 .B Mod1\-Shift\-q
-Quit dwm.
+Quit yaxwm.
 .SS Mouse commands
 .TP
+.B Button1
+Focus a window if not already focused.
+.TP
 .B Mod1\-Button1
-Move focused window while dragging. Tiled windows will be toggled to the floating state.
+Move window while dragging. Tiled windows will be toggled to the floating state.
+.TP
+.B Mod1\-Button2
+Toggle window between tiled and floating state.
 .TP
 .B Mod1\-Button3
-Resize focused window while dragging. Tiled windows will be toggled to the floating state.
+Resize window while dragging. Tiled windows will be toggled to the floating state.
 .SH CUSTOMIZATION
 yaxwm is customized by creating a custom config.h and (re)compiling the source
 code.
 .SH SEE ALSO
+.BR st (1),
 .BR dmenu (1),
-.BR st (1)
+.BR scrot (1)
 .SH BUGS
 Send all bug reports with a patch to Issue Tracker.

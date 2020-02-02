@@ -6,28 +6,40 @@ include config.mk
 ifneq ($(findstring DEBUG,$(DFLAGS)),)
 	LDFLAGS += -lxkbcommon
 endif
-
 # no strip build (make -DNOSTRIP ...)
 ifneq ($(findstring NOSTRIP,$(DFLAGS)),)
-	CCFLAGS += -g
+	CFLAGS += -g
 endif
 
-all: yaxwm
+CFLAGS += -DVERSION=\"${VERSION}\" ${DFLAGS}
+
+all: options yaxwm
+
+options:
+	@echo yaxwm build options:
+	@echo "CC       = ${CC}"
+	@echo "CFLAGS   = ${CFLAGS}"
+	@echo "LDFLAGS  = ${LDFLAGS}"
 
 config.h:
 	cp config.def.h $@
 
 yaxwm: config.h
-	${CC} ${DFLAGS} yaxwm.c ${CCFLAGS} -o $@ ${LDFLAGS}
+	${CC} yaxwm.c -o $@ ${CFLAGS}\
+		${LDFLAGS}
 
 clean:
 	rm -f yaxwm
 
 install: all
+	mkdir -p ${DESTDIR}${PREFIX}/bin
 	cp -f yaxwm ${DESTDIR}${PREFIX}/bin
 	chmod 755 ${DESTDIR}${PREFIX}/bin/yaxwm
+	mkdir -p ${DESTDIR}${MANPREFIX}/man1
+	sed "s/VERSION/${VERSION}/g" yaxwm.1 > ${DESTDIR}${MANPREFIX}/man1/yaxwm.1
+	chmod 644 ${DESTDIR}${MANPREFIX}/man1/yaxwm.1
 
 uninstall:
-	rm -f ${DESTDIR}${PREFIX}/bin/yaxwm
+	rm -f ${DESTDIR}${PREFIX}/bin/yaxwm ${DESTDIR}${MANPREFIX}/man1/yaxwm.1
 
-.PHONY: all clean install uninstall
+.PHONY: all options clean install uninstall

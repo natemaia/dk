@@ -18,7 +18,7 @@ int main(int argc, char *argv[])
 	uint mask = XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT;
 
 	if (argc > 1) {
-		fprintf(stderr, !strcmp(argv[1], "-v") ? "%s v0.01\n" : "usage: %s [-v]\n", argv0);
+		fprintf(stderr, !strcmp(argv[1], "-v") ? "%s "VERSION"\n" : "usage: %s [-v]\n", argv0);
 		exit(1);
 	}
 	if (!setlocale(LC_CTYPE, ""))

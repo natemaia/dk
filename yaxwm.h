@@ -3,8 +3,9 @@
 * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
 */
 
-#ifndef YAXWM_H
-#define YAXWM_H
+#ifndef VERSION
+#define VERSION "0.1"
+#endif
 
 /* sigaction */
 #define _XOPEN_SOURCE 700
@@ -30,20 +31,19 @@
 #include <xcb/xcb_keysyms.h>
 #include <X11/keysym.h>
 
-
-#define W(x)                   ((x)->w + 2 * (x)->bw)
-#define H(x)                   ((x)->h + 2 * (x)->bw)
-#define LEN(x)                 (sizeof(x) / sizeof(x[0]))
-#define MAX(a, b)              ((a) > (b) ? (a) : (b))
-#define MIN(a, b)              ((a) < (b) ? (a) : (b))
-#define CLNMOD(mod)            (mod & ~(numlockmask | XCB_MOD_MASK_LOCK))
+/* bog standard */
+#define W(x)       ((x)->w + 2 * (x)->bw)
+#define H(x)       ((x)->h + 2 * (x)->bw)
+#define MAX(a, b)  ((a) > (b) ? (a) : (b))
+#define MIN(a, b)  ((a) < (b) ? (a) : (b))
+#define LEN(x)     (sizeof(x) / sizeof(x[0]))
 
 /* linked list quick access */
 #define FOR_EACH(v, list)      for ((v) = (list); (v); (v) = (v)->next)
 #define FOR_STACK(v, list)     for ((v) = (list); (v); (v) = (v)->snext)
 #define FOR_TAIL(v, list)      for ((v) = (list); (v) && (v)->next; (v) = (v)->next)
-#define FOR_PREV(v, cur, list) for ((v) = (list); (v) && (v)->next && (v)->next != (cur); (v) = (v)->next)
 #define FOR_WSCLIENTS(c, ws)   FOR_EACH((ws), workspaces) FOR_EACH((c), (ws)->clients)
+#define FOR_PREV(v, cur, list) for ((v) = (list); (v) && (v)->next && (v)->next != (cur); (v) = (v)->next)
 
 /* dissolves into nothing when DEBUG isn't defined */
 #define DBG(fmt, ...)
@@ -57,9 +57,9 @@
 #define PROP_REPLACE(win, atom, type, membsize, nmemb, value) \
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, (win), (atom), (type), (membsize), (nmemb), (value))
 
-
 /* bit masks */
 #define STICKYMASK  (0xFFFFFFFF)
+#define CLNMOD(mod) (mod & ~(numlockmask | XCB_MOD_MASK_LOCK))
 #define BWMASK      (XCB_CONFIG_WINDOW_BORDER_WIDTH)
 #define XYMASK      (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y)
 #define WHMASK      (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT)
@@ -87,7 +87,6 @@ typedef struct WsRule WsRule;
 typedef struct Client Client;
 typedef struct Monitor Monitor;
 typedef struct Workspace Workspace;
-
 
 enum Borders {
 	Width, Focus, Unfocus
@@ -214,7 +213,6 @@ static const char *netatomnames[] = {
 	[WindowTypeDialog] = "_NET_WM_WINDOW_TYPE_DIALOG",
 };
 
-
 static char *argv0;          /* program name */
 static int scr_w, scr_h;     /* root window size */
 static int randrbase = -1;   /* randr extension response */
@@ -235,7 +233,6 @@ static xcb_key_symbols_t *keysyms;   /* current keymap symbols */
 static xcb_atom_t wmatoms[WMLast];   /* _WM atoms used mostly internally */
 static xcb_cursor_t cursor[CurLast]; /* cursors for moving, resizing, and normal */
 static xcb_atom_t netatoms[NetLast]; /* _NET atoms used both internally and by other clients */
-
 
 /* function prototypes */
 static Client *nexttiled(Client *c);
@@ -322,5 +319,3 @@ static void windowtype(Client *c);
 static xcb_atom_t windowprop(xcb_window_t win, xcb_atom_t prop);
 static xcb_get_window_attributes_reply_t *windowattr(xcb_window_t win);
 static xcb_window_t windowtrans(xcb_window_t win);
-
-#endif

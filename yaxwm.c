@@ -4,6 +4,10 @@
 */
 
 #include "yaxwm.h"
+#include "debug.c"
+
+/* config needs access to everything defined */
+#include "config.h"
 
 int main(int argc, char *argv[])
 {
@@ -56,6 +60,22 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
+void applypanelstrut(Panel *p)
+{
+	DBG("%s window area before: %d,%d @ %dx%d", p->mon->name, p->mon->winarea_x,
+			p->mon->winarea_y, p->mon->winarea_w, p->mon->winarea_h);
+	if (p->mon->x + p->strut_l > p->mon->winarea_x)
+		p->mon->winarea_x = p->strut_l;
+	if (p->mon->y + p->strut_t > p->mon->winarea_y)
+		p->mon->winarea_y = p->strut_t;
+	if (p->mon->w - (p->strut_r + p->strut_l) < p->mon->winarea_w)
+		p->mon->winarea_w = p->mon->w - (p->strut_r + p->strut_l);
+	if (p->mon->h - (p->strut_b + p->strut_t) < p->mon->winarea_h)
+		p->mon->winarea_h = p->mon->h - (p->strut_b + p->strut_t);
+	DBG("%s window area after: %d,%d @ %dx%d", p->mon->name, p->mon->winarea_x,
+			p->mon->winarea_y, p->mon->winarea_w, p->mon->winarea_h);
+}
+
 void attach(Client *c, int tohead)
 { /* attach client to it's workspaces client list */
 	Client *n;
@@ -75,6 +95,12 @@ void attachstack(Client *c)
 { /* attach client to it's workspaces focus stack list */
 	c->snext = c->ws->stack;
 	c->ws->stack = c;
+}
+
+void attachpanel(Panel *p)
+{
+	p->next = panels;
+	panels = p;
 }
 
 void assignworkspaces(void)
@@ -700,6 +726,25 @@ void freemon(Monitor *m)
 	free(m);
 }
 
+void freepanel(Panel *p, int destroyed)
+{
+	Panel **pp = &panels;
+
+	DBG("freeing panel: %d", p->win)
+	while (*pp && *pp != p)
+		pp = &(*pp)->next;
+	*pp = p->next;
+	if (!destroyed) {
+		xcb_grab_server(con);
+		setwinstate(p->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
+		xcb_aux_sync(con);
+		xcb_ungrab_server(con);
+	}
+	updatestruts(p, 0);
+	free(p);
+	layoutws(NULL, 0);
+}
+
 void freewm(void)
 { /* exit yaxwm, free everything and cleanup X */
 	uint i;
@@ -946,6 +991,54 @@ void initexisting(void)
 	}
 }
 
+void initpanel(xcb_window_t win)
+{
+	int *s;
+	Panel *p;
+	xcb_generic_error_t *e;
+	xcb_get_geometry_cookie_t gc;
+	xcb_get_property_cookie_t rc;
+	xcb_get_geometry_reply_t *g = NULL;
+	xcb_get_property_reply_t *r = NULL;
+
+	DBG("initializing new panel from window: %d", win)
+	gc = xcb_get_geometry(con, win);
+	p = ecalloc(1, sizeof(Panel));
+	p->win = win;
+
+	if ((g = xcb_get_geometry_reply(con, gc, &e)))
+		p->x = g->x, p->y = g->y, p->w = g->width, p->h = g->height;
+	else
+		checkerror("failed to get window geometry reply", e);
+	free(g);
+	p->mon = ptrtomon(p->x, p->y);
+
+	rc = xcb_get_property(con, 0, p->win, netatoms[StrutPartial], XCB_ATOM_CARDINAL, 0, 4);
+	DBG("checking panel for _NET_WM_STRUT_PARTIAL or _NET_WM_STRUT")
+	if (!(r = xcb_get_property_reply(con, rc, &e)) || r->type == XCB_NONE) {
+		checkerror("unable to get _NET_WM_STRUT_PARTIAL from window", e);
+		rc = xcb_get_property(con, 0, p->win, netatoms[Strut], XCB_ATOM_CARDINAL, 0, 4);
+		if (!(r = xcb_get_property_reply(con, rc, &e)))
+			checkerror("unable to get _NET_WM_STRUT or _NET_WM_STRUT_PARTIAL from window", e);
+	}
+	if (r) {
+		if (r->value_len && (s = xcb_get_property_value(r))) {
+			DBG("panel window has struts: %d, %d, %d, %d", s[0], s[1], s[2], s[3])
+			p->strut_l = s[0], p->strut_r = s[1], p->strut_t = s[2], p->strut_b = s[3];
+			updatestruts(p, 1);
+		}
+		free(r);
+	}
+
+	attachpanel(p);
+	xcb_change_window_attributes(con, p->win, XCB_CW_EVENT_MASK,
+			(uint []){XCB_EVENT_MASK_PROPERTY_CHANGE|XCB_EVENT_MASK_STRUCTURE_NOTIFY});
+	xcb_map_window(con, p->win);
+	layoutws(NULL, 0);
+	DBG("new panel mapped -- monitor: %s -- geometry: %d,%d @ %dx%d",
+			p->mon->name, p->x, p->y, p->w, p->h)
+}
+
 Monitor *initmon(char *name, xcb_randr_output_t id, int x, int y, int w, int h)
 { /* allocate a monitor from randr output */
 	Monitor *m;
@@ -962,6 +1055,27 @@ Monitor *initmon(char *name, xcb_randr_output_t id, int x, int y, int w, int h)
 	if (len > 1)
 		strlcpy(m->name, name, len);
 	return m;
+}
+
+int initrandr(void)
+{
+	int extbase;
+
+	DBG("checking randr extension support")
+	const xcb_query_extension_reply_t *ext = xcb_get_extension_data(con, &xcb_randr_id);
+
+	if (!ext->present)
+		return -1;
+	DBG("randr extension is supported, initializing")
+	updaterandr();
+	extbase = ext->first_event;
+
+	xcb_randr_select_input(con, root, XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE
+			|XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE|XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE
+			|XCB_RANDR_NOTIFY_MASK_OUTPUT_PROPERTY);
+
+	DBG("RANDR extension active and monitor(s) initialized -- extension base: %d", extbase)
+	return extbase;
 }
 
 void initwm(void)
@@ -1143,6 +1257,16 @@ Client *nexttiled(Client *c)
 	return c;
 }
 
+Monitor *outputtomon(xcb_randr_output_t id)
+{
+	Monitor *m;
+
+	FOR_EACH(m, monitors)
+		if (m->id == id)
+			break;
+	return m;
+}
+
 int pointerxy(int *x, int *y)
 {
 	xcb_generic_error_t *e;
@@ -1166,6 +1290,16 @@ Monitor *ptrtomon(int x, int y)
 		if (x >= m->x && x < m->x + m->w && y >= m->y && y < m->y + m->h)
 			return m;
 	return selws->mon;
+}
+
+Monitor *randrclone(xcb_randr_output_t id, int x, int y)
+{
+	Monitor *m;
+
+	FOR_EACH(m, monitors)
+		if (id != m->id && m->x == x && m->y == y)
+			break;
+	return m;
 }
 
 void resetorquit(const Arg *arg)
@@ -1668,6 +1802,115 @@ void updatenumws(uint needed)
 	PROP_REPLACE(root, netatoms[NumDesktops], XCB_ATOM_CARDINAL, 32, 1, &numws);
 }
 
+int updateoutputs(xcb_randr_output_t *outs, int len, xcb_timestamp_t timestamp)
+{
+	uint n;
+	Monitor *m;
+	char name[64];
+	int i, changed = 0;
+	xcb_generic_error_t *e;
+	xcb_randr_get_crtc_info_cookie_t c;
+	xcb_randr_get_output_info_reply_t *o;
+	xcb_randr_get_crtc_info_reply_t *crtc;
+	xcb_randr_get_output_info_cookie_t oc[len];
+
+	DBG("%d outputs, requesting info for each")
+	for (i = 0; i < len; i++)
+		oc[i] = xcb_randr_get_output_info(con, outs[i], timestamp);
+	for (i = 0; i < len; i++) {
+		if (!(o = xcb_randr_get_output_info_reply(con, oc[i], &e))) {
+			checkerror("unable to get monitor info", e);
+			continue;
+		}
+		if (o->crtc != XCB_NONE) {
+			c = xcb_randr_get_crtc_info(con, o->crtc, timestamp);
+			if (!(crtc = xcb_randr_get_crtc_info_reply(con, c, &e))) {
+				checkerror("crtc info for randr output was NULL", e);
+				free(o);
+				return -1;
+			}
+
+			n = xcb_randr_get_output_info_name_length(o) + 1;
+			strlcpy(name, (const char *)xcb_randr_get_output_info_name(o), MIN(sizeof(name), n));
+			DBG("crtc: %s -- location: %d,%d -- size: %dx%d -- status: %d",
+					name, crtc->x, crtc->y, crtc->width, crtc->height, crtc->status)
+
+			if ((m = randrclone(outs[i], crtc->x, crtc->y))) {
+				DBG("monitor %s, id %d is a clone of %s, id %d, skipping",
+						name, outs[i], m->name, m->id)
+			} else if ((m = outputtomon(outs[i]))) {
+				DBG("previously initialized monitor: %s -- location and size: %d,%d @ %dx%d",
+						m->name, m->x, m->y, m->w, m->h)
+				changed = (crtc->x != m->x || crtc->y != m->y
+						|| crtc->width != m->w || crtc->height != m->h);
+				if (crtc->x != m->x)      m->x = m->winarea_x = crtc->x;
+				if (crtc->y != m->y)      m->y = m->winarea_y = crtc->y;
+				if (crtc->width != m->w)  m->w = m->winarea_w = crtc->width;
+				if (crtc->height != m->h) m->h = m->winarea_h = crtc->height;
+				DBG("size and location for monitor: %s -- %d,%d @ %dx%d -- %s",
+						m->name, m->x, m->y, m->w, m->h, changed ? "updated" : "unchanged")
+			} else {
+				FOR_TAIL(m, monitors);
+				if (m)
+					m->next = initmon(name, outs[i], crtc->x, crtc->y, crtc->width, crtc->height);
+				else
+					monitors = initmon(name, outs[i], crtc->x, crtc->y, crtc->width, crtc->height);
+				changed = 1;
+			}
+			free(crtc);
+		} else if ((m = outputtomon(outs[i]))) {
+			DBG("previously initialized monitor is now inactive: %s -- freeing", m->name)
+			freemon(m);
+			changed = 1;
+		}
+		free(o);
+	}
+	return changed;
+}
+
+int updaterandr(void)
+{
+	int len, changed;
+	xcb_timestamp_t timestamp;
+	xcb_generic_error_t *e;
+	xcb_randr_output_t *outputs;
+	xcb_randr_get_screen_resources_current_reply_t *r;
+	xcb_randr_get_screen_resources_current_cookie_t rc;
+
+	DBG("querying current randr outputs")
+	rc = xcb_randr_get_screen_resources_current(con, root);
+	if (!(r = xcb_randr_get_screen_resources_current_reply(con, rc, &e))) {
+		checkerror("unable to get screen resources", e);
+		return -1;
+	}
+
+	timestamp = r->config_timestamp;
+	len = xcb_randr_get_screen_resources_current_outputs_length(r);
+	outputs = xcb_randr_get_screen_resources_current_outputs(r);
+	changed = updateoutputs(outputs, len, timestamp);
+	free(r);
+	return changed;
+}
+
+void updatestruts(Panel *p, int apply)
+{
+	Panel *n;
+	Monitor *m;
+	
+	DBG("resetting struts for each monitor")
+	FOR_EACH(m, monitors) {
+		m->winarea_x = m->x, m->winarea_y = m->y, m->winarea_w = m->w, m->winarea_h = m->h;
+	}
+	if (!p)
+		return;
+	if (apply && !panels)
+		applypanelstrut(p);
+	DBG("applying each panel strut where needed")
+	FOR_EACH(n, panels)
+		if ((apply || n != p) && (n->strut_l || n->strut_r || n->strut_t || n->strut_b))
+			applypanelstrut(p);
+}
+
 void view(const Arg *arg)
 {
 	Workspace *ws;
@@ -1770,6 +2013,18 @@ Client *wintoclient(xcb_window_t win)
 		if (c->win == win)
 			return c;
 	return NULL;
+}
+
+Panel *wintopanel(xcb_window_t win)
+{
+	Panel *p;
+
+	if (win == root)
+		return NULL;
+	FOR_EACH(p, panels)
+		if (p->win == win)
+			break;
+	return p;
 }
 
 Workspace *wintows(xcb_window_t win)

@@ -62,7 +62,12 @@
 #define WHMASK      (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT)
 #define BUTTONMASK  (XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE)
 #define GRABMASK    (XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_BUTTON_MOTION | XCB_EVENT_MASK_POINTER_MOTION_HINT)
-
+#define CLIENTMASK  (XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_FOCUS_CHANGE \
+		| XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY)
+#define ROOTMASK    (XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT | XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY \
+		| XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_POINTER_MOTION \
+		| XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_LEAVE_WINDOW | XCB_EVENT_MASK_STRUCTURE_NOTIFY \
+		| XCB_EVENT_MASK_PROPERTY_CHANGE)
 #define BUTTON1     (XCB_BUTTON_INDEX_1)
 #define BUTTON2     (XCB_BUTTON_INDEX_2)
 #define BUTTON3     (XCB_BUTTON_INDEX_3)
@@ -121,6 +126,7 @@ struct Rule {
 	char *monitor;
 	int workspace;
 	uint floating;
+	void (*cbfunc)(Client *c);
 	regex_t regcomp;
 };
 
@@ -209,7 +215,7 @@ static const char *netatomnames[] = {
 static char *argv0;          /* program name */
 static int scr_w, scr_h;     /* root window size */
 static int randrbase = -1;   /* randr extension response */
-static uint running = 1;     /* exit cleanly when 0 */
+static uint running = 1;     /* continue handling events */
 static uint numws = 0;       /* number of workspaces currently allocated */
 static uint mousebtn = 0;    /* mouse button currently being pressed */
 static uint numlockmask = 0; /* numlock modifier bit mask */
@@ -252,7 +258,7 @@ static void attachstack(Client *c);
 static void changefocus(const Arg *arg);
 static void changews(Workspace *ws, int usermotion);
 static void checkerror(char *prompt, xcb_generic_error_t *e);
-static void clientrules(Client *c, xcb_window_t trans);
+static void *clientrules(Client *c, xcb_window_t *trans);
 static void configure(Client *c);
 static void detach(Client *c, int reattach);
 static void detachstack(Client *c);

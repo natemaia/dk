@@ -12,9 +12,10 @@
 #define VOLDOWN   0x1008ff11
 
 /* save some repetitive typing with the workspace keybinds */
-#define WSBIND(ws, key) { XCB_KEY_PRESS, MODKEY,                      key, view,   {.ui = ws} },\
-                        { XCB_KEY_PRESS, MODKEY|XCB_MOD_MASK_SHIFT,   key, send,   {.ui = ws} },\
-                        { XCB_KEY_PRESS, MODKEY|XCB_MOD_MASK_CONTROL, key, follow, {.ui = ws} }
+#define WSBIND(ws, key) \
+{ XCB_KEY_PRESS, MODKEY,                      key, view,   {.ui = ws} },\
+{ XCB_KEY_PRESS, MODKEY|XCB_MOD_MASK_SHIFT,   key, send,   {.ui = ws} },\
+{ XCB_KEY_PRESS, MODKEY|XCB_MOD_MASK_CONTROL, key, follow, {.ui = ws} }
 
 /* enable focus follows mouse */
 static const int focusmouse = 1;
@@ -27,6 +28,15 @@ static const char *scrots[] = { "scrot", "-s", NULL };
 static const char *voltg[] = { "pamixer", "-t", NULL };
 static const char *volup[] = { "pamixer", "-i", "2", NULL };
 static const char *voldn[] = { "pamixer", "-d", "2", NULL };
+
+static void mpvalbumart(Client *c)
+{ /* move mpv album art client to bottom left of the screen */
+	c->bw = 0, c->nofocus = 1;
+	c->x = c->ws->mon->winarea_x + c->ws->mon->winarea_w - W(c);
+	c->y = c->ws->mon->winarea_y + c->ws->mon->winarea_h - H(c);
+	if (c->ws == c->ws->mon->ws)
+		resizehint(c, c->x, c->y, c->w, c->h, 1);
+}
 
 static int borders[] = {
 	[Width] = 1,         /* border width in pixels */
@@ -56,13 +66,14 @@ static Rule rules[] = {
 	 * window class/instance: `xprop` (the regex matching is case insensitive)
 	 * monitor name: `xrandr` (or use an index 0-n, the order is not guaranteed)
 	 *
-	 * eg. { "chromium", "HDMI-A-0", -1, 1, {0} }
+	 * eg. { "chromium", NULL, "HDMI-A-0", -1, 1, NULL }
 	 *
-	 * class/instance                      monitor     workspace  floating,                                  compiled regex */
-	{ "^firefox$",                          "0",        -1,         0, /* active workspace on monitor 0, tiled */ {0} },
-	{ "^gimp$",                             NULL,        2,         1, /* workspace 2, floating */                {0} },
-	{ "^(steam|lxappearance)$",             NULL,       -1,         1, /* current workspace, floating */          {0} },
-	{ "^(pavucontrol|transmission-gtk)$",   NULL,       -1,         1, /* current workspace, floating */          {0} },
+	 * class/instance                      monitor  workspace  floating  callback */
+	{ "^firefox$",                         "0",    -1,         0,         NULL }, /* active workspace on monitor 0, tiled */
+	{ "^gimp$",                            NULL,    2,         1,         NULL }, /* workspace 2, floating */
+	{ "^(steam|lxappearance)$",            NULL,   -1,         1,         NULL }, /* current workspace, floating */
+	{ "^(pavucontrol|transmission-gtk)$",  NULL,   -1,         1,         NULL }, /* current workspace, floating */
+	{ "^gl$",                              NULL,   -1,         1,         mpvalbumart }, /* current workspace, floating, with callback */
 };
 
 static Bind binds[] = {

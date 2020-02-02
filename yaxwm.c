@@ -49,6 +49,7 @@ int main(int argc, char *argv[])
 	/* setup the wm and existing windows before entering the event loop */
 	initwm();
 	initexisting();
+	layoutws(NULL, 0);
 	focus(NULL);
 	eventloop();
 
@@ -177,15 +178,16 @@ void configure(Client *c)
 }
 
 void *clientrules(Client *c, xcb_window_t *trans)
-{ /* apply user specified rules to client, try using _NET atoms otherwise */
+{ /* apply user specified rules to client, try using _NET atoms otherwise
+   * returns a pointer to the callback function if any otherwise NULL */
 	uint i;
 	Client *t;
 	Monitor *m;
-	int ws, n, len, num = -1;
 	xcb_generic_error_t *e;
+	int ws, n, len, num = -1;
 	xcb_get_property_cookie_t pc;
-	void (*rulecbfunc)(Client *c) = NULL;
 	xcb_icccm_get_wm_class_reply_t prop;
+	void (*rulecbfunc)(Client *c) = NULL;
 
 	if ((*trans != XCB_WINDOW_NONE || (*trans = windowtrans(c->win)) != XCB_WINDOW_NONE)
 			&& (t = wintoclient(*trans)))
@@ -194,12 +196,6 @@ void *clientrules(Client *c, xcb_window_t *trans)
 		c->ws = t->ws;
 		c->floating = 1;
 		ws = c->ws->num;
-		if (!c->min_w || (c->min_h == c->h && !c->fixed))
-			c->h *= 2;
-		if (!c->min_w || (c->min_w == c->w && !c->fixed))
-			c->w *= 2;
-		c->x = t->x + ((t->w - c->w) / 2);
-		c->y = t->y + ((t->h - c->h) / 2);
 		goto done;
 	}
 
@@ -234,7 +230,6 @@ void *clientrules(Client *c, xcb_window_t *trans)
 	} else {
 		checkerror("failed to get window class", e);
 	}
-
 done:
 	setclientws(c, ws);
 	DBG("set client values - workspace: %d, monitor: %s, floating: %d",
@@ -319,9 +314,10 @@ void eventhandle(xcb_generic_event_t *ev)
 		{
 			xcb_mapping_notify_event_t *e = (xcb_mapping_notify_event_t *)ev;
 
+			if (e->request != XCB_MAPPING_KEYBOARD && e->request != XCB_MAPPING_MODIFIER)
+				break;
 			xcb_refresh_keyboard_mapping(keysyms, e);
-			if (e->request == XCB_MAPPING_KEYBOARD)
-				grabkeys();
+			grabkeys();
 			return;
 		}
 		case XCB_CONFIGURE_REQUEST:
@@ -334,18 +330,26 @@ void eventhandle(xcb_generic_event_t *ev)
 					c->bw = e->border_width;
 				else if (c->floating || !selws->layout) {
 					m = c->ws->mon;
-					if (e->value_mask & XCB_CONFIG_WINDOW_X)
-						c->x = c->old_x = m->x + e->x;
-					if (e->value_mask & XCB_CONFIG_WINDOW_Y)
-						c->y = c->old_y = m->y + e->y;
-					if (e->value_mask & XCB_CONFIG_WINDOW_WIDTH)
-						c->w = c->old_w = e->width;
-					if (e->value_mask & XCB_CONFIG_WINDOW_HEIGHT)
-						c->h = c->old_h = e->height;
+					if (e->value_mask & XCB_CONFIG_WINDOW_X) {
+						c->old_x = c->x;
+						c->x = m->x + e->x;
+					}
+					if (e->value_mask & XCB_CONFIG_WINDOW_Y) {
+						c->old_y = c->y;
+						c->y = m->y + e->y;
+					}
+					if (e->value_mask & XCB_CONFIG_WINDOW_WIDTH) {
+						c->old_w = c->w;
+						c->w = e->width;
+					}
+					if (e->value_mask & XCB_CONFIG_WINDOW_HEIGHT) {
+						c->old_h = c->h;
+						c->h = e->height;
+					}
 					if ((c->x + c->w) > m->x + m->w)
-						c->x = c->old_x = m->x + (m->w / 2 - c->w / 2);
+						c->x = m->x + (m->w / 2 - c->w / 2);
 					if ((c->y + c->h) > m->y + m->h)
-						c->y = c->old_y = m->y + (m->h / 2 - c->h / 2);
+						c->y = m->y + (m->h / 2 - c->h / 2);
 					if ((e->value_mask & XYMASK) && !(e->value_mask & WHMASK))
 						configure(c);
 					if (c->ws == c->ws->mon->ws)
@@ -530,8 +534,9 @@ void eventhandle(xcb_generic_event_t *ev)
 				view(&(const Arg){.ui = e->data.data32[0]});
 			} else if ((c = wintoclient(e->window))) {
 				if (e->type == netatoms[ActiveWindow]) {
-					changews(c->ws, 0);
-					layoutws(c->ws, 1);
+					if (c->ws != selws)
+						changews(c->ws, 0);
+					layoutws(NULL, 1);
 					focus(c);
 				} else if (e->type == netatoms[State]
 						&& (e->data.data32[1] == netatoms[Fullscreen]
@@ -548,14 +553,18 @@ void eventhandle(xcb_generic_event_t *ev)
 			xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ev;
 
 			if (e->state != XCB_PROPERTY_DELETE && (c = wintoclient(e->window))) {
-				if (e->atom == XCB_ATOM_WM_TRANSIENT_FOR) {
+				switch (e->atom) {
+				case XCB_ATOM_WM_TRANSIENT_FOR:
 					if (!c->floating && (trans = windowtrans(c->win)) != XCB_NONE
 							&& (c->floating = (wintoclient(trans) != NULL)))
 						layoutws(c->ws, 1);
-				} else if (e->atom == XCB_ATOM_WM_NORMAL_HINTS) {
+					break;
+				case XCB_ATOM_WM_NORMAL_HINTS:
 					sizehints(c);
-				} else if (e->atom == XCB_ATOM_WM_HINTS) {
+					break;
+				case XCB_ATOM_WM_HINTS:
 					windowhints(c);
+					break;
 				}
 				if (e->atom == netatoms[WindowType])
 					windowtype(c);
@@ -588,7 +597,7 @@ void eventloop(void)
 { /* wait for events while the user hasn't requested quit */
 	xcb_generic_event_t *ev;
 
-	xcb_aux_sync(con);
+	xcb_flush(con);
 	while (running && (ev = xcb_wait_for_event(con))) {
 		eventhandle(ev);
 		free(ev);
@@ -663,16 +672,16 @@ void freeclient(Client *c, int destroyed)
 		xcb_configure_window(con, c->win, BWMASK, &c->old_bw);
 		xcb_ungrab_button(con, XCB_BUTTON_INDEX_ANY, c->win, XCB_MOD_MASK_ANY);
 		setwinstate(c->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
-		xcb_aux_sync(con);
+		xcb_flush(con);
 		xcb_ungrab_server(con);
 	}
 	free(c);
-	ignorefocusevents();
 	xcb_delete_property(con, root, netatoms[ClientList]);
 	FOR_WSCLIENTS(c, ws)
 		PROP_APPEND(root, netatoms[ClientList], XCB_ATOM_WINDOW, 32, 1, &c->win);
 	layoutws(cws, 0);
 	focus(NULL);
+	ignorefocusevents();
 }
 
 void freemon(Monitor *m)
@@ -714,7 +723,7 @@ void freewm(void)
 	xcb_destroy_window(con, wmcheck);
 	xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT,
 			XCB_INPUT_FOCUS_POINTER_ROOT, XCB_CURRENT_TIME);
-	xcb_aux_sync(con);
+	xcb_flush(con);
 	xcb_delete_property(con, root, netatoms[ActiveWindow]);
 	xcb_disconnect(con);
 }
@@ -835,61 +844,57 @@ void initatoms(xcb_atom_t *atoms, const char **names, int num)
 void initclient(xcb_window_t win, xcb_window_t trans)
 { /* allocate and setup new client from window */
 	Client *c;
-	Monitor *m;
-	int x, y, w, h, bw, r;
+	xcb_generic_error_t *e;
+	xcb_get_geometry_cookie_t gc;
 	void (*clientcbfunc)(Client *c);
+	xcb_get_geometry_reply_t *g = NULL;
+	uint values[] = { borders[Focus], CLIENTMASK };
 	uint frame[] = { borders[Width], borders[Width], borders[Width], borders[Width] };
 
 	DBG("initializing new client from window: 0x%x", win)
+	gc = xcb_get_geometry(con, win);
 	c = ecalloc(1, sizeof(Client));
 	c->win = win;
-	if ((r = windowgeom(c->win, &x, &y, &w, &h, &bw))) {
-		DBG("using geometry given by the window: %d,%d @ %dx%d", x, y, w, h)
-		c->x = c->old_x = x, c->y = c->old_y = y, c->w = c->old_w = w, c->h = c->old_h = h;
-		c->old_bw = bw;
+	if ((g = xcb_get_geometry_reply(con, gc, &e))) {
+		DBG("using geometry given by the window: %d,%d @ %dx%d", g->x, g->y, g->width, g->height)
+		c->x = c->old_x = g->x, c->y = c->old_y = g->y;
+		c->w = c->old_w = g->width, c->h = c->old_h = g->height;
+		c->old_bw = g->border_width;
+	} else {
+		checkerror("failed to get window geometry reply", e);
 	}
+	free(g);
 	clientcbfunc = clientrules(c, &trans);
-	m = c->ws ? c->ws->mon : selws->mon;
-	if (!r) {
-		DBG("using monitor window area geometry")
-		c->x = c->old_x = m->winarea_x, c->y = c->old_y = m->winarea_y;
-		if (trans == XCB_WINDOW_NONE)
-			c->w = c->old_w = m->winarea_w / 2, c->h = c->old_h = m->winarea_h / 2;
-		c->old_bw = borders[Width];
-	}
 	c->bw = borders[Width];
-
-	if (c->x <= m->winarea_x || c->x + W(c) >= m->winarea_x + m->winarea_w)
-		c->x = (m->winarea_x + m->winarea_w - W(c)) / 2;
-	if (c->y <= m->winarea_y || c->y + H(c) >= m->winarea_y + m->winarea_h)
-		c->y = (m->winarea_y + m->winarea_h - H(c)) / 2;
 	xcb_configure_window(con, c->win, BWMASK, &c->bw);
 	configure(c);
 	windowtype(c);
 	sizehints(c);
 	windowhints(c);
-	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK | XCB_CW_BORDER_PIXEL,
-			(uint []){ borders[Focus], CLIENTMASK });
+	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK | XCB_CW_BORDER_PIXEL, values);
 	grabbuttons(c, 0);
-	if (c->floating || (c->floating = c->oldstate = c->fixed))
+	if (c->floating || (c->floating = c->oldstate = c->fixed)) {
+		if (c->x <= c->ws->mon->winarea_x || c->x + W(c) >= c->ws->mon->winarea_x + c->ws->mon->winarea_w)
+			c->x = (c->ws->mon->winarea_x + c->ws->mon->winarea_w - W(c)) / 2;
+		if (c->y <= c->ws->mon->winarea_y || c->y + H(c) >= c->ws->mon->winarea_y + c->ws->mon->winarea_h)
+			c->y = (c->ws->mon->winarea_y + c->ws->mon->winarea_h - H(c)) / 2;
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+	}
 	PROP_APPEND(root, netatoms[ClientList], XCB_ATOM_WINDOW, 32, 1, &c->win);
 	setwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
 	PROP_REPLACE(c->win, netatoms[FrameExtents], XCB_ATOM_CARDINAL, 32, 4, frame);
-	if (selws && c->ws == selws && selws->sel)
+	if (c->ws == selws)
 		unfocus(selws->sel, 0);
-	if (c->ws)
-		c->ws->sel = c;
-	else if (selws)
-		selws->sel = c;
+	c->ws->sel = c;
 	if (clientcbfunc)
 		clientcbfunc(c);
 	layoutws(c->ws, 0);
 	xcb_map_window(con, c->win);
-	focus(NULL);
+	if (!c->nofocus)
+		focus(NULL);
+	ignorefocusevents();
 	DBG("new client mapped on workspace %s: %d,%d @ %dx%d -- floating: %d",
 			c->ws->name, c->x, c->y, c->w, c->h, c->floating)
-	ignorefocusevents();
 }
 
 void initexisting(void)
@@ -1108,9 +1113,10 @@ void killclient(const Arg *arg)
 		xcb_grab_server(con);
 		xcb_set_close_down_mode(con, XCB_CLOSE_DOWN_DESTROY_ALL);
 		xcb_kill_client(con, selws->sel->win);
-		xcb_aux_sync(con);
+		xcb_flush(con);
 		xcb_ungrab_server(con);
 	}
+	xcb_flush(con);
 }
 
 void layoutws(Workspace *ws, int allowfocusevents)
@@ -1127,7 +1133,7 @@ void layoutws(Workspace *ws, int allowfocusevents)
 		if (ws == ws->mon->ws && ws->layout)
 			ws->layout(ws);
 	}
-	xcb_aux_sync(con);
+	xcb_flush(con);
 }
 
 Client *nexttiled(Client *c)
@@ -1312,7 +1318,7 @@ void setfullscreen(Client *c, int fullscreen)
 		c->floating = 1;
 		resize(c, m->x, m->y, m->w, m->h);
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-		xcb_aux_sync(con);
+		xcb_flush(con);
 	} else if (!fullscreen && c->fullscreen) {
 		PROP_REPLACE(c->win, netatoms[State], XCB_ATOM_ATOM, 32, 0, (uchar *)0);
 		c->floating = c->oldstate;
@@ -1684,28 +1690,6 @@ xcb_get_window_attributes_reply_t *windowattr(xcb_window_t win)
 	if (!(wa = xcb_get_window_attributes_reply(con, c, &e)))
 		checkerror("unable to get window attributes", e);
 	return wa;
-}
-
-int windowgeom(xcb_window_t win, int *x, int *y, int *w, int *h, int *bw)
-{
-	xcb_generic_error_t *e;
-	xcb_get_geometry_reply_t *g;
-
-	if (!(g = xcb_get_geometry_reply(con, xcb_get_geometry(con, win), &e))) {
-		checkerror("failed to get window geometry", e);
-		return 0;
-	}
-	if (x)
-		*x = g->x;
-	if (y)
-		*y = g->y;
-	if (w)
-		*w = g->width;
-	if (h)
-		*h = g->height;
-	if (bw)
-		*bw = g->border_width;
-	return 1;
 }
 
 void windowhints(Client *c)

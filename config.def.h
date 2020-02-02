@@ -30,12 +30,12 @@ static const char *volup[] = { "pamixer", "-i", "2", NULL };
 static const char *voldn[] = { "pamixer", "-d", "2", NULL };
 
 static void mpvalbumart(Client *c)
-{ /* move mpv album art client to bottom left of the screen */
-	c->bw = 0, c->nofocus = 1;
+{ /* mpv album art client borderless, nofocus, and move to bottom left of the screen */
+	c->bw = 0;
+	c->nofocus = 1;
 	c->x = c->ws->mon->winarea_x + c->ws->mon->winarea_w - W(c);
 	c->y = c->ws->mon->winarea_y + c->ws->mon->winarea_h - H(c);
-	if (c->ws == c->ws->mon->ws)
-		resizehint(c, c->x, c->y, c->w, c->h, 1);
+	resize(c, c->x, c->y, c->w, c->h);
 }
 
 static int borders[] = {

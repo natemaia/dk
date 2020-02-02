@@ -248,7 +248,6 @@ static int pointerxy(int *x, int *y);
 static int ruleregcmp(regex_t *r, char *class, char *inst);
 static int sendevent(Client *c, int wmproto);
 static int setsizehints(Client *c, int *x, int *y, int *w, int *h, int interact);
-static int windowgeom(xcb_window_t win, int *x, int *y, int *w, int *h, int *bw);
 static size_t strlcpy(char *dst, const char *src, size_t size);
 static void *ecalloc(size_t elems, size_t size);
 static void updatenumlock(void);

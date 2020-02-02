@@ -49,18 +49,25 @@ void freepanel(Panel *p, int destroyed)
 
 void initpanel(xcb_window_t win)
 {
+	int *s;
 	Panel *p;
 	xcb_generic_error_t *e;
+	xcb_get_geometry_cookie_t gc;
 	xcb_get_property_cookie_t rc;
-	int *s, x = 0, y = 0, w, h, bw;
+	xcb_get_geometry_reply_t *g = NULL;
 	xcb_get_property_reply_t *r = NULL;
 
 	DBG("initializing new panel from window: %d", win)
+	gc = xcb_get_geometry(con, win);
 	p = ecalloc(1, sizeof(Panel));
 	p->win = win;
-	if (windowgeom(p->win, &x, &y, &w, &h, &bw))
-		p->x = x, p->y = y, p->w = w, p->h = h;
-	p->mon = ptrtomon(x, y);
+
+	if ((g = xcb_get_geometry_reply(con, gc, &e)))
+		p->x = g->x, p->y = g->y, p->w = g->width, p->h = g->height;
+	else
+		checkerror("failed to get window geometry reply", e);
+	free(g);
+	p->mon = ptrtomon(p->x, p->y);
 
 	rc = xcb_get_property(con, 0, p->win, netatoms[StrutPartial], XCB_ATOM_CARDINAL, 0, 4);
 	DBG("checking panel for _NET_WM_STRUT_PARTIAL or _NET_WM_STRUT")

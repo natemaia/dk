@@ -53,7 +53,7 @@ int main(int argc, char *argv[])
 	/* setup the wm and existing windows before entering the event loop */
 	initwm();
 	initexisting();
-	layoutws(NULL, 0);
+	layoutws(NULL);
 	focus(NULL);
 	eventloop();
 
@@ -562,7 +562,7 @@ void eventhandle(xcb_generic_event_t *ev)
 				if (e->type == netatoms[ActiveWindow]) {
 					if (c->ws != selws)
 						changews(c->ws, 0);
-					layoutws(NULL, 1);
+					layoutws(NULL);
 					focus(c);
 				} else if (e->type == netatoms[State]
 						&& (e->data.data32[1] == netatoms[Fullscreen]
@@ -583,7 +583,7 @@ void eventhandle(xcb_generic_event_t *ev)
 				case XCB_ATOM_WM_TRANSIENT_FOR:
 					if (!c->floating && (trans = windowtrans(c->win)) != XCB_NONE
 							&& (c->floating = (wintoclient(trans) != NULL)))
-						layoutws(c->ws, 1);
+						layoutws(c->ws);
 					break;
 				case XCB_ATOM_WM_NORMAL_HINTS:
 					sizehints(c);
@@ -647,7 +647,7 @@ void fixupworkspaces(void)
 	if (panels)
 		updatestruts(panels, 1);
 	focus(NULL);
-	layoutws(NULL, 0);
+	layoutws(NULL);
 }
 
 void focus(Client *c)
@@ -705,9 +705,8 @@ void freeclient(Client *c, int destroyed)
 	xcb_delete_property(con, root, netatoms[ClientList]);
 	FOR_WSCLIENTS(c, ws)
 		PROP_APPEND(root, netatoms[ClientList], XCB_ATOM_WINDOW, 32, 1, &c->win);
-	layoutws(cws, 0);
+	layoutws(cws);
 	focus(NULL);
-	ignorefocusevents();
 }
 
 void freemon(Monitor *m)
@@ -742,7 +741,7 @@ void freepanel(Panel *p, int destroyed)
 	}
 	updatestruts(p, 0);
 	free(p);
-	layoutws(NULL, 0);
+	layoutws(NULL);
 }
 
 void freewm(void)
@@ -933,11 +932,10 @@ void initclient(xcb_window_t win, xcb_window_t trans)
 	c->ws->sel = c;
 	if (clientcbfunc)
 		clientcbfunc(c);
-	layoutws(c->ws, 0);
+	layoutws(c->ws);
 	xcb_map_window(con, c->win);
 	if (!c->nofocus)
 		focus(NULL);
-	ignorefocusevents();
 	DBG("new client mapped on workspace %s: %d,%d @ %dx%d -- floating: %d",
 			c->ws->name, c->x, c->y, c->w, c->h, c->floating)
 }
@@ -1034,7 +1032,7 @@ void initpanel(xcb_window_t win)
 	xcb_change_window_attributes(con, p->win, XCB_CW_EVENT_MASK,
 			(uint []){XCB_EVENT_MASK_PROPERTY_CHANGE|XCB_EVENT_MASK_STRUCTURE_NOTIFY});
 	xcb_map_window(con, p->win);
-	layoutws(NULL, 0);
+	layoutws(NULL);
 	DBG("new panel mapped -- monitor: %s -- geometry: %d,%d @ %dx%d",
 			p->mon->name, p->x, p->y, p->w, p->h)
 }
@@ -1167,13 +1165,13 @@ void initworkspaces(void)
 		def = &wsrules[numws];
 		FOR_TAIL(ws, workspaces);
 		if (ws)
-			ws->next = initws(numws, def->name, def->nmaster, def->splitratio, def->layout);
+			ws->next = initws(numws, def->name, def->nmaster, def->nstack, def->splitratio, def->layout);
 		else
-			workspaces = initws(numws, def->name, def->nmaster, def->splitratio, def->layout);
+			workspaces = initws(numws, def->name, def->nmaster, def->nstack, def->splitratio, def->layout);
 	}
 }
 
-Workspace *initws(uint num, char *name, uint nmaster, float splitratio, void (*layout)(Workspace *))
+Workspace *initws(uint num, char *name, uint nmaster, uint nstack, float splitratio, void (*layout)(Workspace *))
 { /* allocate a new workspace with default values */
 	Workspace *ws;
 
@@ -1182,6 +1180,7 @@ Workspace *initws(uint num, char *name, uint nmaster, float splitratio, void (*l
 	ws->num = num;
 	ws->name = name;
 	ws->nmaster = nmaster;
+	ws->nstack = nstack;
 	ws->splitratio = splitratio;
 	ws->layout = layout;
 	return ws;
@@ -1233,12 +1232,12 @@ void killclient(const Arg *arg)
 	xcb_flush(con);
 }
 
-void layoutws(Workspace *ws, int allowfocusevents)
+void layoutws(Workspace *ws)
 { /* show currently visible clients and restack workspaces */
 	if (ws)
-		showhide(ws->stack, allowfocusevents);
+		showhide(ws->stack);
 	else FOR_EACH(ws, workspaces)
-		showhide(ws->stack, allowfocusevents);
+		showhide(ws->stack);
 	if (ws) {
 		if (ws->layout)
 			ws->layout(ws);
@@ -1247,7 +1246,7 @@ void layoutws(Workspace *ws, int allowfocusevents)
 		if (ws == ws->mon->ws && ws->layout)
 			ws->layout(ws);
 	}
-	xcb_flush(con);
+	ignorefocusevents();
 }
 
 Client *nexttiled(Client *c)
@@ -1370,7 +1369,7 @@ void send(const Arg *arg)
 		unfocus(c, 1);
 		setclientws(c, arg->ui);
 		focus(NULL);
-		layoutws(NULL, 0);
+		layoutws(NULL);
 	}
 }
 
@@ -1463,7 +1462,7 @@ void setfullscreen(Client *c, int fullscreen)
 		c->w = c->old_w;
 		c->h = c->old_h;
 		resize(c, c->x, c->y, c->w, c->h);
-		layoutws(c->ws, 0);
+		layoutws(c->ws);
 	}
 }
 
@@ -1473,13 +1472,19 @@ void setlayout(const Arg *arg)
 	if (arg && arg->v)
 		selws->layout = (void (*)(Workspace *))arg->v;
 	if (selws->sel)
-		layoutws(selws, 0);
+		layoutws(selws);
 }
 
 void setnmaster(const Arg *arg)
 {
 	selws->nmaster = MAX(selws->nmaster + arg->i, 0);
-	layoutws(selws, 0);
+	layoutws(selws);
+}
+
+void setnstack(const Arg *arg)
+{
+	selws->nstack = MAX(selws->nstack + arg->i, 0);
+	layoutws(selws);
 }
 
 int setsizehints(Client *c, int *x, int *y, int *w, int *h, int interact)
@@ -1554,7 +1559,7 @@ void setsplit(const Arg *arg)
 		return;
 	DBG("setting split splitratio: %f -> %f", selws->splitratio, f)
 	selws->splitratio = f;
-	layoutws(selws, 0);
+	layoutws(selws);
 }
 
 void seturgency(Client *c, int urg)
@@ -1575,7 +1580,7 @@ void seturgency(Client *c, int urg)
 	}
 }
 
-void showhide(Client *c, int allowfocusevents)
+void showhide(Client *c)
 {
 	if (!c)
 		return;
@@ -1584,14 +1589,12 @@ void showhide(Client *c, int allowfocusevents)
 		MOVE(c->win, c->x, c->y);
 		if ((!c->ws->layout || c->floating) && !c->fullscreen)
 			resizehint(c, c->x, c->y, c->w, c->h, 0);
-		showhide(c->snext, allowfocusevents);
+		showhide(c->snext);
 	} else {
-		showhide(c->snext, allowfocusevents);
+		showhide(c->snext);
 		DBG("hiding client window: 0x%x - workspace: %d", c->win, c->ws->num)
 		MOVE(c->win, W(c) * -2, c->y);
 	}
-	if (!allowfocusevents)
-		ignorefocusevents();
 }
 
 void sighandle(int sig)
@@ -1691,37 +1694,51 @@ void swapclient(const Arg *arg)
 		return;
 	DBG("swapping current client window: 0x%x", c->win)
 	detach(c, 1);
-	focus(c);
-	layoutws(c->ws, 0);
+	focus(NULL);
+	layoutws(c->ws);
 }
 
 void tile(Workspace *ws)
 {
 	Client *c;
 	Monitor *m = ws->mon;
-	uint i, n, h, mw, my, ty, iter;
+	uint i, n, h, mw, sw, my, sy, nr, sh, ssh;
 
 	for (n = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), n++)
 		;
 	if (!n)
 		return;
 	DBG("tiling workspace: %d", ws->num)
-	if (n > ws->nmaster)
+	if (n > ws->nmaster) {
 		mw = ws->nmaster ? m->winarea_w * ws->splitratio : 0;
-	else
-		mw = m->winarea_w;
-	for (i = my = ty = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), ++i)
+		sw = ws->nstack && n - ws->nmaster > ws->nstack ? (m->winarea_w - mw) / 2 : 0;
+		sh = m->winarea_h / MAX(1, MIN(n - ws->nmaster, ws->nstack));
+		ssh = m->winarea_h / MAX(1, n - ws->nmaster - ws->nstack);
+	} else {
+		mw = m->winarea_w, sw = 0, sh = 0, ssh = 0;
+	}
+
+	DBG("nmaster: %d - nstack: %d - nclients: %d - master width: %d - stack width: %d", ws->nmaster, ws->nstack, n, mw, sw)
+
+	for (i = my = sy = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), ++i)
 		if (i < ws->nmaster) {
-			iter = MIN(n, ws->nmaster) - i;
-			h = (m->winarea_h - my) / MAX(1, iter);
+			nr = MIN(n, ws->nmaster) - i;
+			h = (m->winarea_h - my) / MAX(1, nr);
 			resize(c, m->winarea_x, m->winarea_y + my, mw - (2 * c->bw), h - (2 * c->bw));
+			DBG("tiled master window: %d,%d @ %dx%d", c->x, c->y, W(c), H(c))
 			my += H(c);
 		} else {
-			iter = n - i;
-			h = (m->winarea_h - ty) / MAX(1, iter);
-			resize(c, m->winarea_x + mw, m->winarea_y + ty,
-					m->winarea_w - mw - (2 * c->bw), h - (2 * c->bw));
-			ty += H(c);
+			if (ws->stack && i - ws->nmaster < ws->nstack)
+				resize(c, m->winarea_x + mw, m->winarea_y + sy, m->winarea_w - mw - sw - (2 * c->bw), sh - (2 * c->bw));
+			else
+				resize(c, m->winarea_x + mw + sw, m->winarea_y + sy, m->winarea_w - mw - sw - (2 * c->bw), ssh - (2 * c->bw));
+			DBG("tiled stack window: %d,%d @ %dx%d", c->x, c->y, W(c), H(c))
+			DBG("iterations left: %d",  n - i)
+			sy += H(c);
+			if (i + 1 - ws->nmaster == ws->nstack) {
+				DBG("finished first stack")
+				sy = 0;
+			}
 		}
 }
 
@@ -1735,11 +1752,11 @@ void togglefloat(const Arg *arg)
 	DBG("toggling selected window floating state: %d -> %d", c->floating, !c->floating)
 	if ((c->floating = !c->floating || c->fixed)) {
 		c->x = c->old_x, c->y = c->old_y, c->w = c->old_w, c->h = c->old_h;
-		resizehint(c, c->x, c->y, c->w, c->h, 0);
+		resize(c, c->x, c->y, c->w, c->h);
 	} else {
 		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 	}
-	layoutws(selws, 0);
+	layoutws(selws);
 }
 
 void unfocus(Client *c, int focusroot)
@@ -1793,9 +1810,9 @@ void updatenumws(uint needed)
 			FOR_TAIL(ws, workspaces);
 			if (ws)
 				ws->next = initws(numws, itoa(numws, name),
-						ws->nmaster, ws->splitratio, ws->layout);
+						ws->nmaster, ws->nstack, ws->splitratio, ws->layout);
 			else
-				workspaces = initws(numws, itoa(numws, name), 1, 0.5, tile);
+				workspaces = initws(numws, itoa(numws, name), 1, 3, 0.5, tile);
 			numws++;
 		}
 	}
@@ -1919,7 +1936,7 @@ void view(const Arg *arg)
 		return;
 	changews(ws, 0);
 	focus(NULL);
-	layoutws(NULL, 0);
+	layoutws(NULL);
 }
 
 xcb_get_window_attributes_reply_t *windowattr(xcb_window_t win)

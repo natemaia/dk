@@ -48,17 +48,17 @@ static WsRule wsrules[] = {
 	/* workspace default settings and how many to allocate
 	 * if more are allocated later the values from the first rule will be used
 	 *
-	 * name,  nmaster,  splitratio,   layout function (NULL is floating) */
-	{ "0",     1,        0.5,          tile },
-	{ "1",     1,        0.5,          tile },
-	{ "2",     1,        0.5,          tile },
-	{ "3",     1,        0.5,          tile },
-	{ "4",     1,        0.5,          tile },
-	{ "5",     1,        0.5,          tile },
-	{ "6",     1,        0.5,          tile },
-	{ "7",     1,        0.5,          tile },
-	{ "8",     1,        0.5,          tile },
-	{ "9",     1,        0.5,          tile },
+	 * name,  nmaster,  nstack,  splitratio,   layout function (NULL is floating) */
+	{ "0",     1,        0,       0.5,          tile },
+	{ "1",     1,        0,       0.5,          tile },
+	{ "2",     1,        0,       0.5,          tile },
+	{ "3",     1,        0,       0.5,          tile },
+	{ "4",     1,        0,       0.5,          tile },
+	{ "5",     1,        0,       0.5,          tile },
+	{ "6",     1,        0,       0.5,          tile },
+	{ "7",     1,        0,       0.5,          tile },
+	{ "8",     1,        0,       0.5,          tile },
+	{ "9",     1,        0,       0.5,          tile },
 };
 
 static Rule rules[] = {
@@ -94,6 +94,8 @@ static Bind binds[] = {
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_k,      changefocus,  {.i = -1} },    /* focus previous window */
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_i,      setnmaster,   {.i = +1} },    /* increase number of windows in master */
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_d,      setnmaster,   {.i = -1} },    /* decrease number of windows in master */
+	{ XCB_KEY_PRESS,   MODKEY|XCB_MOD_MASK_SHIFT, XK_i,      setnstack,    {.i = +1} },    /* increase number of windows in first stack */
+	{ XCB_KEY_PRESS,   MODKEY|XCB_MOD_MASK_SHIFT, XK_d,      setnstack,    {.i = -1} },    /* decrease number of windows in first stack */
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_h,      setsplit,     {.f = -0.01} }, /* increase master area */
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_l,      setsplit,     {.f = +0.01} }, /* decrease master area */
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_t,      setlayout,    {.v = tile} },  /* set active workspace tiled */

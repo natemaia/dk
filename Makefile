@@ -16,10 +16,10 @@ CFLAGS += -DVERSION=\"${VERSION}\" ${DFLAGS}
 all: options yaxwm
 
 options:
-	@echo yaxwm build options:
-	@echo "CC       = ${CC}"
-	@echo "CFLAGS   = ${CFLAGS}"
-	@echo "LDFLAGS  = ${LDFLAGS}"
+	@echo build settings:
+	@echo "CC      = ${CC}"
+	@echo "CFLAGS  = ${CFLAGS}"
+	@echo "LDFLAGS = ${LDFLAGS}"
 
 config.h:
 	cp config.def.h $@

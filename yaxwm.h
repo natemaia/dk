@@ -155,6 +155,7 @@ struct Client {
 struct WsRule {
 	char *name;
 	uint nmaster;
+	uint nstack;
 	float splitratio;
 	void (*layout)(Workspace *);
 };
@@ -171,6 +172,7 @@ struct Monitor {
 struct Workspace {
 	char *name;
 	uint nmaster;
+	uint nstack;
 	float splitratio;
 	void (*layout)(Workspace *);
 	uint num;
@@ -242,7 +244,7 @@ static Monitor *outputtomon(xcb_randr_output_t id);
 static Monitor *ptrtomon(int x, int y);
 static Monitor *randrclone(xcb_randr_output_t id, int x, int y);
 static Panel *wintopanel(xcb_window_t win);
-static Workspace *initws(uint num, char *name, uint nmaster, float splitratio, void (*layout)(Workspace *));
+static Workspace *initws(uint num, char *name, uint nmaster, uint nstack, float splitratio, void (*layout)(Workspace *));
 static Workspace *itows(uint num);
 static Workspace *wintows(xcb_window_t win);
 static char *itoa(int n, char *s);
@@ -287,7 +289,7 @@ static void initpanel(xcb_window_t win);
 static void initwm(void);
 static void initworkspaces(void);
 static void killclient(const Arg *arg);
-static void layoutws(Workspace *ws, int allowfocusevents);
+static void layoutws(Workspace *ws);
 static void resetorquit(const Arg *arg);
 static void resize(Client *c, int x, int y, int w, int h);
 static void resizehint(Client *c, int x, int y, int w, int h, int interact);
@@ -299,11 +301,12 @@ static void setfocus(Client *c);
 static void setfullscreen(Client *c, int fullscreen);
 static void setlayout(const Arg *arg);
 static void setnmaster(const Arg *arg);
+static void setnstack(const Arg *arg);
 static void setsplit(const Arg *arg);
 static void setstackmode(xcb_window_t win, uint mode);
 static void seturgency(Client *c, int urg);
 static void setwinstate(xcb_window_t win, long state);
-static void showhide(Client *c, int allowfocusevents);
+static void showhide(Client *c);
 static void sighandle(int);
 static void sizehints(Client *c);
 static void swapclient(const Arg *arg);

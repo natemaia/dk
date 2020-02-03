@@ -324,3 +324,8 @@ static void windowtype(Client *c);
 static Client *wintoclient(xcb_window_t win);
 static Panel *wintopanel(xcb_window_t win);
 static Workspace *wintows(xcb_window_t win);
+
+#include "debug.c"
+
+/* config needs access to everything defined */
+#include "config.h"

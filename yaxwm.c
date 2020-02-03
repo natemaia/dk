@@ -4,10 +4,6 @@
 */
 
 #include "yaxwm.h"
-#include "debug.c"
-
-/* config needs access to everything defined */
-#include "config.h"
 
 int main(int argc, char *argv[])
 {

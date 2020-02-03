@@ -1,4 +1,7 @@
-/* debug printing functions */
+/* debug printing functions
+ * see license file for copyright and license details
+ * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
+ */
 
 #ifdef DEBUG
 

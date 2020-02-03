@@ -1,5 +1,5 @@
 /* yet another X window manager
-*
+* see license file for copyright and license details
 * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
 */
 
@@ -237,28 +237,6 @@ static xcb_cursor_t cursor[CurLast]; /* cursors for moving, resizing, and normal
 static xcb_atom_t netatoms[NetLast]; /* _NET atoms used both internally and by other clients */
 
 /* function prototypes */
-static Client *nexttiled(Client *c);
-static Client *wintoclient(xcb_window_t win);
-static Monitor *initmon(char *name, xcb_randr_output_t id, int x, int y, int w, int h);
-static Monitor *outputtomon(xcb_randr_output_t id);
-static Monitor *ptrtomon(int x, int y);
-static Monitor *randrclone(xcb_randr_output_t id, int x, int y);
-static Panel *wintopanel(xcb_window_t win);
-static Workspace *initws(uint num, char *name, uint nmaster, uint nstack, float splitratio, void (*layout)(Workspace *));
-static Workspace *itows(uint num);
-static Workspace *wintows(xcb_window_t win);
-static char *itoa(int n, char *s);
-static int grabpointer(xcb_cursor_t cursor);
-static int initrandr(void);
-static int pointerxy(int *x, int *y);
-static int ruleregcmp(regex_t *r, char *class, char *inst);
-static int sendevent(Client *c, int wmproto);
-static int setsizehints(Client *c, int *x, int *y, int *w, int *h, int interact);
-static int updateoutputs(xcb_randr_output_t *outputs, int len, xcb_timestamp_t timestamp);
-static int updaterandr(void);
-static size_t strlcpy(char *dst, const char *src, size_t size);
-static void *clientrules(Client *c, xcb_window_t *trans);
-static void *ecalloc(size_t elems, size_t size);
 static void assignworkspaces(void);
 static void attach(Client *c, int tohead);
 static void attachpanel(Panel *p);
@@ -266,9 +244,11 @@ static void attachstack(Client *c);
 static void changefocus(const Arg *arg);
 static void changews(Workspace *ws, int usermotion);
 static void checkerror(char *prompt, xcb_generic_error_t *e);
+static void *clientrules(Client *c, xcb_window_t *trans);
 static void configure(Client *c);
 static void detach(Client *c, int reattach);
 static void detachstack(Client *c);
+static void *ecalloc(size_t elems, size_t size);
 static void eventhandle(xcb_generic_event_t *ev);
 static void eventloop(void);
 static void fixupworkspaces(void);
@@ -281,27 +261,43 @@ static void freewm(void);
 static void freews(Workspace *ws);
 static void grabbuttons(Client *c, int focused);
 static void grabkeys(void);
+static int grabpointer(xcb_cursor_t cursor);
 static void ignorefocusevents(void);
 static void initatoms(xcb_atom_t *atoms, const char **names, int num);
 static void initclient(xcb_window_t win, xcb_window_t trans);
 static void initexisting(void);
+static Monitor *initmon(char *name, xcb_randr_output_t id, int x, int y, int w, int h);
 static void initpanel(xcb_window_t win);
+static int initrandr(void);
 static void initwm(void);
 static void initworkspaces(void);
+static Workspace *initws(uint num, char *name, uint nmaster, uint nstack,
+		float splitratio, void (*layout)(Workspace *));
+static char *itoa(int n, char *s);
+static Workspace *itows(uint num);
 static void killclient(const Arg *arg);
 static void layoutws(Workspace *ws);
+static void monocle(Workspace *ws);
+static Client *nexttiled(Client *c);
+static Monitor *outputtomon(xcb_randr_output_t id);
+static int pointerxy(int *x, int *y);
+static Monitor *ptrtomon(int x, int y);
+static Monitor *randrclone(xcb_randr_output_t id, int x, int y);
 static void resetorquit(const Arg *arg);
 static void resize(Client *c, int x, int y, int w, int h);
 static void resizehint(Client *c, int x, int y, int w, int h, int interact);
 static void restack(Workspace *ws);
+static int ruleregcmp(regex_t *r, char *class, char *inst);
 static void runcmd(const Arg *arg);
 static void send(const Arg *arg);
+static int sendevent(Client *c, int wmproto);
 static void setclientws(Client *c, uint num);
 static void setfocus(Client *c);
 static void setfullscreen(Client *c, int fullscreen);
 static void setlayout(const Arg *arg);
 static void setnmaster(const Arg *arg);
 static void setnstack(const Arg *arg);
+static int setsizehints(Client *c, int *x, int *y, int *w, int *h, int interact);
 static void setsplit(const Arg *arg);
 static void setstackmode(xcb_window_t win, uint mode);
 static void seturgency(Client *c, int urg);
@@ -309,16 +305,22 @@ static void setwinstate(xcb_window_t win, long state);
 static void showhide(Client *c);
 static void sighandle(int);
 static void sizehints(Client *c);
+static size_t strlcpy(char *dst, const char *src, size_t size);
 static void swapclient(const Arg *arg);
 static void tile(Workspace *ws);
 static void togglefloat(const Arg *arg);
 static void unfocus(Client *c, int focusroot);
 static void updatenumlock(void);
 static void updatenumws(uint needed);
+static int updateoutputs(xcb_randr_output_t *outputs, int len, xcb_timestamp_t timestamp);
+static int updaterandr(void);
 static void updatestruts(Panel *p, int apply);
 static void view(const Arg *arg);
-static void windowhints(Client *c);
-static void windowtype(Client *c);
-static xcb_atom_t windowprop(xcb_window_t win, xcb_atom_t prop);
 static xcb_get_window_attributes_reply_t *windowattr(xcb_window_t win);
+static void windowhints(Client *c);
+static xcb_atom_t windowprop(xcb_window_t win, xcb_atom_t prop);
 static xcb_window_t windowtrans(xcb_window_t win);
+static void windowtype(Client *c);
+static Client *wintoclient(xcb_window_t win);
+static Panel *wintopanel(xcb_window_t win);
+static Workspace *wintows(xcb_window_t win);

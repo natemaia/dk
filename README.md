@@ -43,15 +43,13 @@ Copy the default config header `config.def.h` to `config.h` then edit it to suit
 
 #### Todo
 
-- Manpage and more ducumentation!!
-
-- More layouts: dual/dynamic stack, monocle, etc.
+- More layouts?
 
 - Text config and parser or fifo reader for better control without recompiling?
 
-- Confirm multihead support *(partially complete, randr is implemented but needs further testing on different systems.. Help!)*
+- Verify proper multi-head support*.
 
-- Code simplifications and better error handling *(ongoing battle)*
+- Code simplifications and better error handling *(ongoing battle)*.
 
 
 #### Contributing
@@ -75,6 +73,9 @@ make DFLAGS='-DNOSTRIP'
 ```
 
 ### Credits
+
+See the LICENSE file for a list of authors/contributors.
+
 Huge thanks to [dwm](https://dmw.suckless.org) and the suckless community for the awesome software and knowledge.
 
 Also thanks to [4wm](https://github.com/dct2012/4wm), [awesome](https://github.com/awesomeWM/awesome),

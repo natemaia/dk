@@ -1,11 +1,14 @@
 # yaxwm - yet another x window manager
+# see license file for copyright and license details
 
 include config.mk
 
 # debug build (make -DDEBUG ...)
 ifneq ($(findstring DEBUG,$(DFLAGS)),)
 	LDFLAGS += -lxkbcommon
+	CFLAGS += -Wextra -Wno-missing-field-initializers
 endif
+
 # no strip build (make -DNOSTRIP ...)
 ifneq ($(findstring NOSTRIP,$(DFLAGS)),)
 	CFLAGS += -g

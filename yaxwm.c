@@ -1254,12 +1254,9 @@ void layoutws(Workspace *ws)
 void monocle(Workspace *ws)
 {
 	Client *c;
-	uint n = 0;
 
 	if (!ws->clients)
 		return;
-	FOR_EACH(c, ws->clients)
-		n++;
 	for (c = nexttiled(ws->clients); c; c = nexttiled(c->next))
 		resizehint(c, ws->mon->winarea_x, ws->mon->winarea_y,
 				ws->mon->winarea_w - 2 * c->bw, ws->mon->winarea_h - 2 * c->bw, 0);

@@ -1485,8 +1485,7 @@ void setfullscreen(Client *c, int fullscreen)
 void setlayout(const Arg *arg)
 {
 	DBG("setting current monitor layout")
-	if (arg && arg->v)
-		selws->layout = (void (*)(Workspace *))arg->v;
+	selws->layout = arg && arg->v ? (void (*)(Workspace *))arg->v : NULL;
 	if (selws->sel)
 		layoutws(selws);
 }

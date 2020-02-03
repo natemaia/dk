@@ -156,6 +156,8 @@ void changefocus(const Arg *arg)
 		DBG("focusing %s client", arg->i > 0 ? "next" : "previous")
 		focus(c);
 		restack(c->ws);
+		if (c->ws->layout == monocle)
+			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	}
 }
 
@@ -1329,8 +1331,8 @@ void resize(Client *c, int x, int y, int w, int h)
 
 	c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 	c->x = x, c->y = y, c->w = w, c->h = h;
-	if (c->ws && nexttiled(c->ws->clients) == c
-			&& !nexttiled(c->next) && !c->floating && !c->fullscreen)
+	if (c->ws && ((nexttiled(c->ws->clients) == c && !nexttiled(c->next))
+				|| c->ws->layout == monocle) && !c->fullscreen && !c->floating)
 		v[2] = W(c), v[3] = H(c), v[4] = 0;
 	xcb_configure_window(con, c->win, XYMASK | WHMASK | BWMASK, v);
 	configure(c);

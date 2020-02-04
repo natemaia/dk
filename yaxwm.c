@@ -152,8 +152,6 @@ void changefocus(const Arg *arg)
 		DBG("focusing %s client", arg->i > 0 ? "next" : "previous")
 		focus(c);
 		restack(c->ws);
-		if (c->ws->layout == monocle)
-			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	}
 }
 
@@ -199,7 +197,6 @@ void configure(Client *c)
 	ce.above_sibling = XCB_NONE;
 	ce.override_redirect = 0;
 	xcb_send_event(con, 0, c->win, XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char *)&ce);
-	xcb_flush(con);
 }
 
 void *clientrules(Client *c, xcb_window_t *trans)
@@ -393,8 +390,8 @@ void eventhandle(xcb_generic_event_t *ev)
 				wc.stack_mode = e->stack_mode;
 				wc.border_width = e->border_width;
 				xcb_configure_window(con, e->window, e->value_mask, &wc);
-				xcb_flush(con);
 			}
+			xcb_flush(con);
 			return;
 		}
 		case XCB_DESTROY_NOTIFY:
@@ -1249,8 +1246,8 @@ void layoutws(Workspace *ws)
 	} else FOR_EACH(ws, workspaces) {
 		if (ws == ws->mon->ws && ws->layout)
 			ws->layout(ws);
+		restack(ws);
 	}
-	ignorefocusevents();
 }
 
 void monocle(Workspace *ws)
@@ -1332,6 +1329,7 @@ void resize(Client *c, int x, int y, int w, int h, int bw)
 	c->x = x, c->y = y, c->w = w, c->h = h;
 	xcb_configure_window(con, c->win, XYMASK | WHMASK | BWMASK, v);
 	configure(c);
+	xcb_flush(con);
 }
 
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int interact)
@@ -1350,10 +1348,11 @@ void restack(Workspace *ws)
 	if (c->floating || !ws->layout)
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	if (ws->layout) {
-		FOR_EACH(c, ws->stack)
+		FOR_STACK(c, ws->stack)
 			if (!c->floating && c->ws == c->ws->mon->ws)
 				setstackmode(c->win, XCB_STACK_MODE_BELOW);
 	}
+	ignorefocusevents();
 }
 
 int ruleregcmp(regex_t *r, char *class, char *inst)
@@ -1620,13 +1619,13 @@ void showhide(Client *c)
 {
 	if (!c)
 		return;
-	if (c->ws == c->ws->mon->ws) {
+	if (c->ws == c->ws->mon->ws) { /* show clients top down */
 		DBG("showing client window: 0x%x - workspace: %d", c->win, c->ws->num)
 		MOVE(c->win, c->x, c->y);
 		if ((!c->ws->layout || c->floating) && !c->fullscreen)
 			resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0);
 		showhide(c->snext);
-	} else {
+	} else { /* hide clients bottom up */
 		showhide(c->snext);
 		DBG("hiding client window: 0x%x - workspace: %d", c->win, c->ws->num)
 		MOVE(c->win, W(c) * -2, c->y);

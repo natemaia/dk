@@ -156,6 +156,7 @@ struct WsRule {
 	char *name;
 	uint nmaster;
 	uint nstack;
+	uint gappx;
 	float splitratio;
 	void (*layout)(Workspace *);
 };
@@ -170,15 +171,16 @@ struct Monitor {
 };
 
 struct Workspace {
+	uint num;
 	char *name;
 	uint nmaster;
 	uint nstack;
+	uint gappx;
 	float splitratio;
 	void (*layout)(Workspace *);
-	uint num;
-	Client *sel, *stack, *clients;
 	Monitor *mon;
 	Workspace *next;
+	Client *sel, *stack, *clients;
 };
 
 static const char *cursors[] = {
@@ -271,12 +273,12 @@ static void initpanel(xcb_window_t win);
 static int initrandr(void);
 static void initwm(void);
 static void initworkspaces(void);
-static Workspace *initws(uint num, char *name, uint nmaster, uint nstack,
-		float splitratio, void (*layout)(Workspace *));
+static Workspace *initws(uint num, WsRule *r);
 static char *itoa(int n, char *s);
 static Workspace *itows(uint num);
 static void killclient(const Arg *arg);
 static void layoutws(Workspace *ws);
+static void setgappx(const Arg *arg);
 static void monocle(Workspace *ws);
 static Client *nexttiled(Client *c);
 static Monitor *outputtomon(xcb_randr_output_t id);
@@ -284,8 +286,8 @@ static int pointerxy(int *x, int *y);
 static Monitor *ptrtomon(int x, int y);
 static Monitor *randrclone(xcb_randr_output_t id, int x, int y);
 static void resetorquit(const Arg *arg);
-static void resize(Client *c, int x, int y, int w, int h);
-static void resizehint(Client *c, int x, int y, int w, int h, int interact);
+static void resize(Client *c, int x, int y, int w, int h, int bw);
+static void resizehint(Client *c, int x, int y, int w, int h, int bw, int interact);
 static void restack(Workspace *ws);
 static int ruleregcmp(regex_t *r, char *class, char *inst);
 static void runcmd(const Arg *arg);

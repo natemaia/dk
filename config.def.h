@@ -31,11 +31,9 @@ static const char *voldn[] = { "pamixer", "-d", "2", NULL };
 
 static void mpvalbumart(Client *c)
 { /* mpv album art client borderless, nofocus, and move to bottom left of the screen */
-	c->bw = 0;
 	c->nofocus = 1;
-	c->x = c->ws->mon->winarea_x + c->ws->mon->winarea_w - W(c);
-	c->y = c->ws->mon->winarea_y + c->ws->mon->winarea_h - H(c);
-	resize(c, c->x, c->y, c->w, c->h);
+	resizehint(c, c->ws->mon->winarea_x + c->ws->mon->winarea_w - W(c),
+			c->ws->mon->winarea_y + c->ws->mon->winarea_h - H(c), c->w, c->h, c->bw, 0);
 }
 
 static int borders[] = {
@@ -48,17 +46,17 @@ static WsRule wsrules[] = {
 	/* workspace default settings and how many to allocate
 	 * if more are allocated later the values from the first rule will be used
 	 *
-	 * name,  nmaster,  nstack,  splitratio,   layout function (NULL is floating) */
-	{ "0",     1,        3,       0.5,          tile },
-	{ "1",     1,        3,       0.5,          tile },
-	{ "2",     1,        3,       0.5,          tile },
-	{ "3",     1,        3,       0.5,          tile },
-	{ "4",     1,        3,       0.5,          tile },
-	{ "5",     1,        3,       0.5,          tile },
-	{ "6",     1,        3,       0.5,          tile },
-	{ "7",     1,        3,       0.5,          tile },
-	{ "8",     1,        3,       0.5,          tile },
-	{ "9",     1,        3,       0.5,          tile },
+	 * name,  nmaster,  nstack,  gappx,  splitratio,   layout function (NULL is floating) */
+	{ "0",     1,        3,        0,       0.5,          tile },
+	{ "1",     1,        3,        0,       0.5,          tile },
+	{ "2",     1,        3,        0,       0.5,          tile },
+	{ "3",     1,        3,        0,       0.5,          tile },
+	{ "4",     1,        3,        0,       0.5,          tile },
+	{ "5",     1,        3,        0,       0.5,          tile },
+	{ "6",     1,        3,        0,       0.5,          tile },
+	{ "7",     1,        3,        0,       0.5,          tile },
+	{ "8",     1,        3,        0,       0.5,          tile },
+	{ "9",     1,        3,        0,       0.5,          tile },
 };
 
 static Rule rules[] = {
@@ -77,11 +75,11 @@ static Rule rules[] = {
 };
 
 static Bind binds[] = {
-	/* type,           modifier(s),               keysym,    function,      arg */
+	/* type,           modifiers,                 keysym,    function,      arg */
 	{ XCB_KEY_PRESS,   MODKEY|XCB_MOD_MASK_SHIFT, XK_Return, runcmd,       {.v = term} },    /* terminal emulator */
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_p,      runcmd,       {.v = menu} },    /* menu program */
-	{ XCB_KEY_PRESS,   MODKEY,                    XK_Print,  runcmd,       {.v = scrot} },   /* screenshot program */
-	{ XCB_KEY_RELEASE, 0,                         XK_Print,  runcmd,       {.v = scrots} },  /* selection box screenshot */
+	{ XCB_KEY_PRESS,   0,                         XK_Print,  runcmd,       {.v = scrot} },   /* screenshot program */
+	{ XCB_KEY_RELEASE, MODKEY,                    XK_Print,  runcmd,       {.v = scrots} },  /* selection box screenshot */
 	{ XCB_KEY_PRESS,   0,                         MUTE,      runcmd,       {.v = voltg} },   /* volume mute command */
 	{ XCB_KEY_PRESS,   0,                         VOLUP,     runcmd,       {.v = volup} },   /* volume up command */
 	{ XCB_KEY_PRESS,   0,                         VOLDOWN,   runcmd,       {.v = voldn} },   /* volume down command */
@@ -98,6 +96,9 @@ static Bind binds[] = {
 	{ XCB_KEY_PRESS,   MODKEY|XCB_MOD_MASK_SHIFT, XK_d,      setnstack,    {.i = -1} },      /* decrease number of windows in first stack */
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_h,      setsplit,     {.f = -0.01} },   /* increase master area */
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_l,      setsplit,     {.f = +0.01} },   /* decrease master area */
+	{ XCB_KEY_PRESS,   MODKEY|XCB_MOD_MASK_SHIFT, XK_equal,  setgappx,     {.i = 0} },       /* reset gap size */
+	{ XCB_KEY_PRESS,   MODKEY,                    XK_equal,  setgappx,     {.i = +2} },      /* increase gap size */
+	{ XCB_KEY_PRESS,   MODKEY,                    XK_minus,  setgappx,     {.i = -2} },      /* decrease gap size */
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_t,      setlayout,    {.v = tile} },    /* set active workspace tiled */
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_m,      setlayout,    {.v = monocle} }, /* set active workspace monocle */
 	{ XCB_KEY_PRESS,   MODKEY,                    XK_f,      setlayout,    {.v = NULL} },    /* set active workspace floating */

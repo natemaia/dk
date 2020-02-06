@@ -11,7 +11,7 @@
 #define DBGBIND(event, mod, sym) printbind(event, mod, sym);
 
 #undef DBG
-#define DBG(fmt, ...) print("%s:%d - " fmt, __FUNCTION__, __LINE__, ##__VA_ARGS__);
+#define DBG(fmt, ...) print("yaxwm:%s:%d - " fmt, __FUNCTION__, __LINE__, ##__VA_ARGS__);
 
 static char *masktomods(uint mask, char *out, int outsize);
 static size_t strlcat(char *dst, const char *src, size_t size);
@@ -77,7 +77,7 @@ void printbind(xcb_generic_event_t *e, uint modmask, xcb_keysym_t keysym)
 
 	masktomods(modmask, mod, sizeof(mod));
 	xkb_keysym_get_name(keysym, key, sizeof(key));
-	print("%s event - key: %s - mod: %s", xcb_event_get_label(e->response_type), key, mod);
+	print("yaxwm:eventhandle: %s event - key: %s - mod: %s", xcb_event_get_label(e->response_type), key, mod);
 }
 
 #endif

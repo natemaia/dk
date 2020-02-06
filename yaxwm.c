@@ -135,19 +135,14 @@ void assignworkspaces(void)
 
 void changefocus(const Arg *arg)
 { /* focus the next or previous client on the active workspace */
-	Client *c, *m = selws->sel;
+	Client *c, *sel = selws->sel;
 
-	if (!m || m->fullscreen)
+	if (!sel || sel->fullscreen)
 		return;
-	if (arg->i > 0) {
-		c = m->next ? m->next : selws->clients;
-		while (c && c->nofocus)
-			c = c->next;
-	} else {
-		FOR_PREV(c, m, selws->clients);
-		while ((m = c) && m->nofocus)
-			FOR_PREV(c, m, selws->clients);
-	}
+	if (arg->i > 0)
+		c = sel->next ? sel->next : selws->clients;
+	else
+		FOR_PREV(c, sel, selws->clients);
 	if (c) {
 		DBG("focusing %s client", arg->i > 0 ? "next" : "previous")
 		focus(c);
@@ -270,6 +265,15 @@ void detach(Client *c, int reattach)
 		attach(c, 1);
 }
 
+void detachpanel(Panel *p)
+{
+	Panel **pp = &panels;
+
+	while (*pp && *pp != p)
+		pp = &(*pp)->next;
+	*pp = p->next;
+}
+
 void detachstack(Client *c)
 { /* detach client from it's workspaces focus stack list */
 	Client **tc = &c->ws->stack;
@@ -294,10 +298,10 @@ void eventhandle(xcb_generic_event_t *ev)
 {
 	uint i;
 	int x, y;
-	Panel *p;
 	Client *c;
 	Monitor *m;
 	Workspace *ws;
+	Panel *p = NULL;
 	xcb_generic_error_t *err;
 
 	if (ev->response_type == randrbase + XCB_RANDR_SCREEN_CHANGE_NOTIFY) {
@@ -431,7 +435,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			if (!b->event || b->event == root || !(c = selws->sel))
 				return;
 			b->state &= 0x00ff; /* drop the top 8 bits (button status bits) */
-			if ((mousebtn = b->detail) == BUTTON1 && CLNMOD(b->state) != MODKEY) {
+			if ((mousebtn = b->detail) == BUTTON1 && CLNMOD(b->state) != MOD) {
 				DBG("button press event had no modifiers, focusing clicked window")
 				focus((c = wintoclient(b->event)));
 				restack(c->ws);
@@ -474,17 +478,21 @@ void eventhandle(xcb_generic_event_t *ev)
 
 			if (!mousebtn || !(c = selws->sel) || c->fullscreen) {
 				if (!e->child && pointerxy(&x, &y) && (m = ptrtomon(x, y)) != selws->mon) {
+					DBG("motion notify on root window: 0x%x - coord: %d,%d", e->child, e->root_x, e->root_y)
 					unfocus(selws->sel, 1);
 					changews(m->ws, 1);
 					focus(NULL);
 				}
 				return;
 			}
-			if (!c->floating && selws->layout)
+			if (!c->floating && c->ws->layout) {
 				togglefloat(NULL);
-			if (pointerxy(&x, &y) && (!selws->layout || c->floating)) {
+				resizehint(c, c->x, c->y, c->w, c->h, c->bw, 1);
+				layoutws(c->ws);
+			}
+			if (pointerxy(&x, &y) && (!c->ws->layout || c->floating)) {
 				DBG("motion notify window: 0x%x - coord: %d,%d", e->child, e->root_x, e->root_y)
-				if ((m = ptrtomon(x, y)) != selws->mon) {
+				if ((m = ptrtomon(x, y)) != c->ws->mon) {
 					setclientws(c, m->ws->num);
 					changews(m->ws, 1);
 					focus(c);
@@ -523,7 +531,14 @@ void eventhandle(xcb_generic_event_t *ev)
 			if (!e->window || !(wa = windowattr(e->window)))
 				return;
 			if ((c = wintoclient(e->window)) || (p = wintopanel(e->window))) {
-				DBG("map request for managed window: 0x%x - ignoring", c ? c->win : p->win)
+				/* if (windowprop(e->window, netatoms[State]) == netatoms[Hidden]) { */
+				/* 	DBG("map request for hidden window: 0x%x - un-hiding", */
+				/* 			c ? c->win : p->win) */
+				/* 	if (c) */
+				/* 		hideclient(c, 0); */
+				/* 	else */
+				/* 		hidepanel(p, 0); */
+				/* } */
 				free(wa);
 				return;
 			}
@@ -541,9 +556,16 @@ void eventhandle(xcb_generic_event_t *ev)
 
 			if (!(c = wintoclient(e->window)) && !(p = wintopanel(e->window)))
 				return;
-			if (XCB_EVENT_SENT(e))
+			if (XCB_EVENT_SENT(e)) {
+				DBG("unmap notify from client message on window: 0x%x - hiding",
+						c ? c->win : p->win)
+
 				setwinstate(c ? c->win : p->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
-			else if (c)
+				/* if (c) */
+				/* 	hideclient(c, 1); */
+				/* else */
+				/* 	hidepanel(p, 1); */
+			} else if (c)
 				freeclient(c, 0);
 			else
 				freepanel(p, 0);
@@ -554,19 +576,47 @@ void eventhandle(xcb_generic_event_t *ev)
 			xcb_client_message_event_t *e = (xcb_client_message_event_t *)ev;
 
 			if (e->window == root && e->type == netatoms[CurrentDesktop]) {
+				DBG("net current desktop client message")
 				view(&(const Arg){.ui = e->data.data32[0]});
-			} else if ((c = wintoclient(e->window))) {
-				if (e->type == netatoms[ActiveWindow]) {
-					if (c->ws != selws)
-						changews(c->ws, 0);
-					layoutws(NULL);
-					focus(c);
-				} else if (e->type == netatoms[State]
-						&& (e->data.data32[1] == netatoms[Fullscreen]
-							|| e->data.data32[2] == netatoms[Fullscreen]))
-				{
-					setfullscreen(c, e->data.data32[0]);
-				}
+			} else if (!(c = wintoclient(e->window)) && !(p = wintopanel(e->window))) {
+				return;
+			} else if (c && e->type == netatoms[ActiveWindow]) {
+				DBG("net active window client message " "- window: 0x%x - workspace: %d "
+						"- current workspace: %d", c->win, c->ws->num, selws->num)
+				DBG("client size and location before changing workspace: %d,%d @ %dx%d",
+						c->x, c->y, c->w, c->h)
+				unfocus(selws->sel, 1);
+				changews(c->ws, 0);
+				layoutws(NULL);
+				/* if (c->floating) { */
+				/* 	if (pointerxy(&x, &y)) */
+				/* 		resizehint(c, x - (W(c) / 2), y - (H(c) / 2), c->w, c->h, c->bw); */
+				/* 		/1* MOVE(c->win, x - (W(c) / 2), y - (H(c) / 2)); *1/ */
+				/* 	else { */
+				/* 		m = c->ws->mon; */
+				/* 		MOVE(c->win, (m->winarea_x + m->winarea_w - W(c)) / 2, */
+				/* 				(m->winarea_y + m->winarea_w - H(c)) / 2); */
+				/* 	} */
+				/* } */
+				focus(c);
+				restack(c->ws);
+				DBG("client size and location after changing workspace: %d,%d @ %dx%d",
+						c->x, c->y, c->w, c->h)
+			} else if (c && e->type == netatoms[State]
+					&& (e->data.data32[1] == netatoms[Fullscreen]
+						|| e->data.data32[2] == netatoms[Fullscreen])) {
+				setfullscreen(c, e->data.data32[0]);
+			} else if (e->type == wmatoms[ChangeState]
+					&& (e->data.data32[0] == XCB_ICCCM_WM_STATE_ICONIC
+						|| e->data.data32[0] == XCB_ICCCM_WM_STATE_WITHDRAWN
+						|| e->data.data32[0] == XCB_ICCCM_WM_STATE_NORMAL)) {
+				DBG("unmap notify caused from client message on window: 0x%x - hiding",
+						c ? c->win : p->win)
+				setwinstate(c ? c->win : p->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
+				/* if (c) */
+				/* 	hideclient(c, e->data.data32[0] != XCB_ICCCM_WM_STATE_NORMAL); */
+				/* else */
+				/* 	hidepanel(p, e->data.data32[0] != XCB_ICCCM_WM_STATE_NORMAL); */
 			}
 			return;
 		}
@@ -660,6 +710,8 @@ void focus(Client *c)
 		DBG("focusing client window: 0x%x", c->win)
 		if (c->urgent)
 			seturgency(c, 0);
+		if (c->floating)
+			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 		detachstack(c);
 		attachstack(c);
 		grabbuttons(c, 1);
@@ -724,12 +776,8 @@ void freemon(Monitor *m)
 
 void freepanel(Panel *p, int destroyed)
 {
-	Panel **pp = &panels;
-
 	DBG("freeing panel: %d", p->win)
-	while (*pp && *pp != p)
-		pp = &(*pp)->next;
-	*pp = p->next;
+	detachpanel(p);
 	if (!destroyed) {
 		xcb_grab_server(con);
 		setwinstate(p->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
@@ -799,7 +847,7 @@ void grabbuttons(Client *c, int focused)
 		for (uint i = 0; i < LEN(mods); i++)
 			for (uint j = 0; j < LEN(btns); j++)
 				xcb_grab_button(con, 0, c->win, BUTTONMASK, ASYNC, SYNC, 0, XCB_NONE,
-						btns[j], MODKEY | mods[i]);
+						btns[j], MOD | mods[i]);
 	}
 }
 
@@ -838,6 +886,56 @@ int grabpointer(xcb_cursor_t cursor)
 		checkerror("unable to grab pointer", e);
 	}
 	return r;
+}
+
+void hideclient(Client *c, int hide)
+{
+	Client **tc;
+
+	if (hide) {
+		setwinstate(c->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
+		setnetwinstate(c->win, netatoms[Hidden]);
+		detach(c, 0);
+		detachstack(c);
+		c->next = c->ws->hidden->next;
+		c->ws->hidden = c;
+		MOVE(c->win, W(c) * -2, c->y);
+	} else {
+		setwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
+		setnetwinstate(c->win, 0);
+		tc = &c->ws->hidden;
+		while (*tc && *tc != c)
+			tc = &(*tc)->next;
+		*tc = c->next;
+		attach(c, 0);
+		attachstack(c);
+		MOVE(c->win, W(c), c->y);
+	}
+	layoutws(c->ws);
+}
+
+void hidepanel(Panel *p, int hide)
+{
+	Panel **pp;
+
+	if (hide) {
+		setwinstate(p->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
+		setnetwinstate(p->win, netatoms[Hidden]);
+		detachpanel(p);
+		p->next = hidden;
+		hidden = p;
+		MOVE(p->win, p->w * -2, p->y);
+	} else {
+		setwinstate(p->win, XCB_ICCCM_WM_STATE_NORMAL);
+		setnetwinstate(p->win, 0);
+		pp = &hidden;
+		while (*pp && *pp != p)
+			pp = &(*pp)->next;
+		*pp = p->next;
+		attachpanel(p);
+		MOVE(p->win, p->w, p->y);
+	}
+	layoutws(selws);
 }
 
 void ignorefocusevents(void)
@@ -890,7 +988,7 @@ void initclient(xcb_window_t win, xcb_window_t trans)
 	xcb_get_geometry_cookie_t gc;
 	void (*clientcbfunc)(Client *c);
 	xcb_get_geometry_reply_t *g = NULL;
-	uint values[] = { borders[Focus], CLIENTMASK };
+	uint values[] = { borders[Unfocus], CLIENTMASK };
 	uint frame[] = { borders[Width], borders[Width], borders[Width], borders[Width] };
 
 	DBG("initializing new client from window: 0x%x", win)
@@ -929,14 +1027,13 @@ void initclient(xcb_window_t win, xcb_window_t trans)
 	if (c->ws == selws)
 		unfocus(selws->sel, 0);
 	c->ws->sel = c;
-	if (clientcbfunc)
-		clientcbfunc(c);
 	layoutws(c->ws);
 	xcb_map_window(con, c->win);
-	if (!c->nofocus)
-		focus(NULL);
-	DBG("new client mapped on workspace %d: %d,%d @ %dx%d -- floating: %d",
-			c->ws->num, c->x, c->y, c->w, c->h, c->floating)
+	focus(NULL);
+	if (clientcbfunc)
+		clientcbfunc(c);
+	DBG("new client mapped on workspace %d: %d,%d @ %dx%d - floating: %d - nofocus: %d",
+			c->ws->num, c->x, c->y, c->w, c->h, c->floating, c->nofocus)
 }
 
 void initexisting(void)
@@ -1126,7 +1223,7 @@ void initwm(void)
 	PROP_REPLACE(root, netatoms[DesktopViewport], XCB_ATOM_CARDINAL, 32, 2, v);
 	v[0] = scr_w, v[1] = scr_h;
 	PROP_REPLACE(root, netatoms[DesktopGeometry], XCB_ATOM_CARDINAL, 32, 2, v);
-	PROP_REPLACE(root, netatoms[Supported], XCB_ATOM_ATOM, 32, NetLast, netatoms);
+	PROP_REPLACE(root, netatoms[Supported], XCB_ATOM_ATOM, 32, LEN(netatoms), netatoms);
 	xcb_delete_property(con, root, netatoms[ClientList]);
 
 	/* CurrentDesktop */
@@ -1246,7 +1343,6 @@ void layoutws(Workspace *ws)
 	} else FOR_EACH(ws, workspaces) {
 		if (ws == ws->mon->ws && ws->layout)
 			ws->layout(ws);
-		restack(ws);
 	}
 }
 
@@ -1336,6 +1432,8 @@ void resizehint(Client *c, int x, int y, int w, int h, int bw, int interact)
 {
 	if (setsizehints(c, &x, &y, &w, &h, interact))
 		resize(c, x, y, w, h, bw);
+	/* else */
+	/* 	xcb_flush(con); */
 }
 
 void restack(Workspace *ws)
@@ -1425,6 +1523,15 @@ void setwinstate(xcb_window_t win, long state)
 	PROP_REPLACE(win, wmatoms[WMState], wmatoms[WMState], 32, 2, s);
 }
 
+void setnetwinstate(xcb_window_t win, long state)
+{
+	long s[] = { state, XCB_ATOM_NONE };
+	if (state)
+		PROP_REPLACE(win, netatoms[State], netatoms[State], 32, 2, s);
+	else
+		PROP_REPLACE(win, netatoms[State], netatoms[State], 32, 0, (uchar *)0);
+}
+
 void setclientws(Client *c, uint num)
 {
 	DBG("setting client atom -- _NET_WM_DESKTOP: %d", num)
@@ -1494,11 +1601,36 @@ void setgappx(const Arg *arg)
 
 	if (!arg || arg->i == 0)
 		newgap = wsrules[selws->num].gappx;
-	else
-		newgap = MAX(MIN((int)selws->gappx + arg->i, selws->mon->h / 6), 0);
+	else /* if we allow gaps or borders to be huge things would get silly,
+		  * so we limit them to 1/6 screen height - border size */
+		newgap = MAX(MIN((int)selws->gappx + arg->i,
+					(selws->mon->winarea_h / 6) - borders[Width]), 0);
 	if (newgap != selws->gappx) {
 		selws->gappx = newgap;
 		layoutws(selws);
+	}
+}
+
+void setborderpx(const Arg *arg)
+{
+	Client *c;
+	Workspace *ws;
+	int newborder;
+
+	if (!arg || arg->i == 0)
+		newborder = borders[Default];
+	else /* if we allow borders to be huge things would get silly, so we limit
+		  * them to 1/6 screen height - gap size, we also don't allow the global
+		  * border to be <1 so we can preserve borderless windows */
+		newborder = MAX(MIN((int)((selws->mon->winarea_h / 6) - selws->gappx),
+					borders[Width] + arg->i), 1);
+
+	if (newborder != borders[Width]) {
+		FOR_WSCLIENTS(c, ws) /* update border width on clients that have borders matching the current global */
+			if (c->bw && c->bw == borders[Width])
+				c->bw = newborder;
+		borders[Width] = newborder;
+		layoutws(NULL);
 	}
 }
 
@@ -1981,6 +2113,7 @@ void view(const Arg *arg)
 	changews(ws, 0);
 	focus(NULL);
 	layoutws(NULL);
+	xcb_flush(con);
 }
 
 xcb_get_window_attributes_reply_t *windowattr(xcb_window_t win)
@@ -2073,6 +2206,9 @@ Client *wintoclient(xcb_window_t win)
 	FOR_WSCLIENTS(c, ws)
 		if (c->win == win)
 			return c;
+	FOR_WSHIDDEN(c, ws)
+		if (c->win == win)
+			return c;
 	return NULL;
 }
 
@@ -2084,7 +2220,10 @@ Panel *wintopanel(xcb_window_t win)
 		return NULL;
 	FOR_EACH(p, panels)
 		if (p->win == win)
-			break;
+			return p;
+	FOR_EACH(p, hidden)
+		if (p->win == win)
+			return p;
 	return p;
 }
 
@@ -2097,6 +2236,9 @@ Workspace *wintows(xcb_window_t win)
 	if (win == root && pointerxy(&x, &y))
 		return ptrtomon(x, y)->ws;
 	FOR_WSCLIENTS(c, ws)
+		if (c->win == win)
+			return ws;
+	FOR_WSHIDDEN(c, ws)
 		if (c->win == win)
 			return ws;
 	return selws;

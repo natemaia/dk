@@ -2,7 +2,6 @@
 * see license file for copyright and license details
 * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
 */
-
 #ifndef VERSION
 #define VERSION "0.1"
 #endif
@@ -37,27 +36,36 @@
 #define MAX(a, b)  ((a) > (b) ? (a) : (b))
 #define MIN(a, b)  ((a) < (b) ? (a) : (b))
 #define LEN(x)     (sizeof(x) / sizeof(x[0]))
-
+/* common short names for some modifiers and buttons */
+#define ALT         (XCB_MOD_MASK_1)
+#define SUPER       (XCB_MOD_MASK_4)
+#define SHIFT       (XCB_MOD_MASK_SHIFT)
+#define CTRL        (XCB_MOD_MASK_CONTROL)
+#define BUTTON1     (XCB_BUTTON_INDEX_1)
+#define BUTTON2     (XCB_BUTTON_INDEX_2)
+#define BUTTON3     (XCB_BUTTON_INDEX_3)
+#define PRESS       (XCB_KEY_PRESS)
+#define RELEASE     (XCB_KEY_RELEASE)
+/* dedicated media keys on many keyboards */
+#define MUTE        (0x1008ff12)
+#define VOLUP       (0x1008ff13)
+#define VOLDOWN     (0x1008ff11)
 /* linked list quick access */
 #define FOR_EACH(v, list)      for ((v) = (list); (v); (v) = (v)->next)
 #define FOR_STACK(v, list)     for ((v) = (list); (v); (v) = (v)->snext)
 #define FOR_TAIL(v, list)      for ((v) = (list); (v) && (v)->next; (v) = (v)->next)
 #define FOR_WSCLIENTS(c, ws)   FOR_EACH((ws), workspaces) FOR_EACH((c), (ws)->clients)
+#define FOR_WSHIDDEN(c, ws)    FOR_EACH((ws), workspaces) FOR_EACH((c), (ws)->hidden)
 #define FOR_PREV(v, cur, list) for ((v) = (list); (v) && (v)->next && (v)->next != (cur); (v) = (v)->next)
-
 /* dissolves into nothing when DEBUG isn't defined */
 #define DBG(fmt, ...)
 #define DBGBIND(event, mod, sym)
-
-/* less wordy calls to some xcb functions */
-#define MOVE(win, x, y) \
-	xcb_configure_window(con, (win), XYMASK, (uint []){(x), (y)})
+/* less wordy calls to change a windows property */
 #define PROP_APPEND(win, atom, type, membsize, nmemb, value) \
 	xcb_change_property(con, XCB_PROP_MODE_APPEND, (win), (atom), (type), (membsize), (nmemb), (value))
 #define PROP_REPLACE(win, atom, type, membsize, nmemb, value) \
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, (win), (atom), (type), (membsize), (nmemb), (value))
-
-/* bit masks */
+/* shorter names for some xcb masks */
 #define STICKYMASK  (0xFFFFFFFF)
 #define CLNMOD(mod) (mod & ~(numlockmask | XCB_MOD_MASK_LOCK))
 #define BWMASK      (XCB_CONFIG_WINDOW_BORDER_WIDTH)
@@ -71,11 +79,14 @@
 		| XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_POINTER_MOTION \
 		| XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_LEAVE_WINDOW | XCB_EVENT_MASK_STRUCTURE_NOTIFY \
 		| XCB_EVENT_MASK_PROPERTY_CHANGE)
-#define BUTTON1     (XCB_BUTTON_INDEX_1)
-#define BUTTON2     (XCB_BUTTON_INDEX_2)
-#define BUTTON3     (XCB_BUTTON_INDEX_3)
 #define ASYNC       (XCB_GRAB_MODE_ASYNC)
 #define SYNC        (XCB_GRAB_MODE_SYNC)
+
+/* Don't use this, use resize() or resizehint() instead.
+ * It's used internally to move clients off-screen without changing
+ * their stored values (c->x, c->y) so we can later move them back
+ * this is how windows are hidden/shown instead of mapping/unmapping them */
+#define MOVE(win, x, y) xcb_configure_window(con, (win), XYMASK, (uint []){(x), (y)})
 
 typedef unsigned int uint;
 typedef unsigned char uchar;
@@ -89,15 +100,15 @@ typedef struct Monitor Monitor;
 typedef struct Workspace Workspace;
 
 enum Borders {
-	Width, Focus, Unfocus
+	Width, Default, Focus, Unfocus
 };
 
 enum Cursors {
-	Normal, Move, Resize, CurLast
+	Normal, Move, Resize
 };
 
 enum WMAtoms {
-	Protocols, Delete, WMState, TakeFocus, Utf8Str, WMLast
+	Protocols, Delete, WMState, ChangeState, TakeFocus, Utf8Str
 };
 
 enum NetAtoms {
@@ -105,7 +116,7 @@ enum NetAtoms {
 	Fullscreen,      NumDesktops,      CurrentDesktop, ActiveWindow,
 	WindowType,      WindowTypeDialog, Desktop,        ClientList,
 	DesktopViewport, DesktopGeometry,  DesktopNames,   WindowTypeDock,
-	Strut,           StrutPartial,     FrameExtents,   NetLast
+	Strut,           StrutPartial,     FrameExtents,   Hidden,
 };
 
 union Arg {
@@ -180,7 +191,7 @@ struct Workspace {
 	void (*layout)(Workspace *);
 	Monitor *mon;
 	Workspace *next;
-	Client *sel, *stack, *clients;
+	Client *sel, *stack, *clients, *hidden;
 };
 
 static const char *cursors[] = {
@@ -193,6 +204,7 @@ static const char *wmatomnames[] = {
 	[Protocols] = "WM_PROTOCOLS",
 	[TakeFocus] = "WM_TAKE_FOCUS",
 	[Delete] = "WM_DELETE_WINDOW",
+	[ChangeState] = "WM_CHANGE_STATE",
 };
 
 static const char *netatomnames[] = {
@@ -201,6 +213,7 @@ static const char *netatomnames[] = {
 	[Strut] = "_NET_WM_STRUT",
 	[Desktop] = "_NET_WM_DESKTOP",
 	[Supported] = "_NET_SUPPORTED",
+	[Hidden] = "_NET_WM_STATE_HIDDEN",
 	[ClientList] = "_NET_CLIENT_LIST",
 	[Check] = "_NET_SUPPORTING_WM_CHECK",
 	[WindowType] = "_NET_WM_WINDOW_TYPE",
@@ -217,115 +230,117 @@ static const char *netatomnames[] = {
 	[WindowTypeDialog] = "_NET_WM_WINDOW_TYPE_DIALOG",
 };
 
-static char *argv0;          /* program name */
-static int scr_w, scr_h;     /* root window size */
-static int randrbase = -1;   /* randr extension response */
-static uint running = 1;     /* continue handling events */
-static uint numws = 0;       /* number of workspaces currently allocated */
-static uint mousebtn = 0;    /* mouse button currently being pressed */
-static uint numlockmask = 0; /* numlock modifier bit mask */
-
-static Panel *panels;         /* panel linked list head */
-static Monitor *monitors;     /* monitor linked list head */
-static Workspace *selws;      /* selected workspace */
-static Workspace *workspaces; /* workspace linked list head */
-
-static xcb_screen_t *scr;            /* the X screen */
-static xcb_connection_t *con;        /* xcb connection to the X server */
-static xcb_window_t root, wmcheck;   /* root window and _NET_SUPPORTING_WM_CHECK window */
-static xcb_key_symbols_t *keysyms;   /* current keymap symbols */
-static xcb_atom_t wmatoms[WMLast];   /* _WM atoms used mostly internally */
-static xcb_cursor_t cursor[CurLast]; /* cursors for moving, resizing, and normal */
-static xcb_atom_t netatoms[NetLast]; /* _NET atoms used both internally and by other clients */
+char *argv0;                            /* program name */
+int scr_w, scr_h;                       /* root window size */
+int randrbase = -1;                     /* randr extension response */
+uint running = 1;                       /* continue handling events */
+uint numws = 0;                         /* number of workspaces currently allocated */
+uint mousebtn = 0;                      /* mouse button currently being pressed */
+uint numlockmask = 0;                   /* numlock modifier bit mask */
+Panel *panels, *hidden;                 /* panel linked list head */
+Monitor *monitors;                      /* monitor linked list head */
+Workspace *selws;                       /* selected workspace */
+Workspace *workspaces;                  /* workspace linked list head */
+xcb_screen_t *scr;                      /* the X screen */
+xcb_connection_t *con;                  /* xcb connection to the X server */
+xcb_window_t root, wmcheck;             /* root window and _NET_SUPPORTING_WM_CHECK window */
+xcb_key_symbols_t *keysyms;             /* current keymap symbols */
+xcb_cursor_t cursor[LEN(cursors)];      /* cursors for moving, resizing, and normal */
+xcb_atom_t wmatoms[LEN(wmatomnames)];   /* _WM atoms used mostly internally */
+xcb_atom_t netatoms[LEN(netatomnames)]; /* _NET atoms used both internally and by other clients */
 
 /* function prototypes */
-static void assignworkspaces(void);
-static void attach(Client *c, int tohead);
-static void attachpanel(Panel *p);
-static void attachstack(Client *c);
-static void changefocus(const Arg *arg);
-static void changews(Workspace *ws, int usermotion);
-static void checkerror(char *prompt, xcb_generic_error_t *e);
-static void *clientrules(Client *c, xcb_window_t *trans);
-static void configure(Client *c);
-static void detach(Client *c, int reattach);
-static void detachstack(Client *c);
-static void *ecalloc(size_t elems, size_t size);
-static void eventhandle(xcb_generic_event_t *ev);
-static void eventloop(void);
-static void fixupworkspaces(void);
-static void focus(Client *c);
-static void follow(const Arg *arg);
-static void freeclient(Client *c, int destroyed);
-static void freemon(Monitor *m);
-static void freepanel(Panel *panel, int destroyed);
-static void freewm(void);
-static void freews(Workspace *ws);
-static void grabbuttons(Client *c, int focused);
-static void grabkeys(void);
-static int grabpointer(xcb_cursor_t cursor);
-static void ignorefocusevents(void);
-static void initatoms(xcb_atom_t *atoms, const char **names, int num);
-static void initclient(xcb_window_t win, xcb_window_t trans);
-static void initexisting(void);
-static Monitor *initmon(char *name, xcb_randr_output_t id, int x, int y, int w, int h);
-static void initpanel(xcb_window_t win);
-static int initrandr(void);
-static void initwm(void);
-static void initworkspaces(void);
-static Workspace *initws(uint num, WsRule *r);
-static char *itoa(int n, char *s);
-static Workspace *itows(uint num);
-static void killclient(const Arg *arg);
-static void layoutws(Workspace *ws);
-static void setgappx(const Arg *arg);
-static void monocle(Workspace *ws);
-static Client *nexttiled(Client *c);
-static Monitor *outputtomon(xcb_randr_output_t id);
-static int pointerxy(int *x, int *y);
-static Monitor *ptrtomon(int x, int y);
-static Monitor *randrclone(xcb_randr_output_t id, int x, int y);
-static void resetorquit(const Arg *arg);
-static void resize(Client *c, int x, int y, int w, int h, int bw);
-static void resizehint(Client *c, int x, int y, int w, int h, int bw, int interact);
-static void restack(Workspace *ws);
-static int ruleregcmp(regex_t *r, char *class, char *inst);
-static void runcmd(const Arg *arg);
-static void send(const Arg *arg);
-static int sendevent(Client *c, int wmproto);
-static void setclientws(Client *c, uint num);
-static void setfocus(Client *c);
-static void setfullscreen(Client *c, int fullscreen);
-static void setlayout(const Arg *arg);
-static void setnmaster(const Arg *arg);
-static void setnstack(const Arg *arg);
-static int setsizehints(Client *c, int *x, int *y, int *w, int *h, int interact);
-static void setsplit(const Arg *arg);
-static void setstackmode(xcb_window_t win, uint mode);
-static void seturgency(Client *c, int urg);
-static void setwinstate(xcb_window_t win, long state);
-static void showhide(Client *c);
-static void sighandle(int);
-static void sizehints(Client *c);
-static size_t strlcpy(char *dst, const char *src, size_t size);
-static void swapclient(const Arg *arg);
-static void tile(Workspace *ws);
-static void togglefloat(const Arg *arg);
-static void unfocus(Client *c, int focusroot);
-static void updatenumlock(void);
-static void updatenumws(uint needed);
-static int updateoutputs(xcb_randr_output_t *outputs, int len, xcb_timestamp_t timestamp);
-static int updaterandr(void);
-static void updatestruts(Panel *p, int apply);
-static void view(const Arg *arg);
-static xcb_get_window_attributes_reply_t *windowattr(xcb_window_t win);
-static void windowhints(Client *c);
-static xcb_atom_t windowprop(xcb_window_t win, xcb_atom_t prop);
-static xcb_window_t windowtrans(xcb_window_t win);
-static void windowtype(Client *c);
-static Client *wintoclient(xcb_window_t win);
-static Panel *wintopanel(xcb_window_t win);
-static Workspace *wintows(xcb_window_t win);
+void assignworkspaces(void);
+void attach(Client *c, int tohead);
+void attachpanel(Panel *p);
+void attachstack(Client *c);
+void changefocus(const Arg *arg);
+void changews(Workspace *ws, int usermotion);
+void checkerror(char *prompt, xcb_generic_error_t *e);
+void *clientrules(Client *c, xcb_window_t *trans);
+void configure(Client *c);
+void detach(Client *c, int reattach);
+void detachstack(Client *c);
+void *ecalloc(size_t elems, size_t size);
+void eventhandle(xcb_generic_event_t *ev);
+void eventloop(void);
+void fixupworkspaces(void);
+void focus(Client *c);
+void follow(const Arg *arg);
+void freeclient(Client *c, int destroyed);
+void freemon(Monitor *m);
+void freepanel(Panel *panel, int destroyed);
+void freewm(void);
+void freews(Workspace *ws);
+void grabbuttons(Client *c, int focused);
+void grabkeys(void);
+int grabpointer(xcb_cursor_t cursor);
+void hideclient(Client *c, int hide);
+void hidepanel(Panel *p, int hide);
+void ignorefocusevents(void);
+void initatoms(xcb_atom_t *atoms, const char **names, int num);
+void initclient(xcb_window_t win, xcb_window_t trans);
+void initexisting(void);
+Monitor *initmon(char *name, xcb_randr_output_t id, int x, int y, int w, int h);
+void initpanel(xcb_window_t win);
+int initrandr(void);
+void initwm(void);
+void initworkspaces(void);
+Workspace *initws(uint num, WsRule *r);
+char *itoa(int n, char *s);
+Workspace *itows(uint num);
+void killclient(const Arg *arg);
+void layoutws(Workspace *ws);
+void monocle(Workspace *ws);
+Client *nexttiled(Client *c);
+Monitor *outputtomon(xcb_randr_output_t id);
+int pointerxy(int *x, int *y);
+Monitor *ptrtomon(int x, int y);
+Monitor *randrclone(xcb_randr_output_t id, int x, int y);
+void resetorquit(const Arg *arg);
+void resize(Client *c, int x, int y, int w, int h, int bw);
+void resizehint(Client *c, int x, int y, int w, int h, int bw, int interact);
+void restack(Workspace *ws);
+int ruleregcmp(regex_t *r, char *class, char *inst);
+void runcmd(const Arg *arg);
+void send(const Arg *arg);
+int sendevent(Client *c, int wmproto);
+void setborderpx(const Arg *arg);
+void setclientws(Client *c, uint num);
+void setfocus(Client *c);
+void setfullscreen(Client *c, int fullscreen);
+void setgappx(const Arg *arg);
+void setlayout(const Arg *arg);
+void setnetwinstate(xcb_window_t win, long state);
+void setnmaster(const Arg *arg);
+void setnstack(const Arg *arg);
+int setsizehints(Client *c, int *x, int *y, int *w, int *h, int interact);
+void setsplit(const Arg *arg);
+void setstackmode(xcb_window_t win, uint mode);
+void seturgency(Client *c, int urg);
+void setwinstate(xcb_window_t win, long state);
+void showhide(Client *c);
+void sighandle(int);
+void sizehints(Client *c);
+size_t strlcpy(char *dst, const char *src, size_t size);
+void swapclient(const Arg *arg);
+void tile(Workspace *ws);
+void togglefloat(const Arg *arg);
+void unfocus(Client *c, int focusroot);
+void updatenumlock(void);
+void updatenumws(uint needed);
+int updateoutputs(xcb_randr_output_t *outputs, int len, xcb_timestamp_t timestamp);
+int updaterandr(void);
+void updatestruts(Panel *p, int apply);
+void view(const Arg *arg);
+xcb_get_window_attributes_reply_t *windowattr(xcb_window_t win);
+void windowhints(Client *c);
+xcb_atom_t windowprop(xcb_window_t win, xcb_atom_t prop);
+xcb_window_t windowtrans(xcb_window_t win);
+void windowtype(Client *c);
+Client *wintoclient(xcb_window_t win);
+Panel *wintopanel(xcb_window_t win);
+Workspace *wintows(xcb_window_t win);
 
 #include "debug.c"
 

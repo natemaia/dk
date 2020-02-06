@@ -4,18 +4,12 @@
  */
 
 /* primary modifier for binds including mouse move/resize */
-#define MODKEY    XCB_MOD_MASK_1
-
-/* dedicated media keys on many keyboards */
-#define MUTE      0x1008ff12
-#define VOLUP     0x1008ff13
-#define VOLDOWN   0x1008ff11
+#define MOD    ALT
 
 /* save some repetitive typing with the workspace keybinds */
-#define WSBIND(ws, key) \
-{ XCB_KEY_PRESS, MODKEY,                      key, view,   {.ui = ws} },\
-{ XCB_KEY_PRESS, MODKEY|XCB_MOD_MASK_SHIFT,   key, send,   {.ui = ws} },\
-{ XCB_KEY_PRESS, MODKEY|XCB_MOD_MASK_CONTROL, key, follow, {.ui = ws} }
+#define WSBIND(ws, key) { PRESS, MOD,       key, view,   {.ui = ws} },\
+                        { PRESS, MOD|SHIFT, key, send,   {.ui = ws} },\
+                        { PRESS, MOD|CTRL,  key, follow, {.ui = ws} }
 
 /* enable focus follows mouse */
 static const int focusmouse = 1;
@@ -30,14 +24,15 @@ static const char *volup[] = { "pamixer", "-i", "2", NULL };
 static const char *voldn[] = { "pamixer", "-d", "2", NULL };
 
 static void mpvalbumart(Client *c)
-{ /* mpv album art client borderless, nofocus, and move to bottom left of the screen */
-	c->nofocus = 1;
+{ /* move mpv album art window to the bottom left of the screen */
 	resizehint(c, c->ws->mon->winarea_x + c->ws->mon->winarea_w - W(c),
-			c->ws->mon->winarea_y + c->ws->mon->winarea_h - H(c), c->w, c->h, c->bw, 0);
+				  c->ws->mon->winarea_y + c->ws->mon->winarea_h - H(c),
+				  c->w, c->h, c->bw, 0);
 }
 
 static int borders[] = {
 	[Width] = 1,          /* border width in pixels */
+	[Default] = 1,         /* border width default value for resetting border width */
 	[Focus] = 0x6699cc,   /* focused window border colours, 0-256 colour or hex 0x000000-0xffffff */
 	[Unfocus] = 0x000000, /* unfocused window border colours, 0-256 colour or hex 0x000000-0xffffff */
 };
@@ -75,33 +70,38 @@ static Rule rules[] = {
 };
 
 static Bind binds[] = {
-	/* type,           modifiers,                 keysym,    function,      arg */
-	{ XCB_KEY_PRESS,   MODKEY|XCB_MOD_MASK_SHIFT, XK_Return, runcmd,       {.v = term} },    /* terminal emulator */
-	{ XCB_KEY_PRESS,   MODKEY,                    XK_p,      runcmd,       {.v = menu} },    /* menu program */
-	{ XCB_KEY_PRESS,   0,                         XK_Print,  runcmd,       {.v = scrot} },   /* screenshot program */
-	{ XCB_KEY_RELEASE, MODKEY,                    XK_Print,  runcmd,       {.v = scrots} },  /* selection box screenshot */
-	{ XCB_KEY_PRESS,   0,                         MUTE,      runcmd,       {.v = voltg} },   /* volume mute command */
-	{ XCB_KEY_PRESS,   0,                         VOLUP,     runcmd,       {.v = volup} },   /* volume up command */
-	{ XCB_KEY_PRESS,   0,                         VOLDOWN,   runcmd,       {.v = voldn} },   /* volume down command */
-	{ XCB_KEY_PRESS,   MODKEY,                    XK_q,      killclient,   {0} },            /* close active window */
-	{ XCB_KEY_PRESS,   MODKEY,                    XK_Tab,    swapclient,   {0} },            /* swap window with master and vise versa */
-	{ XCB_KEY_PRESS,   MODKEY|XCB_MOD_MASK_SHIFT, XK_space,  togglefloat,  {0} },            /* toggle active window floating state */
-	{ XCB_KEY_PRESS,   MODKEY|XCB_MOD_MASK_SHIFT, XK_q,      resetorquit,  {.i = 0} },       /* quit yaxwm */
-	{ XCB_KEY_PRESS,   MODKEY|XCB_MOD_MASK_SHIFT, XK_r,      resetorquit,  {.i = 1} },       /* restart yaxwm */
-	{ XCB_KEY_PRESS,   MODKEY,                    XK_j,      changefocus,  {.i = +1} },      /* focus next window */
-	{ XCB_KEY_PRESS,   MODKEY,                    XK_k,      changefocus,  {.i = -1} },      /* focus previous window */
-	{ XCB_KEY_PRESS,   MODKEY,                    XK_i,      setnmaster,   {.i = +1} },      /* increase number of windows in master */
-	{ XCB_KEY_PRESS,   MODKEY,                    XK_d,      setnmaster,   {.i = -1} },      /* decrease number of windows in master */
-	{ XCB_KEY_PRESS,   MODKEY|XCB_MOD_MASK_SHIFT, XK_i,      setnstack,    {.i = +1} },      /* increase number of windows in first stack */
-	{ XCB_KEY_PRESS,   MODKEY|XCB_MOD_MASK_SHIFT, XK_d,      setnstack,    {.i = -1} },      /* decrease number of windows in first stack */
-	{ XCB_KEY_PRESS,   MODKEY,                    XK_h,      setsplit,     {.f = -0.01} },   /* increase master area */
-	{ XCB_KEY_PRESS,   MODKEY,                    XK_l,      setsplit,     {.f = +0.01} },   /* decrease master area */
-	{ XCB_KEY_PRESS,   MODKEY|XCB_MOD_MASK_SHIFT, XK_equal,  setgappx,     {.i = 0} },       /* reset gap size */
-	{ XCB_KEY_PRESS,   MODKEY,                    XK_equal,  setgappx,     {.i = +2} },      /* increase gap size */
-	{ XCB_KEY_PRESS,   MODKEY,                    XK_minus,  setgappx,     {.i = -2} },      /* decrease gap size */
-	{ XCB_KEY_PRESS,   MODKEY,                    XK_t,      setlayout,    {.v = tile} },    /* set active workspace tiled */
-	{ XCB_KEY_PRESS,   MODKEY,                    XK_m,      setlayout,    {.v = monocle} }, /* set active workspace monocle */
-	{ XCB_KEY_PRESS,   MODKEY,                    XK_f,      setlayout,    {.v = NULL} },    /* set active workspace floating */
+	/* type,   modifiers, keysym,    function,      arg */
+	{ PRESS,   MOD|SHIFT,      XK_Return, runcmd,       {.v = term} },    /* terminal emulator */
+	{ PRESS,   MOD,            XK_p,      runcmd,       {.v = menu} },    /* menu program */
+	{ PRESS,   0,              XK_Print,  runcmd,       {.v = scrot} },   /* screenshot program */
+	{ RELEASE, MOD,            XK_Print,  runcmd,       {.v = scrots} },  /* selection box screenshot */
+	{ PRESS,   0,              MUTE,      runcmd,       {.v = voltg} },   /* volume mute command */
+	{ PRESS,   0,              VOLUP,     runcmd,       {.v = volup} },   /* volume up command */
+	{ PRESS,   0,              VOLDOWN,   runcmd,       {.v = voldn} },   /* volume down command */
+	{ PRESS,   MOD,            XK_Insert, runcmd,       {.v = volup} },   /* volume up command */
+	{ PRESS,   MOD,            XK_Delete, runcmd,       {.v = voldn} },   /* volume down command */
+	{ PRESS,   MOD,            XK_q,      killclient,   {0} },            /* close active window */
+	{ PRESS,   MOD,            XK_Tab,    swapclient,   {0} },            /* swap window with master and vise versa */
+	{ PRESS,   MOD|SHIFT,      XK_space,  togglefloat,  {0} },            /* toggle active window floating state */
+	{ PRESS,   MOD|SHIFT,      XK_q,      resetorquit,  {.i = 0} },       /* quit yaxwm */
+	{ PRESS,   MOD|SHIFT,      XK_r,      resetorquit,  {.i = 1} },       /* restart yaxwm */
+	{ PRESS,   MOD,            XK_j,      changefocus,  {.i = +1} },      /* focus next window */
+	{ PRESS,   MOD,            XK_k,      changefocus,  {.i = -1} },      /* focus previous window */
+	{ PRESS,   MOD,            XK_i,      setnmaster,   {.i = +1} },      /* increase number of windows in master */
+	{ PRESS,   MOD,            XK_d,      setnmaster,   {.i = -1} },      /* decrease number of windows in master */
+	{ PRESS,   MOD|SHIFT,      XK_i,      setnstack,    {.i = +1} },      /* increase number of windows in first stack */
+	{ PRESS,   MOD|SHIFT,      XK_d,      setnstack,    {.i = -1} },      /* decrease number of windows in first stack */
+	{ PRESS,   MOD,            XK_h,      setsplit,     {.f = -0.01} },   /* increase master area */
+	{ PRESS,   MOD,            XK_l,      setsplit,     {.f = +0.01} },   /* decrease master area */
+	{ PRESS,   MOD|SHIFT,      XK_equal,  setgappx,     {.i = 0} },       /* reset gap size */
+	{ PRESS,   MOD,            XK_equal,  setgappx,     {.i = +2} },      /* increase gap size */
+	{ PRESS,   MOD,            XK_minus,  setgappx,     {.i = -2} },      /* decrease gap size */
+	{ PRESS,   MOD|SHIFT|CTRL, XK_equal,  setborderpx,  {.i = 0} },       /* reset gap size */
+	{ PRESS,   MOD|CTRL,       XK_equal,  setborderpx,  {.i = +2} },      /* increase gap size */
+	{ PRESS,   MOD|CTRL,       XK_minus,  setborderpx,  {.i = -2} },      /* decrease gap size */
+	{ PRESS,   MOD,            XK_t,      setlayout,    {.v = tile} },    /* set active workspace tiled */
+	{ PRESS,   MOD,            XK_m,      setlayout,    {.v = monocle} }, /* set active workspace monocle */
+	{ PRESS,   MOD,            XK_f,      setlayout,    {.v = NULL} },    /* set active workspace floating */
 	WSBIND(0, XK_1), WSBIND(1, XK_2), WSBIND(2, XK_3), WSBIND(3, XK_4), WSBIND(4, XK_5),
 	WSBIND(5, XK_6), WSBIND(6, XK_7), WSBIND(7, XK_8), WSBIND(8, XK_9), WSBIND(9, XK_0),
 };

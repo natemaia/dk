@@ -59,7 +59,7 @@ static Rule rules[] = {
 	 * window class/instance: `xprop` (the regex matching is case insensitive)
 	 * monitor name: `xrandr` (or use an index 0-n, the order is not guaranteed)
 	 *
-	 * eg. { "chromium", NULL, "HDMI-A-0", -1, 1, NULL }
+	 * eg. { "^chromium$", "HDMI-A-0", -1, 1, NULL }
 	 *
 	 * class/instance                      monitor  workspace  floating  callback */
 	{ "^firefox$",                         "0",    -1,         0,         NULL }, /* active workspace on monitor 0, tiled */

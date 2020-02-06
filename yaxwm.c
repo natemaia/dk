@@ -1432,8 +1432,6 @@ void resizehint(Client *c, int x, int y, int w, int h, int bw, int interact)
 {
 	if (setsizehints(c, &x, &y, &w, &h, interact))
 		resize(c, x, y, w, h, bw);
-	/* else */
-	/* 	xcb_flush(con); */
 }
 
 void restack(Workspace *ws)

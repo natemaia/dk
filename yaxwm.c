@@ -1189,6 +1189,7 @@ void initwm(void)
 		monitors = initmon("default", 0, 0, 0, scr_w, scr_h);
 	initworkspaces();
 	assignworkspaces();
+	borders[Default] = borders[Width];
 
 	/* cursors */
 	if (xcb_cursor_context_new(con, scr, &ctx) < 0)
@@ -1349,12 +1350,12 @@ void layoutws(Workspace *ws)
 void monocle(Workspace *ws)
 {
 	Client *c;
+	Monitor *m = ws->mon;
 
 	if (!ws->clients)
 		return;
 	for (c = nexttiled(ws->clients); c; c = nexttiled(c->next))
-		resizehint(c, ws->mon->winarea_x, ws->mon->winarea_y,
-				ws->mon->winarea_w - 2 * c->bw, ws->mon->winarea_h - 2 * c->bw, 0, 0);
+		resizehint(c, m->winarea_x, m->winarea_y, m->winarea_w, m->winarea_h, 0, 0);
 }
 
 Client *nexttiled(Client *c)
@@ -1868,13 +1869,13 @@ void tile(Workspace *ws)
 	Client *c;
 	Monitor *m = ws->mon;
 	uint i, n, my, sy, nr;
-	uint mw = 0, ss = 0, sw = 0, ns = 1, bw = 1;
+	uint mw = 0, ss = 0, sw = 0, ns = 1, drawborder = 1, bw;
 
 	for (n = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), n++)
 		;
 	switch (n) {
 		case 0: return;
-		case 1: bw = 0;
+		case 1: drawborder = 0, bw = 0;
 	}
 	if (n > ws->nmaster) {
 		if (ws->nmaster)
@@ -1889,27 +1890,27 @@ void tile(Workspace *ws)
 			ws->num, ws->nmaster, ws->nstack, n, mw, sw, ws->gappx)
 
 	for (i = 0, my = sy = ws->gappx, c = nexttiled(ws->clients); c; c = nexttiled(c->next), ++i) {
+		bw = drawborder ? c->bw : 0;
 		if (i < ws->nmaster) {
 			nr = MIN(n, ws->nmaster) - i;
 			resizehint(c, m->winarea_x + ws->gappx, m->winarea_y + my,
-					mw - ws->gappx * (5 - ns) / 2 - (2 * c->bw),
-					((m->winarea_h - my) / MAX(1, nr)) - ws->gappx - (2 * c->bw),
-					bw ? c->bw : 0, 0);
-			my += (bw ? H(c) : c->h) + ws->gappx;
+					mw - ws->gappx * (5 - ns) / 2 - (2 * bw),
+					((m->winarea_h - my) / MAX(1, nr)) - ws->gappx - (2 * bw), bw, 0);
+			my += c->h + (2 * bw) + ws->gappx;
 		} else if (i - ws->nmaster < ws->nstack) {
 			nr = MIN(n - ws->nmaster, ws->nstack) - (i - ws->nmaster);
 			resizehint(c, m->winarea_x + mw + ws->gappx/ns, m->winarea_y + sy,
-					(m->winarea_w - mw - sw - ws->gappx * (5 - ns - ss) / 2) - (2 * c->bw),
-					(m->winarea_h - sy) / MAX(1, nr) - ws->gappx - (2 * c->bw), c->bw, 0);
-			sy += H(c) + ws->gappx;
+					(m->winarea_w - mw - sw - ws->gappx * (5 - ns - ss) / 2) - (2 * bw),
+					(m->winarea_h - sy) / MAX(1, nr) - ws->gappx - (2 * bw), bw, 0);
+			sy += c->h + (2 * bw) + ws->gappx;
 		} else {
 			if (i - ws->nmaster == ws->nstack)
 				sy = ws->gappx;
 			resizehint(c, m->winarea_x + mw + sw + ws->gappx/ns - ss,
 					m->winarea_y + sy,
-					(m->winarea_w - mw - sw - ws->gappx * (5 - ns) / 2) - (2 * c->bw),
-					(m->winarea_h - sy) / MAX(1, n - i) - ws->gappx - (2 * c->bw), c->bw, 0);
-			sy += H(c) + ws->gappx;
+					(m->winarea_w - mw - sw - ws->gappx * (5 - ns) / 2) - (2 * bw),
+					(m->winarea_h - sy) / MAX(1, n - i) - ws->gappx - (2 * bw), c->bw, 0);
+			sy += c->h + (2 * bw) + ws->gappx;
 		}
 		DBG("tiled window %d of %d: %d,%d @ %dx%d", i + 1, n, c->x, c->y, W(c), bw ? H(c) : c->h)
 	}

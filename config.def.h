@@ -13,26 +13,26 @@
 
 /* enable focus follows mouse */
 static const int focusmouse = 1;
+/* no borders when there's only one tiled window or when in monocle layout */
+static const int smartborder = 1;
 
 /* commands */
 static const char *term[] = { "st", NULL };
 static const char *menu[] = { "dmenu_run", NULL };
 static const char *scrot[] = { "scrot", NULL };
 static const char *scrots[] = { "scrot", "-s", NULL };
+/* volume control commands */
 static const char *voltg[] = { "pamixer", "-t", NULL };
 static const char *volup[] = { "pamixer", "-i", "2", NULL };
 static const char *voldn[] = { "pamixer", "-d", "2", NULL };
 
-static void mpvalbumart(Client *c)
-{ /* move mpv album art window to the bottom left of the screen */
-	resizehint(c, c->ws->mon->winarea_x + c->ws->mon->winarea_w - W(c),
-				  c->ws->mon->winarea_y + c->ws->mon->winarea_h - H(c),
-				  c->w, c->h, c->bw, 0);
-}
+/* simple example of a client callback function for mpv album art */
+/* gravitate window to the bottom-left of the screen, matching gap offset */
+static void mpvart(Client *c) { gravitate(c, Bottom, Right, 1); }
 
 static int borders[] = {
 	[Width] = 1,          /* border width in pixels */
-	[Default] = 1,         /* border width default value for resetting border width */
+	[Default] = 1,        /* border width default value for resetting border width (same as Width) */
 	[Focus] = 0x6699cc,   /* focused window border colours, 0-256 colour or hex 0x000000-0xffffff */
 	[Unfocus] = 0x000000, /* unfocused window border colours, 0-256 colour or hex 0x000000-0xffffff */
 };
@@ -59,14 +59,13 @@ static Rule rules[] = {
 	 * window class/instance: `xprop` (the regex matching is case insensitive)
 	 * monitor name: `xrandr` (or use an index 0-n, the order is not guaranteed)
 	 *
-	 * eg. { "^chromium$", "HDMI-A-0", -1, 1, NULL }
-	 *
-	 * class/instance                      monitor  workspace  floating  callback */
-	{ "^firefox$",                         "0",    -1,         0,         NULL }, /* active workspace on monitor 0, tiled */
-	{ "^gimp$",                            NULL,    2,         1,         NULL }, /* workspace 2, floating */
-	{ "^(steam|lxappearance)$",            NULL,   -1,         1,         NULL }, /* current workspace, floating */
-	{ "^(pavucontrol|transmission-gtk)$",  NULL,   -1,         1,         NULL }, /* current workspace, floating */
-	{ "^gl$",                              NULL,   -1,         1,         mpvalbumart }, /* current workspace, floating, with callback */
+	 * class/instance,                    monitor,   workspace,  floating,  callback function */
+	{ "^firefox$",                        "0",          -1,         0,        NULL }, /* active workspace on monitor 0, tiled */
+	{ "^chromium$",                       "HDMI-A-0",   -1,         1,        NULL }, /* active workspace on HDMI-A-0, floating */
+	{ "^gimp$",                            NULL,         2,         1,        NULL }, /* workspace 2, floating */
+	{ "^(steam|lxappearance)$",            NULL,        -1,         1,        NULL }, /* current workspace, floating */
+	{ "^(pavucontrol|transmission-gtk)$",  NULL,        -1,         1,        NULL }, /* current workspace, floating */
+	{ "^gl$",                              NULL,        -1,         1,        mpvart }, /* current workspace, floating, with callback */
 };
 
 static Bind binds[] = {

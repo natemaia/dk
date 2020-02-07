@@ -297,19 +297,12 @@ void *ecalloc(size_t elems, size_t size)
 void eventhandle(xcb_generic_event_t *ev)
 {
 	uint i;
-	int x, y;
 	Client *c;
 	Monitor *m;
 	Workspace *ws;
 	Panel *p = NULL;
+	static int x, y;
 	xcb_generic_error_t *err;
-
-	if (ev->response_type == randrbase + XCB_RANDR_SCREEN_CHANGE_NOTIFY) {
-		DBG("RANDR screen change notify, updating monitors")
-		if (updaterandr() > 0)
-			fixupworkspaces();
-		return;
-	}
 
 	switch (XCB_EVENT_RESPONSE_TYPE(ev)) {
 		case XCB_FOCUS_IN:
@@ -432,25 +425,28 @@ void eventhandle(xcb_generic_event_t *ev)
 		{
 			xcb_button_press_event_t *b = (xcb_button_press_event_t *)ev;
 
-			if (!b->event || b->event == root || !(c = selws->sel))
+			if (b->event == root && (m = wintows(b->event)->mon) && m != selws->mon) {
+				unfocus(selws->sel, 1);
+				changews(m->ws, 1);
+				focus(NULL);
+			}
+			if (!(c = wintoclient(b->event)))
 				return;
-			b->state &= 0x00ff; /* drop the top 8 bits (button status bits) */
-			if ((mousebtn = b->detail) == BUTTON1 && CLNMOD(b->state) != MOD) {
-				DBG("button press event had no modifiers, focusing clicked window")
-				focus((c = wintoclient(b->event)));
-				restack(c->ws);
-			} else if (mousebtn == BUTTON1 || mousebtn == BUTTON3) {
-				DBG("button press event - button: %d", b->detail)
-				restack(selws);
+			DBG("button press event - mouse button %d", b->detail)
+			focus(c);
+			restack(selws);
+			xcb_allow_events(con, XCB_ALLOW_REPLAY_POINTER, XCB_CURRENT_TIME);
+			if (CLNMOD(MOD) != CLNMOD((b->state & 0x00ff)))
+				return;
+			if ((mousebtn = b->detail) == BUTTON1 || b->detail == BUTTON3) {
 				if (mousebtn == BUTTON1)
 					xcb_warp_pointer(con, XCB_NONE, c->win, 0, 0, 0, 0, c->w / 2, c->h / 2);
 				else
 					xcb_warp_pointer(con, XCB_NONE, c->win, 0, 0, 0, 0, c->w, c->h);
-				if (!grabpointer(cursor[b->detail == BUTTON1 ? Move : Resize]))
+				if (!grabpointer(cursor[b->detail == BUTTON1 ? Move : Resize]) || !pointerxy(&x, &y))
 					mousebtn = 0;
-			} else if (mousebtn == BUTTON2) {
+			} else
 				togglefloat(NULL);
-			}
 			return;
 		}
 		case XCB_BUTTON_RELEASE:
@@ -458,7 +454,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			xcb_void_cookie_t cookie;
 			xcb_button_release_event_t *b = (xcb_button_release_event_t *)ev;
 
-			if (!b->event || !(c = selws->sel))
+			if (!mousebtn || !b->event || !(c = selws->sel))
 				return;
 			DBG("button release event, ungrabbing pointer")
 			cookie = xcb_ungrab_pointer_checked(con, XCB_CURRENT_TIME);
@@ -477,8 +473,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			xcb_motion_notify_event_t *e = (xcb_motion_notify_event_t *)ev;
 
 			if (!mousebtn || !(c = selws->sel) || c->fullscreen) {
-				if (!e->child && pointerxy(&x, &y) && (m = ptrtomon(x, y)) != selws->mon) {
-					DBG("motion notify on root window: 0x%x - coord: %d,%d", e->child, e->root_x, e->root_y)
+				if ((m = ptrtomon(e->root_x, e->root_y)) != selws->mon) {
 					unfocus(selws->sel, 1);
 					changews(m->ws, 1);
 					focus(NULL);
@@ -486,8 +481,8 @@ void eventhandle(xcb_generic_event_t *ev)
 				return;
 			}
 			if (!c->floating && c->ws->layout) {
+				c->old_x = c->x, c->old_y = c->y, c->old_h = c->h, c->old_w = c->w;
 				togglefloat(NULL);
-				resizehint(c, c->x, c->y, c->w, c->h, c->bw, 1);
 				layoutws(c->ws);
 			}
 			if (pointerxy(&x, &y) && (!c->ws->layout || c->floating)) {
@@ -583,25 +578,11 @@ void eventhandle(xcb_generic_event_t *ev)
 			} else if (c && e->type == netatoms[ActiveWindow]) {
 				DBG("net active window client message " "- window: 0x%x - workspace: %d "
 						"- current workspace: %d", c->win, c->ws->num, selws->num)
-				DBG("client size and location before changing workspace: %d,%d @ %dx%d",
-						c->x, c->y, c->w, c->h)
 				unfocus(selws->sel, 1);
 				changews(c->ws, 0);
 				layoutws(NULL);
-				/* if (c->floating) { */
-				/* 	if (pointerxy(&x, &y)) */
-				/* 		resizehint(c, x - (W(c) / 2), y - (H(c) / 2), c->w, c->h, c->bw); */
-				/* 		/1* MOVE(c->win, x - (W(c) / 2), y - (H(c) / 2)); *1/ */
-				/* 	else { */
-				/* 		m = c->ws->mon; */
-				/* 		MOVE(c->win, (m->winarea_x + m->winarea_w - W(c)) / 2, */
-				/* 				(m->winarea_y + m->winarea_w - H(c)) / 2); */
-				/* 	} */
-				/* } */
 				focus(c);
 				restack(c->ws);
-				DBG("client size and location after changing workspace: %d,%d @ %dx%d",
-						c->x, c->y, c->w, c->h)
 			} else if (c && e->type == netatoms[State]
 					&& (e->data.data32[1] == netatoms[Fullscreen]
 						|| e->data.data32[2] == netatoms[Fullscreen])) {
@@ -646,6 +627,13 @@ void eventhandle(xcb_generic_event_t *ev)
 		}
 		default:
 		{
+			if (randrbase != -1 && ev->response_type == randrbase + XCB_RANDR_SCREEN_CHANGE_NOTIFY) {
+				DBG("RANDR screen change notify, updating monitors")
+				if (updaterandr() > 0)
+					fixupworkspaces();
+				return;
+			}
+
 			xcb_generic_error_t *e = (xcb_generic_error_t *)ev;
 
 			if (ev->response_type /* ignored event, not an error */
@@ -842,7 +830,7 @@ void grabbuttons(Client *c, int focused)
 		DBG("grabbing buttons on client window: 0x%x - focused: %d", c->win, focused)
 		xcb_ungrab_button(con, XCB_BUTTON_INDEX_ANY, c->win, XCB_MOD_MASK_ANY);
 		if (!focused)
-			xcb_grab_button(con, 0, c->win, BUTTONMASK, ASYNC, SYNC, 0, XCB_NONE,
+			xcb_grab_button(con, 0, c->win, BUTTONMASK, SYNC, SYNC, 0, XCB_NONE,
 					XCB_BUTTON_INDEX_ANY, XCB_MOD_MASK_ANY);
 		for (uint i = 0; i < LEN(mods); i++)
 			for (uint j = 0; j < LEN(btns); j++)
@@ -886,6 +874,28 @@ int grabpointer(xcb_cursor_t cursor)
 		checkerror("unable to grab pointer", e);
 	}
 	return r;
+}
+
+void gravitate(Client *c, int vert, int horz, int matchgap)
+{
+	int x, y, gap;
+
+	if (!c || !c->ws || !c->floating)
+		return;
+	x = c->x, y = c->y;
+	gap = matchgap ? c->ws->gappx : 0;
+	switch (horz) {
+	case Left: x = c->ws->mon->winarea_x + gap; break;
+	case Right: x = c->ws->mon->winarea_x + c->ws->mon->winarea_w - W(c) - gap; break;
+	case Center: x = (c->ws->mon->winarea_x + c->ws->mon->winarea_w - W(c)) / 2; break;
+	}
+	switch (vert) {
+	case Top: y = c->ws->mon->winarea_y + gap; break;
+	case Bottom: y = c->ws->mon->winarea_y + c->ws->mon->winarea_h - H(c) - gap; break;
+	case Center: y = (c->ws->mon->winarea_y + c->ws->mon->winarea_h - H(c)) / 2; break;
+	}
+	c->x = x, c->y = y;
+	resizehint(c, c->x, c->y, W(c), H(c), c->bw, 0);
 }
 
 void hideclient(Client *c, int hide)
@@ -1242,14 +1252,12 @@ void initwm(void)
 	PROP_REPLACE(root, netatoms[DesktopNames], wmatoms[Utf8Str], 8, --len, names);
 
 	/* root window event mask & cursor */
-	c = xcb_change_window_attributes_checked(con, root,
-			XCB_CW_EVENT_MASK | XCB_CW_CURSOR,
+	c = xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK | XCB_CW_CURSOR,
 			(uint []){ ROOTMASK, cursor[Normal] });
 	if ((e = xcb_request_check(con, c))) {
 		free(e);
 		errx(1, "unable to change root window event mask and cursor");
 	}
-
 	/* binds */
 	if (!(keysyms = xcb_key_symbols_alloc(con)))
 		errx(1, "error unable to get keysyms from X connection");
@@ -1355,7 +1363,8 @@ void monocle(Workspace *ws)
 	if (!ws->clients)
 		return;
 	for (c = nexttiled(ws->clients); c; c = nexttiled(c->next))
-		resizehint(c, m->winarea_x, m->winarea_y, m->winarea_w, m->winarea_h, 0, 0);
+		resizehint(c, m->winarea_x, m->winarea_y, m->winarea_w, m->winarea_h,
+				smartborder ? 0 : borders[Width], 0);
 }
 
 Client *nexttiled(Client *c)
@@ -1868,29 +1877,26 @@ void tile(Workspace *ws)
 {
 	Client *c;
 	Monitor *m = ws->mon;
-	uint i, n, my, sy, nr;
-	uint mw = 0, ss = 0, sw = 0, ns = 1, drawborder = 1, bw;
+	uint i, n, my, ssy, sy, nr;
+	uint mw = 0, ss = 0, sw = 0, ns = 1, bw;
 
 	for (n = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), n++)
 		;
-	switch (n) {
-		case 0: return;
-		case 1: drawborder = 0, bw = 0;
-	}
-	if (n > ws->nmaster) {
-		if (ws->nmaster)
-			ns = 2, mw = m->winarea_w * ws->splitratio;
-		if (ws->nstack && n - ws->nmaster > ws->nstack)
-			ss = 1, sw = (m->winarea_w - mw) / 2;
-	} else
+	if (!n)
+		return;
+	bw = n == 1 && smartborder ? 0 : borders[Width];
+	if (n <= ws->nmaster)
 		mw = m->winarea_w, ss = 1;
+	else if (ws->nmaster)
+		ns = 2, mw = m->winarea_w * ws->splitratio;
+	if (ws->nstack && n - ws->nmaster > ws->nstack)
+		ss = 1, sw = (m->winarea_w - mw) / 2;
 
 	DBG("workspace: %d - nmaster: %d - nstack: %d - "
 			"nclients: %d - master width: %d - stack width: %d - gap width: %d",
 			ws->num, ws->nmaster, ws->nstack, n, mw, sw, ws->gappx)
 
-	for (i = 0, my = sy = ws->gappx, c = nexttiled(ws->clients); c; c = nexttiled(c->next), ++i) {
-		bw = drawborder ? c->bw : 0;
+	for (i = 0, my = sy = ssy = ws->gappx, c = nexttiled(ws->clients); c; c = nexttiled(c->next), ++i) {
 		if (i < ws->nmaster) {
 			nr = MIN(n, ws->nmaster) - i;
 			resizehint(c, m->winarea_x + ws->gappx, m->winarea_y + my,
@@ -1904,15 +1910,12 @@ void tile(Workspace *ws)
 					(m->winarea_h - sy) / MAX(1, nr) - ws->gappx - (2 * bw), bw, 0);
 			sy += c->h + (2 * bw) + ws->gappx;
 		} else {
-			if (i - ws->nmaster == ws->nstack)
-				sy = ws->gappx;
-			resizehint(c, m->winarea_x + mw + sw + ws->gappx/ns - ss,
-					m->winarea_y + sy,
+			resizehint(c, m->winarea_x + mw + sw + ws->gappx/ns - ss, m->winarea_y + ssy,
 					(m->winarea_w - mw - sw - ws->gappx * (5 - ns) / 2) - (2 * bw),
-					(m->winarea_h - sy) / MAX(1, n - i) - ws->gappx - (2 * bw), c->bw, 0);
-			sy += c->h + (2 * bw) + ws->gappx;
+					(m->winarea_h - ssy) / MAX(1, n - i) - ws->gappx - (2 * bw), c->bw, 0);
+			ssy += c->h + (2 * bw) + ws->gappx;
 		}
-		DBG("tiled window %d of %d: %d,%d @ %dx%d", i + 1, n, c->x, c->y, W(c), bw ? H(c) : c->h)
+		DBG("tiled window %d of %d: %d,%d @ %dx%d", i + 1, n, c->x, c->y, W(c), c->h + (2 * bw))
 	}
 }
 
@@ -2112,7 +2115,7 @@ void view(const Arg *arg)
 	changews(ws, 0);
 	focus(NULL);
 	layoutws(NULL);
-	xcb_flush(con);
+	ignorefocusevents();
 }
 
 xcb_get_window_attributes_reply_t *windowattr(xcb_window_t win)

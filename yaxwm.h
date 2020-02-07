@@ -119,6 +119,10 @@ enum NetAtoms {
 	Strut,           StrutPartial,     FrameExtents,   Hidden,
 };
 
+enum Gravity {
+	Left, Right, Center, Top, Bottom,
+};
+
 union Arg {
 	int i;
 	uint ui;
@@ -275,6 +279,7 @@ void freews(Workspace *ws);
 void grabbuttons(Client *c, int focused);
 void grabkeys(void);
 int grabpointer(xcb_cursor_t cursor);
+void gravitate(Client *c, int vert, int horz, int matchgap);
 void hideclient(Client *c, int hide);
 void hidepanel(Panel *p, int hide);
 void ignorefocusevents(void);
@@ -292,6 +297,7 @@ Workspace *itows(uint num);
 void killclient(const Arg *arg);
 void layoutws(Workspace *ws);
 void monocle(Workspace *ws);
+void mousemotion(xcb_button_t b);
 Client *nexttiled(Client *c);
 Monitor *outputtomon(xcb_randr_output_t id);
 int pointerxy(int *x, int *y);

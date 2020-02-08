@@ -26,9 +26,20 @@ Yaxwm differs in several ways:
 
 #### Installation
 
-Run `make` as a normal user so the created config.h is editable, edit `config.h` to your liking, finally run `sudo make clean install`.
+You will need the xcb headers, on an Arch Linux system you can run
+```
+pacman -S xcb-proto xcb-util xcb-util-wm xcb-util-cursor xcb-util-keysyms
+```
+On other systems packages of similar names should be available. Once complete run
+```
+make
+```
+as a normal user so the created config.h is editable, edit `config.h` to your liking, finally run
+```
+sudo make clean install
+```
 
-If at any time you want to uninstall it you can run `sudo make uninstall`.
+If at any time you want to remove yaxwm, you can run `sudo make uninstall`.
 
 
 #### Usage

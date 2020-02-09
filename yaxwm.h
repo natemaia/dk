@@ -116,7 +116,8 @@ enum NetAtoms {
 	Fullscreen,      NumDesktops,      CurrentDesktop, ActiveWindow,
 	WindowType,      WindowTypeDialog, Desktop,        ClientList,
 	DesktopViewport, DesktopGeometry,  DesktopNames,   WindowTypeDock,
-	Strut,           StrutPartial,     FrameExtents,   Hidden,
+	Strut,           StrutPartial,     FrameExtents,   WindowTypeMenu,
+	Hidden,
 };
 
 enum Gravity {
@@ -231,6 +232,7 @@ static const char *netatomnames[] = {
 	[DesktopViewport] = "_NET_DESKTOP_VIEWPORT",
 	[DesktopGeometry] = "_NET_DESKTOP_GEOMETRY",
 	[WindowTypeDock] = "_NET_WM_WINDOW_TYPE_DOCK",
+	[WindowTypeMenu] = "_NET_WM_WINDOW_TYPE_MENU",
 	[WindowTypeDialog] = "_NET_WM_WINDOW_TYPE_DIALOG",
 };
 

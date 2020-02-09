@@ -429,13 +429,14 @@ void eventhandle(xcb_generic_event_t *ev)
 				unfocus(selws->sel, 1);
 				changews(m->ws, 1);
 				focus(NULL);
+				return;
 			}
 			if (!(c = wintoclient(b->event)))
 				return;
 			DBG("button press event - mouse button %d", b->detail)
 			focus(c);
 			restack(selws);
-			xcb_allow_events(con, XCB_ALLOW_REPLAY_POINTER, XCB_CURRENT_TIME);
+			xcb_allow_events(con, XCB_ALLOW_REPLAY_POINTER, b->time);
 			if (CLNMOD(MOD) != CLNMOD((b->state & 0x00ff)))
 				return;
 			if ((mousebtn = b->detail) == BUTTON1 || b->detail == BUTTON3) {
@@ -1025,10 +1026,9 @@ void initclient(xcb_window_t win, xcb_window_t trans)
 	grabbuttons(c, 0);
 	if (c->floating || (c->floating = c->oldstate = c->fixed)) {
 		m = c->ws->mon;
-		if (c->x <= m->winarea_x || c->x + W(c) >= m->winarea_x + m->winarea_w)
-			c->x = (m->winarea_x + m->winarea_w - W(c)) / 2;
-		if (c->y <= m->winarea_y || c->y + H(c) >= m->winarea_y + m->winarea_h)
-			c->y = (m->winarea_y + m->winarea_h - H(c)) / 2;
+		if (c->x <= m->winarea_x || c->x + W(c) >= m->winarea_x + m->winarea_w
+				|| c->y <= m->winarea_y || c->y + H(c) >= m->winarea_y + m->winarea_h)
+			gravitate(c, Center, Center, 0);
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	}
 	PROP_APPEND(root, netatoms[ClientList], XCB_ATOM_WINDOW, 32, 1, &c->win);
@@ -1360,11 +1360,9 @@ void monocle(Workspace *ws)
 	Client *c;
 	Monitor *m = ws->mon;
 
-	if (!ws->clients)
-		return;
 	for (c = nexttiled(ws->clients); c; c = nexttiled(c->next))
-		resizehint(c, m->winarea_x, m->winarea_y, m->winarea_w, m->winarea_h,
-				smartborder ? 0 : borders[Width], 0);
+		resize(c, m->winarea_x, m->winarea_y, m->winarea_w, m->winarea_h,
+				smartborder ? 0 : borders[Width]);
 }
 
 Client *nexttiled(Client *c)
@@ -1878,13 +1876,14 @@ void tile(Workspace *ws)
 	Client *c;
 	Monitor *m = ws->mon;
 	uint i, n, my, ssy, sy, nr;
-	uint mw = 0, ss = 0, sw = 0, ns = 1, bw;
+	uint mw = 0, ss = 0, sw = 0, ns = 1, bw = 0;
 
 	for (n = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), n++)
 		;
 	if (!n)
 		return;
-	bw = n == 1 && smartborder ? 0 : borders[Width];
+	if (n > 1 || !smartborder)
+		bw = borders[Width];
 	if (n <= ws->nmaster)
 		mw = m->winarea_w, ss = 1;
 	else if (ws->nmaster)
@@ -1899,20 +1898,20 @@ void tile(Workspace *ws)
 	for (i = 0, my = sy = ssy = ws->gappx, c = nexttiled(ws->clients); c; c = nexttiled(c->next), ++i) {
 		if (i < ws->nmaster) {
 			nr = MIN(n, ws->nmaster) - i;
-			resizehint(c, m->winarea_x + ws->gappx, m->winarea_y + my,
+			resize(c, m->winarea_x + ws->gappx, m->winarea_y + my,
 					mw - ws->gappx * (5 - ns) / 2 - (2 * bw),
-					((m->winarea_h - my) / MAX(1, nr)) - ws->gappx - (2 * bw), bw, 0);
+					((m->winarea_h - my) / MAX(1, nr)) - ws->gappx - (2 * bw), bw);
 			my += c->h + (2 * bw) + ws->gappx;
 		} else if (i - ws->nmaster < ws->nstack) {
 			nr = MIN(n - ws->nmaster, ws->nstack) - (i - ws->nmaster);
-			resizehint(c, m->winarea_x + mw + ws->gappx/ns, m->winarea_y + sy,
+			resize(c, m->winarea_x + mw + ws->gappx/ns, m->winarea_y + sy,
 					(m->winarea_w - mw - sw - ws->gappx * (5 - ns - ss) / 2) - (2 * bw),
-					(m->winarea_h - sy) / MAX(1, nr) - ws->gappx - (2 * bw), bw, 0);
+					(m->winarea_h - sy) / MAX(1, nr) - ws->gappx - (2 * bw), bw);
 			sy += c->h + (2 * bw) + ws->gappx;
 		} else {
-			resizehint(c, m->winarea_x + mw + sw + ws->gappx/ns - ss, m->winarea_y + ssy,
+			resize(c, m->winarea_x + mw + sw + ws->gappx/ns - ss, m->winarea_y + ssy,
 					(m->winarea_w - mw - sw - ws->gappx * (5 - ns) / 2) - (2 * bw),
-					(m->winarea_h - ssy) / MAX(1, n - i) - ws->gappx - (2 * bw), c->bw, 0);
+					(m->winarea_h - ssy) / MAX(1, n - i) - ws->gappx - (2 * bw), c->bw);
 			ssy += c->h + (2 * bw) + ws->gappx;
 		}
 		DBG("tiled window %d of %d: %d,%d @ %dx%d", i + 1, n, c->x, c->y, W(c), c->h + (2 * bw))
@@ -2191,11 +2190,15 @@ xcb_window_t windowtrans(xcb_window_t win)
 
 void windowtype(Client *c)
 {
+	xcb_atom_t t;
+
 	DBG("checking window type for window: 0x%x", c->win)
 	if (windowprop(c->win, netatoms[State]) == netatoms[Fullscreen])
 		setfullscreen(c, 1);
-	else if (windowprop(c->win, netatoms[WindowType]) == netatoms[WindowTypeDialog])
+	else if ((t = windowprop(c->win, netatoms[WindowType])) == netatoms[WindowTypeDialog])
 		c->floating = 1;
+	else if (t == netatoms[WindowTypeMenu])
+		c->bw = 0, c->floating = 1;
 }
 
 Client *wintoclient(xcb_window_t win)

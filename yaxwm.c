@@ -1343,7 +1343,7 @@ void monocle(Workspace *ws)
 Client *nexttiled(Client *c)
 { /* return c if it's mapped and not floating,
    * otherwise walk the list until we find one that is */
-	while (c && (c->floating || !c->mapped))
+	while (c && c->floating)
 		c = c->next;
 	return c;
 }

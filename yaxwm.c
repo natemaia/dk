@@ -415,7 +415,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			c = wintoclient(e->event);
 			if ((ws = c ? c->ws : wintows(e->event)) != selws) {
 				unfocus(selws->sel, 1);
-				changews(ws, 0);
+				changews(ws, 1);
 			} else if (!focusmouse || !c || c == selws->sel)
 				return;
 			focus(c);
@@ -828,10 +828,10 @@ void grabbuttons(Client *c, int focused)
 		uint mods[] = { 0, XCB_MOD_MASK_LOCK, numlockmask, numlockmask | XCB_MOD_MASK_LOCK };
 
 		DBG("grabbing buttons on client window: 0x%x - focused: %d", c->win, focused)
-		xcb_ungrab_button(con, XCB_BUTTON_INDEX_ANY, c->win, XCB_MOD_MASK_ANY);
+		xcb_ungrab_button(con, XCB_BUTTON_INDEX_ANY, c->win, XCB_BUTTON_MASK_ANY);
 		if (!focused)
 			xcb_grab_button(con, 0, c->win, BUTTONMASK, SYNC, SYNC, 0, XCB_NONE,
-					XCB_BUTTON_INDEX_ANY, XCB_MOD_MASK_ANY);
+					XCB_BUTTON_INDEX_ANY, XCB_BUTTON_MASK_ANY);
 		for (uint i = 0; i < LEN(mods); i++)
 			for (uint j = 0; j < LEN(btns); j++)
 				xcb_grab_button(con, 0, c->win, BUTTONMASK, ASYNC, SYNC, 0, XCB_NONE,

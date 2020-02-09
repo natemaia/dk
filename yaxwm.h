@@ -36,6 +36,7 @@
 #define MAX(a, b)  ((a) > (b) ? (a) : (b))
 #define MIN(a, b)  ((a) < (b) ? (a) : (b))
 #define LEN(x)     (sizeof(x) / sizeof(x[0]))
+
 /* common short names for some modifiers and buttons */
 #define ALT         (XCB_MOD_MASK_1)
 #define SUPER       (XCB_MOD_MASK_4)
@@ -46,27 +47,33 @@
 #define BUTTON3     (XCB_BUTTON_INDEX_3)
 #define PRESS       (XCB_KEY_PRESS)
 #define RELEASE     (XCB_KEY_RELEASE)
+
 /* dedicated media keys on many keyboards */
 #define MUTE        (0x1008ff12)
 #define VOLUP       (0x1008ff13)
 #define VOLDOWN     (0x1008ff11)
+
 /* linked list quick access */
 #define FOR_EACH(v, list)      for ((v) = (list); (v); (v) = (v)->next)
 #define FOR_STACK(v, list)     for ((v) = (list); (v); (v) = (v)->snext)
-#define FOR_TAIL(v, list)      for ((v) = (list); (v) && (v)->next; (v) = (v)->next)
+#define FIND_TAIL(v, list)     for ((v) = (list); (v) && (v)->next; (v) = (v)->next)
 #define FOR_WSCLIENTS(c, ws)   FOR_EACH((ws), workspaces) FOR_EACH((c), (ws)->clients)
-#define FOR_WSHIDDEN(c, ws)    FOR_EACH((ws), workspaces) FOR_EACH((c), (ws)->hidden)
 #define FOR_PREV(v, cur, list) for ((v) = (list); (v) && (v)->next && (v)->next != (cur); (v) = (v)->next)
+
 /* dissolves into nothing when DEBUG isn't defined */
 #define DBG(fmt, ...)
 #define DBGBIND(event, mod, sym)
+
 /* less wordy calls to change a windows property */
 #define PROP_APPEND(win, atom, type, membsize, nmemb, value) \
 	xcb_change_property(con, XCB_PROP_MODE_APPEND, (win), (atom), (type), (membsize), (nmemb), (value))
 #define PROP_REPLACE(win, atom, type, membsize, nmemb, value) \
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, (win), (atom), (type), (membsize), (nmemb), (value))
+
 /* shorter names for some xcb masks */
-#define STICKYMASK  (0xFFFFFFFF)
+#define STICKY      (0xFFFFFFFF)
+#define SYNC        (XCB_GRAB_MODE_SYNC)
+#define ASYNC       (XCB_GRAB_MODE_ASYNC)
 #define CLNMOD(mod) (mod & ~(numlockmask | XCB_MOD_MASK_LOCK))
 #define BWMASK      (XCB_CONFIG_WINDOW_BORDER_WIDTH)
 #define XYMASK      (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y)
@@ -79,8 +86,6 @@
 		| XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_POINTER_MOTION \
 		| XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_LEAVE_WINDOW | XCB_EVENT_MASK_STRUCTURE_NOTIFY \
 		| XCB_EVENT_MASK_PROPERTY_CHANGE)
-#define ASYNC       (XCB_GRAB_MODE_ASYNC)
-#define SYNC        (XCB_GRAB_MODE_SYNC)
 
 /* Don't use this, use resize() or resizehint() instead.
  * It's used internally to move clients off-screen without changing
@@ -151,6 +156,7 @@ struct Rule {
 struct Panel {
 	int x, y, w, h;
 	int strut_l, strut_r, strut_t, strut_b;
+	int mapped;
 	Panel *next;
 	Monitor *mon;
 	xcb_window_t win;
@@ -162,7 +168,7 @@ struct Client {
 	int max_w, max_h, min_w, min_h;
 	int base_w, base_h, increment_w, increment_h;
 	float min_aspect, max_aspect;
-	int sticky, fixed, floating, fullscreen, urgent, nofocus, oldstate;
+	int sticky, mapped, fixed, floating, fullscreen, urgent, nofocus, oldstate;
 	Client *next, *snext;
 	Workspace *ws;
 	xcb_window_t win;
@@ -243,7 +249,7 @@ uint running = 1;                       /* continue handling events */
 uint numws = 0;                         /* number of workspaces currently allocated */
 uint mousebtn = 0;                      /* mouse button currently being pressed */
 uint numlockmask = 0;                   /* numlock modifier bit mask */
-Panel *panels, *hidden;                 /* panel linked list head */
+Panel *panels;                          /* panel linked list head */
 Monitor *monitors;                      /* monitor linked list head */
 Workspace *selws;                       /* selected workspace */
 Workspace *workspaces;                  /* workspace linked list head */
@@ -282,8 +288,6 @@ void grabbuttons(Client *c, int focused);
 void grabkeys(void);
 int grabpointer(xcb_cursor_t cursor);
 void gravitate(Client *c, int vert, int horz, int matchgap);
-void hideclient(Client *c, int hide);
-void hidepanel(Panel *p, int hide);
 void ignorefocusevents(void);
 void initatoms(xcb_atom_t *atoms, const char **names, int num);
 void initclient(xcb_window_t win, xcb_window_t trans);
@@ -303,7 +307,7 @@ void mousemotion(xcb_button_t b);
 Client *nexttiled(Client *c);
 Monitor *outputtomon(xcb_randr_output_t id);
 int pointerxy(int *x, int *y);
-Monitor *ptrtomon(int x, int y);
+Monitor *pointertomon(int x, int y);
 Monitor *randrclone(xcb_randr_output_t id, int x, int y);
 void resetorquit(const Arg *arg);
 void resize(Client *c, int x, int y, int w, int h, int bw);
@@ -322,14 +326,15 @@ void setlayout(const Arg *arg);
 void setnetwinstate(xcb_window_t win, long state);
 void setnmaster(const Arg *arg);
 void setnstack(const Arg *arg);
-int setsizehints(Client *c, int *x, int *y, int *w, int *h, int interact);
 void setsplit(const Arg *arg);
 void setstackmode(xcb_window_t win, uint mode);
 void seturgency(Client *c, int urg);
 void setwinstate(xcb_window_t win, long state);
+void setwinvis(xcb_window_t win, int visible);
 void showhide(Client *c);
 void sighandle(int);
 void sizehints(Client *c);
+size_t strlcat(char *dst, const char *src, size_t size);
 size_t strlcpy(char *dst, const char *src, size_t size);
 void swapclient(const Arg *arg);
 void tile(Workspace *ws);
@@ -340,12 +345,13 @@ void updatenumws(uint needed);
 int updateoutputs(xcb_randr_output_t *outputs, int len, xcb_timestamp_t timestamp);
 int updaterandr(void);
 void updatestruts(Panel *p, int apply);
+int usesizehints(Client *c, int *x, int *y, int *w, int *h, int interact);
 void view(const Arg *arg);
-xcb_get_window_attributes_reply_t *windowattr(xcb_window_t win);
-void windowhints(Client *c);
-xcb_atom_t windowprop(xcb_window_t win, xcb_atom_t prop);
-xcb_window_t windowtrans(xcb_window_t win);
-void windowtype(Client *c);
+xcb_get_window_attributes_reply_t *winattr(xcb_window_t win);
+void winhints(Client *c);
+xcb_atom_t winprop(xcb_window_t win, xcb_atom_t prop);
+xcb_window_t wintrans(xcb_window_t win);
+void wintype(Client *c);
 Client *wintoclient(xcb_window_t win);
 Panel *wintopanel(xcb_window_t win);
 Workspace *wintows(xcb_window_t win);

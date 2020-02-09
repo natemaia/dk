@@ -439,7 +439,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			focus(c);
 			restack(selws);
 			xcb_allow_events(con, XCB_ALLOW_REPLAY_POINTER, b->time);
-			if (CLNMOD(MOD) != CLNMOD((b->state & 0x00ff)))
+			if (CLNMOD(MOD) != CLNMOD((b->state & 0x00ff)) || c->fullscreen)
 				return;
 			if ((mousebtn = b->detail) == BUTTON1 || b->detail == BUTTON3) {
 				if (mousebtn == BUTTON1)

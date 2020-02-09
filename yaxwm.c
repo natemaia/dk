@@ -117,7 +117,7 @@ void assignworkspaces(void)
 		for (i = 0; ws && i < j; i++, ws = ws->next) {
 			ws->mon = m;
 			DBG("workspace: %d - monitor: %s", ws->num, m->name)
-			if (!i)
+			if (!i || ws == selws || ws->mon->ws == ws)
 				m->ws = ws;
 		}
 

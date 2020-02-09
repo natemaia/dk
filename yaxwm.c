@@ -192,6 +192,7 @@ void configure(Client *c)
 	ce.above_sibling = XCB_NONE;
 	ce.override_redirect = 0;
 	xcb_send_event(con, 0, c->win, XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char *)&ce);
+	xcb_flush(con);
 }
 
 void *clientrules(Client *c, xcb_window_t *trans)
@@ -1239,7 +1240,7 @@ void initwm(void)
 
 	/* CurrentDesktop */
 	cws = (r = windowprop(root, netatoms[CurrentDesktop])) >= 0 ? r : 0;
-	changews((ws = itows(cws)) ? ws : workspaces, 0);
+	changews((ws = itows(cws)) ? ws : workspaces, 1);
 
 	/* DesktopNames */
 	FOR_EACH(ws, workspaces)
@@ -1761,7 +1762,7 @@ void showhide(Client *c)
 		DBG("showing client window: 0x%x - workspace: %d", c->win, c->ws->num)
 		MOVE(c->win, c->x, c->y);
 		if ((!c->ws->layout || c->floating) && !c->fullscreen)
-			resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0);
+			resize(c, c->x, c->y, c->w, c->h, c->bw);
 		showhide(c->snext);
 	} else { /* hide clients bottom up */
 		showhide(c->snext);

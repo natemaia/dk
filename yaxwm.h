@@ -92,6 +92,8 @@
  * their stored values (c->x, c->y) so we can later move them back
  * this is how windows are hidden/shown instead of mapping/unmapping them */
 #define MOVE(win, x, y) xcb_configure_window(con, (win), XYMASK, (uint []){(x), (y)})
+#define RESIZE(win, w, h) xcb_configure_window(con, (win), WHMASK, (uint []){(w), (h)})
+#define MOVERESIZE(win, x, y, w, h) xcb_configure_window(con, (win), XYMASK | WHMASK, (uint []){(x), (y), (w), (h)})
 
 typedef unsigned int uint;
 typedef unsigned char uchar;
@@ -255,6 +257,7 @@ Workspace *selws;                       /* selected workspace */
 Workspace *workspaces;                  /* workspace linked list head */
 xcb_screen_t *scr;                      /* the X screen */
 xcb_connection_t *con;                  /* xcb connection to the X server */
+xcb_timestamp_t lasttime;               /* the last motion notify event time, used to reduce redraws */
 xcb_window_t root, wmcheck;             /* root window and _NET_SUPPORTING_WM_CHECK window */
 xcb_key_symbols_t *keysyms;             /* current keymap symbols */
 xcb_cursor_t cursor[LEN(cursors)];      /* cursors for moving, resizing, and normal */

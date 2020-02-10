@@ -178,9 +178,10 @@ void checkerror(char *prompt, xcb_generic_error_t *e)
 
 void configure(Client *c)
 { /* send client a configure notify event */
+	xcb_void_cookie_t vc;
+	xcb_generic_error_t *e;
 	xcb_configure_notify_event_t ce;
 
-	DBG("sending configure notify event to client window: 0x%x", c->win)
 	ce.event = c->win;
 	ce.window = c->win;
 	ce.response_type = XCB_CONFIGURE_NOTIFY;
@@ -191,8 +192,11 @@ void configure(Client *c)
 	ce.border_width = c->bw;
 	ce.above_sibling = XCB_NONE;
 	ce.override_redirect = 0;
-	xcb_send_event(con, 0, c->win, XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char *)&ce);
-	xcb_flush(con);
+	vc = xcb_send_event_checked(con, 0, c->win, XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char *)&ce);
+	if ((e = xcb_request_check(con, vc))) {
+		free(e);
+		warnx("failed to send configure notify event to client window: 0x%x", c->win);
+	}
 }
 
 void *clientrules(Client *c, xcb_window_t *trans)
@@ -413,8 +417,7 @@ void eventhandle(xcb_generic_event_t *ev)
 						|| e->detail == XCB_NOTIFY_DETAIL_INFERIOR))
 				return;
 			DBG("enter notify event - window: 0x%x", e->event)
-			c = wintoclient(e->event);
-			if ((ws = c ? c->ws : wintows(e->event)) != selws) {
+			if ((ws = (c = wintoclient(e->event)) ? c->ws : wintows(e->event)) != selws) {
 				unfocus(selws->sel, 1);
 				changews(ws, 1);
 			} else if (!focusmouse || !c || c == selws->sel)
@@ -426,30 +429,25 @@ void eventhandle(xcb_generic_event_t *ev)
 		{
 			xcb_button_press_event_t *b = (xcb_button_press_event_t *)ev;
 
-			if (b->event == root) {
-				if ((m = wintows(b->event)->mon) && m != selws->mon) {
-					unfocus(selws->sel, 1);
-					changews(m->ws, 1);
-					focus(NULL);
-				}
-				return;
-			} else if (!(c = wintoclient(b->event)))
+			if (!(c = wintoclient(b->event)))
 				return;
 			DBG("button press event - mouse button %d - window: 0x%x", b->detail, b->event)
 			focus(c);
 			restack(selws);
 			xcb_allow_events(con, XCB_ALLOW_REPLAY_POINTER, b->time);
-			if (CLNMOD(MOD) != CLNMOD((b->state & 0x00ff)) || c->fullscreen)
-				return;
-			if ((mousebtn = b->detail) == BUTTON1 || b->detail == BUTTON3) {
-				if (mousebtn == BUTTON1)
-					xcb_warp_pointer(con, XCB_NONE, c->win, 0, 0, 0, 0, c->w / 2, c->h / 2);
-				else
-					xcb_warp_pointer(con, XCB_NONE, c->win, 0, 0, 0, 0, c->w, c->h);
-				if (!grabpointer(cursor[b->detail == BUTTON1 ? Move : Resize]) || !pointerxy(&x, &y))
-					mousebtn = 0;
-			} else
-				togglefloat(NULL);
+			if (CLNMOD(MOD) == CLNMOD(b->state) && !c->fullscreen) {
+				if (b->detail == BUTTON2) {
+					togglefloat(NULL);
+				} else if (b->detail == BUTTON1 || b->detail == BUTTON3) {
+					if ((mousebtn = b->detail) == BUTTON1)
+						xcb_warp_pointer(con, XCB_NONE, c->win, 0, 0, 0, 0, c->w / 2, c->h / 2);
+					else
+						xcb_warp_pointer(con, XCB_NONE, c->win, 0, 0, 0, 0, c->w, c->h);
+					if (!grabpointer(cursor[b->detail == BUTTON1 ? Move : Resize]))
+						mousebtn = 0;
+					lasttime = 0;
+				}
+			}
 			return;
 		}
 		case XCB_BUTTON_RELEASE:
@@ -483,22 +481,29 @@ void eventhandle(xcb_generic_event_t *ev)
 				}
 				return;
 			}
-			if (!c->floating && c->ws->layout) {
-				c->old_x = c->x, c->old_y = c->y, c->old_h = c->h, c->old_w = c->w;
-				togglefloat(NULL);
-				layoutws(c->ws);
-			}
-			if (pointerxy(&x, &y) && (!c->ws->layout || c->floating)) {
-				DBG("motion notify window: 0x%x - coord: %d,%d", e->child, e->root_x, e->root_y)
-				if ((m = pointertomon(e->root_x, e->root_y)) != c->ws->mon) {
-					setclientws(c, m->ws->num);
-					changews(m->ws, 1);
-					focus(c);
+			/* we shouldn't need to do this and just use the event root_x, root_y
+			 * but for whatever reason there is some buffering happening and this causes
+			 * a flush, using xcb_flush or xcb_aux_sync() do not seem to work in this case */
+			if (pointerxy(&x, &y)) {
+				if ((e->time - lasttime) <= (1000 / 60))
+					return;
+				lasttime = e->time;
+				if (!c->floating && c->ws->layout) {
+					c->old_x = c->x, c->old_y = c->y, c->old_h = c->h, c->old_w = c->w;
+					togglefloat(NULL);
+					layoutws(c->ws);
 				}
-				if (mousebtn == BUTTON1)
-					resizehint(c, x - c->w / 2, y - c->h / 2, c->w, c->h, c->bw, 1);
-				else
-					resizehint(c, c->x, c->y, x - c->x, y - c->y, c->bw, 1);
+				if (!c->ws->layout || c->floating) {
+					if ((m = pointertomon(x, y)) != c->ws->mon) {
+						setclientws(c, m->ws->num);
+						changews(m->ws, 1);
+						focus(c);
+					}
+					if (mousebtn == BUTTON1)
+						resizehint(c, x - c->w / 2, y - c->h / 2, c->w, c->h, c->bw, 1);
+					else
+						resizehint(c, c->x, c->y, x - c->x, y - c->y, c->bw, 1);
+				}
 			}
 			return;
 		}
@@ -508,7 +513,6 @@ void eventhandle(xcb_generic_event_t *ev)
 			xcb_keysym_t sym;
 			xcb_key_press_event_t *e = (xcb_key_press_event_t *)ev;
 
-			e->state &= 0x00ff; /* drop the top 8 bits (key status bits) */
 			sym = xcb_key_symbols_get_keysym(keysyms, e->detail, 0);
 			for (i = 0; i < LEN(binds); i++)
 				if (sym == binds[i].keysym && binds[i].func
@@ -706,8 +710,6 @@ void focus(Client *c)
 		DBG("focusing client window: 0x%x", c->win)
 		if (c->urgent)
 			seturgency(c, 0);
-		if (c->floating)
-			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 		detachstack(c);
 		attachstack(c);
 		grabbuttons(c, 1);
@@ -1409,7 +1411,6 @@ void resize(Client *c, int x, int y, int w, int h, int bw)
 	c->x = x, c->y = y, c->w = w, c->h = h;
 	xcb_configure_window(con, c->win, XYMASK | WHMASK | BWMASK, v);
 	configure(c);
-	xcb_flush(con);
 }
 
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int interact)

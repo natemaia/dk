@@ -18,9 +18,9 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 	if (!setlocale(LC_CTYPE, ""))
-		errx(1, "no locale support");
+		err(1, "no locale support");
 	if (xcb_connection_has_error((con = xcb_connect(NULL, NULL))))
-		errx(1, "error connecting to X");
+		err(1, "error connecting to X");
 
 	/* cleanly quit when exit(3) is called */
 	atexit(freewm);
@@ -44,7 +44,7 @@ int main(int argc, char *argv[])
 	sa.sa_flags = SA_RESTART;
 	for (uint i = 0; i < LEN(sigs); i++)
 		if (sigaction(sigs[i], &sa, NULL) < 0)
-			errx(1, "unable to setup handler for signal: %d", sigs[i]);
+			err(1, "unable to setup handler for signal: %d", sigs[i]);
 
 	/* setup the wm and existing windows before entering the event loop */
 	initwm();
@@ -307,7 +307,7 @@ void eventhandle(xcb_generic_event_t *ev)
 	Workspace *ws;
 	Panel *p = NULL;
 	static int x, y;
-	xcb_generic_error_t *err;
+	xcb_generic_error_t *error;
 
 	switch (XCB_EVENT_RESPONSE_TYPE(ev)) {
 		case XCB_FOCUS_IN:
@@ -459,8 +459,8 @@ void eventhandle(xcb_generic_event_t *ev)
 				return;
 			DBG("button release event, ungrabbing pointer")
 			cookie = xcb_ungrab_pointer_checked(con, XCB_CURRENT_TIME);
-			if ((err = xcb_request_check(con, cookie))) {
-				free(err);
+			if ((error = xcb_request_check(con, cookie))) {
+				free(error);
 				errx(1, "failed to ungrab pointer");
 			}
 			if (mousebtn == BUTTON3)
@@ -671,13 +671,43 @@ void eventhandle(xcb_generic_event_t *ev)
 
 void eventloop(void)
 { /* wait for events while the user hasn't requested quit */
+	fd_set read_fds;
+	int n, confd, nfds, e;
 	xcb_generic_event_t *ev;
 
-	xcb_flush(con);
-	while (running && (ev = xcb_wait_for_event(con))) {
-		eventhandle(ev);
-		free(ev);
+	confd = xcb_get_file_descriptor(con);
+	nfds = confd > fifofd ? confd : fifofd;
+	nfds++;
+	while (running) {
+		xcb_flush(con);
+		FD_ZERO(&read_fds);
+		FD_SET(fifofd, &read_fds);
+		FD_SET(confd, &read_fds);
+		if ((n = select(nfds, &read_fds, NULL, NULL, NULL)) > 0) {
+			if (FD_ISSET(fifofd, &read_fds))
+				readfifo();
+			if (FD_ISSET(confd, &read_fds)) {
+				while ((ev = xcb_poll_for_event(con))) {
+					eventhandle(ev);
+					free(ev);
+				}
+			}
+		}
+		if ((e = xcb_connection_has_error(con))) {
+			warnx("connection to the server was closed");
+			switch (e) {
+			case XCB_CONN_ERROR:                   warn("socket, pipe or stream error"); break;
+			case XCB_CONN_CLOSED_EXT_NOTSUPPORTED: warn("unsupported extension"); break;
+			case XCB_CONN_CLOSED_MEM_INSUFFICIENT: warn("not enough memory"); break;
+			case XCB_CONN_CLOSED_REQ_LEN_EXCEED:   warn("request length exceeded"); break;
+			case XCB_CONN_CLOSED_INVALID_SCREEN:   warn("invalid screen"); break;
+			case XCB_CONN_CLOSED_FDPASSING_FAILED: warn("failed to pass FD"); break;
+			default: warn("unknown error.\n"); break;
+			}
+			running = 0;
+		}
 	}
+
 }
 
 void fixupworkspaces(void)
@@ -813,6 +843,8 @@ void freewm(void)
 	xcb_flush(con);
 	xcb_delete_property(con, root, netatoms[ActiveWindow]);
 	xcb_disconnect(con);
+	close(fifofd);
+	unlink(fifo);
 }
 
 void freews(Workspace *ws)
@@ -828,6 +860,41 @@ void freews(Workspace *ws)
 	}
 	DBG("freeing workspace: %d", ws->num)
 	free(ws);
+}
+
+int gettoken(char **src, char *dst)
+{
+	char *start, *end, *p;
+	int quoted, nchars = 0;
+
+	while (**src && isspace(**src))
+		(*src)++;
+
+	if (*src[0] == '"') {
+		quoted = 1;
+		start = *src + 1;
+		end = strchr(start, '"');
+		if (!end)
+			return 0;
+		while (*(end - 1) == '\\')
+			end = strchr(end + 1, '"');
+	} else {
+		quoted = 0;
+		start = *src;
+		end = strpbrk(*src, " \t\n");
+	}
+	p = start;
+	while (end ? p < end : *p) {
+		if (quoted && *p == '\\' && *(p + 1) == '"') {
+			p++;
+		} else {
+			nchars++;
+			*dst++ = *p++;
+		}
+	}
+	*dst = '\0';
+	*src = ++end;
+	return nchars || quoted;
 }
 
 void grabbuttons(Client *c, int focused)
@@ -906,24 +973,6 @@ void gravitate(Client *c, int vert, int horz, int matchgap)
 	}
 	c->x = x, c->y = y;
 	resizehint(c, c->x, c->y, W(c), H(c), c->bw, 0);
-}
-
-void setwinvis(xcb_window_t win, int visible)
-{
-	/* remove SUBSTRUCTURE_NOTIFY from the root window event mask
-	 * temporarily so we don't receive (un)map events */
-	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK,
-			(uint []){ ROOTMASK & ~XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY });
-	if (visible) {
-		setwinstate(win, XCB_ICCCM_WM_STATE_NORMAL);
-		setnetwinstate(win, 0);
-		xcb_map_window(con, win);
-	} else {
-		xcb_unmap_window(con, win);
-		setnetwinstate(win, netatoms[Hidden]);
-		setwinstate(win, XCB_ICCCM_WM_STATE_ICONIC);
-	}
-	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, (uint []){ ROOTMASK });
 }
 
 void ignorefocusevents(void)
@@ -1141,20 +1190,18 @@ Monitor *initmon(char *name, xcb_randr_output_t id, int x, int y, int w, int h)
 int initrandr(void)
 {
 	int extbase;
+	const xcb_query_extension_reply_t *ext;
 
 	DBG("checking randr extension support")
-	const xcb_query_extension_reply_t *ext = xcb_get_extension_data(con, &xcb_randr_id);
-
+	ext = xcb_get_extension_data(con, &xcb_randr_id);
 	if (!ext->present)
 		return -1;
 	DBG("randr extension is supported, initializing")
 	updaterandr();
 	extbase = ext->first_event;
-
 	xcb_randr_select_input(con, root, XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE
 			|XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE|XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE
 			|XCB_RANDR_NOTIFY_MASK_OUTPUT_PROPERTY);
-
 	DBG("RANDR extension active and monitor(s) initialized -- extension base: %d", extbase)
 	return extbase;
 }
@@ -1165,7 +1212,7 @@ void initwm(void)
 	Workspace *ws;
 	uint i, j, cws;
 	size_t len = 1;
-	char errbuf[256];
+	char errbuf[NAME_MAX];
 	xcb_void_cookie_t c;
 	xcb_generic_error_t *e;
 	xcb_cursor_context_t *ctx;
@@ -1180,7 +1227,7 @@ void initwm(void)
 
 	/* cursors */
 	if (xcb_cursor_context_new(con, scr, &ctx) < 0)
-		errx(1, "unable to create cursor context");
+		err(1, "unable to create cursor context");
 	for (i = 0; i < LEN(cursors); i++)
 		cursor[i] = xcb_cursor_load_cursor(ctx, cursors[i]);
 	xcb_cursor_context_free(ctx);
@@ -1233,12 +1280,19 @@ void initwm(void)
 			(uint []){ ROOTMASK, cursor[Normal] });
 	if ((e = xcb_request_check(con, c))) {
 		free(e);
-		errx(1, "unable to change root window event mask and cursor");
+		err(1, "unable to change root window event mask and cursor");
 	}
 	/* binds */
 	if (!(keysyms = xcb_key_symbols_alloc(con)))
-		errx(1, "error unable to get keysyms from X connection");
+		err(1, "unable to get keysyms from X connection");
 	grabkeys();
+
+	/* fifo pipe */
+	if (!(fifo = getenv("YAXWM_FIFO")))
+		fifo = "/tmp/yaxwm.fifo";
+	if ((mkfifo(fifo, 0666) < 0 && errno != EEXIST)
+			|| (fifofd = open(fifo, O_RDONLY | O_NONBLOCK | O_DSYNC | O_SYNC | O_RSYNC)) < 0)
+		err(1, "unable to open fifo: %s", fifo);
 }
 
 void initworkspaces(void)
@@ -1395,6 +1449,24 @@ Monitor *randrclone(xcb_randr_output_t id, int x, int y)
 	return m;
 }
 
+void readfifo(void)
+{
+	ssize_t n;
+	char *head, buf[PIPE_BUF], tok[PIPE_BUF];
+
+	memset(buf, 0, sizeof(buf));
+	memset(tok, 0, sizeof(tok));
+
+	if ((n = read(fifofd, buf, sizeof(buf) - 1)) > 0) {
+		if (*buf == '#' || *buf == '\n')
+			return;
+		head = buf;
+		while (gettoken(&head, tok)) {
+			fprintf(stderr, "parser got token: %s\n", tok);
+		}
+	}
+}
+
 void resetorquit(const Arg *arg)
 {
 	if ((running = arg->i)) {
@@ -1504,6 +1576,24 @@ void setwinstate(xcb_window_t win, long state)
 {
 	long s[] = { state, XCB_ATOM_NONE };
 	PROP_REPLACE(win, wmatoms[WMState], wmatoms[WMState], 32, 2, s);
+}
+
+void setwinvis(xcb_window_t win, int visible)
+{
+	/* remove SUBSTRUCTURE_NOTIFY from the root window event mask
+	 * temporarily so we don't receive (un)map events */
+	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK,
+			(uint []){ ROOTMASK & ~XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY });
+	if (visible) {
+		setwinstate(win, XCB_ICCCM_WM_STATE_NORMAL);
+		setnetwinstate(win, 0);
+		xcb_map_window(con, win);
+	} else {
+		xcb_unmap_window(con, win);
+		setnetwinstate(win, netatoms[Hidden]);
+		setwinstate(win, XCB_ICCCM_WM_STATE_ICONIC);
+	}
+	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, (uint []){ ROOTMASK });
 }
 
 void setnetwinstate(xcb_window_t win, long state)
@@ -1692,10 +1782,10 @@ void sighandle(int sig)
 	case SIGINT: /* fallthrough */
 	case SIGTERM: /* fallthrough */
 	case SIGHUP: /* fallthrough */
-		freewm();
-		exit(1);
+		running = 0;
 		break;
 	case SIGCHLD:
+		signal(sig, sighandle);
 		while (waitpid(-1, NULL, WNOHANG) > 0)
 			;
 		break;

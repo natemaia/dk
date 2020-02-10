@@ -12,6 +12,8 @@
 #include <err.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <regex.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -19,7 +21,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <locale.h>
+#include <limits.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/select.h>
 #include <xcb/xcb.h>
 #include <xcb/randr.h>
 #include <xcb/xproto.h>
@@ -244,7 +249,9 @@ static const char *netatomnames[] = {
 	[WindowTypeDialog] = "_NET_WM_WINDOW_TYPE_DIALOG",
 };
 
+char *fifo;                             /* path to fifo pipe YAXWM_FIFO env variable */
 char *argv0;                            /* program name */
+int fifofd;                             /* fifo pipe file descriptor */
 int scr_w, scr_h;                       /* root window size */
 int randrbase = -1;                     /* randr extension response */
 uint running = 1;                       /* continue handling events */
@@ -287,6 +294,7 @@ void freemon(Monitor *m);
 void freepanel(Panel *panel, int destroyed);
 void freewm(void);
 void freews(Workspace *ws);
+int gettoken(char **src, char *dst);
 void grabbuttons(Client *c, int focused);
 void grabkeys(void);
 int grabpointer(xcb_cursor_t cursor);
@@ -312,6 +320,7 @@ Monitor *outputtomon(xcb_randr_output_t id);
 int pointerxy(int *x, int *y);
 Monitor *pointertomon(int x, int y);
 Monitor *randrclone(xcb_randr_output_t id, int x, int y);
+void readfifo(void);
 void resetorquit(const Arg *arg);
 void resize(Client *c, int x, int y, int w, int h, int bw);
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int interact);

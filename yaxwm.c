@@ -56,6 +56,42 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
+void adjustborderpx(const Arg *arg, char *opt)
+{
+	int i = arg->i;
+
+	if (opt && *opt) { /* with no opt we assume relative */
+		if (!strcmp("reset", opt)) {
+			i = 0;
+		} else if (!strcmp("absolute", opt)) { /* we still use a relative calculation for absolute to save space */
+			if (!(i = MAX(MIN((int)((selws->mon->winarea_h / 6) - selws->gappx), arg->i), 0) - borders[Width]))
+				return; /* don't pass 0 as that would mean the border size is unchanged and 0 resets */
+		} else {
+			warnx("FIFO ERROR: invalid option for 'border' setting: %s", opt);
+			return;
+		}
+	}
+	setborderpx(&(const Arg){.i = i});
+}
+
+void adjustgappx(const Arg *arg, char *opt)
+{
+	int i = arg->i;
+
+	if (opt && *opt) { /* with no opt we assume relative */
+		if (!strcmp("reset", opt)) {
+			i = 0;
+		} else if (!strcmp("absolute", opt)) { /* we still use a relative calculation for absolute to save space */
+			if (!(i = MAX(MIN(arg->i, (selws->mon->winarea_h / 6) - borders[Width]), 0) - selws->gappx))
+				return; /* don't pass 0 as that would mean the gap size is unchanged and 0 resets */
+		} else {
+			warnx("FIFO ERROR: invalid option for 'gap' setting: %s", opt);
+			return;
+		}
+	}
+	setgappx(&(const Arg){.i = i});
+}
+
 void applypanelstrut(Panel *p)
 {
 	DBG("%s window area before: %d,%d @ %dx%d", p->mon->name, p->mon->winarea_x,
@@ -70,6 +106,41 @@ void applypanelstrut(Panel *p)
 		p->mon->winarea_h = p->mon->h - (p->strut_b + p->strut_t);
 	DBG("%s window area after: %d,%d @ %dx%d", p->mon->name, p->mon->winarea_x,
 			p->mon->winarea_y, p->mon->winarea_w, p->mon->winarea_h);
+}
+
+void applysetting(const Arg *arg)
+{
+	Arg sarg;
+	uint i, v = 0, set = 0;
+	char *s, *o = NULL, **args, **opts;
+
+	s = ((char **)arg->v)[0];
+	args = (char **)arg->v + 1;
+
+	for (i = 0; i < LEN(settings); i++)
+		if (!strcmp(settings[i].name, s)) {
+			DBG("FIFO: parsed matching setting token: %s", s)
+			while (*args) {
+				if (isdigit(*args[0]) || ((*args[0] == '-' || *args[0] == '+') && isdigit(*args[1]))) {
+					set = 1, v = atoi(*args);
+					DBG("FIFO: parsed required digit argument: %d", v)
+				} else for (opts = (char **)settings[i].opts; opts && *opts; opts++)
+					if (!strcmp(*opts, *args)) {
+						DBG("FIFO: parsed matching optional argument: %s", *args)
+						o = *args;
+					}
+				if (set && o)
+					break;
+				args++;
+			}
+			if (!set) {
+				warnx("FIFO ERROR: missing required argument for setting: %s", s);
+			} else {
+				sarg.i = v;
+				settings[i].func(&sarg, o);
+			}
+			return;
+		}
 }
 
 void attach(Client *c, int tohead)
@@ -671,21 +742,27 @@ void eventhandle(xcb_generic_event_t *ev)
 
 void eventloop(void)
 { /* wait for events while the user hasn't requested quit */
+	ssize_t n;
 	fd_set read_fds;
-	int n, confd, nfds, e;
+	char buf[PIPE_BUF];
+	int num, confd, nfds, e;
 	xcb_generic_event_t *ev;
 
-	confd = xcb_get_file_descriptor(con);
-	nfds = confd > fifofd ? confd : fifofd;
+	nfds = (confd = xcb_get_file_descriptor(con)) > fifofd ? confd : fifofd;
 	nfds++;
 	while (running) {
 		xcb_flush(con);
 		FD_ZERO(&read_fds);
 		FD_SET(fifofd, &read_fds);
 		FD_SET(confd, &read_fds);
-		if ((n = select(nfds, &read_fds, NULL, NULL, NULL)) > 0) {
+		if ((num = select(nfds, &read_fds, NULL, NULL, NULL)) > 0) {
 			if (FD_ISSET(fifofd, &read_fds))
-				readfifo();
+				if ((n = read(fifofd, buf, sizeof(buf) - 1)) > 0 && *buf != '#' && *buf != '\n') {
+					if (buf[n - 1] == '\n')
+						n--;
+					buf[n] = '\0';
+					parsecommand(buf);
+				}
 			if (FD_ISSET(confd, &read_fds)) {
 				while ((ev = xcb_poll_for_event(con))) {
 					eventhandle(ev);
@@ -860,41 +937,6 @@ void freews(Workspace *ws)
 	}
 	DBG("freeing workspace: %d", ws->num)
 	free(ws);
-}
-
-int gettoken(char **src, char *dst)
-{
-	char *start, *end, *p;
-	int quoted, nchars = 0;
-
-	while (**src && isspace(**src))
-		(*src)++;
-
-	if (*src[0] == '"') {
-		quoted = 1;
-		start = *src + 1;
-		end = strchr(start, '"');
-		if (!end)
-			return 0;
-		while (*(end - 1) == '\\')
-			end = strchr(end + 1, '"');
-	} else {
-		quoted = 0;
-		start = *src;
-		end = strpbrk(*src, " \t\n");
-	}
-	p = start;
-	while (end ? p < end : *p) {
-		if (quoted && *p == '\\' && *(p + 1) == '"') {
-			p++;
-		} else {
-			nchars++;
-			*dst++ = *p++;
-		}
-	}
-	*dst = '\0';
-	*src = ++end;
-	return nchars || quoted;
 }
 
 void grabbuttons(Client *c, int focused)
@@ -1288,8 +1330,10 @@ void initwm(void)
 	grabkeys();
 
 	/* fifo pipe */
-	if (!(fifo = getenv("YAXWM_FIFO")))
+	if (!(fifo = getenv("YAXWM_FIFO"))) {
 		fifo = "/tmp/yaxwm.fifo";
+		setenv("YAXWM_FIFO", fifo, 0);
+	}
 	if ((mkfifo(fifo, 0666) < 0 && errno != EEXIST)
 			|| (fifofd = open(fifo, O_RDONLY | O_NONBLOCK | O_DSYNC | O_SYNC | O_RSYNC)) < 0)
 		err(1, "unable to open fifo: %s", fifo);
@@ -1414,6 +1458,45 @@ Monitor *outputtomon(xcb_randr_output_t id)
 	return m;
 }
 
+void parsecommand(char *buf)
+{
+	Arg arg;
+	uint i, n = 0, match = 0;
+	char *k, *args[10], *dbuf, *delim = " \t";
+
+	DBG("FIFO RAW INPUT: %s", buf);
+
+	dbuf = strdup(buf);
+	if (!(k = strtok(dbuf, delim)))
+		goto out;
+	if ((i = !strcmp("reset", k)) || !strcmp("quit", k)) {
+		DBG("FIFO: parsed keyword token: %s", k)
+		arg.i = i;
+		resetorquit(&arg);
+		goto out;
+	}
+	for (i = 0; i < LEN(keywords); i++)
+		if (!strcmp(keywords[i].name, k)) {
+			match = 1;
+			DBG("FIFO: parsed keyword token: %s", k)
+			while (n < sizeof(args) && (args[n++] = strtok(NULL, delim))) {
+				DBG("FIFO: parsed argument token: %s", args[n - 1])
+			}
+			if (args[0]) {
+				arg.v = args;
+				DBG("FIFO: calling matching keyword function with arguments - num args: %d", n - 1)
+				keywords[i].func(&arg);
+			} else {
+				warnx("FIFO ERROR: keyword '%s' requires argument(s) - num recieved %d", k, n - 1);
+			}
+			break;
+		}
+	if (!match)
+		warn("FIFO ERROR: failed to match any known keywords");
+out:
+	free(dbuf);
+}
+
 int pointerxy(int *x, int *y)
 {
 	xcb_generic_error_t *e;
@@ -1447,24 +1530,6 @@ Monitor *randrclone(xcb_randr_output_t id, int x, int y)
 		if (id != m->id && m->x == x && m->y == y)
 			break;
 	return m;
-}
-
-void readfifo(void)
-{
-	ssize_t n;
-	char *head, buf[PIPE_BUF], tok[PIPE_BUF];
-
-	memset(buf, 0, sizeof(buf));
-	memset(tok, 0, sizeof(tok));
-
-	if ((n = read(fifofd, buf, sizeof(buf) - 1)) > 0) {
-		if (*buf == '#' || *buf == '\n')
-			return;
-		head = buf;
-		while (gettoken(&head, tok)) {
-			fprintf(stderr, "parser got token: %s\n", tok);
-		}
-	}
 }
 
 void resetorquit(const Arg *arg)

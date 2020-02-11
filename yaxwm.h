@@ -102,14 +102,18 @@
 
 typedef unsigned int uint;
 typedef unsigned char uchar;
+
+/* general types */
 typedef union Arg Arg;
 typedef struct Bind Bind;
-typedef struct Rule Rule;
-typedef struct Panel Panel;
-typedef struct WsRule WsRule;
 typedef struct Client Client;
+typedef struct Keyword Keyword;
 typedef struct Monitor Monitor;
+typedef struct Panel Panel;
+typedef struct Rule Rule;
+typedef struct Setting Setting;
 typedef struct Workspace Workspace;
+typedef struct WsRule WsRule;
 
 enum Borders {
 	Width, Default, Focus, Unfocus
@@ -212,6 +216,17 @@ struct Workspace {
 	Client *sel, *stack, *clients, *hidden;
 };
 
+struct Setting {
+	char *name;
+	void (*func)(const Arg *, char *);
+	const void *opts;
+};
+
+struct Keyword {
+	char *name;
+	void (*func)(const Arg *);
+};
+
 static const char *cursors[] = {
 	[Move] = "fleur", [Normal] = "arrow", [Resize] = "sizing"
 };
@@ -272,6 +287,16 @@ xcb_atom_t wmatoms[LEN(wmatomnames)];   /* _WM atoms used mostly internally */
 xcb_atom_t netatoms[LEN(netatomnames)]; /* _NET atoms used both internally and by other clients */
 
 /* function prototypes */
+void adjustborderpx(const Arg *arg, char *opt);
+void adjustgappx(const Arg *arg, char *opt);
+/* void adjustbordercol(const Arg *arg, char *opt); */
+/* void adjustfocus(const Arg *arg, char *opt); */
+/* void adjustnmaster(const Arg *arg, char *opt); */
+/* void adjustnstack(const Arg *arg, char *opt); */
+/* void adjustsplit(const Arg *arg, char *opt); */
+/* void applybind(const Arg *arg); */
+/* void applyrule(const Arg *arg); */
+void applysetting(const Arg *arg);
 void assignworkspaces(void);
 void attach(Client *c, int tohead);
 void attachpanel(Panel *p);
@@ -294,7 +319,6 @@ void freemon(Monitor *m);
 void freepanel(Panel *panel, int destroyed);
 void freewm(void);
 void freews(Workspace *ws);
-int gettoken(char **src, char *dst);
 void grabbuttons(Client *c, int focused);
 void grabkeys(void);
 int grabpointer(xcb_cursor_t cursor);
@@ -317,10 +341,10 @@ void monocle(Workspace *ws);
 void mousemotion(xcb_button_t b);
 Client *nexttiled(Client *c);
 Monitor *outputtomon(xcb_randr_output_t id);
-int pointerxy(int *x, int *y);
+void parsecommand(char *buf);
 Monitor *pointertomon(int x, int y);
+int pointerxy(int *x, int *y);
 Monitor *randrclone(xcb_randr_output_t id, int x, int y);
-void readfifo(void);
 void resetorquit(const Arg *arg);
 void resize(Client *c, int x, int y, int w, int h, int bw);
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int interact);
@@ -362,13 +386,81 @@ void view(const Arg *arg);
 xcb_get_window_attributes_reply_t *winattr(xcb_window_t win);
 void winhints(Client *c);
 xcb_atom_t winprop(xcb_window_t win, xcb_atom_t prop);
-xcb_window_t wintrans(xcb_window_t win);
-void wintype(Client *c);
 Client *wintoclient(xcb_window_t win);
 Panel *wintopanel(xcb_window_t win);
 Workspace *wintows(xcb_window_t win);
+xcb_window_t wintrans(xcb_window_t win);
+void wintype(Client *c);
 
-#include "debug.c"
+#ifdef DEBUG
+#include <xkbcommon/xkbcommon.h>
+
+#undef DBGBIND
+#define DBGBIND(event, mod, sym) printbind(event, mod, sym);
+#undef DBG
+#define DBG(fmt, ...) print("yaxwm:%s:%d - " fmt, __FUNCTION__, __LINE__, ##__VA_ARGS__);
+
+char *masktomods(uint mask, char *out, int outsize);
+void print(const char *fmt, ...);
+void printbind(xcb_generic_event_t *e, uint modmask, xcb_keysym_t keysym);
+
+char *masktomods(uint mask, char *out, int outsize)
+{ /* convert mask to modifier names in out, eg. "Shift, Mod4\0" */
+	const char **mod, *mods[] = {
+		"Shift", "Lock", "Ctrl", "Mod1", "Mod2", "Mod3", "Mod4",
+		"Mod5", "Button1", "Button2", "Button3", "Button4", "Button5"
+	};
+
+	*out = '\0';
+	for (mod = mods; mask; mask >>= 1, ++mod)
+		if (mask & 1) {
+			if (*out) {
+				strlcat(out, ", ", outsize);
+				strlcat(out, *mod, outsize);
+			} else
+				strlcpy(out, *mod, outsize);
+		}
+	return out;
+}
+
+void print(const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	vfprintf(stderr, fmt, ap);
+	va_end(ap);
+	fprintf(stderr, "\n");
+}
+
+void printbind(xcb_generic_event_t *e, uint modmask, xcb_keysym_t keysym)
+{
+	char mod[64], key[64];
+
+	masktomods(modmask, mod, sizeof(mod));
+	xkb_keysym_get_name(keysym, key, sizeof(key));
+	print("yaxwm:eventhandle: %s event - key: %s - mod: %s", xcb_event_get_label(e->response_type), key, mod);
+}
+#endif
+
+/* parser keywords */
+static Keyword keywords[] = {
+	{ "exec",  runcmd },
+	{ "set",   applysetting },
+	/* { "rule",  applyrule, }, */
+	/* { "bind",  applybind, }, */
+};
+
+/* set keyword options */
+static Setting settings[] = {
+	{ "gap",         adjustgappx,    (char *[]){ "absolute", "reset", NULL } },
+	{ "border",      adjustborderpx, (char *[]){ "absolute", "reset", NULL } },
+	/* { "split",       adjustsplit,    (char *[]){ "absolute", "reset", NULL } }, */
+	/* { "stack",       adjustnstack,   (char *[]){ "absolute", "reset", NULL } }, */
+	/* { "master",      adjustnmaster,  (char *[]){ "absolute", "reset", NULL } }, */
+	/* { "focus",       adjustfocus,    (char *[]){ "windowid",  NULL         } }, */
+	/* { "layout",      adjustlayout,   (char *[]){ "reset",     NULL         } }, */
+	/* { "bordercolor", "focused",  setbordercol }, */
+};
 
 /* config needs access to everything defined */
 #include "config.h"

@@ -32,9 +32,8 @@ static void mpvart(Client *c) { gravitate(c, Bottom, Right, 1); }
 
 static int borders[] = {
 	[Width] = 1,          /* border width in pixels */
-	[Default] = 1,        /* border width default value for resetting border width (same as Width) */
-	[Focus] = 0x6699cc,   /* focused window border colours, 0-256 colour or hex 0x000000-0xffffff */
-	[Unfocus] = 0x000000, /* unfocused window border colours, 0-256 colour or hex 0x000000-0xffffff */
+	[Focus] = 0x6699cc,   /* focused window border colours, hex 0x000000-0xffffff */
+	[Unfocus] = 0x000000, /* unfocused window border colours, hex 0x000000-0xffffff */
 };
 
 static WsRule wsrules[] = {

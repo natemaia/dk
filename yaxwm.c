@@ -56,40 +56,75 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
+int adjust(int i, char *opt, int v, int o)
+{
+	int r;
+	/* if opt is NULL or empty we assume absolute sizes, however we still use
+	 * a relative calculation so we can just call the set* function and save code repetition */
+	if (opt && *opt) {
+		if (!strcmp("reset", opt)) {
+			return 0;
+		} else if (!strcmp("relative", opt)) {
+			if (!(r = i)) {
+				warnx("FIFO ERROR: invalid value for 'relative': %d -- use 'reset'", r);
+				return UNSET;
+			}
+		} else {
+			warnx("FIFO ERROR: invalid setting option: %s", opt);
+			return UNSET;
+		}
+	} else if (!(r = MAX(MIN(i, (selws->mon->winarea_h / 6) - v), 0) - o))
+		return UNSET;
+	return r;
+}
+
 void adjustborderpx(const Arg *arg, char *opt)
 {
-	int i = arg->i;
-
-	if (opt && *opt) { /* with no opt we assume relative */
-		if (!strcmp("reset", opt)) {
-			i = 0;
-		} else if (!strcmp("absolute", opt)) { /* we still use a relative calculation for absolute to save space */
-			if (!(i = MAX(MIN((int)((selws->mon->winarea_h / 6) - selws->gappx), arg->i), 0) - borders[Width]))
-				return; /* don't pass 0 as that would mean the border size is unchanged and 0 resets */
-		} else {
-			warnx("FIFO ERROR: invalid option for 'border' setting: %s", opt);
-			return;
-		}
+	Arg a;
+	if ((a.i = adjust(arg->i, opt, selws->gappx, borders[Width])) != UNSET) {
+		DBG("adjusted value is good, passing to setborderpx: %d", a.i)
+		setborderpx(&a);
+		return;
 	}
-	setborderpx(&(const Arg){.i = i});
+	DBG("FIFO ERRO: one or more arguments are invalid")
+}
+
+void adjustbordercol(const Arg *arg, char *opt)
+{
+	Client *c;
+	Workspace *ws;
+	int f = borders[Focus], u = borders[Unfocus];
+
+	if (!opt || !*opt || arg->i > 0xffffff || arg->i < 0x000000) {
+		return;
+	} else if (!strcmp("reset", opt)) {
+		borders[Focus] = defaultborder[Focus];
+		borders[Unfocus] = defaultborder[Unfocus];
+	} else if (!strcmp("focus", opt)) {
+		borders[Focus] = arg->i;
+		xcb_change_window_attributes(con, selws->sel->win, XCB_CW_BORDER_PIXEL, &borders[Focus]);
+		return;
+	} else if (!strcmp("unfocus", opt)) {
+		borders[Unfocus] = arg->i;
+	} else {
+		warnx("FIFO ERROR: invalid setting option: %s", opt);
+		return;
+	}
+	if (f != borders[Focus] || u != borders[Unfocus])
+		FOR_WSCLIENTS(c, ws)
+			xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL,
+					&borders[c == c->ws->sel ? Focus : Unfocus]);
 }
 
 void adjustgappx(const Arg *arg, char *opt)
 {
-	int i = arg->i;
-
-	if (opt && *opt) { /* with no opt we assume relative */
-		if (!strcmp("reset", opt)) {
-			i = 0;
-		} else if (!strcmp("absolute", opt)) { /* we still use a relative calculation for absolute to save space */
-			if (!(i = MAX(MIN(arg->i, (selws->mon->winarea_h / 6) - borders[Width]), 0) - selws->gappx))
-				return; /* don't pass 0 as that would mean the gap size is unchanged and 0 resets */
-		} else {
-			warnx("FIFO ERROR: invalid option for 'gap' setting: %s", opt);
-			return;
-		}
+	Arg a;
+	if ((a.i = adjust(arg->i, opt, borders[Width], selws->gappx)) != UNSET) {
+		DBG("adjusted value is good, passing to setgappx: %d", a.i)
+		setgappx(&a);
+		return;
 	}
-	setgappx(&(const Arg){.i = i});
+	DBG("FIFO ERRO: one or more arguments are invalid")
 }
 
 void applypanelstrut(Panel *p)
@@ -110,35 +145,33 @@ void applypanelstrut(Panel *p)
 
 void applysetting(const Arg *arg)
 {
-	Arg sarg;
-	uint i, v = 0, set = 0;
-	char *s, *o = NULL, **args, **opts;
+	int n;
+	Arg a;
+	uint i;
+	char *s, *o = NULL;
+	char **args, **opts;
 
 	s = ((char **)arg->v)[0];
 	args = (char **)arg->v + 1;
-
 	for (i = 0; i < LEN(settings); i++)
 		if (!strcmp(settings[i].name, s)) {
 			DBG("FIFO: parsed matching setting token: %s", s)
 			while (*args) {
-				if (isdigit(*args[0]) || ((*args[0] == '-' || *args[0] == '+') && isdigit(*args[1]))) {
-					set = 1, v = atoi(*args);
-					DBG("FIFO: parsed required digit argument: %d", v)
-				} else for (opts = (char **)settings[i].opts; opts && *opts; opts++)
+				if (**args == '#' && !strcmp(settings[i].name, "colour")) {
+					a.i = strtol(++*args, NULL, 16);
+				} else if ((n = strtol(*args, NULL, 0)) || **args == '0') {
+					DBG("FIFO: parsed digit argument: %d", n)
+					a.i = n;
+				} else for (opts = (char **)settings[i].opts; opts && *opts; opts++) {
 					if (!strcmp(*opts, *args)) {
-						DBG("FIFO: parsed matching optional argument: %s", *args)
+						DBG("FIFO: parsed optional string argument: %s", *args)
 						o = *args;
 					}
-				if (set && o)
-					break;
+				}
 				args++;
 			}
-			if (!set) {
-				warnx("FIFO ERROR: missing required argument for setting: %s", s);
-			} else {
-				sarg.i = v;
-				settings[i].func(&sarg, o);
-			}
+			DBG("FIFO: finished parsing arguments, passing to matching function")
+			settings[i].func(&a, o);
 			return;
 		}
 }
@@ -1265,7 +1298,9 @@ void initwm(void)
 		monitors = initmon("default", 0, 0, 0, scr_w, scr_h);
 	initworkspaces();
 	assignworkspaces();
-	borders[Default] = borders[Width];
+	defaultborder[Width] = borders[Width];
+	defaultborder[Focus] = borders[Focus];
+	defaultborder[Unfocus] = borders[Unfocus];
 
 	/* cursors */
 	if (xcb_cursor_context_new(con, scr, &ctx) < 0)
@@ -1753,7 +1788,7 @@ void setborderpx(const Arg *arg)
 	int newborder;
 
 	if (!arg || arg->i == 0)
-		newborder = borders[Default];
+		newborder = defaultborder[Width];
 	else /* if we allow borders to be huge things would get silly, so we limit
 		  * them to 1/6 screen height - gap size, we also don't allow the global
 		  * border to be <1 so we can preserve borderless windows */

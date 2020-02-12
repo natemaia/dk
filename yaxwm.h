@@ -76,6 +76,7 @@
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, (win), (atom), (type), (membsize), (nmemb), (value))
 
 /* shorter names for some xcb masks */
+#define UNSET       (INT_MAX)
 #define STICKY      (0xFFFFFFFF)
 #define SYNC        (XCB_GRAB_MODE_SYNC)
 #define ASYNC       (XCB_GRAB_MODE_ASYNC)
@@ -116,7 +117,7 @@ typedef struct Workspace Workspace;
 typedef struct WsRule WsRule;
 
 enum Borders {
-	Width, Default, Focus, Unfocus
+	Width, Focus, Unfocus
 };
 
 enum Cursors {
@@ -269,6 +270,7 @@ char *argv0;                            /* program name */
 int fifofd;                             /* fifo pipe file descriptor */
 int scr_w, scr_h;                       /* root window size */
 int randrbase = -1;                     /* randr extension response */
+int defaultborder[3];                   /* default border values used for resetting */
 uint running = 1;                       /* continue handling events */
 uint numws = 0;                         /* number of workspaces currently allocated */
 uint mousebtn = 0;                      /* mouse button currently being pressed */
@@ -286,10 +288,11 @@ xcb_cursor_t cursor[LEN(cursors)];      /* cursors for moving, resizing, and nor
 xcb_atom_t wmatoms[LEN(wmatomnames)];   /* _WM atoms used mostly internally */
 xcb_atom_t netatoms[LEN(netatomnames)]; /* _NET atoms used both internally and by other clients */
 
+
 /* function prototypes */
 void adjustborderpx(const Arg *arg, char *opt);
 void adjustgappx(const Arg *arg, char *opt);
-/* void adjustbordercol(const Arg *arg, char *opt); */
+void adjustbordercol(const Arg *arg, char *opt);
 /* void adjustfocus(const Arg *arg, char *opt); */
 /* void adjustnmaster(const Arg *arg, char *opt); */
 /* void adjustnstack(const Arg *arg, char *opt); */
@@ -442,24 +445,33 @@ void printbind(xcb_generic_event_t *e, uint modmask, xcb_keysym_t keysym)
 }
 #endif
 
-/* parser keywords */
+/* setting options for most integer based */
+static const char *stdopts[] = { "reset", "relative", NULL };
+static const char *colopts[] = { "reset", "focus", "unfocus", NULL };
+
+/* fifo parser keywords and functions,
+ * functions must have a prototype like:  void func(const Arg *);
+ * remaining arguments will be tokenized as an array of char *'s in arg->v
+ * where the function is expected to know how to handle and use them */
 static Keyword keywords[] = {
-	{ "exec",  runcmd },
-	{ "set",   applysetting },
+	{ "exec", runcmd },
+	{ "set",  applysetting },
 	/* { "rule",  applyrule, }, */
 	/* { "bind",  applybind, }, */
 };
 
-/* set keyword options */
+/* "set" keyword options, used by applysetting() to parse arguments
+ * the final argument should be an array of char *'s and contain any
+ * optional string arguments supported by the setting function */
 static Setting settings[] = {
-	{ "gap",         adjustgappx,    (char *[]){ "absolute", "reset", NULL } },
-	{ "border",      adjustborderpx, (char *[]){ "absolute", "reset", NULL } },
-	/* { "split",       adjustsplit,    (char *[]){ "absolute", "reset", NULL } }, */
-	/* { "stack",       adjustnstack,   (char *[]){ "absolute", "reset", NULL } }, */
-	/* { "master",      adjustnmaster,  (char *[]){ "absolute", "reset", NULL } }, */
+	{ "gap",    adjustgappx,     stdopts },
+	{ "border", adjustborderpx,  stdopts },
+	{ "colour", adjustbordercol, colopts },
+	/* { "split",       adjustsplit,    stdopts }, */
+	/* { "stack",       adjustnstack,   stdopts }, */
+	/* { "master",      adjustnmaster,  stdopts }, */
 	/* { "focus",       adjustfocus,    (char *[]){ "windowid",  NULL         } }, */
 	/* { "layout",      adjustlayout,   (char *[]){ "reset",     NULL         } }, */
-	/* { "bordercolor", "focused",  setbordercol }, */
 };
 
 /* config needs access to everything defined */

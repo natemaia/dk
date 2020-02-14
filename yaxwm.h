@@ -134,7 +134,7 @@ enum NetAtoms {
 	WindowType,      WindowTypeDialog, Desktop,        ClientList,
 	DesktopViewport, DesktopGeometry,  DesktopNames,   WindowTypeDock,
 	Strut,           StrutPartial,     FrameExtents,   WindowTypeMenu,
-	Hidden,
+	WorkArea,        Hidden,
 };
 
 enum Gravity {
@@ -245,6 +245,7 @@ static const char *netatomnames[] = {
 	[Name] = "_NET_WM_NAME",
 	[State] = "_NET_WM_STATE",
 	[Strut] = "_NET_WM_STRUT",
+	[WorkArea] = "_NET_WORKAREA",
 	[Desktop] = "_NET_WM_DESKTOP",
 	[Supported] = "_NET_SUPPORTED",
 	[Hidden] = "_NET_WM_STATE_HIDDEN",
@@ -362,13 +363,13 @@ void setfocus(Client *c);
 void setfullscreen(Client *c, int fullscreen);
 void setgappx(const Arg *arg);
 void setlayout(const Arg *arg);
-void setnetwinstate(xcb_window_t win, long state);
+void setnetworkareavp(void);
 void setnmaster(const Arg *arg);
 void setnstack(const Arg *arg);
 void setsplit(const Arg *arg);
 void setstackmode(xcb_window_t win, uint mode);
 void seturgency(Client *c, int urg);
-void setwinstate(xcb_window_t win, long state);
+void setwinstate(xcb_window_t win, uint32_t state);
 void setwinvis(xcb_window_t win, int visible);
 void showhide(Client *c);
 void sighandle(int);

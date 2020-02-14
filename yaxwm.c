@@ -570,7 +570,6 @@ void eventhandle(xcb_generic_event_t *ev)
 			if (mousebtn == BUTTON3)
 				ignorefocusevents();
 			mousebtn = 0;
-			focus(c);
 			return;
 		}
 		case XCB_MOTION_NOTIFY:
@@ -682,9 +681,12 @@ void eventhandle(xcb_generic_event_t *ev)
 					DBG("net active window client message - window: 0x%x - workspace: %d "
 							"- current workspace: %d", c->win, c->ws->num, selws->num)
 					c->mapped = 1;
-					unfocus(selws->sel, 1);
-					changews(c->ws, 0);
-					layoutws(NULL);
+					if (c->ws != selws) {
+						unfocus(selws->sel, 1);
+						changews(c->ws, 0);
+					}
+					if (c->ws != c->ws->mon->ws)
+						layoutws(NULL);
 					focus(c);
 					restack(c->ws);
 				} else {
@@ -833,6 +835,7 @@ void fixupworkspaces(void)
 	PROP_REPLACE(root, netatoms[DesktopGeometry], XCB_ATOM_CARDINAL, 32, 2, v);
 	if (panels)
 		updatestruts(panels, 1);
+	setnetworkareavp();
 	focus(NULL);
 	layoutws(NULL);
 }
@@ -1291,7 +1294,7 @@ void initwm(void)
 	xcb_void_cookie_t c;
 	xcb_generic_error_t *e;
 	xcb_cursor_context_t *ctx;
-	uint v[] = { 0, 0 };
+	uint v[] = { scr_w, scr_h };
 
 	/* monitor(s) & workspaces */
 	if ((randrbase = initrandr()) < 0 || !monitors)
@@ -1332,11 +1335,10 @@ void initwm(void)
 
 	/* set most of the root window atoms that are unlikely to change often */
 	updatenumws(numws);
-	PROP_REPLACE(root, netatoms[DesktopViewport], XCB_ATOM_CARDINAL, 32, 2, v);
-	v[0] = scr_w, v[1] = scr_h;
 	PROP_REPLACE(root, netatoms[DesktopGeometry], XCB_ATOM_CARDINAL, 32, 2, v);
 	PROP_REPLACE(root, netatoms[Supported], XCB_ATOM_ATOM, 32, LEN(netatoms), netatoms);
 	xcb_delete_property(con, root, netatoms[ClientList]);
+	setnetworkareavp();
 
 	/* CurrentDesktop */
 	cws = (r = winprop(root, netatoms[CurrentDesktop])) >= 0 ? r : 0;
@@ -1672,9 +1674,9 @@ void setstackmode(xcb_window_t win, uint mode)
 	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_STACK_MODE, &mode);
 }
 
-void setwinstate(xcb_window_t win, long state)
+void setwinstate(xcb_window_t win, uint32_t state)
 {
-	long s[] = { state, XCB_ATOM_NONE };
+	uint32_t s[] = { state, XCB_ATOM_NONE };
 	PROP_REPLACE(win, wmatoms[WMState], wmatoms[WMState], 32, 2, s);
 }
 
@@ -1686,20 +1688,29 @@ void setwinvis(xcb_window_t win, int visible)
 			(uint []){ ROOTMASK & ~XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY });
 	if (visible) {
 		setwinstate(win, XCB_ICCCM_WM_STATE_NORMAL);
-		setnetwinstate(win, 0);
+		/* xcb_delete_property(con, win, netatoms[State]); */
 		xcb_map_window(con, win);
 	} else {
 		xcb_unmap_window(con, win);
-		setnetwinstate(win, netatoms[Hidden]);
+		/* PROP_REPLACE(win, netatoms[State], netatoms[State], 32, 1, &netatoms[Hidden]); */
 		setwinstate(win, XCB_ICCCM_WM_STATE_ICONIC);
 	}
 	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, (uint []){ ROOTMASK });
 }
 
-void setnetwinstate(xcb_window_t win, long state)
+void setnetworkareavp(void)
 {
-	long s[] = { state, XCB_ATOM_NONE };
-	PROP_REPLACE(win, netatoms[State], netatoms[State], 32, state ? 2 : 0, state ? s : (long *)0);
+	uint wa[4];
+	Workspace *ws;
+
+	xcb_delete_property(con, root, netatoms[WorkArea]);
+	xcb_delete_property(con, root, netatoms[DesktopViewport]);
+	FOR_EACH(ws, workspaces) {
+		wa[0] = ws->mon->winarea_x, wa[1] = ws->mon->winarea_y;
+		wa[2] = ws->mon->winarea_w, wa[3] = ws->mon->winarea_h;
+		PROP_APPEND(root, netatoms[WorkArea], XCB_ATOM_CARDINAL, 32, 4, wa);
+		PROP_APPEND(root, netatoms[DesktopViewport], XCB_ATOM_CARDINAL, 32, 2, wa);
+	}
 }
 
 void setclientws(Client *c, uint num)
@@ -1862,9 +1873,9 @@ void showhide(Client *c)
 	if (c->ws == c->ws->mon->ws) { /* show clients top down */
 		if (c->mapped) {
 			DBG("showing window: 0x%x - workspace: %d", c->win, c->ws->num)
-				MOVE(c->win, c->x, c->y);
-			if ((!c->ws->layout || c->floating) && !c->fullscreen)
-				resize(c, c->x, c->y, c->w, c->h, c->bw);
+			MOVE(c->win, c->x, c->y);
+			/* if ((!c->ws->layout || c->floating) && !c->fullscreen) */
+			/* 	resize(c, c->x, c->y, c->w, c->h, c->bw); */
 		}
 		showhide(c->snext);
 	} else { /* hide clients bottom up */

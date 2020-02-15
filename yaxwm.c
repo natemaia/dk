@@ -1482,26 +1482,30 @@ void monocle(Workspace *ws)
 void movestack(const Arg *arg)
 {
 	Client *c;
-	int i = 0, n;
+	int i = 0;
 
 	if (!selws->sel || selws->sel->floating || !nexttiled(selws->clients->next))
 		return;
 	if (arg->i > 0) { /* swap current and the next or move to the front when at the end */
 		detach(selws->sel, (c = nexttiled(selws->sel->next)) ? 0 : 1);
-		if (c) {
+		if (c) { /* attach within the list */
 			selws->sel->next = c->next;
 			c->next = selws->sel;
 		}
 	} else { /* swap the current and the previous or move to the end when at the front */
-		FIND_PREVTILED(c, selws->sel, selws->clients);
-		detach(selws->sel, (n = c->next != NULL) ? (i = c == selws->clients ? 1 : 0) : 0);
-		if (n && !i) { /* attach somewhere in the list */
-			selws->sel->next = c;
-			FIND_PREV(c, selws->sel->next, selws->clients);
+		if (selws->sel == nexttiled(selws->clients)) { /* attach to end */
+			detach(selws->sel, 0);
+			FIND_TILETAIL(c, selws->clients);
+			selws->sel->next = c->next;
 			c->next = selws->sel;
-		} else if (!n) { /* attach at the end */
-			selws->sel->next = NULL;
-			c->next = selws->sel;
+		} else {
+			FIND_PREVTILED(c, selws->sel, selws->clients);
+			detach(selws->sel, (i = (c == nexttiled(selws->clients)) ? 1 : 0));
+			if (!i) { /* attach within the list */
+				selws->sel->next = c;
+				FIND_PREV(c, selws->sel->next, selws->clients);
+				c->next = selws->sel;
+			}
 		}
 	}
 	layoutws(selws);

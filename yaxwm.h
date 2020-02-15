@@ -59,11 +59,30 @@
 #define VOLDOWN     (0x1008ff11)
 
 /* linked list quick access */
-#define FOR_EACH(v, list)      for ((v) = (list); (v); (v) = (v)->next)
-#define FOR_STACK(v, list)     for ((v) = (list); (v); (v) = (v)->snext)
-#define FIND_TAIL(v, list)     for ((v) = (list); (v) && (v)->next; (v) = (v)->next)
-#define FOR_WSCLIENTS(c, ws)   FOR_EACH((ws), workspaces) FOR_EACH((c), (ws)->clients)
-#define FOR_PREV(v, cur, list) for ((v) = (list); (v) && (v)->next && (v)->next != (cur); (v) = (v)->next)
+#define FOR_EACH(v, list)    for ((v) = (list); (v); (v) = (v)->next)
+#define FOR_STACK(v, list)   for ((v) = (list); (v); (v) = (v)->snext)
+#define FOR_CLIENTS(c, ws)   FOR_EACH((ws), workspaces) FOR_EACH((c), (ws)->clients)
+
+/* find the last client in the list, tile version may not be the actual
+ * tail but the last tiled client, will never be null unless the list is */
+#define FIND_TAIL(v, list)\
+	for ((v) = (list); (v) && (v)->next; (v) = (v)->next)
+#define FIND_TILETAIL(v, list)\
+	for ((v) = nexttiled((list)); (v) && nexttiled((v)->next); (v) = nexttiled((v)->next))
+
+/* find the next client in the list (circular), when at the tail
+ * we wrap around to the head, will never be null unless the list is */
+#define FIND_NEXT(v, cur, list)\
+	(v) = (cur)->next ? (cur)->next : (list)
+#define FIND_NEXTTILED(v, cur, list)\
+	(v) = nexttiled((cur)->next) ? nexttiled((cur)->next) : nexttiled((list))
+
+/* find the previous client in the list (circular), when at the head
+ * we wrap around to the tail, will never be null unless the list is */
+#define FIND_PREV(v, cur, list)\
+	for ((v) = (list); (v) && (v)->next && (v)->next != (cur); (v) = (v)->next)
+#define FIND_PREVTILED(v, cur, list)\
+	for ((v) = nexttiled((list)); (v) && nexttiled((v)->next) && nexttiled((v)->next) != (cur); (v) = nexttiled((v)->next))
 
 /* dissolves into nothing when DEBUG isn't defined */
 #define DBG(fmt, ...)
@@ -367,6 +386,7 @@ void setnetworkareavp(void);
 void setnmaster(const Arg *arg);
 void setnstack(const Arg *arg);
 void setsplit(const Arg *arg);
+void movestack(const Arg *arg);
 void setstackmode(xcb_window_t win, uint mode);
 void seturgency(Client *c, int urg);
 void setwinstate(xcb_window_t win, uint32_t state);

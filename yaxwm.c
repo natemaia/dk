@@ -111,7 +111,7 @@ void adjustbordercol(const Arg *arg, char *opt)
 		return;
 	}
 	if (f != borders[Focus] || u != borders[Unfocus])
-		FOR_WSCLIENTS(c, ws)
+		FOR_CLIENTS(c, ws)
 			xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL,
 					&borders[c == c->ws->sel ? Focus : Unfocus]);
 }
@@ -178,14 +178,16 @@ void applysetting(const Arg *arg)
 
 void attach(Client *c, int tohead)
 { /* attach client to it's workspaces client list */
-	Client *n;
+	Client *t = NULL;
 
 	if (!c->ws)
 		c->ws = selws;
-	if (!tohead && (n = nexttiled(c->ws->clients))) {
-		c->next = n->next;
-		n->next = c;
-	} else {
+	if (!tohead)
+		FIND_TILETAIL(t, c->ws->clients);
+	if (t) { /* attach to tail */
+		c->next = t->next;
+		t->next = c;
+	} else { /* attach to head */
 		c->next = c->ws->clients;
 		c->ws->clients = c;
 	}
@@ -244,9 +246,9 @@ void changefocus(const Arg *arg)
 	if (!sel || sel->fullscreen)
 		return;
 	if (arg->i > 0)
-		c = sel->next ? sel->next : selws->clients;
+		FIND_NEXT(c, sel, selws->clients);
 	else
-		FOR_PREV(c, sel, selws->clients);
+		FIND_PREV(c, sel, selws->clients);
 	if (c) {
 		DBG("focusing %s client", arg->i > 0 ? "next" : "previous")
 		focus(c);
@@ -691,7 +693,7 @@ void eventhandle(xcb_generic_event_t *ev)
 					restack(c->ws);
 				} else {
 					p->mapped = 1;
-					updatestruts(p, 1);		
+					updatestruts(p, 1);
 					layoutws(selws);
 					focus(NULL);
 				}
@@ -829,7 +831,7 @@ void fixupworkspaces(void)
 	uint v[] = { scr_w, scr_h };
 
 	assignworkspaces();
-	FOR_WSCLIENTS(c, ws)
+	FOR_CLIENTS(c, ws)
 		if (c->fullscreen)
 			resize(c, ws->mon->x, ws->mon->y, ws->mon->w, ws->mon->h, c->bw);
 	PROP_REPLACE(root, netatoms[DesktopGeometry], XCB_ATOM_CARDINAL, 32, 2, v);
@@ -893,7 +895,7 @@ void freeclient(Client *c, int destroyed)
 	}
 	free(c);
 	xcb_delete_property(con, root, netatoms[ClientList]);
-	FOR_WSCLIENTS(c, ws)
+	FOR_CLIENTS(c, ws)
 		PROP_APPEND(root, netatoms[ClientList], XCB_ATOM_WINDOW, 32, 1, &c->win);
 	layoutws(cws);
 	focus(NULL);
@@ -906,7 +908,7 @@ void freemon(Monitor *m)
 	if (m == monitors)
 		monitors = monitors->next;
 	else {
-		FOR_PREV(mon, m, monitors);
+		FIND_PREV(mon, m, monitors);
 		if (mon)
 			mon->next = m->next;
 	}
@@ -967,7 +969,7 @@ void freews(Workspace *ws)
 	if (ws == workspaces)
 		workspaces = workspaces->next;
 	else {
-		FOR_PREV(sel, ws, workspaces);
+		FIND_PREV(sel, ws, workspaces);
 		if (sel)
 			sel->next = ws->next;
 	}
@@ -1477,9 +1479,37 @@ void monocle(Workspace *ws)
 				smartborder ? 0 : borders[Width]);
 }
 
+void movestack(const Arg *arg)
+{
+	Client *c;
+	int i = 0, n;
+
+	if (!selws->sel || selws->sel->floating || !nexttiled(selws->clients->next))
+		return;
+	if (arg->i > 0) { /* swap current and the next or move to the front when at the end */
+		detach(selws->sel, (c = nexttiled(selws->sel->next)) ? 0 : 1);
+		if (c) {
+			selws->sel->next = c->next;
+			c->next = selws->sel;
+		}
+	} else { /* swap the current and the previous or move to the end when at the front */
+		FIND_PREVTILED(c, selws->sel, selws->clients);
+		detach(selws->sel, (n = c->next != NULL) ? (i = c == selws->clients ? 1 : 0) : 0);
+		if (n && !i) { /* attach somewhere in the list */
+			selws->sel->next = c;
+			FIND_PREV(c, selws->sel->next, selws->clients);
+			c->next = selws->sel;
+		} else if (!n) { /* attach at the end */
+			selws->sel->next = NULL;
+			c->next = selws->sel;
+		}
+	}
+	layoutws(selws);
+	focus(selws->sel);
+}
+
 Client *nexttiled(Client *c)
-{ /* return c if it's mapped and not floating,
-   * otherwise walk the list until we find one that is */
+{ /* return c if it's not floating, or walk the list until we find one that isn't */
 	while (c && c->floating)
 		c = c->next;
 	return c;
@@ -1806,7 +1836,7 @@ void setborderpx(const Arg *arg)
 		newborder = MAX(MIN((int)((selws->mon->winarea_h / 6) - selws->gappx),
 					borders[Width] + arg->i), 1);
 	if (newborder != borders[Width]) {
-		FOR_WSCLIENTS(c, ws) /* update border width on clients that have borders matching the current global */
+		FOR_CLIENTS(c, ws) /* update border width on clients that have borders matching the current global */
 			if (c->bw && c->bw == borders[Width])
 				c->bw = newborder;
 		borders[Width] = newborder;
@@ -2039,12 +2069,12 @@ void tile(Workspace *ws)
 			my += c->h + (2 * bw) + ws->gappx;
 		} else if (i - ws->nmaster < ws->nstack) {
 			nr = MIN(n - ws->nmaster, ws->nstack) - (i - ws->nmaster);
-			resize(c, m->winarea_x + mw + ws->gappx/ns, m->winarea_y + sy,
+			resize(c, m->winarea_x + mw + (ws->gappx / ns), m->winarea_y + sy,
 					(m->winarea_w - mw - sw - ws->gappx * (5 - ns - ss) / 2) - (2 * bw),
 					(m->winarea_h - sy) / MAX(1, nr) - ws->gappx - (2 * bw), bw);
 			sy += c->h + (2 * bw) + ws->gappx;
 		} else {
-			resize(c, m->winarea_x + mw + sw + ws->gappx/ns - ss, m->winarea_y + ssy,
+			resize(c, m->winarea_x + mw + sw + (ws->gappx / ns), m->winarea_y + ssy,
 					(m->winarea_w - mw - sw - ws->gappx * (5 - ns) / 2) - (2 * bw),
 					(m->winarea_h - ssy) / MAX(1, n - i) - ws->gappx - (2 * bw), c->bw);
 			ssy += c->h + (2 * bw) + ws->gappx;
@@ -2225,7 +2255,7 @@ void updatestruts(Panel *p, int apply)
 {
 	Panel *n;
 	Monitor *m;
-	
+
 	DBG("resetting struts for each monitor")
 	FOR_EACH(m, monitors) {
 		m->winarea_x = m->x, m->winarea_y = m->y, m->winarea_w = m->w, m->winarea_h = m->h;
@@ -2404,7 +2434,7 @@ Client *wintoclient(xcb_window_t win)
 
 	if (win == root)
 		return NULL;
-	FOR_WSCLIENTS(c, ws)
+	FOR_CLIENTS(c, ws)
 		if (c->win == win)
 			return c;
 	return NULL;
@@ -2430,7 +2460,7 @@ Workspace *wintows(xcb_window_t win)
 
 	if (win == root && pointerxy(&x, &y))
 		return pointertomon(x, y)->ws;
-	FOR_WSCLIENTS(c, ws)
+	FOR_CLIENTS(c, ws)
 		if (c->win == win)
 			return ws;
 	return selws;

@@ -21,14 +21,15 @@ static const char *term[] = { "st", NULL };
 static const char *menu[] = { "dmenu_run", NULL };
 static const char *scrot[] = { "scrot", NULL };
 static const char *scrots[] = { "scrot", "-s", NULL };
+
 /* volume control commands */
 static const char *voltg[] = { "pamixer", "-t", NULL };
 static const char *volup[] = { "pamixer", "-i", "2", NULL };
 static const char *voldn[] = { "pamixer", "-d", "2", NULL };
 
 /* simple example of a client callback function for mpv album art */
-/* gravitate window to the bottom-left of the screen, matching gap offset */
-static void mpvart(Client *c) { gravitate(c, Bottom, Right, 1); }
+/* move mpv album art window to the bottom left of the screen and focus the last window */
+static void mpvart(Client *c) { gravitate(c, Bottom, Right, 1); focus(c->snext); }
 
 static int borders[] = {
 	[Width] = 1,          /* border width in pixels */

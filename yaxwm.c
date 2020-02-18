@@ -1051,8 +1051,7 @@ void gravitate(Client *c, int vert, int horz, int matchgap)
 	case Bottom: y = c->ws->mon->winarea_y + c->ws->mon->winarea_h - H(c) - gap; break;
 	case Center: y = (c->ws->mon->winarea_y + c->ws->mon->winarea_h - H(c)) / 2; break;
 	}
-	c->x = x, c->y = y;
-	resizehint(c, c->x, c->y, W(c), H(c), c->bw, 0);
+	resizehint(c, x, y, c->w, c->h, c->bw, 0);
 }
 
 void ignorefocusevents(void)
@@ -1503,7 +1502,7 @@ void movestack(const Arg *arg)
 			detach(selws->sel, (i = (c == nexttiled(selws->clients)) ? 1 : 0));
 			if (!i) { /* attach within the list */
 				selws->sel->next = c;
-				FIND_PREV(c, selws->sel->next, selws->clients);
+				FIND_PREV(c, selws->sel->next, selws->clients); /* find the real (non-tiled) previous to c */
 				c->next = selws->sel;
 			}
 		}

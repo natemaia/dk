@@ -39,7 +39,7 @@ static Keyword keywords[] = {
 
 static const char *minopts[]  = { "relative", NULL };
 static const char *stdopts[]  = { "reset",   "relative", NULL };
-static const char *lytopts[]  = { "tile",    "monocle",  NULL };
+static const char *lytopts[]  = { "tile",    "monocle", "none", NULL };
 static const char *wsopts[]   = { "view",    "send",    "follow",  NULL };
 static const char *colopts[]  = { "reset",   "focus",   "unfocus", NULL };
 static const char *listopts[] = { "next",    "prev",    "first",  "last", NULL };
@@ -164,6 +164,7 @@ void cmdgappx(const Arg *arg, char *opt)
 void cmdlayout(const Arg *arg, char *opt)
 {
 	Arg a;
+	(void)(arg);
 	if (!strcmp(opt, "tile"))
 		a.v = tile;
 	else if (!strcmp(opt, "monocle"))
@@ -171,7 +172,6 @@ void cmdlayout(const Arg *arg, char *opt)
 	else
 		a.v = NULL;
 	setlayout(&a);
-	(void)(arg);
 }
 
 void cmdmove(const Arg *arg)
@@ -265,7 +265,7 @@ void cmdset(const Arg *arg)
 					a.i = strtol(++*args, NULL, 16);
 				else if ((n = strtol(*args, NULL, 0)) || **args == '0')
 					a.i = n;
-				else for (opts = (char **)settings[i].opts; opts && *opts; opts++)
+				else for (opts = (char **)settings[i].opts; !o && opts && *opts; opts++)
 					if (!strcmp(*opts, *args))
 						o = *args;
 				args++;
@@ -299,7 +299,7 @@ void parsecommand(char *buf)
 {
 	Arg arg;
 	uint i, n = 0;
-	char *k, *args[10], *dbuf, *delim = " \t";
+	char *k, *args[10], *dbuf, *delim = " \t\n\r";
 
 	dbuf = strdup(buf);
 	if (!(k = strtok(dbuf, delim)))
@@ -313,7 +313,7 @@ void parsecommand(char *buf)
 		if (!strcmp(keywords[i].name, k)) {
 			while (n < sizeof(args) && (args[n++] = strtok(NULL, delim)))
 				;
-			if (args[0]) {
+			if (*args) {
 				arg.v = args;
 				keywords[i].func(&arg);
 			}

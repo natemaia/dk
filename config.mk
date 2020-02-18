@@ -1,6 +1,6 @@
 # see license file for copyright and license details
 
-VERSION = 0.1
+VERSION = 0.2
 
 # installation paths
 PREFIX = /usr

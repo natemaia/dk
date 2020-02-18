@@ -4,6 +4,7 @@
 */
 
 #include "yaxwm.h"
+#include "command.c"
 
 int main(int argc, char *argv[])
 {
@@ -56,77 +57,6 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
-int adjust(int i, char *opt, int v, int o)
-{
-	int r;
-	/* if opt is NULL or empty we assume absolute sizes, however we still use
-	 * a relative calculation so we can just call the set* function and save code repetition */
-	if (opt && *opt) {
-		if (!strcmp("reset", opt)) {
-			return 0;
-		} else if (!strcmp("relative", opt)) {
-			if (!(r = i)) {
-				warnx("FIFO ERROR: invalid value for 'relative': %d -- use 'reset'", r);
-				return UNSET;
-			}
-		} else {
-			warnx("FIFO ERROR: invalid setting option: %s", opt);
-			return UNSET;
-		}
-	} else if (!(r = MAX(MIN(i, (selws->mon->winarea_h / 6) - v), 0) - o))
-		return UNSET;
-	return r;
-}
-
-void adjustborderpx(const Arg *arg, char *opt)
-{
-	Arg a;
-	if ((a.i = adjust(arg->i, opt, selws->gappx, borders[Width])) != UNSET) {
-		DBG("adjusted value is good, passing to setborderpx: %d", a.i)
-		setborderpx(&a);
-		return;
-	}
-	DBG("FIFO ERRO: one or more arguments are invalid")
-}
-
-void adjustbordercol(const Arg *arg, char *opt)
-{
-	Client *c;
-	Workspace *ws;
-	int f = borders[Focus], u = borders[Unfocus];
-
-	if (!opt || !*opt || arg->i > 0xffffff || arg->i < 0x000000) {
-		return;
-	} else if (!strcmp("reset", opt)) {
-		borders[Focus] = defaultborder[Focus];
-		borders[Unfocus] = defaultborder[Unfocus];
-	} else if (!strcmp("focus", opt)) {
-		borders[Focus] = arg->i;
-		xcb_change_window_attributes(con, selws->sel->win, XCB_CW_BORDER_PIXEL, &borders[Focus]);
-		return;
-	} else if (!strcmp("unfocus", opt)) {
-		borders[Unfocus] = arg->i;
-	} else {
-		warnx("FIFO ERROR: invalid setting option: %s", opt);
-		return;
-	}
-	if (f != borders[Focus] || u != borders[Unfocus])
-		FOR_CLIENTS(c, ws)
-			xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL,
-					&borders[c == c->ws->sel ? Focus : Unfocus]);
-}
-
-void adjustgappx(const Arg *arg, char *opt)
-{
-	Arg a;
-	if ((a.i = adjust(arg->i, opt, borders[Width], selws->gappx)) != UNSET) {
-		DBG("adjusted value is good, passing to setgappx: %d", a.i)
-		setgappx(&a);
-		return;
-	}
-	DBG("FIFO ERRO: one or more arguments are invalid")
-}
-
 void applypanelstrut(Panel *p)
 {
 	DBG("%s window area before: %d,%d @ %dx%d", p->mon->name, p->mon->winarea_x,
@@ -143,39 +73,6 @@ void applypanelstrut(Panel *p)
 			p->mon->winarea_y, p->mon->winarea_w, p->mon->winarea_h);
 }
 
-void applysetting(const Arg *arg)
-{
-	int n;
-	Arg a;
-	uint i;
-	char *s, *o = NULL;
-	char **args, **opts;
-
-	s = ((char **)arg->v)[0];
-	args = (char **)arg->v + 1;
-	for (i = 0; i < LEN(settings); i++)
-		if (!strcmp(settings[i].name, s)) {
-			DBG("FIFO: parsed matching setting token: %s", s)
-			while (*args) {
-				if (**args == '#' && !strcmp(settings[i].name, "colour")) {
-					a.i = strtol(++*args, NULL, 16);
-				} else if ((n = strtol(*args, NULL, 0)) || **args == '0') {
-					DBG("FIFO: parsed digit argument: %d", n)
-					a.i = n;
-				} else for (opts = (char **)settings[i].opts; opts && *opts; opts++) {
-					if (!strcmp(*opts, *args)) {
-						DBG("FIFO: parsed optional string argument: %s", *args)
-						o = *args;
-					}
-				}
-				args++;
-			}
-			DBG("FIFO: finished parsing arguments, passing to matching function")
-			settings[i].func(&a, o);
-			return;
-		}
-}
-
 void attach(Client *c, int tohead)
 { /* attach client to it's workspaces client list */
 	Client *t = NULL;
@@ -183,7 +80,7 @@ void attach(Client *c, int tohead)
 	if (!c->ws)
 		c->ws = selws;
 	if (!tohead)
-		FIND_TILETAIL(t, c->ws->clients);
+		FIND_TAIL(t, c->ws->clients);
 	if (t) { /* attach to tail */
 		c->next = t->next;
 		t->next = c;
@@ -1494,9 +1391,7 @@ void movestack(const Arg *arg)
 	} else { /* swap the current and the previous or move to the end when at the front */
 		if (selws->sel == nexttiled(selws->clients)) { /* attach to end */
 			detach(selws->sel, 0);
-			FIND_TILETAIL(c, selws->clients);
-			selws->sel->next = c->next;
-			c->next = selws->sel;
+			attach(selws->sel, 0);
 		} else {
 			FIND_PREVTILED(c, selws->sel, selws->clients);
 			detach(selws->sel, (i = (c == nexttiled(selws->clients)) ? 1 : 0));
@@ -1526,45 +1421,6 @@ Monitor *outputtomon(xcb_randr_output_t id)
 		if (m->id == id)
 			break;
 	return m;
-}
-
-void parsecommand(char *buf)
-{
-	Arg arg;
-	uint i, n = 0, match = 0;
-	char *k, *args[10], *dbuf, *delim = " \t";
-
-	DBG("FIFO RAW INPUT: %s", buf);
-
-	dbuf = strdup(buf);
-	if (!(k = strtok(dbuf, delim)))
-		goto out;
-	if ((i = !strcmp("reset", k)) || !strcmp("quit", k)) {
-		DBG("FIFO: parsed keyword token: %s", k)
-		arg.i = i;
-		resetorquit(&arg);
-		goto out;
-	}
-	for (i = 0; i < LEN(keywords); i++)
-		if (!strcmp(keywords[i].name, k)) {
-			match = 1;
-			DBG("FIFO: parsed keyword token: %s", k)
-			while (n < sizeof(args) && (args[n++] = strtok(NULL, delim))) {
-				DBG("FIFO: parsed argument token: %s", args[n - 1])
-			}
-			if (args[0]) {
-				arg.v = args;
-				DBG("FIFO: calling matching keyword function with arguments - num args: %d", n - 1)
-				keywords[i].func(&arg);
-			} else {
-				warnx("FIFO ERROR: keyword '%s' requires argument(s) - num recieved %d", k, n - 1);
-			}
-			break;
-		}
-	if (!match)
-		warn("FIFO ERROR: failed to match any known keywords");
-out:
-	free(dbuf);
 }
 
 int pointerxy(int *x, int *y)
@@ -1646,18 +1502,6 @@ void restack(Workspace *ws)
 int ruleregcmp(regex_t *r, char *class, char *inst)
 {
 	return (!regexec(r, class, 0, NULL, 0) || !regexec(r, inst, 0, NULL, 0));
-}
-
-void runcmd(const Arg *arg)
-{
-	DBG("user run command: %s", ((char **)arg->v)[0])
-	if (fork())
-		return;
-	if (con)
-		close(xcb_get_file_descriptor(con));
-	setsid();
-	execvp(((char **)arg->v)[0], (char **)arg->v);
-	errx(0, "execvp: %s", ((char **)arg->v)[0]);
 }
 
 void send(const Arg *arg)

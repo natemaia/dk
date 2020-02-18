@@ -2,6 +2,11 @@
 * see license file for copyright and license details
 * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
 */
+
+/* stop multiple includes in the same file */
+#ifndef YAXWM_H
+#define YAXWM_H
+
 #ifndef VERSION
 #define VERSION "0.1"
 #endif
@@ -65,6 +70,8 @@
 
 /* find the last client in the list, tile version may not be the actual
  * tail but the last tiled client, will never be null unless the list is */
+#define FIND_STAIL(v, list)\
+	for ((v) = (list); (v) && (v)->snext; (v) = (v)->snext)
 #define FIND_TAIL(v, list)\
 	for ((v) = (list); (v) && (v)->next; (v) = (v)->next)
 #define FIND_TILETAIL(v, list)\
@@ -72,6 +79,8 @@
 
 /* find the next client in the list (circular), when at the tail
  * we wrap around to the head, will never be null unless the list is */
+#define FIND_SNEXT(v, cur, list)\
+	(v) = (cur)->snext ? (cur)->snext : (list)
 #define FIND_NEXT(v, cur, list)\
 	(v) = (cur)->next ? (cur)->next : (list)
 #define FIND_NEXTTILED(v, cur, list)\
@@ -79,6 +88,8 @@
 
 /* find the previous client in the list (circular), when at the head
  * we wrap around to the tail, will never be null unless the list is */
+#define FIND_SPREV(v, cur, list)\
+	for ((v) = (list); (v) && (v)->snext && (v)->snext != (cur); (v) = (v)->snext)
 #define FIND_PREV(v, cur, list)\
 	for ((v) = (list); (v) && (v)->next && (v)->next != (cur); (v) = (v)->next)
 #define FIND_PREVTILED(v, cur, list)\
@@ -112,8 +123,8 @@
 		| XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_LEAVE_WINDOW | XCB_EVENT_MASK_STRUCTURE_NOTIFY \
 		| XCB_EVENT_MASK_PROPERTY_CHANGE)
 
-/* Don't use this, use resize() or resizehint() instead.
- * It's used internally to move clients off-screen without changing
+/* Don't use these, use resize() or resizehint() instead.
+ * They're used internally to move clients off-screen without changing
  * their stored values (c->x, c->y) so we can later move them back
  * this is how windows are hidden/shown instead of mapping/unmapping them */
 #define MOVE(win, x, y) xcb_configure_window(con, (win), XYMASK, (uint []){(x), (y)})
@@ -309,17 +320,6 @@ xcb_atom_t wmatoms[LEN(wmatomnames)];   /* _WM atoms used mostly internally */
 xcb_atom_t netatoms[LEN(netatomnames)]; /* _NET atoms used both internally and by other clients */
 
 
-/* function prototypes */
-void adjustborderpx(const Arg *arg, char *opt);
-void adjustgappx(const Arg *arg, char *opt);
-void adjustbordercol(const Arg *arg, char *opt);
-/* void adjustfocus(const Arg *arg, char *opt); */
-/* void adjustnmaster(const Arg *arg, char *opt); */
-/* void adjustnstack(const Arg *arg, char *opt); */
-/* void adjustsplit(const Arg *arg, char *opt); */
-/* void applybind(const Arg *arg); */
-/* void applyrule(const Arg *arg); */
-void applysetting(const Arg *arg);
 void assignworkspaces(void);
 void attach(Client *c, int tohead);
 void attachpanel(Panel *p);
@@ -328,6 +328,7 @@ void changefocus(const Arg *arg);
 void changews(Workspace *ws, int usermotion);
 void checkerror(char *prompt, xcb_generic_error_t *e);
 void *clientrules(Client *c, xcb_window_t *trans);
+void cmdrun(const Arg *arg);
 void configure(Client *c);
 void detach(Client *c, int reattach);
 void detachstack(Client *c);
@@ -364,7 +365,6 @@ void monocle(Workspace *ws);
 void mousemotion(xcb_button_t b);
 Client *nexttiled(Client *c);
 Monitor *outputtomon(xcb_randr_output_t id);
-void parsecommand(char *buf);
 Monitor *pointertomon(int x, int y);
 int pointerxy(int *x, int *y);
 Monitor *randrclone(xcb_randr_output_t id, int x, int y);
@@ -373,7 +373,6 @@ void resize(Client *c, int x, int y, int w, int h, int bw);
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int interact);
 void restack(Workspace *ws);
 int ruleregcmp(regex_t *r, char *class, char *inst);
-void runcmd(const Arg *arg);
 void send(const Arg *arg);
 int sendevent(Client *c, int wmproto);
 void setborderpx(const Arg *arg);
@@ -415,6 +414,7 @@ Panel *wintopanel(xcb_window_t win);
 Workspace *wintows(xcb_window_t win);
 xcb_window_t wintrans(xcb_window_t win);
 void wintype(Client *c);
+
 
 #ifdef DEBUG
 #include <xkbcommon/xkbcommon.h>
@@ -466,34 +466,7 @@ void printbind(xcb_generic_event_t *e, uint modmask, xcb_keysym_t keysym)
 }
 #endif
 
-/* setting options for most integer based */
-static const char *stdopts[] = { "reset", "relative", NULL };
-static const char *colopts[] = { "reset", "focus", "unfocus", NULL };
-
-/* fifo parser keywords and functions,
- * functions must have a prototype like:  void func(const Arg *);
- * remaining arguments will be tokenized as an array of char *'s in arg->v
- * where the function is expected to know how to handle and use them */
-static Keyword keywords[] = {
-	{ "exec", runcmd },
-	{ "set",  applysetting },
-	/* { "rule",  applyrule, }, */
-	/* { "bind",  applybind, }, */
-};
-
-/* "set" keyword options, used by applysetting() to parse arguments
- * the final argument should be an array of char *'s and contain any
- * optional string arguments supported by the setting function */
-static Setting settings[] = {
-	{ "gap",    adjustgappx,     stdopts },
-	{ "border", adjustborderpx,  stdopts },
-	{ "colour", adjustbordercol, colopts },
-	/* { "split",       adjustsplit,    stdopts }, */
-	/* { "stack",       adjustnstack,   stdopts }, */
-	/* { "master",      adjustnmaster,  stdopts }, */
-	/* { "focus",       adjustfocus,    (char *[]){ "windowid",  NULL         } }, */
-	/* { "layout",      adjustlayout,   (char *[]){ "reset",     NULL         } }, */
-};
-
-/* config needs access to everything defined */
+/* config needs access to everything defined in the main header */
 #include "config.h"
+
+#endif

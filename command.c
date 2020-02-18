@@ -129,7 +129,7 @@ void cmdfocus(const Arg *arg)
 		if (!strcmp(opt, "relative")) { /* relative forwards */
 			iarg--;
 			while (iarg > 0 && (tmp = c)) {
-				FIND_SNEXT(c, tmp, selws->clients);
+				FIND_SNEXT(c, tmp, selws->stack);
 				iarg--;
 			}
 		}
@@ -138,7 +138,7 @@ void cmdfocus(const Arg *arg)
 		if (!strcmp(opt, "relative")) { /* relative backwards */
 			iarg++;
 			while (iarg < 0 && (tmp = c)) {
-				FIND_SPREV(c, tmp, selws->clients);
+				FIND_SPREV(c, tmp, selws->stack);
 				iarg++;
 			}
 		}

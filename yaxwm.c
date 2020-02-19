@@ -436,7 +436,7 @@ void eventhandle(xcb_generic_event_t *ev)
 				return;
 			DBG("button press event - mouse button %d - window: 0x%x", b->detail, b->event)
 			focus(c);
-			restack(selws);
+			restack(c->ws);
 			xcb_allow_events(con, XCB_ALLOW_REPLAY_POINTER, b->time);
 			if (CLNMOD(MOD) == CLNMOD(b->state) && !c->fullscreen) {
 				if (b->detail == BUTTON2) {
@@ -456,38 +456,38 @@ void eventhandle(xcb_generic_event_t *ev)
 		case XCB_BUTTON_RELEASE:
 		{
 			xcb_void_cookie_t cookie;
-			xcb_button_release_event_t *b = (xcb_button_release_event_t *)ev;
 
-			if (!mousebtn || !b->event || !(c = selws->sel))
-				return;
-			DBG("button release event, ungrabbing pointer")
-			cookie = xcb_ungrab_pointer_checked(con, XCB_CURRENT_TIME);
-			if ((error = xcb_request_check(con, cookie))) {
-				free(error);
-				errx(1, "failed to ungrab pointer");
+			if (mousebtn) {
+				DBG("button release event, ungrabbing pointer")
+					cookie = xcb_ungrab_pointer_checked(con, XCB_CURRENT_TIME);
+				if ((error = xcb_request_check(con, cookie))) {
+					free(error);
+					errx(1, "failed to ungrab pointer");
+				}
+				if (mousebtn == BUTTON3)
+					ignorefocusevents();
+				mousebtn = 0;
 			}
-			if (mousebtn == BUTTON3)
-				ignorefocusevents();
-			mousebtn = 0;
 			return;
 		}
 		case XCB_MOTION_NOTIFY:
 		{
 			xcb_motion_notify_event_t *e = (xcb_motion_notify_event_t *)ev;
 
-			if (!mousebtn || !(c = selws->sel) || c->fullscreen) {
+			if (!mousebtn) {
 				if ((m = pointertomon(e->root_x, e->root_y)) != selws->mon) {
 					unfocus(selws->sel, 1);
 					changews(m->ws, 1);
 					focus(NULL);
 				}
 				return;
-			}
+			} else if (!(c = selws->sel) || c->fullscreen)
+				return;
 			/* we shouldn't need to do this and just use the event root_x, root_y
 			 * but for whatever reason there is some buffering happening and this causes
 			 * a flush, using xcb_flush or xcb_aux_sync() do not seem to work in this case */
 			if (pointerxy(&x, &y)) {
-				if ((e->time - lasttime) <= (1000 / 60))
+				if ((e->time - lasttime) < (1000 / 60))
 					return;
 				lasttime = e->time;
 				if (!c->floating && c->ws->layout) {
@@ -517,9 +517,8 @@ void eventhandle(xcb_generic_event_t *ev)
 
 			sym = xcb_key_symbols_get_keysym(keysyms, e->detail, 0);
 			for (i = 0; i < LEN(binds); i++)
-				if (sym == binds[i].keysym && binds[i].func
-						&& CLNMOD(binds[i].mod) == CLNMOD(e->state)
-						&& ev->response_type == binds[i].type)
+				if (ev->response_type == binds[i].type && sym == binds[i].keysym
+						&& CLNMOD(binds[i].mod) == CLNMOD(e->state) && binds[i].func)
 				{
 					DBGBIND(ev, CLNMOD(e->state), sym)
 					binds[i].func(&(binds[i].arg));
@@ -532,14 +531,9 @@ void eventhandle(xcb_generic_event_t *ev)
 			xcb_get_window_attributes_reply_t *wa;
 			xcb_map_request_event_t *e = (xcb_map_request_event_t *)ev;
 
-			if (!e->window || !(wa = winattr(e->window)))
+			if (!e->window || !(wa = winattr(e->window))
+					|| (c = wintoclient(e->window)) || (p = wintopanel(e->window)))
 				return;
-			if ((c = wintoclient(e->window)) || (p = wintopanel(e->window))) {
-				/* I don't believe we should be getting map events for managed windows since
-				 * we mask off the SUBSTRUCTURE_NOTIFY event from the root window when mapping */
-				free(wa);
-				return;
-			}
 			DBG("map request event for unmanaged window: 0x%x", e->window)
 			if (winprop(e->window, netatoms[WindowType]) == netatoms[WindowTypeDock])
 				initpanel(e->window);
@@ -552,73 +546,45 @@ void eventhandle(xcb_generic_event_t *ev)
 		{
 			xcb_unmap_notify_event_t *e = (xcb_unmap_notify_event_t *)ev;
 
-			if (!(c = wintoclient(e->window)) && !(p = wintopanel(e->window)))
-				return;
-			if (XCB_EVENT_SENT(e)) {
-				DBG("unmap notify from client message on window: 0x%x - hiding", e->window)
-				setwinstate(e->window, XCB_ICCCM_WM_STATE_WITHDRAWN);
-			} else if (c)
+			if ((c = wintoclient(e->window)))
 				freeclient(c, 0);
-			else
+			else if ((p = wintopanel(e->window)))
 				freepanel(p, 0);
 			return;
 		}
 		case XCB_CLIENT_MESSAGE:
 		{
 			xcb_client_message_event_t *e = (xcb_client_message_event_t *)ev;
+			uint32_t *d = e->data.data32;
 
-			if (e->window == root && e->type == netatoms[CurrentDesktop]) {
-				DBG("net current desktop client message")
-				view(&(const Arg){.ui = e->data.data32[0]});
+			if (!(c = wintoclient(e->window)) && !(p = wintopanel(e->window))) {
+				if (e->window == root && e->type == netatoms[CurrentDesktop]) {
+					view(&(const Arg){.ui = d[0]});
+					xcb_aux_sync(con);
+				}
 				return;
-			}
-			if (!(c = wintoclient(e->window)) && !(p = wintopanel(e->window)))
-				return;
-			if (e->type == netatoms[ActiveWindow]) {
-				setwinvis(e->window, 1);
-				if (c) {
-					DBG("net active window client message - window: 0x%x - workspace: %d "
-							"- current workspace: %d", c->win, c->ws->num, selws->num)
-					c->mapped = 1;
+			} else if (e->type == netatoms[ActiveWindow]) {
+				setwinvis(c, p, 1);
+				if (p)
+					updatestruts(p, 1);
+				else {
 					if (c->ws != selws) {
 						unfocus(selws->sel, 1);
 						changews(c->ws, 0);
 					}
-					if (c->ws != c->ws->mon->ws)
-						layoutws(NULL);
 					focus(c);
-					restack(c->ws);
-				} else {
-					p->mapped = 1;
-					updatestruts(p, 1);
-					layoutws(selws);
-					focus(NULL);
 				}
 			} else if (e->type == netatoms[State]) {
-				if (c && (e->data.data32[1] == netatoms[Fullscreen]
-							|| e->data.data32[2] == netatoms[Fullscreen]))
-					setfullscreen(c, (e->data.data32[0] == 1
-								|| (e->data.data32[0] == 2 && !c->fullscreen)));
-				else if (e->data.data32[1] == netatoms[Hidden]
-						|| e->data.data32[2] == netatoms[Hidden]) {
-					if (c)
-						setwinvis(e->window, (e->data.data32[0] == 1
-									|| (e->data.data32[0] == 2 && !c->mapped)));
-					else
-						setwinvis(e->window, (e->data.data32[0] == 1
-									|| (e->data.data32[0] == 2 && !p->mapped)));
-				}
+				int mapped = c ? c->mapped : p->mapped;
+				if (c && (d[1] == netatoms[Fullscreen] || d[2] == netatoms[Fullscreen]))
+					setfullscreen(c, (d[0] == 1 || (d[0] == 2 && !c->fullscreen)));
+				else if (d[1] == netatoms[Hidden] || d[2] == netatoms[Hidden])
+					setwinvis(c, p, (d[0] == 1 || (d[0] == 2 && !mapped)));
 			} else if (e->type == wmatoms[ChangeState]) {
-				if (e->data.data32[0] == XCB_ICCCM_WM_STATE_ICONIC
-						|| e->data.data32[0] == XCB_ICCCM_WM_STATE_WITHDRAWN)
-					setwinvis(e->window, 0);
-				else if (e->data.data32[0] == XCB_ICCCM_WM_STATE_NORMAL)
-					setwinvis(e->window, 1);
-				if (c)
-					c->mapped = e->data.data32[0] == XCB_ICCCM_WM_STATE_NORMAL;
-				else
-					p->mapped = e->data.data32[0] == XCB_ICCCM_WM_STATE_NORMAL;
+				setwinvis(c, p, (d[0] == XCB_ICCCM_WM_STATE_NORMAL));
 			}
+			layoutws(NULL);
+			focus(NULL);
 			return;
 		}
 		case XCB_PROPERTY_NOTIFY:
@@ -640,8 +606,10 @@ void eventhandle(xcb_generic_event_t *ev)
 					winhints(c);
 					break;
 				}
-				if (e->atom == netatoms[WindowType])
+				if (e->atom == netatoms[WindowType]) {
 					wintype(c);
+					layoutws(c->ws);
+				}
 			}
 			return;
 		}
@@ -1034,14 +1002,18 @@ void initclient(xcb_window_t win, xcb_window_t trans)
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	}
 	PROP_APPEND(root, netatoms[ClientList], XCB_ATOM_WINDOW, 32, 1, &c->win);
-	setwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
 	PROP_REPLACE(c->win, netatoms[FrameExtents], XCB_ATOM_CARDINAL, 32, 4, frame);
-	if (c->ws == selws)
-		unfocus(selws->sel, 0);
+	MOVERESIZE(c->win, c->x, c->y, c->w, c->h);
+	setwinvis(c, NULL, 1);
+	if (c->ws == c->ws->mon->ws) {
+		if (c->ws == selws)
+			unfocus(selws->sel, 0);
+		MOVERESIZE(c->win, c->x, c->y, c->w, c->h);
+		layoutws(c->ws);
+	} else
+		MOVE(c->win, H(c) * -2, c->y);
 	c->ws->sel = c;
-	layoutws(c->ws);
 	xcb_map_window(con, c->win);
-	c->mapped = 1;
 	focus(NULL);
 	if (clientcbfunc)
 		clientcbfunc(c);
@@ -1138,8 +1110,8 @@ void initpanel(xcb_window_t win)
 	attachpanel(p);
 	xcb_change_window_attributes(con, p->win, XCB_CW_EVENT_MASK,
 			(uint []){ XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY });
+	setwinvis(NULL, p, 1);
 	xcb_map_window(con, p->win);
-	p->mapped = 1;
 	layoutws(NULL);
 	DBG("new panel mapped -- monitor: %s -- geometry: %d,%d @ %dx%d",
 			p->mon->name, p->x, p->y, p->w, p->h)
@@ -1351,18 +1323,16 @@ void killclient(const Arg *arg)
 
 void layoutws(Workspace *ws)
 { /* show currently visible clients and restack workspaces */
-	if (ws)
-		showhide(ws->stack);
-	else FOR_EACH(ws, workspaces)
-		showhide(ws->stack);
 	if (ws) {
+		showhide(ws->stack);
 		if (ws->layout)
 			ws->layout(ws);
-		restack(ws);
 	} else FOR_EACH(ws, workspaces) {
+		showhide(ws->stack);
 		if (ws == ws->mon->ws && ws->layout)
 			ws->layout(ws);
 	}
+	restack(ws);
 }
 
 void monocle(Workspace *ws)
@@ -1486,6 +1456,8 @@ void restack(Workspace *ws)
 {
 	Client *c;
 
+	if (!ws)
+		ws = selws;
 	if (!(c = ws->sel))
 		return;
 	DBG("restacking clients on workspace: %d", ws->num)
@@ -1557,22 +1529,33 @@ void setwinstate(xcb_window_t win, uint32_t state)
 	PROP_REPLACE(win, wmatoms[WMState], wmatoms[WMState], 32, 2, s);
 }
 
-void setwinvis(xcb_window_t win, int visible)
+void setwinvis(Client *c, Panel *p, int visible)
 {
-	/* remove SUBSTRUCTURE_NOTIFY from the root window event mask
-	 * temporarily so we don't receive (un)map events */
-	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK,
-			(uint []){ ROOTMASK & ~XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY });
-	if (visible) {
+	int x, y, mapped;
+	xcb_window_t win;
+	
+	if (c)
+		x = c->x, y = c->y, mapped = c->mapped, win = c->win;
+	else
+		x = p->x, y = p->y, mapped = p->mapped, win = p->win;
+
+	if (visible && !mapped) {
 		setwinstate(win, XCB_ICCCM_WM_STATE_NORMAL);
-		/* xcb_delete_property(con, win, netatoms[State]); */
-		xcb_map_window(con, win);
-	} else {
-		xcb_unmap_window(con, win);
-		/* PROP_REPLACE(win, netatoms[State], netatoms[State], 32, 1, &netatoms[Hidden]); */
+		PROP_REPLACE(win, netatoms[State], netatoms[State], 32, 0, (uchar *)0);
+		MOVE(win, x, y);
+		if (c)
+			c->mapped = 1;
+		else
+			p->mapped = 1;
+	} else if (!visible && mapped) {
 		setwinstate(win, XCB_ICCCM_WM_STATE_ICONIC);
+		PROP_REPLACE(win, netatoms[State], netatoms[State], 32, 1, &netatoms[Hidden]);
+		MOVE(win, x * -2, y);
+		if (c)
+			c->mapped = 0;
+		else
+			p->mapped = 0;
 	}
-	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, (uint []){ ROOTMASK });
 }
 
 void setnetworkareavp(void)
@@ -1621,24 +1604,14 @@ void setfullscreen(Client *c, int fullscreen)
 	if (fullscreen && !c->fullscreen) {
 		PROP_REPLACE(c->win, netatoms[State], XCB_ATOM_ATOM, 32, 1, &netatoms[Fullscreen]);
 		c->oldstate = c->floating;
-		c->fullscreen = 1;
-		c->old_bw = c->bw;
-		c->bw = 0;
-		c->floating = 1;
-		resize(c, m->x, m->y, m->w, m->h, c->bw);
-		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-		xcb_flush(con);
+		c->fullscreen = c->floating = 1;
+		resize(c, m->x, m->y, m->w, m->h, 0);
 	} else if (!fullscreen && c->fullscreen) {
 		PROP_REPLACE(c->win, netatoms[State], XCB_ATOM_ATOM, 32, 0, (uchar *)0);
-		c->floating = c->oldstate;
 		c->fullscreen = 0;
-		c->bw = c->old_bw;
-		c->x = c->old_x;
-		c->y = c->old_y;
-		c->w = c->old_w;
-		c->h = c->old_h;
+		c->floating = c->oldstate;
+		c->x = c->old_x, c->y = c->old_y, c->w = c->old_w, c->h = c->old_h;
 		resize(c, c->x, c->y, c->w, c->h, c->bw);
-		layoutws(c->ws);
 	}
 }
 
@@ -1747,20 +1720,16 @@ void showhide(Client *c)
 {
 	if (!c)
 		return;
-	if (c->ws == c->ws->mon->ws) { /* show clients top down */
-		if (c->mapped) {
-			DBG("showing window: 0x%x - workspace: %d", c->win, c->ws->num)
-			MOVE(c->win, c->x, c->y);
-			/* if ((!c->ws->layout || c->floating) && !c->fullscreen) */
-			/* 	resize(c, c->x, c->y, c->w, c->h, c->bw); */
-		}
+	if (c->ws == c->ws->mon->ws && c->mapped) { /* show clients top down */
+		DBG("showing window: 0x%x - workspace: %d", c->win, c->ws->num)
+		MOVE(c->win, c->x, c->y);
+		if ((!c->ws->layout || c->floating) && !c->fullscreen)
+			resize(c, c->x, c->y, c->w, c->h, c->bw);
 		showhide(c->snext);
 	} else { /* hide clients bottom up */
 		showhide(c->snext);
-		if (c->mapped) {
-			DBG("hiding window: 0x%x - workspace: %d", c->win, c->ws->num)
-			MOVE(c->win, W(c) * -2, c->y);
-		}
+		DBG("hiding window: 0x%x - workspace: %d", c->win, c->ws->num)
+		MOVE(c->win, W(c) * -2, c->y);
 	}
 }
 

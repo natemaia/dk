@@ -69,16 +69,16 @@ static Rule rules[] = {
 };
 
 static Bind binds[] = {
-	/* type,   modifiers, keysym,    function,      arg */
-	{ PRESS,   MOD|SHIFT,      XK_Return, cmdrun,       {.v = term} },    /* terminal emulator */
-	{ PRESS,   MOD,            XK_p,      cmdrun,       {.v = menu} },    /* menu program */
-	{ PRESS,   0,              XK_Print,  cmdrun,       {.v = scrot} },   /* screenshot program */
-	{ RELEASE, MOD,            XK_Print,  cmdrun,       {.v = scrots} },  /* selection box screenshot */
-	{ PRESS,   0,              MUTE,      cmdrun,       {.v = voltg} },   /* volume mute command */
-	{ PRESS,   0,              VOLUP,     cmdrun,       {.v = volup} },   /* volume up command */
-	{ PRESS,   0,              VOLDOWN,   cmdrun,       {.v = voldn} },   /* volume down command */
-	{ PRESS,   MOD,            XK_Insert, cmdrun,       {.v = volup} },   /* volume up command */
-	{ PRESS,   MOD,            XK_Delete, cmdrun,       {.v = voldn} },   /* volume down command */
+	/* type,   modifiers,      keysym,    function,      arg */
+	{ PRESS,   MOD|SHIFT,      XK_Return, cmdexec,      {.v = term} },    /* terminal emulator */
+	{ PRESS,   MOD,            XK_p,      cmdexec,      {.v = menu} },    /* menu program */
+	{ PRESS,   0,              XK_Print,  cmdexec,      {.v = scrot} },   /* screenshot program */
+	{ RELEASE, MOD,            XK_Print,  cmdexec,      {.v = scrots} },  /* selection box screenshot */
+	{ PRESS,   0,              MUTE,      cmdexec,      {.v = voltg} },   /* volume mute command */
+	{ PRESS,   0,              VOLUP,     cmdexec,      {.v = volup} },   /* volume up command */
+	{ PRESS,   0,              VOLDOWN,   cmdexec,      {.v = voldn} },   /* volume down command */
+	{ PRESS,   MOD,            XK_Insert, cmdexec,      {.v = volup} },   /* volume up command */
+	{ PRESS,   MOD,            XK_Delete, cmdexec,      {.v = voldn} },   /* volume down command */
 	{ PRESS,   MOD,            XK_q,      killclient,   {0} },            /* close active window */
 	{ PRESS,   MOD,            XK_Tab,    swapclient,   {0} },            /* swap window with master and vise versa */
 	{ PRESS,   MOD|SHIFT,      XK_space,  togglefloat,  {0} },            /* toggle active window floating state */

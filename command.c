@@ -3,7 +3,7 @@
 /* function prototypes */
 void cmdfocus(const Arg *arg);
 void cmdmove(const Arg *arg);
-void cmdrun(const Arg *arg);
+void cmdexec(const Arg *arg);
 void cmdset(const Arg *arg);
 void cmdws(const Arg *arg);
 void cmdborder(const Arg *arg, char *opt);
@@ -16,15 +16,16 @@ void cmdsplit(const Arg *arg, char *opt);
 void cmdparse(char *buf);
 
 /* used specifically by other functions */
-char *parseintopts(char **argv, char **opts, int *iarg);
+char *parseopts(char **argv, char **opts, int *argi);
 int adjbdorgap(int i, char *opt, int changing, int other);
+void adjmvfocus(const Arg *arg, void (*fn)(const Arg *));
 
 /* fifo parser keywords and functions,
  * functions must have a prototype like:  void func(const Arg *);
  * remaining arguments will be tokenized as an array of char *'s in arg->v
  * where the function is expected to know how to handle and use them */
 static Keyword keywords[] = {
-	{ "exec",   cmdrun },   /* none */
+	{ "exec",   cmdexec },   /* none */
 	{ "move",   cmdmove },  /* listopts */
 	{ "focus",  cmdfocus }, /* listopts */
 	{ "ws",     cmdws },    /* wsopts */
@@ -38,11 +39,11 @@ static Keyword keywords[] = {
 };
 
 static const char *minopts[]  = { "relative", NULL };
+static const char *listopts[] = { "next",    "prev", NULL };
 static const char *stdopts[]  = { "reset",   "relative", NULL };
 static const char *lytopts[]  = { "tile",    "monocle", "none", NULL };
 static const char *wsopts[]   = { "view",    "send",    "follow",  NULL };
 static const char *colopts[]  = { "reset",   "focus",   "unfocus", NULL };
-static const char *listopts[] = { "next",    "prev",    "first",  "last", NULL };
 
 /* "set" keyword options, used by cmdset() to parse arguments
  * the final argument should be an array of char *'s and contain any
@@ -74,6 +75,25 @@ int adjbdorgap(int i, char *opt, int changing, int other)
 	} else if (!(r = MAX(MIN(i, (selws->mon->winarea_h / 6) - changing), 0) - other))
 		return UNSET;
 	return r;
+}
+
+void adjmvfocus(const Arg *arg, void (*fn)(const Arg *))
+{
+	Arg a;
+	char *opt;
+
+	if (!selws->sel || selws->sel->fullscreen || selws->sel->floating)
+		return;
+	else if (!(opt = parseopts((char **)arg->v, (char **)listopts, &a.i)) && a.i == UNSET)
+		return;
+	else if ((opt && !strcmp(opt, "next")) || (a.i > 0 && a.i != UNSET))
+		a.i = opt ? +1 : a.i;
+	else if ((opt && !strcmp(opt, "prev")) || a.i < 0)
+		a.i = opt ? -1 : a.i;
+	while (a.i) {
+		fn(&a);
+		a.i += a.i > 0 ? -1 : 1;
+	}
 }
 
 void cmdborder(const Arg *arg, char *opt)
@@ -112,46 +132,7 @@ void cmdcolour(const Arg *arg, char *opt)
 
 void cmdfocus(const Arg *arg)
 {
-	int i = 0, iarg;
-	char *opt;
-	Client *c = NULL, *tmp = NULL;
-
-	if (!selws->sel || selws->sel->fullscreen)
-		return;
-	if (!(opt = parseintopts((char **)arg->v, (char **)listopts, &iarg)) && iarg == UNSET)
-		return;
-	if ((opt && !strcmp(opt, "first")) || iarg == 0) {
-		c = selws->clients;
-	} else if (opt && !strcmp(opt, "last")) {
-		FIND_STAIL(c, selws->stack);
-	} else if (opt && (!strcmp(opt, "next") || (!strcmp(opt, "relative") && iarg > 0))) {
-		FIND_SNEXT(c, selws->sel, selws->stack);
-		if (!strcmp(opt, "relative")) { /* relative forwards */
-			iarg--;
-			while (iarg > 0 && (tmp = c)) {
-				FIND_SNEXT(c, tmp, selws->stack);
-				iarg--;
-			}
-		}
-	} else if (opt && (!strcmp(opt, "prev") || (!strcmp(opt, "relative") && iarg < 0))) {
-		FIND_SPREV(c, selws->sel, selws->stack);
-		if (!strcmp(opt, "relative")) { /* relative backwards */
-			iarg++;
-			while (iarg < 0 && (tmp = c)) {
-				FIND_SPREV(c, tmp, selws->stack);
-				iarg++;
-			}
-		}
-	} else FOR_EACH(c, selws->clients) { /* absolute, try to find client at index arg->i */
-		if (i == iarg)
-			break;
-		i++;
-	}
-
-	if (c) {
-		focus(c);
-		restack(c->ws);
-	}
+	adjmvfocus(arg, changefocus);
 }
 
 void cmdgappx(const Arg *arg, char *opt)
@@ -176,37 +157,7 @@ void cmdlayout(const Arg *arg, char *opt)
 
 void cmdmove(const Arg *arg)
 {
-	Arg a;
-	char *opt;
-	int i = 0, iarg;
-
-	if (!selws->sel || selws->sel->fullscreen || selws->sel->floating)
-		return;
-	if (!(opt = parseintopts((char **)arg->v, (char **)listopts, &iarg)) && iarg == UNSET)
-		return;
-	if ((opt && !strcmp(opt, "first")) || iarg == 0) {
-		detach(selws->sel, 1);
-	} else if (opt && !strcmp(opt, "last")) {
-		detach(selws->sel, 0);
-		attach(selws->sel, 0);
-	} else if (opt && (!strcmp(opt, "next") || (!strcmp(opt, "relative") && iarg > 0))) {
-		a.i = +1;
-		movestack(&a);
-		if (!strcmp(opt, "relative")) /* relative forwards */
-			for (i = iarg - 1; i > 0; i--)
-				movestack(&a);
-	} else if (opt && (!strcmp(opt, "prev") || (!strcmp(opt, "relative") && iarg < 0))) {
-		a.i = -1;
-		movestack(&a);
-		if (!strcmp(opt, "relative")) /* relative backwards */
-			for (i = iarg + 1; i < 0; i++)
-				movestack(&a);
-	} else if (iarg > 0) {
-		a.i = +1;
-		detach(selws->sel, 1); /* attach to head to begin */
-		for (i = iarg; i > 0; i--)
-			movestack(&a);
-	}
+	adjmvfocus(arg, movestack);
 }
 
 void cmdnmaster(const Arg *arg, char *opt)
@@ -223,7 +174,7 @@ void cmdnstack(const Arg *arg, char *opt)
 	setnstack(&a);
 }
 
-void cmdrun(const Arg *arg)
+void cmdexec(const Arg *arg)
 {
 	DBG("user run command: %s", ((char **)arg->v)[0])
 	if (fork())
@@ -283,7 +234,7 @@ void cmdws(const Arg *arg)
 
 	if (!selws->sel || selws->sel->fullscreen)
 		return;
-	opt = parseintopts((char **)arg->v, (char **)wsopts, &a.i);
+	opt = parseopts((char **)arg->v, (char **)wsopts, &a.i);
 	if (a.i > (int)numws || a.i < 0)
 		return;
 	if (opt) {
@@ -323,15 +274,15 @@ out:
 	free(dbuf);
 }
 
-char *parseintopts(char **argv, char **opts, int *iarg)
+char *parseopts(char **argv, char **opts, int *argi)
 {
 	int n;
 	char *opt = NULL;
 
-	*iarg = UNSET;
+	*argi = UNSET;
 	while (*argv) {
 		if ((n = strtol(*argv, NULL, 0)) || **argv == '0')
-			*iarg = n;
+			*argi = n;
 		else for (; !opt && opts && *opts; opts++)
 			if (!strcmp(*opts, *argv))
 				opt = *argv;
@@ -339,4 +290,3 @@ char *parseintopts(char **argv, char **opts, int *iarg)
 	}
 	return opt;
 }
-

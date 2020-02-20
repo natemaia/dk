@@ -155,16 +155,14 @@ enum Cursors {
 };
 
 enum WMAtoms {
-	Protocols, Delete, WMState, ChangeState, TakeFocus, Utf8Str
+	Protocols, Delete, WMState, TakeFocus, Utf8Str
 };
 
 enum NetAtoms {
-	Supported,       Name,             State,          Check,
-	Fullscreen,      NumDesktops,      CurrentDesktop, ActiveWindow,
-	WindowType,      WindowTypeDialog, Desktop,        ClientList,
-	DesktopViewport, DesktopGeometry,  DesktopNames,   WindowTypeDock,
-	Strut,           StrutPartial,     FrameExtents,   WindowTypeMenu,
-	WorkArea,        Hidden,
+	Supported,       Name,             State,            Check,           Fullscreen,
+	ActiveWindow,    WindowType,       WindowTypeDialog, WindowTypeDock,  FrameExtents,
+	Desktop,         CurrentDesktop,   NumDesktops,      DesktopViewport, DesktopGeometry,
+	DesktopNames,    ClientList,       Strut,            StrutPartial,    WorkArea,
 };
 
 enum Gravity {
@@ -173,7 +171,6 @@ enum Gravity {
 
 union Arg {
 	int i;
-	uint ui;
 	float f;
 	const void *v;
 };
@@ -198,7 +195,6 @@ struct Rule {
 struct Panel {
 	int x, y, w, h;
 	int strut_l, strut_r, strut_t, strut_b;
-	int mapped;
 	Panel *next;
 	Monitor *mon;
 	xcb_window_t win;
@@ -210,7 +206,7 @@ struct Client {
 	int max_w, max_h, min_w, min_h;
 	int base_w, base_h, increment_w, increment_h;
 	float min_aspect, max_aspect;
-	int sticky, mapped, fixed, floating, fullscreen, urgent, nofocus, oldstate;
+	int sticky, fixed, floating, fullscreen, urgent, nofocus, oldstate;
 	Client *next, *snext;
 	Workspace *ws;
 	xcb_window_t win;
@@ -235,7 +231,7 @@ struct Monitor {
 };
 
 struct Workspace {
-	uint num;
+	int num;
 	char *name;
 	uint nmaster;
 	uint nstack;
@@ -263,37 +259,34 @@ static const char *cursors[] = {
 };
 
 static const char *wmatomnames[] = {
-	[WMState] = "WM_STATE",
-	[Utf8Str] = "UTF8_STRING",
+	[Delete] = "WM_DELETE_WINDOW",
 	[Protocols] = "WM_PROTOCOLS",
 	[TakeFocus] = "WM_TAKE_FOCUS",
-	[Delete] = "WM_DELETE_WINDOW",
-	[ChangeState] = "WM_CHANGE_STATE",
+	[Utf8Str] = "UTF8_STRING",
+	[WMState] = "WM_STATE",
 };
 
 static const char *netatomnames[] = {
-	[Name] = "_NET_WM_NAME",
-	[State] = "_NET_WM_STATE",
-	[Strut] = "_NET_WM_STRUT",
-	[WorkArea] = "_NET_WORKAREA",
-	[Desktop] = "_NET_WM_DESKTOP",
-	[Supported] = "_NET_SUPPORTED",
-	[Hidden] = "_NET_WM_STATE_HIDDEN",
-	[ClientList] = "_NET_CLIENT_LIST",
-	[Check] = "_NET_SUPPORTING_WM_CHECK",
-	[WindowType] = "_NET_WM_WINDOW_TYPE",
-	[FrameExtents] = "_NET_FRAME_EXTENTS",
-	[DesktopNames] = "_NET_DESKTOP_NAMES",
 	[ActiveWindow] = "_NET_ACTIVE_WINDOW",
-	[StrutPartial] = "_NET_WM_STRUT_PARTIAL",
-	[Fullscreen] = "_NET_WM_STATE_FULLSCREEN",
+	[Check] = "_NET_SUPPORTING_WM_CHECK",
+	[ClientList] = "_NET_CLIENT_LIST",
 	[CurrentDesktop] = "_NET_CURRENT_DESKTOP",
-	[NumDesktops] = "_NET_NUMBER_OF_DESKTOPS",
-	[DesktopViewport] = "_NET_DESKTOP_VIEWPORT",
 	[DesktopGeometry] = "_NET_DESKTOP_GEOMETRY",
-	[WindowTypeDock] = "_NET_WM_WINDOW_TYPE_DOCK",
-	[WindowTypeMenu] = "_NET_WM_WINDOW_TYPE_MENU",
+	[DesktopNames] = "_NET_DESKTOP_NAMES",
+	[DesktopViewport] = "_NET_DESKTOP_VIEWPORT",
+	[Desktop] = "_NET_WM_DESKTOP",
+	[FrameExtents] = "_NET_FRAME_EXTENTS",
+	[Fullscreen] = "_NET_WM_STATE_FULLSCREEN",
+	[Name] = "_NET_WM_NAME",
+	[NumDesktops] = "_NET_NUMBER_OF_DESKTOPS",
+	[State] = "_NET_WM_STATE",
+	[StrutPartial] = "_NET_WM_STRUT_PARTIAL",
+	[Strut] = "_NET_WM_STRUT",
+	[Supported] = "_NET_SUPPORTED",
 	[WindowTypeDialog] = "_NET_WM_WINDOW_TYPE_DIALOG",
+	[WindowTypeDock] = "_NET_WM_WINDOW_TYPE_DOCK",
+	[WindowType] = "_NET_WM_WINDOW_TYPE",
+	[WorkArea] = "_NET_WORKAREA",
 };
 
 char *fifo;                             /* path to fifo pipe YAXWM_FIFO env variable */
@@ -302,8 +295,8 @@ int fifofd;                             /* fifo pipe file descriptor */
 int scr_w, scr_h;                       /* root window size */
 int randrbase = -1;                     /* randr extension response */
 int defaultborder[3];                   /* default border values used for resetting */
+int numws = 0;                          /* number of workspaces currently allocated */
 uint running = 1;                       /* continue handling events */
-uint numws = 0;                         /* number of workspaces currently allocated */
 uint mousebtn = 0;                      /* mouse button currently being pressed */
 uint numlockmask = 0;                   /* numlock modifier bit mask */
 Panel *panels;                          /* panel linked list head */
@@ -347,7 +340,7 @@ void grabbuttons(Client *c, int focused);
 void grabkeys(void);
 int grabpointer(xcb_cursor_t cursor);
 void gravitate(Client *c, int vert, int horz, int matchgap);
-void ignorefocusevents(void);
+void eventignore(uint8_t type);
 void initatoms(xcb_atom_t *atoms, const char **names, int num);
 void initclient(xcb_window_t win, xcb_window_t trans);
 void initexisting(void);
@@ -356,23 +349,26 @@ void initpanel(xcb_window_t win);
 int initrandr(void);
 void initwm(void);
 void initworkspaces(void);
-Workspace *initws(uint num, WsRule *r);
+Workspace *initws(int num, WsRule *r);
 char *itoa(int n, char *s);
-Workspace *itows(uint num);
+Workspace *itows(int num);
 void killclient(const Arg *arg);
 void layoutws(Workspace *ws);
 void monocle(Workspace *ws);
 void mousemotion(xcb_button_t b);
 Client *nexttiled(Client *c);
 Monitor *outputtomon(xcb_randr_output_t id);
-Monitor *pointertomon(int x, int y);
-int pointerxy(int *x, int *y);
+Monitor *coordtomon(int x, int y);
+Client *coordtoclient(int x, int y);
+void mvrmouse(int mv);
+int querypointer(int *x, int *y);
 Monitor *randrclone(xcb_randr_output_t id, int x, int y);
 void resetorquit(const Arg *arg);
 void resize(Client *c, int x, int y, int w, int h, int bw);
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int interact);
 void restack(Workspace *ws);
 int ruleregcmp(regex_t *r, char *class, char *inst);
+void ungrabpointer(void);
 void send(const Arg *arg);
 int sendevent(Client *c, int wmproto);
 void setborderpx(const Arg *arg);
@@ -400,7 +396,7 @@ void tile(Workspace *ws);
 void togglefloat(const Arg *arg);
 void unfocus(Client *c, int focusroot);
 void updatenumlock(void);
-void updatenumws(uint needed);
+void updatenumws(int needed);
 int updateoutputs(xcb_randr_output_t *outputs, int len, xcb_timestamp_t timestamp);
 int updaterandr(void);
 void updatestruts(Panel *p, int apply);

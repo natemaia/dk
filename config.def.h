@@ -7,9 +7,9 @@
 #define MOD    ALT
 
 /* save some repetitive typing with the workspace keybinds */
-#define WSBIND(ws, key) { PRESS, MOD,       key, view,   {.ui = ws} },\
-                        { PRESS, MOD|SHIFT, key, send,   {.ui = ws} },\
-                        { PRESS, MOD|CTRL,  key, follow, {.ui = ws} }
+#define WSBIND(ws, key) { PRESS, MOD,       key, view,   {.i = ws} },\
+                        { PRESS, MOD|SHIFT, key, send,   {.i = ws} },\
+                        { PRESS, MOD|CTRL,  key, follow, {.i = ws} }
 
 /* enable focus follows mouse */
 static const int focusmouse = 1;

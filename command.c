@@ -3,6 +3,7 @@
 /* function prototypes */
 void cmdfocus(const Arg *arg);
 void cmdmove(const Arg *arg);
+void cmdmouse(const Arg *arg);
 void cmdexec(const Arg *arg);
 void cmdset(const Arg *arg);
 void cmdws(const Arg *arg);
@@ -16,20 +17,22 @@ void cmdsplit(const Arg *arg, char *opt);
 void cmdparse(char *buf);
 
 /* used specifically by other functions */
-char *parseopts(char **argv, char **opts, int *argi);
 int adjbdorgap(int i, char *opt, int changing, int other);
 void adjmvfocus(const Arg *arg, void (*fn)(const Arg *));
+char *parseopts(char **argv, char **opts, int *argi);
+void mvresizemouse(int mv);
 
 /* fifo parser keywords and functions,
  * functions must have a prototype like:  void func(const Arg *);
  * remaining arguments will be tokenized as an array of char *'s in arg->v
  * where the function is expected to know how to handle and use them */
 static Keyword keywords[] = {
-	{ "exec",   cmdexec },   /* none */
-	{ "move",   cmdmove },  /* listopts */
-	{ "focus",  cmdfocus }, /* listopts */
-	{ "ws",     cmdws },    /* wsopts */
-	{ "set",    cmdset },   /* settings[] below */
+	{ "ws",      cmdws },      /* wsopts */
+	{ "set",     cmdset },     /* settings[] below */
+	{ "exec",    cmdexec },    /* none */
+	{ "move",    cmdmove },    /* listopts */
+	{ "focus",   cmdfocus },   /* listopts */
+	{ "mouse",   cmdmouse },   /* mouseopts */
 
 	/* these just ignore args and operate on the current
 	 * window so we can use existing functions */
@@ -38,12 +41,13 @@ static Keyword keywords[] = {
 	{ "float",  togglefloat },
 };
 
-static const char *minopts[]  = { "relative", NULL };
-static const char *listopts[] = { "next",    "prev", NULL };
-static const char *stdopts[]  = { "reset",   "relative", NULL };
-static const char *lytopts[]  = { "tile",    "monocle", "none", NULL };
-static const char *wsopts[]   = { "view",    "send",    "follow",  NULL };
-static const char *colopts[]  = { "reset",   "focus",   "unfocus", NULL };
+static const char *minopts[]   = { "relative", NULL };
+static const char *listopts[]  = { "next", "prev", NULL };
+static const char *mouseopts[] = { "move", "resize", NULL };
+static const char *stdopts[]   = { "reset", "relative", NULL };
+static const char *wsopts[]    = { "view", "send", "follow", NULL };
+static const char *lytopts[]   = { "tile", "monocle", "none", NULL };
+static const char *colopts[]   = { "reset", "focus", "unfocus", NULL };
 
 /* "set" keyword options, used by cmdset() to parse arguments
  * the final argument should be an array of char *'s and contain any
@@ -130,6 +134,18 @@ void cmdcolour(const Arg *arg, char *opt)
 					&borders[c == c->ws->sel ? Focus : Unfocus]);
 }
 
+void cmdexec(const Arg *arg)
+{
+	DBG("user run command: %s", ((char **)arg->v)[0])
+	if (fork())
+		return;
+	if (con)
+		close(xcb_get_file_descriptor(con));
+	setsid();
+	execvp(((char **)arg->v)[0], (char **)arg->v);
+	errx(0, "execvp: %s", ((char **)arg->v)[0]);
+}
+
 void cmdfocus(const Arg *arg)
 {
 	adjmvfocus(arg, changefocus);
@@ -155,6 +171,15 @@ void cmdlayout(const Arg *arg, char *opt)
 	setlayout(&a);
 }
 
+void cmdmouse(const Arg *arg)
+{
+	int i;
+	char *opt;
+
+	if ((opt = parseopts((char **)arg->v, (char **)mouseopts, &i)))
+		mvrmouse(!strcmp(opt, "move"));
+}
+
 void cmdmove(const Arg *arg)
 {
 	adjmvfocus(arg, movestack);
@@ -172,18 +197,6 @@ void cmdnstack(const Arg *arg, char *opt)
 	Arg a;
 	a.i = opt ? arg->i : arg->i - (int)selws->nstack;
 	setnstack(&a);
-}
-
-void cmdexec(const Arg *arg)
-{
-	DBG("user run command: %s", ((char **)arg->v)[0])
-	if (fork())
-		return;
-	if (con)
-		close(xcb_get_file_descriptor(con));
-	setsid();
-	execvp(((char **)arg->v)[0], (char **)arg->v);
-	errx(0, "execvp: %s", ((char **)arg->v)[0]);
 }
 
 void cmdsplit(const Arg *arg, char *opt)

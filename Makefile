@@ -1,38 +1,44 @@
 # yaxwm - yet another x window manager
 # see license file for copyright and license details
 
-include config.mk
+VERSION = 0.2
 
-# debug build (make -DDEBUG ...)
+# installation paths
+PREFIX = /usr
+MANPREFIX = ${PREFIX}/share/man
+
+# compiler and linker flags
+CC = cc
+CFLAGS = -O3 -Wall -DVERSION=\"${VERSION}\"
+LDFLAGS = -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
+
+
+# debug build (make DFLAGS=' -DDEBUG ...')
 ifneq ($(findstring DEBUG,$(DFLAGS)),)
 	LDFLAGS += -lxkbcommon
 	CFLAGS += -Wextra -Wno-missing-field-initializers
 endif
 
-# no strip build (make -DNOSTRIP ...)
+# no strip build (make DFLAGS='-DNOSTRIP ...')
 ifneq ($(findstring NOSTRIP,$(DFLAGS)),)
 	CFLAGS += -g
 endif
 
-CFLAGS += -DVERSION=\"${VERSION}\" ${DFLAGS}
+SRC = yaxwm.c
+OBJ := ${SRC:.c=.o}
+CFLAGS += ${DFLAGS}
 
-all: options yaxwm
-
-options:
-	@echo build settings:
-	@echo "CC      = ${CC}"
-	@echo "CFLAGS  = ${CFLAGS}"
-	@echo "LDFLAGS = ${LDFLAGS}"
+all: yaxwm
 
 config.h:
 	cp config.def.h $@
 
-yaxwm: config.h
-	${CC} yaxwm.c -o $@ ${CFLAGS}\
-		${LDFLAGS}
+${OBJ}: config.h
+
+yaxwm: ${OBJ}
 
 clean:
-	rm -f yaxwm
+	rm -f yaxwm ${OBJ}
 
 install: all
 	mkdir -p ${DESTDIR}${PREFIX}/bin
@@ -45,4 +51,4 @@ install: all
 uninstall:
 	rm -f ${DESTDIR}${PREFIX}/bin/yaxwm ${DESTDIR}${MANPREFIX}/man1/yaxwm.1
 
-.PHONY: all options clean install uninstall
+.PHONY: all clean install uninstall

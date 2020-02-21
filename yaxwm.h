@@ -3,42 +3,9 @@
 * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
 */
 
-/* stop multiple includes in the same file */
-#ifndef YAXWM_H
-#define YAXWM_H
-
 #ifndef VERSION
 #define VERSION "0.1"
 #endif
-
-/* sigaction */
-#define _XOPEN_SOURCE 700
-
-#include <err.h>
-#include <stdio.h>
-#include <ctype.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <regex.h>
-#include <signal.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
-#include <locale.h>
-#include <limits.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-#include <sys/select.h>
-#include <xcb/xcb.h>
-#include <xcb/randr.h>
-#include <xcb/xproto.h>
-#include <xcb/xcb_util.h>
-#include <xcb/xcb_atom.h>
-#include <xcb/xcb_icccm.h>
-#include <xcb/xcb_cursor.h>
-#include <xcb/xcb_keysyms.h>
-#include <X11/keysym.h>
 
 /* bog standard */
 #define W(x)       ((x)->w + 2 * (x)->bw)
@@ -95,10 +62,6 @@
 #define FIND_PREVTILED(v, cur, list)\
 	for ((v) = nexttiled((list)); (v) && nexttiled((v)->next) && nexttiled((v)->next) != (cur); (v) = nexttiled((v)->next))
 
-/* dissolves into nothing when DEBUG isn't defined */
-#define DBG(fmt, ...)
-#define DBGBIND(event, mod, sym)
-
 /* less wordy calls to change a windows property */
 #define PROP_APPEND(win, atom, type, membsize, nmemb, value) \
 	xcb_change_property(con, XCB_PROP_MODE_APPEND, (win), (atom), (type), (membsize), (nmemb), (value))
@@ -131,38 +94,30 @@
 #define RESIZE(win, w, h) xcb_configure_window(con, (win), WHMASK, (uint []){(w), (h)})
 #define MOVERESIZE(win, x, y, w, h) xcb_configure_window(con, (win), XYMASK | WHMASK, (uint []){(x), (y), (w), (h)})
 
+
 typedef unsigned int uint;
 typedef unsigned char uchar;
-
-/* general types */
 typedef union Arg Arg;
+
 typedef struct Bind Bind;
-typedef struct Client Client;
-typedef struct Keyword Keyword;
-typedef struct Monitor Monitor;
-typedef struct Panel Panel;
 typedef struct Rule Rule;
-typedef struct Setting Setting;
-typedef struct Workspace Workspace;
 typedef struct WsRule WsRule;
+typedef struct MouseBind MouseBind;
+
+typedef struct Panel Panel;
+typedef struct Client Client;
+typedef struct Monitor Monitor;
+typedef struct Workspace Workspace;
+
+typedef struct Setting Setting;
+typedef struct Keyword Keyword;
+
+enum Opt {
+	Std, Min, Ws, Lyt, List, Mouse, Col, Quit, Abs
+};
 
 enum Borders {
 	Width, Focus, Unfocus
-};
-
-enum Cursors {
-	Normal, Move, Resize
-};
-
-enum WMAtoms {
-	Protocols, Delete, WMState, TakeFocus, Utf8Str
-};
-
-enum NetAtoms {
-	Supported,       Name,             State,            Check,           Fullscreen,
-	ActiveWindow,    WindowType,       WindowTypeDialog, WindowTypeDock,  FrameExtents,
-	Desktop,         CurrentDesktop,   NumDesktops,      DesktopViewport, DesktopGeometry,
-	DesktopNames,    ClientList,       Strut,            StrutPartial,    WorkArea,
 };
 
 enum Gravity {
@@ -179,6 +134,13 @@ struct Bind {
 	uint8_t type;
 	uint mod;
 	xcb_keysym_t keysym;
+	void (*func)(const Arg *);
+	const Arg arg;
+};
+
+struct MouseBind {
+	uint mod;
+	xcb_button_t button;
 	void (*func)(const Arg *);
 	const Arg arg;
 };
@@ -245,19 +207,30 @@ struct Workspace {
 
 struct Setting {
 	char *name;
-	void (*func)(const Arg *, char *);
+	void (*func)(const Arg *);
 	const void *opts;
 };
 
 struct Keyword {
 	char *name;
 	void (*func)(const Arg *);
+	int requiresarg;
 };
 
+/* cursors used for normal operation, moving, and resizing */
+enum Cursors {
+	Normal, Move, Resize
+};
 static const char *cursors[] = {
-	[Move] = "fleur", [Normal] = "arrow", [Resize] = "sizing"
+	[Move] = "fleur",
+	[Normal] = "arrow",
+	[Resize] = "sizing"
 };
 
+/* supported WM_* atoms */
+enum WMAtoms {
+	Protocols, Delete, WMState, TakeFocus, Utf8Str
+};
 static const char *wmatomnames[] = {
 	[Delete] = "WM_DELETE_WINDOW",
 	[Protocols] = "WM_PROTOCOLS",
@@ -266,6 +239,13 @@ static const char *wmatomnames[] = {
 	[WMState] = "WM_STATE",
 };
 
+/* supported _NET_* atoms */
+enum NetAtoms {
+	Supported,       Name,             State,            Check,           Fullscreen,
+	ActiveWindow,    WindowType,       WindowTypeDialog, WindowTypeDock,  FrameExtents,
+	Desktop,         CurrentDesktop,   NumDesktops,      DesktopViewport, DesktopGeometry,
+	DesktopNames,    ClientList,       Strut,            StrutPartial,    WorkArea,
+};
 static const char *netatomnames[] = {
 	[ActiveWindow] = "_NET_ACTIVE_WINDOW",
 	[Check] = "_NET_SUPPORTING_WM_CHECK",
@@ -289,30 +269,9 @@ static const char *netatomnames[] = {
 	[WorkArea] = "_NET_WORKAREA",
 };
 
-char *fifo;                             /* path to fifo pipe YAXWM_FIFO env variable */
-char *argv0;                            /* program name */
-int fifofd;                             /* fifo pipe file descriptor */
-int scr_w, scr_h;                       /* root window size */
-int randrbase = -1;                     /* randr extension response */
-int defaultborder[3];                   /* default border values used for resetting */
-int numws = 0;                          /* number of workspaces currently allocated */
-uint running = 1;                       /* continue handling events */
-uint mousebtn = 0;                      /* mouse button currently being pressed */
-uint numlockmask = 0;                   /* numlock modifier bit mask */
-Panel *panels;                          /* panel linked list head */
-Monitor *monitors;                      /* monitor linked list head */
-Workspace *selws;                       /* selected workspace */
-Workspace *workspaces;                  /* workspace linked list head */
-xcb_screen_t *scr;                      /* the X screen */
-xcb_connection_t *con;                  /* xcb connection to the X server */
-xcb_timestamp_t lasttime;               /* the last motion notify event time, used to reduce redraws */
-xcb_window_t root, wmcheck;             /* root window and _NET_SUPPORTING_WM_CHECK window */
-xcb_key_symbols_t *keysyms;             /* current keymap symbols */
-xcb_cursor_t cursor[LEN(cursors)];      /* cursors for moving, resizing, and normal */
-xcb_atom_t wmatoms[LEN(wmatomnames)];   /* _WM atoms used mostly internally */
-xcb_atom_t netatoms[LEN(netatomnames)]; /* _NET atoms used both internally and by other clients */
 
-
+int adjbdorgap(int i, char *opt, int changing, int other);
+void adjmvfocus(const Arg *arg, void (*fn)(const Arg *));
 void assignworkspaces(void);
 void attach(Client *c, int tohead);
 void attachpanel(Panel *p);
@@ -321,12 +280,34 @@ void changefocus(const Arg *arg);
 void changews(Workspace *ws, int usermotion);
 void checkerror(char *prompt, xcb_generic_error_t *e);
 void *clientrules(Client *c, xcb_window_t *trans);
+void cmdborder(const Arg *arg);
+void cmdcolour(const Arg *arg);
 void cmdexec(const Arg *arg);
+void cmdexec(const Arg *arg);
+void cmdfloat(const Arg *arg);
+void cmdfocus(const Arg *arg);
+void cmdgappx(const Arg *arg);
+void cmdkill(const Arg *arg);
+void cmdlayout(const Arg *arg);
+void cmdmouse(const Arg *arg);
+void cmdmove(const Arg *arg);
+void cmdnmaster(const Arg *arg);
+void cmdnstack(const Arg *arg);
+char *cmdoptparse(char **argv, char **opts, int *argi);
+void cmdparse(char *buf);
+void cmdquit(const Arg *arg);
+void cmdsetting(const Arg *arg);
+void cmdsplit(const Arg *arg);
+void cmdswap(const Arg *arg);
+void cmdws(const Arg *arg);
 void configure(Client *c);
+Client *coordtoclient(int x, int y);
+Monitor *coordtomon(int x, int y);
 void detach(Client *c, int reattach);
 void detachstack(Client *c);
 void *ecalloc(size_t elems, size_t size);
 void eventhandle(xcb_generic_event_t *ev);
+void eventignore(uint8_t type);
 void eventloop(void);
 void fixupworkspaces(void);
 void focus(Client *c);
@@ -340,35 +321,33 @@ void grabbuttons(Client *c, int focused);
 void grabkeys(void);
 int grabpointer(xcb_cursor_t cursor);
 void gravitate(Client *c, int vert, int horz, int matchgap);
-void eventignore(uint8_t type);
 void initatoms(xcb_atom_t *atoms, const char **names, int num);
 void initclient(xcb_window_t win, xcb_window_t trans);
-void initexisting(void);
 Monitor *initmon(char *name, xcb_randr_output_t id, int x, int y, int w, int h);
 void initpanel(xcb_window_t win);
 int initrandr(void);
+void initscan(void);
 void initwm(void);
 void initworkspaces(void);
 Workspace *initws(int num, WsRule *r);
 char *itoa(int n, char *s);
 Workspace *itows(int num);
-void killclient(const Arg *arg);
 void layoutws(Workspace *ws);
+char *masktomods(uint mask, char *out, int outsize);
 void monocle(Workspace *ws);
 void mousemotion(xcb_button_t b);
+void mousemoveresize(const Arg *arg);
+void movestack(const Arg *arg);
 Client *nexttiled(Client *c);
 Monitor *outputtomon(xcb_randr_output_t id);
-Monitor *coordtomon(int x, int y);
-Client *coordtoclient(int x, int y);
-void mvrmouse(int mv);
+void printbind(xcb_generic_event_t *e, uint modmask, xcb_keysym_t keysym);
+void print(const char *fmt, ...);
 int querypointer(int *x, int *y);
 Monitor *randrclone(xcb_randr_output_t id, int x, int y);
-void resetorquit(const Arg *arg);
 void resize(Client *c, int x, int y, int w, int h, int bw);
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int interact);
 void restack(Workspace *ws);
-int ruleregcmp(regex_t *r, char *class, char *inst);
-void ungrabpointer(void);
+int rulecmp(regex_t *r, char *class, char *inst);
 void send(const Arg *arg);
 int sendevent(Client *c, int wmproto);
 void setborderpx(const Arg *arg);
@@ -381,7 +360,6 @@ void setnetworkareavp(void);
 void setnmaster(const Arg *arg);
 void setnstack(const Arg *arg);
 void setsplit(const Arg *arg);
-void movestack(const Arg *arg);
 void setstackmode(xcb_window_t win, uint mode);
 void seturgency(Client *c, int urg);
 void setwinstate(xcb_window_t win, uint32_t state);
@@ -391,10 +369,9 @@ void sighandle(int);
 void sizehints(Client *c);
 size_t strlcat(char *dst, const char *src, size_t size);
 size_t strlcpy(char *dst, const char *src, size_t size);
-void swapclient(const Arg *arg);
 void tile(Workspace *ws);
-void togglefloat(const Arg *arg);
 void unfocus(Client *c, int focusroot);
+void ungrabpointer(void);
 void updatenumlock(void);
 void updatenumws(int needed);
 int updateoutputs(xcb_randr_output_t *outputs, int len, xcb_timestamp_t timestamp);
@@ -405,64 +382,10 @@ void view(const Arg *arg);
 xcb_get_window_attributes_reply_t *winattr(xcb_window_t win);
 void winhints(Client *c);
 xcb_atom_t winprop(xcb_window_t win, xcb_atom_t prop);
+int wintextprop(xcb_window_t w, xcb_atom_t atom, char *text, size_t size);
 Client *wintoclient(xcb_window_t win);
 Panel *wintopanel(xcb_window_t win);
 Workspace *wintows(xcb_window_t win);
 xcb_window_t wintrans(xcb_window_t win);
 void wintype(Client *c);
 
-
-#ifdef DEBUG
-#include <xkbcommon/xkbcommon.h>
-
-#undef DBGBIND
-#define DBGBIND(event, mod, sym) printbind(event, mod, sym);
-#undef DBG
-#define DBG(fmt, ...) print("yaxwm:%s:%d - " fmt, __FUNCTION__, __LINE__, ##__VA_ARGS__);
-
-char *masktomods(uint mask, char *out, int outsize);
-void print(const char *fmt, ...);
-void printbind(xcb_generic_event_t *e, uint modmask, xcb_keysym_t keysym);
-
-char *masktomods(uint mask, char *out, int outsize)
-{ /* convert mask to modifier names in out, eg. "Shift, Mod4\0" */
-	const char **mod, *mods[] = {
-		"Shift", "Lock", "Ctrl", "Mod1", "Mod2", "Mod3", "Mod4",
-		"Mod5", "Button1", "Button2", "Button3", "Button4", "Button5"
-	};
-
-	*out = '\0';
-	for (mod = mods; mask; mask >>= 1, ++mod)
-		if (mask & 1) {
-			if (*out) {
-				strlcat(out, ", ", outsize);
-				strlcat(out, *mod, outsize);
-			} else
-				strlcpy(out, *mod, outsize);
-		}
-	return out;
-}
-
-void print(const char *fmt, ...)
-{
-	va_list ap;
-	va_start(ap, fmt);
-	vfprintf(stderr, fmt, ap);
-	va_end(ap);
-	fprintf(stderr, "\n");
-}
-
-void printbind(xcb_generic_event_t *e, uint modmask, xcb_keysym_t keysym)
-{
-	char mod[64], key[64];
-
-	masktomods(modmask, mod, sizeof(mod));
-	xkb_keysym_get_name(keysym, key, sizeof(key));
-	print("yaxwm:eventhandle: %s event - key: %s - mod: %s", xcb_event_get_label(e->response_type), key, mod);
-}
-#endif
-
-/* config needs access to everything defined in the main header */
-#include "config.h"
-
-#endif

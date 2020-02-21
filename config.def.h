@@ -69,40 +69,47 @@ static Rule rules[] = {
 };
 
 static Bind binds[] = {
-	/* type,   modifiers,      keysym,    function,      arg */
-	{ PRESS,   MOD|SHIFT,      XK_Return, cmdexec,      {.v = term} },    /* terminal emulator */
-	{ PRESS,   MOD,            XK_p,      cmdexec,      {.v = menu} },    /* menu program */
-	{ PRESS,   0,              XK_Print,  cmdexec,      {.v = scrot} },   /* screenshot program */
-	{ RELEASE, MOD,            XK_Print,  cmdexec,      {.v = scrots} },  /* selection box screenshot */
-	{ PRESS,   0,              MUTE,      cmdexec,      {.v = voltg} },   /* volume mute command */
-	{ PRESS,   0,              VOLUP,     cmdexec,      {.v = volup} },   /* volume up command */
-	{ PRESS,   0,              VOLDOWN,   cmdexec,      {.v = voldn} },   /* volume down command */
-	{ PRESS,   MOD,            XK_Insert, cmdexec,      {.v = volup} },   /* volume up command */
-	{ PRESS,   MOD,            XK_Delete, cmdexec,      {.v = voldn} },   /* volume down command */
-	{ PRESS,   MOD,            XK_q,      killclient,   {0} },            /* close active window */
-	{ PRESS,   MOD,            XK_Tab,    swapclient,   {0} },            /* swap window with master and vise versa */
-	{ PRESS,   MOD|SHIFT,      XK_space,  togglefloat,  {0} },            /* toggle active window floating state */
-	{ PRESS,   MOD|SHIFT,      XK_q,      resetorquit,  {.i = 0} },       /* quit yaxwm */
-	{ PRESS,   MOD|SHIFT,      XK_r,      resetorquit,  {.i = 1} },       /* restart yaxwm */
-	{ PRESS,   MOD,            XK_j,      changefocus,  {.i = +1} },      /* focus next window */
-	{ PRESS,   MOD,            XK_k,      changefocus,  {.i = -1} },      /* focus previous window */
-	{ PRESS,   MOD|SHIFT,      XK_j,      movestack,    {.i = +1} },      /* move focused tiled window up the stack or master */
-	{ PRESS,   MOD|SHIFT,      XK_k,      movestack,    {.i = -1} },      /* move focused tiled window down the stack or master */
-	{ PRESS,   MOD,            XK_i,      setnmaster,   {.i = +1} },      /* increase number of windows in master */
-	{ PRESS,   MOD,            XK_d,      setnmaster,   {.i = -1} },      /* decrease number of windows in master */
-	{ PRESS,   MOD|SHIFT,      XK_i,      setnstack,    {.i = +1} },      /* increase number of windows in first stack */
-	{ PRESS,   MOD|SHIFT,      XK_d,      setnstack,    {.i = -1} },      /* decrease number of windows in first stack */
-	{ PRESS,   MOD,            XK_h,      setsplit,     {.f = -0.01} },   /* increase master area */
-	{ PRESS,   MOD,            XK_l,      setsplit,     {.f = +0.01} },   /* decrease master area */
-	{ PRESS,   MOD|SHIFT,      XK_equal,  setgappx,     {.i = 0} },       /* reset gap size */
-	{ PRESS,   MOD,            XK_equal,  setgappx,     {.i = +2} },      /* increase gap size */
-	{ PRESS,   MOD,            XK_minus,  setgappx,     {.i = -2} },      /* decrease gap size */
-	{ PRESS,   MOD|SHIFT|CTRL, XK_equal,  setborderpx,  {.i = 0} },       /* reset gap size */
-	{ PRESS,   MOD|CTRL,       XK_equal,  setborderpx,  {.i = +2} },      /* increase gap size */
-	{ PRESS,   MOD|CTRL,       XK_minus,  setborderpx,  {.i = -2} },      /* decrease gap size */
-	{ PRESS,   MOD,            XK_t,      setlayout,    {.v = tile} },    /* set active workspace tiled */
-	{ PRESS,   MOD,            XK_m,      setlayout,    {.v = monocle} }, /* set active workspace monocle */
-	{ PRESS,   MOD,            XK_f,      setlayout,    {.v = NULL} },    /* set active workspace floating */
+	/* type,   modifiers,      keysym,    function,    arg */
+	{ PRESS,   MOD|SHIFT,      XK_Return, cmdexec,    {.v = term} },            /* terminal emulator */
+	{ PRESS,   MOD,            XK_p,      cmdexec,    {.v = menu} },            /* menu program */
+	{ PRESS,   0,              XK_Print,  cmdexec,    {.v = scrot} },           /* screenshot program */
+	{ RELEASE, MOD,            XK_Print,  cmdexec,    {.v = scrots} },          /* selection box screenshot */
+	{ PRESS,   0,              MUTE,      cmdexec,    {.v = voltg} },           /* volume mute command */
+	{ PRESS,   0,              VOLUP,     cmdexec,    {.v = volup} },           /* volume up command */
+	{ PRESS,   0,              VOLDOWN,   cmdexec,    {.v = voldn} },           /* volume down command */
+	{ PRESS,   MOD,            XK_Insert, cmdexec,    {.v = volup} },           /* volume up command */
+	{ PRESS,   MOD,            XK_Delete, cmdexec,    {.v = voldn} },           /* volume down command */
+	{ PRESS,   MOD,            XK_q,      cmdkill,    {.v = NULL} },            /* close active window */
+	{ PRESS,   MOD,            XK_Tab,    cmdswap,    {.v = NULL} },            /* swap window in or out of master */
+	{ PRESS,   MOD|SHIFT,      XK_space,  cmdfloat,   {.v = NULL} },            /* toggle active window floating state */
+	{ PRESS,   MOD|SHIFT,      XK_q,      cmdquit,    {.v = ARGV("quit")} },    /* quit yaxwm */
+	{ PRESS,   MOD|SHIFT,      XK_r,      cmdquit,    {.v = ARGV("reset")} },   /* restart yaxwm */
+	{ PRESS,   MOD,            XK_j,      cmdfocus,   {.v = ARGV("+1")} },      /* focus next window */
+	{ PRESS,   MOD,            XK_k,      cmdfocus,   {.v = ARGV("-1")} },      /* focus previous window */
+	{ PRESS,   MOD|SHIFT,      XK_j,      cmdmove,    {.v = ARGV("+1")} },      /* move focused tiled window up */
+	{ PRESS,   MOD|SHIFT,      XK_k,      cmdmove,    {.v = ARGV("-1")} },      /* move focused tiled window down */
+	{ PRESS,   MOD,            XK_i,      cmdnmaster, {.v = ARGV("+1")} },      /* increase number of windows in master */
+	{ PRESS,   MOD,            XK_d,      cmdnmaster, {.v = ARGV("-1")} },      /* decrease number of windows in master */
+	{ PRESS,   MOD|SHIFT,      XK_i,      cmdnstack,  {.v = ARGV("+1")} },      /* increase number of windows in stack1 */
+	{ PRESS,   MOD|SHIFT,      XK_d,      cmdnstack,  {.v = ARGV("-1")} },      /* decrease number of windows in stack1 */
+	{ PRESS,   MOD,            XK_l,      cmdsplit,   {.v = ARGV("+0.01")} },   /* increase master area */
+	{ PRESS,   MOD,            XK_h,      cmdsplit,   {.v = ARGV("-0.01")} },   /* decrease master area */
+	{ PRESS,   MOD|SHIFT,      XK_equal,  cmdgappx,   {.v = ARGV("0")} },       /* reset gap size */
+	{ PRESS,   MOD,            XK_equal,  cmdgappx,   {.v = ARGV("+2")} },      /* increase gap size */
+	{ PRESS,   MOD,            XK_minus,  cmdgappx,   {.v = ARGV("-2")} },      /* decrease gap size */
+	{ PRESS,   MOD|SHIFT|CTRL, XK_equal,  cmdborder,  {.v = ARGV("0")} },       /* reset gap size */
+	{ PRESS,   MOD|CTRL,       XK_equal,  cmdborder,  {.v = ARGV("+2")} },      /* increase gap size */
+	{ PRESS,   MOD|CTRL,       XK_minus,  cmdborder,  {.v = ARGV("-2")} },      /* decrease gap size */
+	{ PRESS,   MOD,            XK_t,      cmdlayout,  {.v = ARGV("tile")} },    /* set active workspace tiled */
+	{ PRESS,   MOD,            XK_m,      cmdlayout,  {.v = ARGV("monocle")} }, /* set active workspace monocle */
+	{ PRESS,   MOD,            XK_f,      cmdlayout,  {.v = ARGV("none")} },    /* set active workspace floating */
 	WSBIND(0, XK_1), WSBIND(1, XK_2), WSBIND(2, XK_3), WSBIND(3, XK_4), WSBIND(4, XK_5),
 	WSBIND(5, XK_6), WSBIND(6, XK_7), WSBIND(7, XK_8), WSBIND(8, XK_9), WSBIND(9, XK_0),
+};
+
+static MouseBind mousebinds[] = {
+	/* modifiers,  button,    function,   arg */
+	{ MOD,         BUTTON1,   cmdmouse,  {.v = "move"} },
+	{ MOD,         BUTTON2,   cmdfloat,  {.v = NULL} },
+	{ MOD,         BUTTON3,   cmdmouse,  {.v = "resize"} },
 };

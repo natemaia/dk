@@ -26,15 +26,14 @@ nostrip: CFLAGS += -g -O0
 nostrip: debug
 
 yaxwm: yaxwm.o
-
 yaxcmd: yaxcmd.o
 
-yaxwm.o: config.h
+yaxwm.o: %.o: %.c
+	@test -f ${VPATH}/config.h || cp ${VPATH}/config.def.h ${VPATH}/config.h
+	${CC} ${CFLAGS} ${CPPFLAGS} -c $< -o $@
 
-yaxcmd.o:
-
-config.h:
-	cp config.def.h $@
+yaxcmd.o: %.o: %.c
+	${CC} ${CFLAGS} ${CPPFLAGS} -c $< -o $@
 
 clean:
 	rm -f yaxwm yaxcmd yaxwm.o yaxcmd.o

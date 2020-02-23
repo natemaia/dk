@@ -96,6 +96,7 @@ typedef unsigned int uint;
 typedef unsigned char uchar;
 typedef struct Panel Panel;
 typedef struct Client Client;
+typedef struct Layout Layout;
 typedef struct Monitor Monitor;
 typedef struct Keyword Keyword;
 typedef struct Workspace Workspace;
@@ -164,6 +165,11 @@ struct WorkspaceRule {
 	char *name;
 	uint nmaster, nstack, gappx;
 	float splitratio;
+	void (*layout)(Workspace *);
+};
+
+struct Layout {
+	char *name;
 	void (*layout)(Workspace *);
 };
 
@@ -273,14 +279,13 @@ static void wintype(Client *c);
 
 /* options available for various commands */
 enum Opt {
-	Std, Min, Ws, Lyt, List, Col, Wm, Bdr
+	Std, Min, Ws, List, Col, Wm, Bdr
 };
 static const char *parseropts[][6] = {
 	[Min]  = { "absolute", NULL },
 	[List] = { "next",     "prev",     NULL },
 	[Std]  = { "reset",    "absolute", NULL },
 	[Wm]   = { "reload",   "restart",  "exit",    NULL },
-	[Lyt]  = { "tile",     "monocle",  "none",    NULL },
 	[Ws]   = { "view",     "send",     "follow",  NULL },
 	[Col]  = { "reset",    "focus",    "unfocus", NULL },
 	[Bdr]  = { "absolute", "width",    "colour",  "color", "smart", NULL },
@@ -372,10 +377,10 @@ extern char **environ;            /* environment variables */
 static char *argv0;               /* program name */
 static char *fifo;                /* path to fifo file, loaded from YAXWM_FIFO env */
 static int fifofd;                /* fifo pipe file descriptor */
-static int scr_w, scr_h;          /* root window size */
-static int randrbase = -1;        /* randr extension response */
 static int numws = 0;             /* number of workspaces currently allocated */
+static int scr_w, scr_h;          /* root window size */
 static uint running = 1;          /* continue handling events */
+static int randrbase = -1;        /* randr extension response */
 static uint numlockmask = 0;      /* numlock modifier bit mask */
 static int dborder[LEN(borders)]; /* default border values used for resetting */
 
@@ -843,23 +848,22 @@ void cmdkill(char **argv)
 
 void cmdlayout(char **argv)
 {
-	char *opt;
-	void (*f)(Workspace *);
+	uint i;
 
-	opt = optparse(argv, (char **)parseropts[Lyt], NULL, NULL, 0);
-	if (!opt)
+	if (!argv || !*argv)
 		return;
-	if (!strcmp(opt, "tile"))
-		f = tile;
-	else if (!strcmp(opt, "monocle"))
-		f = monocle;
-	else
-		f = NULL;
-	if (f == selws->layout)
-		return;
-	selws->layout = f;
-	if (selws->sel)
-		layoutws(selws);
+	while (*argv) {
+		for (i = 0; i < LEN(layouts); i++)
+			if (!strcmp(layouts[i].name, *argv)) {
+				if (layouts[i].layout == selws->layout)
+					return;
+				selws->layout = layouts[i].layout;
+				if (selws->sel)
+					layoutws(selws);
+				return;
+			}
+		argv++;
+	}
 }
 
 void cmdmove(char **argv)
@@ -912,8 +916,10 @@ void cmdset(char **argv)
 	uint i;
 	char *s, **r;
 
-	s = argv[0];
-	r = argv + 1;
+	if ((s = argv[0]))
+		r = argv + 1;
+	else
+		r = NULL;
 	for (i = 0; i < LEN(setcmds); i++)
 		if (!strcmp(setcmds[i].name, s)) {
 			setcmds[i].func(r);
@@ -2168,6 +2174,8 @@ char *optparse(char **argv, char **opts, int *argi, float *argf, int hex)
 	float f;
 	char *opt = NULL;
 
+	if (!argv || !*argv)
+		return opt;
 	if (argi)
 		*argi = UNSET;
 	if (argf)

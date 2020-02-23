@@ -22,6 +22,13 @@ static int borders[] = {
 	[Unfocus] = 0x000000, /* unfocused window border colours, hex 0x000000-0xffffff */
 };
 
+static Layout layouts[] = {
+	/* name,      layout (NULL is floating) */
+	{ "tile",     tile    },
+	{ "monocle",  monocle },
+	{ "none",     NULL    },
+};
+
 static ClientRule clientrules[] = {
 	/* In order to get monitor and window info you can use the following commands:
 	 * window class/instance: `xprop` (the regex matching is case insensitive)

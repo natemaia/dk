@@ -99,6 +99,7 @@ typedef struct Client Client;
 typedef struct Layout Layout;
 typedef struct Monitor Monitor;
 typedef struct Keyword Keyword;
+typedef struct Command Command;
 typedef struct Workspace Workspace;
 typedef struct ClientRule ClientRule;
 typedef struct WorkspaceRule WorkspaceRule;
@@ -147,8 +148,8 @@ struct Workspace {
 	int num;
 	char *name;
 	uint nmaster, nstack, gappx;
-	float splitratio;
-	void (*layout)(Workspace *);
+	float split;
+	Layout *layout;
 	Monitor *mon;
 	Workspace *next;
 	Client *sel, *stack, *clients, *hidden;
@@ -164,13 +165,18 @@ struct ClientRule {
 struct WorkspaceRule {
 	char *name;
 	uint nmaster, nstack, gappx;
-	float splitratio;
-	void (*layout)(Workspace *);
+	float split;
+	Layout *layout;
 };
 
 struct Layout {
 	char *name;
-	void (*layout)(Workspace *);
+	void (*fn)(Workspace *);
+};
+
+struct Command {
+	char *name;
+	void (*fn)(int);
 };
 
 static int adjbdorgap(int i, char *opt, int changing, int other);
@@ -286,7 +292,6 @@ static const char *parseropts[][6] = {
 	[List] = { "next",     "prev",     NULL },
 	[Std]  = { "reset",    "absolute", NULL },
 	[Wm]   = { "reload",   "restart",  "exit",    NULL },
-	[Ws]   = { "view",     "send",     "follow",  NULL },
 	[Col]  = { "reset",    "focus",    "unfocus", NULL },
 	[Bdr]  = { "absolute", "width",    "colour",  "color", "smart", NULL },
 };
@@ -607,7 +612,7 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int usermotion)
 		if (*y + *h + 2 * c->bw < m->winarea_y)
 			*y = m->winarea_y;
 	}
-	if (c->floating || !c->ws->layout) {
+	if (c->floating || !c->ws->layout->fn) {
 		if (!(baseismin = c->base_w == c->min_w && c->base_h == c->min_h)) {
 			/* temporarily remove base dimensions */
 			*w -= c->base_w;
@@ -789,14 +794,16 @@ void cmdfloat(char **argv)
 
 	if (!(c = selws->sel) || c->fullscreen)
 		return;
-	(void)(argv);
 	if ((c->floating = !c->floating || c->fixed)) {
-		c->x = c->old_x, c->y = c->old_y, c->w = c->old_w, c->h = c->old_h;
+		c->w = c->old_w, c->h = c->old_h;
+		c->x = c->old_x ? c->old_x : (c->ws->mon->winarea_x + c->ws->mon->winarea_w - W(c)) / 2;
+		c->y = c->old_y ? c->old_y : (c->ws->mon->winarea_y + c->ws->mon->winarea_h - H(c)) / 2;
 		resize(c, c->x, c->y, c->w, c->h, c->bw);
 	} else {
 		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 	}
 	layoutws(selws);
+	(void)(argv);
 }
 
 void cmdfocus(char **argv)
@@ -855,11 +862,10 @@ void cmdlayout(char **argv)
 	while (*argv) {
 		for (i = 0; i < LEN(layouts); i++)
 			if (!strcmp(layouts[i].name, *argv)) {
-				if (layouts[i].layout == selws->layout)
-					return;
-				selws->layout = layouts[i].layout;
-				if (selws->sel)
+				if (&layouts[i] != selws->layout) {
+					selws->layout = &layouts[i];
 					layoutws(selws);
+				}
 				return;
 			}
 		argv++;
@@ -916,10 +922,9 @@ void cmdset(char **argv)
 	uint i;
 	char *s, **r;
 
-	if ((s = argv[0]))
-		r = argv + 1;
-	else
-		r = NULL;
+	if (!(s = argv[0]))
+		return;
+	r = argv + 1;
 	for (i = 0; i < LEN(setcmds); i++)
 		if (!strcmp(setcmds[i].name, s)) {
 			setcmds[i].func(r);
@@ -932,14 +937,14 @@ void cmdsplit(char **argv)
 	char *opt;
 	float f, nf;
 
-	if (!selws->layout)
+	if (!selws->layout->fn)
 		return;
 	opt = optparse(argv, (char **)parseropts[Min], NULL, &f, 0);
-	if (f == 0.0 || (opt && (f > 0.9 || f < 0.1 || !(f -= selws->splitratio))))
+	if (f == 0.0 || (opt && (f > 0.9 || f < 0.1 || !(f -= selws->split))))
 		return;
-	if ((nf = f < 1.0 ? f + selws->splitratio : f - 1.0) < 0.1 || nf > 0.9)
+	if ((nf = f < 1.0 ? f + selws->split : f - 1.0) < 0.1 || nf > 0.9)
 		return;
-	selws->splitratio = nf;
+	selws->split = nf;
 	layoutws(selws);
 }
 
@@ -948,7 +953,7 @@ void cmdswap(char **argv)
 	Client *c;
 
 	(void)(argv);
-	if (!(c = selws->sel) || c->floating || !selws->layout)
+	if (!(c = selws->sel) || c->floating || !selws->layout->fn)
 		return;
 	if (c == nexttiled(selws->clients) && !(c = nexttiled(c->next)))
 		return;
@@ -991,20 +996,22 @@ void cmdwm(char **argv)
 
 void cmdws(char **argv)
 {
-	int i;
-	char *opt;
-	void (*fn)(int) = view;
+	uint j;
+	int i = UNSET, n;
+	void (*fn)(int) = view; /* assume view so `ws 1` is the same as `ws view 1` */
 
-	opt = optparse(argv, (char **)parseropts[Ws], &i, NULL, 0);
-	if (i > (int)numws || i < 0)
+	if (!argv || !*argv)
 		return;
-	if (opt) {
-		if (!strcmp(opt, "send"))
-			fn = send;
-		else if (!strcmp(opt, "follow"))
-			fn = follow;
+	while (*argv) {
+		if ((n = strtol(*argv, NULL, 0)) || **argv == '0')
+			i = n;
+		else for (j = 0; j < LEN(wscommands); j++)
+			if (wscommands[j].fn && !strcmp(wscommands[j].name, *argv))
+				fn = wscommands[j].fn;
+		argv++;
 	}
-	fn(i);
+	if (i < (int)numws && i >= 0)
+		fn(i);
 }
 
 void configure(Client *c)
@@ -1138,7 +1145,7 @@ void eventhandle(xcb_generic_event_t *ev)
 				DBG("configure request event for managed window: 0x%x", e->window)
 				if (e->value_mask & XCB_CONFIG_WINDOW_BORDER_WIDTH)
 					c->bw = e->border_width;
-				else if (c->floating || !selws->layout) {
+				else if (c->floating || !selws->layout->fn) {
 					m = c->ws->mon;
 					if (e->value_mask & XCB_CONFIG_WINDOW_X) {
 						c->old_x = c->x;
@@ -1991,7 +1998,7 @@ Workspace *initws(int num, WorkspaceRule *r)
 	ws->nmaster = r->nmaster;
 	ws->nstack = r->nstack;
 	ws->gappx = r->gappx;
-	ws->splitratio = r->splitratio;
+	ws->split = r->split;
 	ws->layout = r->layout;
 	return ws;
 }
@@ -2033,12 +2040,12 @@ void layoutws(Workspace *ws)
 	else FOR_EACH(ws, workspaces)
 		showhide(ws->stack);
 	if (ws) {
-		if (ws->layout)
-			ws->layout(ws);
+		if (ws->layout->fn)
+			ws->layout->fn(ws);
 		restack(ws);
 	} else FOR_EACH(ws, workspaces)
-		if (ws == ws->mon->ws && ws->layout)
-			ws->layout(ws);
+		if (ws == ws->mon->ws && ws->layout->fn)
+			ws->layout->fn(ws);
 }
 
 void monocle(Workspace *ws)
@@ -2133,12 +2140,12 @@ void mousemvr(int move)
 				nx = ox + (x - mx), ny = oy + (y - my);
 			else
 				nw = ow + (x - mx), nh = oh + (y - my);
-			if ((nw != c->w || nh != c->h || nx != c->x || ny != c->y) && !c->floating && selws->layout) {
+			if ((nw != c->w || nh != c->h || nx != c->x || ny != c->y) && !c->floating && selws->layout->fn) {
 				c->old_x = c->x, c->old_y = c->y, c->old_h = c->h, c->old_w = c->w;
 				cmdfloat(NULL);
 				layoutws(c->ws);
 			}
-			if (!c->ws->layout || c->floating) {
+			if (!c->ws->layout->fn || c->floating) {
 				if (move && (m = coordtomon(x, y)) != c->ws->mon) {
 					setclientws(c, m->ws->num);
 					changews(m->ws, 1);
@@ -2266,9 +2273,9 @@ void restack(Workspace *ws)
 	if (!ws || !(c = ws->sel))
 		return;
 	DBG("restacking clients on workspace: %d", ws->num)
-	if (c->floating || !ws->layout)
+	if (c->floating || !ws->layout->fn)
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-	if (ws->layout) {
+	if (ws->layout->fn) {
 		FOR_STACK(c, ws->stack)
 			if (!c->floating && c->ws == c->ws->mon->ws)
 				setstackmode(c->win, XCB_STACK_MODE_BELOW);
@@ -2417,7 +2424,7 @@ void showhide(Client *c)
 	if (c->ws == c->ws->mon->ws) { /* show clients top down */
 		DBG("showing window: 0x%08x - workspace: %d", c->win, c->ws->num)
 		MOVE(c->win, c->x, c->y);
-		if ((!c->ws->layout || c->floating) && !c->fullscreen)
+		if ((!c->ws->layout->fn || c->floating) && !c->fullscreen)
 			resize(c, c->x, c->y, c->w, c->h, c->bw);
 		showhide(c->snext);
 	} else { /* hide clients bottom up */
@@ -2556,7 +2563,7 @@ void tile(Workspace *ws)
 	if (n <= ws->nmaster)
 		mw = m->winarea_w, ss = 1;
 	else if (ws->nmaster)
-		ns = 2, mw = m->winarea_w * ws->splitratio;
+		ns = 2, mw = m->winarea_w * ws->split;
 	if (ws->nstack && n - ws->nmaster > ws->nstack)
 		ss = 1, sw = (m->winarea_w - mw) / 2;
 
@@ -2626,8 +2633,10 @@ void updatenumws(int needed)
 		while (needed > numws) {
 			FIND_TAIL(ws, workspaces);
 			r.name = itoa(numws, name);
-			r.nmaster = ws->nmaster, r.nstack = ws->nstack;
-			r.gappx = ws->gappx, r.splitratio = ws->splitratio;
+			r.nmaster = ws->nmaster;
+			r.nstack = ws->nstack;
+			r.gappx = ws->gappx;
+			r.split = ws->split;
 			r.layout = ws->layout;
 			ws->next = initws(numws, &r);
 			numws++;

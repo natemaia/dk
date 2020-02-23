@@ -29,7 +29,7 @@ yaxwm: yaxwm.o
 yaxcmd: yaxcmd.o
 
 yaxwm.o: %.o: %.c
-	@cp ${VPATH}/config.def.h ${VPATH}/config.h
+	@test -f ${VPATH}/config.h || cp ${VPATH}/config.def.h ${VPATH}/config.h
 	${CC} ${CFLAGS} ${CPPFLAGS} -c $< -o $@
 
 yaxcmd.o: %.o: %.c

@@ -23,39 +23,44 @@ static int borders[] = {
 };
 
 static Layout layouts[] = {
-	/* name,      layout (NULL is floating) */
+	/* name,     function (NULL is floating) */
 	{ "tile",     tile    },
 	{ "monocle",  monocle },
 	{ "none",     NULL    },
+};
+
+static Command wscommands[] = {
+	/* name,    function */
+	{ "view",    view   },
+	{ "send",    send   },
+	{ "follow",  follow },
 };
 
 static ClientRule clientrules[] = {
 	/* In order to get monitor and window info you can use the following commands:
 	 * window class/instance: `xprop` (the regex matching is case insensitive)
 	 * monitor name: `xrandr` (or use an index 0-n, the order is not guaranteed)
-	 *
-	 * class/instance,                    monitor,   workspace,  floating,  callback function */
-	{ "^firefox$",                        "0",          -1,         0,        NULL }, /* active workspace on monitor 0, tiled */
-	{ "^chromium$",                       "HDMI-A-0",   -1,         1,        NULL }, /* active workspace on HDMI-A-0, floating */
-	{ "^gimp$",                            NULL,         2,         1,        NULL }, /* workspace 2, floating */
-	{ "^(steam|lxappearance)$",            NULL,        -1,         1,        NULL }, /* current workspace, floating */
-	{ "^(pavucontrol|transmission-gtk)$",  NULL,        -1,         1,        NULL }, /* current workspace, floating */
-	{ "^gl$",                              NULL,        -1,         1,        mpvart }, /* current workspace, floating, with callback */
+	 * format: class/instance, monitor, workspace, floating, callback function */
+	{ "^firefox$",                       "0",        -1, 0, NULL }, /* active workspace on monitor 0, tiled */
+	{ "^chromium$",                      "HDMI-A-0", -1, 1, NULL }, /* active workspace on HDMI-A-0, floating */
+	{ "^gimp$",                           NULL,       2, 1, NULL }, /* workspace 2, floating */
+	{ "^(steam|lxappearance)$",           NULL,      -1, 1, NULL }, /* current workspace, floating */
+	{ "^(pavucontrol|transmission-gtk)$", NULL,      -1, 1, NULL }, /* current workspace, floating */
+	{ "^gl$",                             NULL,      -1, 1, mpvart }, /* current workspace, floating, with callback */
 };
 
 static WorkspaceRule workspacerules[] = {
-	/* workspace default settings and how many to allocate
-	 * if more are allocated later the values from the first rule will be used
-	 *
-	 * name,  nmaster,  nstack,  gappx,  splitratio,   layout (NULL is floating) */
-	{ "0",     1,        3,        0,       0.5,       tile },
-	{ "1",     1,        3,        0,       0.5,       tile },
-	{ "2",     1,        3,        0,       0.5,       tile },
-	{ "3",     1,        3,        0,       0.5,       tile },
-	{ "4",     1,        3,        0,       0.5,       tile },
-	{ "5",     1,        3,        0,       0.5,       tile },
-	{ "6",     1,        3,        0,       0.5,       tile },
-	{ "7",     1,        3,        0,       0.5,       tile },
-	{ "8",     1,        3,        0,       0.5,       tile },
-	{ "9",     1,        3,        0,       0.5,       tile },
+	/* workspace default settings and how many to allocate if more are
+	 * allocated later the values from the first rule will be used
+	 * format: name, master, stack, gap, split, layout */
+	{ "0", 1, 3, 0, 0.5, &layouts[0] },
+	{ "1", 1, 3, 0, 0.5, &layouts[0] },
+	{ "2", 1, 3, 0, 0.5, &layouts[0] },
+	{ "3", 1, 3, 0, 0.5, &layouts[0] },
+	{ "4", 1, 3, 0, 0.5, &layouts[0] },
+	{ "5", 1, 3, 0, 0.5, &layouts[0] },
+	{ "6", 1, 3, 0, 0.5, &layouts[0] },
+	{ "7", 1, 3, 0, 0.5, &layouts[0] },
+	{ "8", 1, 3, 0, 0.5, &layouts[0] },
+	{ "9", 1, 3, 0, 0.5, &layouts[0] },
 };

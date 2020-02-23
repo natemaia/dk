@@ -32,89 +32,366 @@
 #include <xcb/xcb_icccm.h>
 #include <xcb/xcb_cursor.h>
 #include <xcb/xcb_keysyms.h>
-#include <X11/keysym.h>
 
 #ifdef DEBUG
-#include <xkbcommon/xkbcommon.h>
-#define DBGBIND(event, mod, sym) printbind(event, mod, sym);
 #define DBG(fmt, ...) print("yaxwm:%s:%d - " fmt, __FUNCTION__, __LINE__, ##__VA_ARGS__);
+static void print(const char *fmt, ...);
 #else
 #define DBG(fmt, ...)
-#define DBGBIND(event, mod, sym)
 #endif
 
-#define ARGV(str) (char *[]){ str, NULL }
+#ifndef VERSION
+#define VERSION "0.1"
+#endif
 
-#include "yaxwm.h"
+#define UNSET       (INT_MAX)
+#define STICKY      (0xFFFFFFFF)
+#define W(x)        ((x)->w + 2 * (x)->bw)
+#define H(x)        ((x)->h + 2 * (x)->bw)
+#define MAX(a, b)   ((a) > (b) ? (a) : (b))
+#define MIN(a, b)   ((a) < (b) ? (a) : (b))
+#define LEN(x)      (sizeof(x) / sizeof(x[0]))
+#define CLNMOD(mod) (mod & ~(numlockmask | XCB_MOD_MASK_LOCK))
+#define BWMASK      (XCB_CONFIG_WINDOW_BORDER_WIDTH)
+#define XYMASK      (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y)
+#define WHMASK      (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT)
+#define BUTTONMASK  (XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE)
+#define GRABMASK    (XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_BUTTON_MOTION\
+		| XCB_EVENT_MASK_POINTER_MOTION_HINT)
+#define CLIENTMASK  (XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_FOCUS_CHANGE\
+		| XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY)
+#define ROOTMASK    (XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT\
+		| XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY | XCB_EVENT_MASK_BUTTON_PRESS\
+		| XCB_EVENT_MASK_POINTER_MOTION | XCB_EVENT_MASK_ENTER_WINDOW\
+		| XCB_EVENT_MASK_LEAVE_WINDOW | XCB_EVENT_MASK_STRUCTURE_NOTIFY\
+		| XCB_EVENT_MASK_PROPERTY_CHANGE)
+
+#define FOR_EACH(v, list)    for ((v) = (list); (v); (v) = (v)->next)
+#define FOR_STACK(v, list)   for ((v) = (list); (v); (v) = (v)->snext)
+#define FOR_CLIENTS(c, ws)   FOR_EACH((ws), workspaces) FOR_EACH((c), (ws)->clients)
+
+#define FIND_TAIL(v, list)\
+	for ((v) = (list); (v) && (v)->next; (v) = (v)->next)
+#define FIND_TILETAIL(v, list)\
+	for ((v) = nexttiled((list)); (v) && nexttiled((v)->next); (v) = nexttiled((v)->next))
+
+#define FIND_PREV(v, cur, list)\
+	for ((v) = (list); (v) && (v)->next && (v)->next != (cur); (v) = (v)->next)
+#define FIND_PREVTILED(v, cur, list)\
+	for ((v) = nexttiled((list)); (v) && nexttiled((v)->next)\
+			&& nexttiled((v)->next) != (cur); (v) = nexttiled((v)->next))
+
+#define PROP_APPEND(win, atom, type, membsize, nmemb, value)\
+	xcb_change_property(con, XCB_PROP_MODE_APPEND, (win), (atom),\
+			(type), (membsize), (nmemb), (value))
+#define PROP_REPLACE(win, atom, type, membsize, nmemb, value)\
+	xcb_change_property(con, XCB_PROP_MODE_REPLACE, (win), (atom),\
+			(type), (membsize), (nmemb), (value))
+
+#define MOVE(win, x, y) xcb_configure_window(con, (win), XYMASK, (uint []){(x), (y)})
+#define RESIZE(win, w, h) xcb_configure_window(con, (win), WHMASK, (uint []){(w), (h)})
+#define MOVERESIZE(win, x, y, w, h) xcb_configure_window(con, (win), XYMASK | WHMASK, (uint []){(x), (y), (w), (h)})
+
+typedef unsigned int uint;
+typedef unsigned char uchar;
+typedef struct Panel Panel;
+typedef struct Client Client;
+typedef struct Monitor Monitor;
+typedef struct Keyword Keyword;
+typedef struct Workspace Workspace;
+typedef struct ClientRule ClientRule;
+typedef struct WorkspaceRule WorkspaceRule;
+
+enum Borders {
+	Width, Smart, Focus, Unfocus
+};
+
+enum Gravity {
+	Left, Right, Center, Top, Bottom,
+};
+
+struct Panel {
+	int x, y, w, h, strut_l, strut_r, strut_t, strut_b;
+	Panel *next;
+	Monitor *mon;
+	xcb_window_t win;
+};
+
+struct Client {
+	int x, y, w, h, bw;
+	int old_x, old_y, old_w, old_h, old_bw;
+	int max_w, max_h, min_w, min_h;
+	int base_w, base_h, increment_w, increment_h;
+	float min_aspect, max_aspect;
+	int sticky, fixed, floating, fullscreen, urgent, nofocus, oldstate;
+	Client *next, *snext;
+	Workspace *ws;
+	xcb_window_t win;
+};
+
+struct Monitor {
+	char *name;
+	xcb_randr_output_t id;
+	int x, y, w, h, winarea_x, winarea_y, winarea_w, winarea_h;
+	Monitor *next;
+	Workspace *ws;
+};
+
+struct Keyword {
+	char *name;
+	void (*func)(char **);
+};
+
+struct Workspace {
+	int num;
+	char *name;
+	uint nmaster, nstack, gappx;
+	float splitratio;
+	void (*layout)(Workspace *);
+	Monitor *mon;
+	Workspace *next;
+	Client *sel, *stack, *clients, *hidden;
+};
+
+struct ClientRule {
+	char *regex, *monitor;
+	int workspace, floating;
+	void (*cbfunc)(Client *c);
+	regex_t regcomp;
+};
+
+struct WorkspaceRule {
+	char *name;
+	uint nmaster, nstack, gappx;
+	float splitratio;
+	void (*layout)(Workspace *);
+};
+
+static int adjbdorgap(int i, char *opt, int changing, int other);
+static void adjmvfocus(char **argv, void (*fn)(int));
+static void *applyclientrule(Client *c, xcb_window_t *trans);
+static void applypanelstrut(Panel *p);
+static int applysizehints(Client *c, int *x, int *y, int *w, int *h, int usermotion);
+static void assignworkspaces(void);
+static void attach(Client *c, int tohead);
+static void attachpanel(Panel *p);
+static void attachstack(Client *c);
+static void changews(Workspace *ws, int usermotion);
+static void checkerror(char *msg, xcb_generic_error_t *e);
+static void cmdborder(char **argv);
+static void cmdfloat(char **argv);
+static void cmdfocus(char **argv);
+static void cmdgappx(char **argv);
+static void cmdkill(char **argv);
+static void cmdlayout(char **argv);
+static void cmdmove(char **argv);
+static void cmdnmaster(char **argv);
+static void cmdnstack(char **argv);
+static void cmdparse(char *buf);
+static void cmdset(char **argv);
+static void cmdsplit(char **argv);
+static void cmdswap(char **argv);
+static void cmdwin(char **argv);
+static void cmdwm(char **argv);
+static void cmdws(char **argv);
+static void configure(Client *c);
+static Monitor *coordtomon(int x, int y);
+static void detach(Client *c, int reattach);
+static void detachstack(Client *c);
+static void *ecalloc(size_t elems, size_t size);
+static void eventhandle(xcb_generic_event_t *ev);
+static void eventignore(uint8_t type);
+static void eventloop(void);
+static void execcfg(void);
+static void fixupworkspaces(void);
+static void focus(Client *c);
+static void follow(int num);
+static void freeclient(Client *c, int destroyed);
+static void freemon(Monitor *m);
+static void freepanel(Panel *panel, int destroyed);
+static void freewm(void);
+static void freews(Workspace *ws);
+static void grabbuttons(Client *c, int focused);
+static int grabpointer(xcb_cursor_t cursor);
+static void gravitate(Client *c, int vert, int horz, int matchgap);
+static void initatoms(xcb_atom_t *atoms, const char **names, int num);
+static void initclient(xcb_window_t win, xcb_window_t trans);
+static Monitor *initmon(char *name, xcb_randr_output_t id, int x, int y, int w, int h);
+static void initpanel(xcb_window_t win);
+static int initrandr(void);
+static void initscan(void);
+static void initwm(void);
+static void initworkspaces(void);
+static Workspace *initws(int num, WorkspaceRule *r);
+static char *itoa(int n, char *s);
+static Workspace *itows(int num);
+static void layoutws(Workspace *ws);
+static void monocle(Workspace *ws);
+static void mousemvr(int move);
+static void movefocus(int direction);
+static void movestack(int direction);
+static Client *nexttiled(Client *c);
+static char *optparse(char **argv, char **opts, int *argi, float *argf, int hex);
+static Monitor *outputtomon(xcb_randr_output_t id);
+static int querypointer(int *x, int *y);
+static Monitor *randrclone(xcb_randr_output_t id, int x, int y);
+static void resize(Client *c, int x, int y, int w, int h, int bw);
+static void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion);
+static void restack(Workspace *ws);
+static int rulecmp(regex_t *r, char *class, char *inst);
+static int sendevent(Client *c, int wmproto);
+static void send(int num);
+static void setclientws(Client *c, uint num);
+static void setfullscreen(Client *c, int fullscreen);
+static void setnetworkareavp(void);
+static void setstackmode(xcb_window_t win, uint mode);
+static void seturgency(Client *c, int urg);
+static void setwinstate(xcb_window_t win, uint32_t state);
+static void showhide(Client *c);
+static void sighandle(int);
+static void sizehints(Client *c);
+static size_t strlcat(char *dst, const char *src, size_t size);
+static size_t strlcpy(char *dst, const char *src, size_t size);
+static void takefocus(Client *c);
+static void tile(Workspace *ws);
+static void unfocus(Client *c, int focusroot);
+static void ungrabpointer(void);
+static void updatenumws(int needed);
+static int updateoutputs(xcb_randr_output_t *outputs, int len, xcb_timestamp_t timestamp);
+static int updaterandr(void);
+static void updatestruts(Panel *p, int apply);
+static void view(int num);
+static xcb_get_window_attributes_reply_t *winattr(xcb_window_t win);
+static void winhints(Client *c);
+static xcb_atom_t winprop(xcb_window_t win, xcb_atom_t prop);
+static int wintextprop(xcb_window_t w, xcb_atom_t atom, char *text, size_t size);
+static Client *wintoclient(xcb_window_t win);
+static Panel *wintopanel(xcb_window_t win);
+static Workspace *wintows(xcb_window_t win);
+static xcb_window_t wintrans(xcb_window_t win);
+static void wintype(Client *c);
+
+/* options available for various commands */
+enum Opt {
+	Std, Min, Ws, Lyt, List, Col, Wm, Bdr
+};
+static const char *parseropts[][6] = {
+	[Min]  = { "absolute", NULL },
+	[List] = { "next",     "prev",     NULL },
+	[Std]  = { "reset",    "absolute", NULL },
+	[Wm]   = { "reload",   "restart",  "exit",    NULL },
+	[Lyt]  = { "tile",     "monocle",  "none",    NULL },
+	[Ws]   = { "view",     "send",     "follow",  NULL },
+	[Col]  = { "reset",    "focus",    "unfocus", NULL },
+	[Bdr]  = { "absolute", "width",    "colour",  "color", "smart", NULL },
+};
+
+/* fifo command keywords and functions */
+static Keyword keywords[] = {
+	{ "win", cmdwin },
+	{ "set", cmdset },
+	{ "ws",  cmdws  },
+	{ "wm",  cmdwm  },
+};
+
+/* "set" keyword options, used by cmdset() to parse arguments */
+static Keyword setcmds[] = {
+	{ "gap",     cmdgappx   },
+	{ "border",  cmdborder  },
+	{ "split",   cmdsplit   },
+	{ "stack",   cmdnstack  },
+	{ "master",  cmdnmaster },
+	{ "layout",  cmdlayout  },
+};
+
+/* "win" keyword options, used by cmdwin() to parse arguments */
+static Keyword wincmds[] = {
+	{ "float",  cmdfloat },
+	{ "focus",  cmdfocus },
+	{ "kill",   cmdkill  },
+	{ "move",   cmdmove  },
+	{ "swap",   cmdswap  },
+};
+
+/* cursors used for normal operation, moving, and resizing */
+enum Cursors {
+	Normal, Move, Resize
+};
+static const char *cursors[] = {
+	[Move] = "fleur",
+	[Normal] = "arrow",
+	[Resize] = "sizing"
+};
+
+/* supported WM_* atoms */
+enum WMAtoms {
+	Protocols, Delete, WMState, TakeFocus, Utf8Str
+};
+static const char *wmatomnames[] = {
+	[Delete] = "WM_DELETE_WINDOW",
+	[Protocols] = "WM_PROTOCOLS",
+	[TakeFocus] = "WM_TAKE_FOCUS",
+	[Utf8Str] = "UTF8_STRING",
+	[WMState] = "WM_STATE",
+};
+
+/* supported _NET_* atoms */
+enum NetAtoms {
+	Supported,       Name,             State,            Check,           Fullscreen,
+	ActiveWindow,    WindowType,       WindowTypeDialog, WindowTypeDock,  FrameExtents,
+	Desktop,         CurrentDesktop,   NumDesktops,      DesktopViewport, DesktopGeometry,
+	DesktopNames,    ClientList,       Strut,            StrutPartial,    WorkArea,
+};
+static const char *netatomnames[] = {
+	[ActiveWindow] = "_NET_ACTIVE_WINDOW",
+	[Check] = "_NET_SUPPORTING_WM_CHECK",
+	[ClientList] = "_NET_CLIENT_LIST",
+	[CurrentDesktop] = "_NET_CURRENT_DESKTOP",
+	[DesktopGeometry] = "_NET_DESKTOP_GEOMETRY",
+	[DesktopNames] = "_NET_DESKTOP_NAMES",
+	[DesktopViewport] = "_NET_DESKTOP_VIEWPORT",
+	[Desktop] = "_NET_WM_DESKTOP",
+	[FrameExtents] = "_NET_FRAME_EXTENTS",
+	[Fullscreen] = "_NET_WM_STATE_FULLSCREEN",
+	[Name] = "_NET_WM_NAME",
+	[NumDesktops] = "_NET_NUMBER_OF_DESKTOPS",
+	[State] = "_NET_WM_STATE",
+	[StrutPartial] = "_NET_WM_STRUT_PARTIAL",
+	[Strut] = "_NET_WM_STRUT",
+	[Supported] = "_NET_SUPPORTED",
+	[WindowTypeDialog] = "_NET_WM_WINDOW_TYPE_DIALOG",
+	[WindowTypeDock] = "_NET_WM_WINDOW_TYPE_DOCK",
+	[WindowType] = "_NET_WM_WINDOW_TYPE",
+	[WorkArea] = "_NET_WORKAREA",
+};
+
 #include "config.h"
 
-static const char *parseropts[][5] = {
-	[Min]   = { "relative", NULL },
-	[Abs]   = { "absolute", NULL },
-	[List]  = { "next",     "prev",     NULL },
-	[Mouse] = { "move",     "resize",   NULL },
-	[Quit]  = { "reset",    "quit",     NULL },
-	[Std]   = { "reset",    "relative", NULL },
-	[Lyt]   = { "tile",     "monocle",  "none",    NULL },
-	[Ws]    = { "view",     "send",     "follow",  NULL },
-	[Col]   = { "reset",    "focus",    "unfocus", NULL },
-};
+extern char **environ;            /* environment variables */
 
-/* fifo parser keywords and functions,
- * functions must have a prototype like:  void func(const Arg *);
- * remaining arguments will be tokenized as an array of char *'s in arg->v
- * where the function is expected to know how to handle and use them */
-static Keyword keywords[] = {
-	{ "exec",   cmdexec,    0 }, /* none */
-	{ "float",  cmdfloat,   0 }, /* none */
-	{ "focus",  cmdfocus,   1 }, /* parseropts[List] */
-	{ "kill",   cmdkill,    0 }, /* none */
-	{ "mouse",  cmdmouse,   1 }, /* parseropts[Mouse] */
-	{ "move",   cmdmove,    1 }, /* parseropts[List] */
-	{ "set",    cmdsetting, 1 }, /* settings[].name */
-	{ "swap",   cmdswap,    0 }, /* none */
-	{ "ws",     cmdws,      1 }, /* parseropts[Ws] */
-	{ "yaxwm",  cmdquit,    1 }, /* parseropts[Quit] */
-};
+static char *argv0;               /* program name */
+static char *fifo;                /* path to fifo file, loaded from YAXWM_FIFO env */
+static int fifofd;                /* fifo pipe file descriptor */
+static int scr_w, scr_h;          /* root window size */
+static int randrbase = -1;        /* randr extension response */
+static int numws = 0;             /* number of workspaces currently allocated */
+static uint running = 1;          /* continue handling events */
+static uint numlockmask = 0;      /* numlock modifier bit mask */
+static int dborder[LEN(borders)]; /* default border values used for resetting */
 
-/* "set" keyword options, used by cmdsetting() to parse arguments
- * the final argument should be an array of char *'s and contain any
- * optional string arguments supported by the setting function */
-static Setting settings[] = {
-	{ "gap",     cmdgappx,   parseropts[Std] },
-	{ "border",  cmdborder,  parseropts[Std] },
-	{ "colour",  cmdcolour,  parseropts[Col] },
-	{ "split",   cmdsplit,   parseropts[Min] },
-	{ "stack",   cmdnstack,  parseropts[Min] },
-	{ "master",  cmdnmaster, parseropts[Min] },
-	{ "layout",  cmdlayout,  parseropts[Lyt] },
-};
+static Panel *panels;         /* panel linked list head */
+static Workspace *selws;      /* selected workspace */
+static Monitor *primary;      /* primary monitor detected with RANDR */
+static Monitor *monitors;     /* monitor linked list head */
+static Workspace *workspaces; /* workspace linked list head */
 
-
-char *argv0;               /* program name */
-char *fifo;                /* path to fifo file, loaded from YAXWM_FIFO env */
-int fifofd;                /* fifo pipe file descriptor */
-int scr_w, scr_h;          /* root window size */
-int randrbase = -1;        /* randr extension response */
-int numws = 0;             /* number of workspaces currently allocated */
-uint running = 1;          /* continue handling events */
-uint numlockmask = 0;      /* numlock modifier bit mask */
-int dborder[LEN(borders)]; /* default border values used for resetting */
-
-Panel *panels;         /* panel linked list head */
-Workspace *selws;      /* selected workspace */
-Monitor *primary;      /* primary monitor detected with RANDR */
-Monitor *monitors;     /* monitor linked list head */
-Workspace *workspaces; /* workspace linked list head */
-
-xcb_screen_t *scr;                      /* the X screen */
-xcb_connection_t *con;                  /* xcb connection to the X server */
-xcb_window_t root, wmcheck;             /* root window and _NET_SUPPORTING_WM_CHECK window */
-xcb_key_symbols_t *keysyms;             /* current keymap symbols */
-xcb_cursor_t cursor[LEN(cursors)];      /* cursors for moving, resizing, and normal */
-xcb_atom_t wmatoms[LEN(wmatomnames)];   /* _WM atoms used mostly internally */
-xcb_atom_t netatoms[LEN(netatomnames)]; /* _NET atoms used both internally and by other clients */
-
+static xcb_screen_t *scr;                      /* the X screen */
+static xcb_connection_t *con;                  /* xcb connection to the X server */
+static xcb_window_t root, wmcheck;             /* root window and _NET_SUPPORTING_WM_CHECK window */
+static xcb_key_symbols_t *keysyms;             /* current keymap symbols */
+static xcb_cursor_t cursor[LEN(cursors)];      /* cursors for moving, resizing, and normal */
+static xcb_atom_t wmatoms[LEN(wmatomnames)];   /* _WM atoms used mostly internally */
+static xcb_atom_t netatoms[LEN(netatomnames)]; /* _NET atoms used both internally and by other clients */
 
 int main(int argc, char *argv[])
 {
@@ -162,6 +439,7 @@ int main(int argc, char *argv[])
 	initscan();
 	layoutws(NULL);
 	focus(NULL);
+	execcfg();
 	eventloop();
 
 	return 0;
@@ -185,23 +463,100 @@ int adjbdorgap(int i, char *opt, int changing, int other)
 	return r;
 }
 
-void adjmvfocus(const Arg *arg, void (*fn)(const Arg *))
+void adjmstack(int i, char *opt, int master)
 {
-	Arg a;
+	uint n = UNSET;
+
+	if (i == UNSET)
+		return;
+	if (opt)
+		i -= master ? (int)selws->nmaster : (int)selws->nstack;
+	if (master && (n = MAX(selws->nmaster + i, 0)) != selws->nmaster)
+		selws->nmaster = n;
+	else if (!master && (n = MAX(selws->nstack + i, 0)) != selws->nstack)
+		selws->nstack = n;
+	if (n != UNSET)
+		layoutws(selws);
+}
+
+void adjmvfocus(char **argv, void (*fn)(int))
+{
+	int i;
 	char *opt;
 
-	if (!selws->sel || selws->sel->fullscreen || selws->sel->floating)
+	if (!(opt = optparse(argv, (char **)parseropts[List], &i, NULL, 0)) && i == UNSET)
 		return;
-	else if (!(opt = cmdoptparse((char **)arg->v, (char **)parseropts[List], &a.i)) && a.i == UNSET)
-		return;
-	else if ((opt && !strcmp(opt, "next")) || (a.i > 0 && a.i != UNSET))
-		a.i = opt ? +1 : a.i;
-	else if ((opt && !strcmp(opt, "prev")) || a.i < 0)
-		a.i = opt ? -1 : a.i;
-	while (a.i) {
-		fn(&a);
-		a.i += a.i > 0 ? -1 : 1;
+	else if ((opt && !strcmp(opt, "next")) || (i > 0 && i != UNSET))
+		i = opt ? +1 : i;
+	else if ((opt && !strcmp(opt, "prev")) || i < 0)
+		i = opt ? -1 : i;
+	while (i) {
+		fn(i);
+		i += i > 0 ? -1 : 1;
 	}
+}
+
+void *applyclientrule(Client *c, xcb_window_t *trans)
+{ /* apply user specified rules to client, try using _NET atoms otherwise
+   * returns a pointer to the callback function if any otherwise NULL */
+	uint i;
+	Client *t;
+	Monitor *m;
+	int ws, n, num = -1;
+	char name[NAME_MAX];
+	xcb_generic_error_t *e;
+	xcb_get_property_cookie_t pc;
+	xcb_icccm_get_wm_class_reply_t prop;
+	void (*rulecbfunc)(Client *c) = NULL;
+
+	if ((*trans != XCB_WINDOW_NONE || (*trans = wintrans(c->win)) != XCB_WINDOW_NONE)
+			&& (t = wintoclient(*trans)))
+	{
+		c->ws = t->ws;
+		c->floating = 1;
+		ws = c->ws->num;
+		goto done;
+	}
+
+	if (!wintextprop(c->win, netatoms[Name], name, sizeof(name))
+			&& !wintextprop(c->win, XCB_ATOM_WM_NAME, name, sizeof(name)))
+		strlcpy(name, "broken", sizeof(name));
+	DBG("window title: %s", name);
+
+	pc = xcb_icccm_get_wm_class(con, c->win);
+	c->floating = 0;
+	if ((ws = winprop(c->win, netatoms[Desktop])) < 0)
+		ws = selws->num;
+	if (xcb_icccm_get_wm_class_reply(con, pc, &prop, &e)) {
+		DBG("window class: %s - instance: %s", prop.class_name, prop.instance_name)
+		for (i = 0; i < LEN(clientrules); i++) {
+			if (!rulecmp(&clientrules[i].regcomp, prop.class_name, prop.instance_name))
+				continue;
+			DBG("client matched rule regex: %s", clientrules[i].regex)
+			c->floating = clientrules[i].floating;
+			if (clientrules[i].workspace >= 0)
+				ws = clientrules[i].workspace;
+			else if (clientrules[i].monitor) {
+				if (strtol(clientrules[i].monitor, NULL, 0) || clientrules[i].monitor[0] == '0')
+					num = strtol(clientrules[i].monitor, NULL, 0);
+				for (n = 0, m = monitors; m; m = m->next, n++) {
+					if ((num >= 0 && num == n) || !strcmp(clientrules[i].monitor, m->name)) {
+						ws = m->ws->num;
+						break;
+					}
+				}
+			}
+			rulecbfunc = clientrules[i].cbfunc;
+		}
+		xcb_icccm_get_wm_class_reply_wipe(&prop);
+	} else {
+		checkerror("failed to get window class", e);
+	}
+done:
+	setclientws(c, ws);
+	DBG("set client values - workspace: %d, monitor: %s, floating: %d",
+			c->ws->num, c->ws->mon->name, c->floating)
+	return rulecbfunc;
 }
 
 void applypanelstrut(Panel *p)
@@ -218,6 +573,67 @@ void applypanelstrut(Panel *p)
 		p->mon->winarea_h = p->mon->h - (p->strut_b + p->strut_t);
 	DBG("%s window area after: %d,%d @ %dx%d", p->mon->name, p->mon->winarea_x,
 			p->mon->winarea_y, p->mon->winarea_w, p->mon->winarea_h);
+}
+
+int applysizehints(Client *c, int *x, int *y, int *w, int *h, int usermotion)
+{
+	int baseismin;
+	Monitor *m = c->ws->mon;
+
+	/* set minimum possible */
+	*w = MAX(1, *w);
+	*h = MAX(1, *h);
+	if (usermotion) { /* don't confine */
+		if (*x > scr_w)
+			*x = scr_w - W(c);
+		if (*y > scr_h)
+			*y = scr_h - H(c);
+		if (*x + *w + 2 * c->bw < 0)
+			*x = 0;
+		if (*y + *h + 2 * c->bw < 0)
+			*y = 0;
+	} else { /* confine to monitor */
+		if (*x > m->winarea_x + m->winarea_w)
+			*x = m->winarea_x + m->winarea_w - W(c);
+		if (*y > m->winarea_y + m->winarea_h)
+			*y = m->winarea_y + m->winarea_h - H(c);
+		if (*x + *w + 2 * c->bw < m->winarea_x)
+			*x = m->winarea_x;
+		if (*y + *h + 2 * c->bw < m->winarea_y)
+			*y = m->winarea_y;
+	}
+	if (c->floating || !c->ws->layout) {
+		if (!(baseismin = c->base_w == c->min_w && c->base_h == c->min_h)) {
+			/* temporarily remove base dimensions */
+			*w -= c->base_w;
+			*h -= c->base_h;
+		}
+		if (c->min_aspect > 0 && c->max_aspect > 0) { /* adjust for aspect limits */
+			if (c->max_aspect < (float)*w / *h)
+				*w = *h * c->max_aspect + 0.5;
+			else if (c->min_aspect < (float)*h / *w)
+				*h = *w * c->min_aspect + 0.5;
+		}
+		if (baseismin) { /* increment calculation requires this */
+			*w -= c->base_w;
+			*h -= c->base_h;
+		}
+		/* adjust for increment value */
+		if (c->increment_w)
+			*w -= *w % c->increment_w;
+		if (c->increment_h)
+			*h -= *h % c->increment_h;
+		/* restore base dimensions */
+		*w += c->base_w;
+		*h += c->base_h;
+		*w = MAX(*w, c->min_w);
+		*h = MAX(*h, c->min_h);
+		if (c->max_w)
+			*w = MIN(*w, c->max_w);
+		if (c->max_h)
+			*h = MIN(*h, c->max_h);
+	}
+	return *x != c->x || *y != c->y || *w != c->w || *h != c->h;
 }
 
 void attach(Client *c, int tohead)
@@ -237,16 +653,16 @@ void attach(Client *c, int tohead)
 	}
 }
 
-void attachstack(Client *c)
-{ /* attach client to it's workspaces focus stack list */
-	c->snext = c->ws->stack;
-	c->ws->stack = c;
-}
-
 void attachpanel(Panel *p)
 {
 	p->next = panels;
 	panels = p;
+}
+
+void attachstack(Client *c)
+{ /* attach client to it's workspaces focus stack list */
+	c->snext = c->ws->stack;
+	c->ws->stack = c;
 }
 
 void assignworkspaces(void)
@@ -281,23 +697,6 @@ void assignworkspaces(void)
 	}
 }
 
-void changefocus(const Arg *arg)
-{ /* focus the next or previous client on the active workspace */
-	Client *c, *sel = selws->sel;
-
-	if (!sel || sel->fullscreen)
-		return;
-	if (arg->i > 0)
-		FIND_NEXT(c, sel, selws->clients);
-	else
-		FIND_PREV(c, sel, selws->clients);
-	if (c) {
-		DBG("focusing %s client", arg->i > 0 ? "next" : "previous")
-		focus(c);
-		restack(c->ws);
-	}
-}
-
 void changews(Workspace *ws, int usermotion)
 { /* change the currently active workspace and warp the mouse if needed */
 	int diffmon = selws ? selws->mon != ws->mon : 1;
@@ -310,152 +709,82 @@ void changews(Workspace *ws, int usermotion)
 				ws->mon->x + (ws->mon->w / 2), ws->mon->y + (ws->mon->h / 2));
 }
 
-void checkerror(char *prompt, xcb_generic_error_t *e)
+void checkerror(char *msg, xcb_generic_error_t *e)
 { /* if e is non-null print a warning with error code and name to stderr and free(3) e */
 	if (!e)
 		return;
-	warnx("%s -- X11 error: %d: %s", prompt, e->error_code,
+	warnx("%s -- X11 error: %d: %s", msg, e->error_code,
 			xcb_event_get_error_label(e->error_code));
 	free(e);
 }
 
-void *clientrules(Client *c, xcb_window_t *trans)
-{ /* apply user specified rules to client, try using _NET atoms otherwise
-   * returns a pointer to the callback function if any otherwise NULL */
-	uint i;
-	Client *t;
-	Monitor *m;
-	char name[NAME_MAX];
-	xcb_generic_error_t *e;
-	int ws, n, len, num = -1;
-	xcb_get_property_cookie_t pc;
-	xcb_icccm_get_wm_class_reply_t prop;
-	void (*rulecbfunc)(Client *c) = NULL;
-
-	if ((*trans != XCB_WINDOW_NONE || (*trans = wintrans(c->win)) != XCB_WINDOW_NONE)
-			&& (t = wintoclient(*trans)))
-	{
-		c->ws = t->ws;
-		c->floating = 1;
-		ws = c->ws->num;
-		goto done;
-	}
-
-	if (!wintextprop(c->win, netatoms[Name], name, sizeof(name))
-			&& !wintextprop(c->win, XCB_ATOM_WM_NAME, name, sizeof(name)))
-		strlcpy(name, "broken", sizeof(name));
-
-	pc = xcb_icccm_get_wm_class(con, c->win);
-	c->floating = 0;
-	if ((ws = winprop(c->win, netatoms[Desktop])) < 0)
-		ws = selws->num;
-	if (xcb_icccm_get_wm_class_reply(con, pc, &prop, &e)) {
-		DBG("window class: %s - instance: %s", prop.class_name, prop.instance_name)
-		for (i = 0; i < LEN(rules); i++)
-			if (rulecmp(&rules[i].regcomp, prop.class_name, prop.instance_name)) {
-				DBG("client matched rule regex: %s", rules[i].regex)
-					c->floating = rules[i].floating;
-				if (rules[i].workspace >= 0)
-					ws = rules[i].workspace;
-				else if (rules[i].monitor) {
-					len = strlen(rules[i].monitor);
-					if (len <= 2 && isdigit(rules[i].monitor[0])
-							&& (len == 1 || isdigit(rules[i].monitor[1])))
-						num = atoi(rules[i].monitor);
-					for (n = 0, m = monitors; m; m = m->next, n++)
-						if ((num >= 0 && num == n) || !strcmp(rules[i].monitor, m->name)) {
-							ws = m->ws->num;
-							break;
-						}
-				}
-				rulecbfunc = rules[i].cbfunc;
-				break;
-			}
-		xcb_icccm_get_wm_class_reply_wipe(&prop);
-	} else {
-		checkerror("failed to get window class", e);
-	}
-done:
-	setclientws(c, ws);
-	DBG("set client values - workspace: %d, monitor: %s, floating: %d",
-			c->ws->num, c->ws->mon->name, c->floating)
-	return rulecbfunc;
-}
-
-void cmdborder(const Arg *arg)
+void cmdborder(char **argv)
 {
-	int i;
-	Arg a;
 	char *opt;
-
-	if (!(opt = cmdoptparse((char **)arg->v, (char **)parseropts[Abs], &i)) && i == UNSET)
-		return;
-	if ((a.i = adjbdorgap(i, opt, selws->gappx, borders[Width])) != UNSET)
-		setborderpx(&a);
-}
-
-void cmdcolour(const Arg *arg)
-{
 	Client *c;
 	Workspace *ws;
-	int n, colour = UNSET;
-	char **args, **opts, *opt = NULL;
+	int i, n, newborder, col = UNSET;
 	int f = borders[Focus], u = borders[Unfocus];
 
-	args = (char **)arg->v;
-	while (*args) {
-		if (**args == '#' && strlen(*args) == 7)
-			colour = strtol(++*args, NULL, 16);
-		else if ((n = strtol(*args, NULL, 0)) || **args == '0')
-			colour = n;
-		else for (opts = (char **)parseropts[Col]; !opt && opts && *opts; opts++)
-			if (!strcmp(*opts, *args))
-				opt = *args;
-		args++;
+	opt = optparse(argv, (char **)parseropts[Bdr], &i, NULL, 0);
+
+	if (!opt)
+		return;
+	if (opt && !strcmp(opt, "smart")) {
+		if (i != UNSET)
+			borders[Smart] = i;
+	} else if (!strcmp(opt, "colour") || !strcmp(opt, "color")) {
+		opt = optparse(argv + 1, (char **)parseropts[Col], &i, NULL, 1);
+		if (!opt)
+			return;
+		if (!strcmp("reset", opt)) {
+			borders[Focus] = dborder[Focus];
+			borders[Unfocus] = dborder[Unfocus];
+		} else if (col <= 0xffffff || col >= 0x000000) {
+			if (!strcmp("focus", opt)) {
+				borders[Focus] = col;
+				xcb_change_window_attributes(con, selws->sel->win,
+						XCB_CW_BORDER_PIXEL, &borders[Focus]);
+				return;
+			} else if (!strcmp("unfocus", opt)) {
+				borders[Unfocus] = col;
+			}
+		}
+		if (f != borders[Focus] || u != borders[Unfocus])
+			FOR_CLIENTS(c, ws)
+				xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL,
+						&borders[c == c->ws->sel ? Focus : Unfocus]);
+	} else if (!strcmp(opt, "width")) {
+		opt = optparse(argv + 1, (char **)parseropts[Std], &i, NULL, 0);
+		if (!opt && i == UNSET)
+			return;
+		if ((n = adjbdorgap(i, opt, selws->gappx, borders[Width])) != UNSET) {
+			if (n == 0)
+				newborder = dborder[Width];
+			else /* if we allow borders to be huge things would get silly, so we limit
+				  * them to 1/6 screen height - gap size, we also don't allow the global
+				  * border to be <1 so we can preserve borderless windows */
+				newborder = MAX(MIN((int)((selws->mon->winarea_h / 6) - selws->gappx),
+							borders[Width] + n), 1);
+			if (newborder != borders[Width]) {
+				/* update border width on clients that have borders matching the current global */
+				FOR_CLIENTS(c, ws)
+					if (c->bw && c->bw == borders[Width])
+						c->bw = newborder;
+				borders[Width] = newborder;
+				layoutws(NULL);
+			}
+		}
 	}
-	if (colour == UNSET)
-		return;
-	else if (!opt || !*opt || colour > 0xffffff || colour < 0x000000)
-		return;
-	else if (!strcmp("reset", opt)) {
-		borders[Focus] = dborder[Focus];
-		borders[Unfocus] = dborder[Unfocus];
-	} else if (!strcmp("focus", opt)) {
-		borders[Focus] = colour;
-		xcb_change_window_attributes(con, selws->sel->win,
-				XCB_CW_BORDER_PIXEL, &borders[Focus]);
-		return;
-	} else if (!strcmp("unfocus", opt)) {
-		borders[Unfocus] = colour;
-	} else {
-		return;
-	}
-	if (f != borders[Focus] || u != borders[Unfocus])
-		FOR_CLIENTS(c, ws)
-			xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL,
-					&borders[c == c->ws->sel ? Focus : Unfocus]);
 }
 
-void cmdexec(const Arg *arg)
-{
-	DBG("user run command: %s", ((char **)arg->v)[0])
-	if (fork())
-		return;
-	if (con)
-		close(xcb_get_file_descriptor(con));
-	setsid();
-	execvp(((char **)arg->v)[0], (char **)arg->v);
-	errx(0, "execvp: %s", ((char **)arg->v)[0]);
-}
-
-void cmdfloat(const Arg *arg)
+void cmdfloat(char **argv)
 {
 	Client *c;
 
 	if (!(c = selws->sel) || c->fullscreen)
 		return;
-	(void)(arg);
-	DBG("toggling selected window floating state: %d -> %d", c->floating, !c->floating)
+	(void)(argv);
 	if ((c->floating = !c->floating || c->fixed)) {
 		c->x = c->old_x, c->y = c->old_y, c->w = c->old_w, c->h = c->old_h;
 		resize(c, c->x, c->y, c->w, c->h, c->bw);
@@ -465,29 +794,43 @@ void cmdfloat(const Arg *arg)
 	layoutws(selws);
 }
 
-void cmdfocus(const Arg *arg)
+void cmdfocus(char **argv)
 {
-	adjmvfocus(arg, changefocus);
-}
-
-void cmdgappx(const Arg *arg)
-{
-	int i;
-	Arg a;
-	char *opt;
-
-	if (!(opt = cmdoptparse((char **)arg->v, (char **)parseropts[Abs], &i)) && i == UNSET)
+	if (!selws->sel || selws->sel->fullscreen)
 		return;
-	if ((a.i = adjbdorgap(i, opt, borders[Width], selws->gappx)) != UNSET)
-		setgappx(&a);
+	adjmvfocus(argv, movefocus);
 }
 
-void cmdkill(const Arg *arg)
+void cmdgappx(char **argv)
+{
+	int i, n;
+	char *opt;
+	uint newgap;
+
+	opt = optparse(argv, (char **)parseropts[Std], &i, NULL, 0);
+
+	if (!opt && i == UNSET)
+		return;
+	if ((n = adjbdorgap(i, opt, borders[Width], selws->gappx)) == UNSET)
+		return;
+	if (n == 0)
+		newgap = workspacerules[selws->num].gappx;
+	else /* if we allow gaps or borders to be huge things would get silly,
+		  * so we limit them to 1/6 screen height - border size */
+		newgap = MAX(MIN((int)selws->gappx + n,
+					(selws->mon->winarea_h / 6) - borders[Width]), 0);
+	if (newgap != selws->gappx) {
+		selws->gappx = newgap;
+		layoutws(selws);
+	}
+}
+
+void cmdkill(char **argv)
 { /* close currently active client and free it */
 	if (!selws->sel)
 		return;
 	DBG("user requested kill current client")
-	(void)(arg);
+	(void)(argv);
 	if (!sendevent(selws->sel, Delete)) {
 		xcb_grab_server(con);
 		xcb_set_close_down_mode(con, XCB_CLOSE_DOWN_DESTROY_ALL);
@@ -498,86 +841,54 @@ void cmdkill(const Arg *arg)
 	xcb_flush(con);
 }
 
-void cmdlayout(const Arg *arg)
+void cmdlayout(char **argv)
 {
-	int i;
-	Arg a;
 	char *opt;
+	void (*f)(Workspace *);
 
-	if (!(opt = cmdoptparse((char **)arg->v, (char **)parseropts[Lyt], &i)))
+	opt = optparse(argv, (char **)parseropts[Lyt], NULL, NULL, 0);
+	if (!opt)
 		return;
 	if (!strcmp(opt, "tile"))
-		a.v = tile;
+		f = tile;
 	else if (!strcmp(opt, "monocle"))
-		a.v = monocle;
+		f = monocle;
 	else
-		a.v = NULL;
-	setlayout(&a);
-}
-
-void cmdmouse(const Arg *arg)
-{
-	Arg a;
-	char *opt;
-
-	if ((opt = cmdoptparse((char **)arg->v, (char **)parseropts[Mouse], &a.i))) {
-		a.i = !strcmp(opt, "move");
-		mousemoveresize(&a);
-	}
-}
-
-void cmdmove(const Arg *arg)
-{
-	adjmvfocus(arg, movestack);
-}
-
-void cmdnmaster(const Arg *arg)
-{
-	Arg a;
-	char *opt;
-
-	opt = cmdoptparse((char **)arg->v, (char **)parseropts[Abs], &a.i);
-	if (a.i == UNSET)
+		f = NULL;
+	if (f == selws->layout)
 		return;
-	if (opt)
-		a.i -= (int)selws->nmaster;
-	setnmaster(&a);
+	selws->layout = f;
+	if (selws->sel)
+		layoutws(selws);
 }
 
-void cmdnstack(const Arg *arg)
+void cmdmove(char **argv)
 {
-	Arg a;
+	if (!selws->sel || selws->sel->fullscreen || selws->sel->floating)
+		return;
+	adjmvfocus(argv, movestack);
+}
+
+void cmdnmaster(char **argv)
+{
+	int i;
 	char *opt;
 
-	opt = cmdoptparse((char **)arg->v, (char **)parseropts[Abs], &a.i);
-	if (a.i == UNSET)
-		return;
-	if (opt)
-		a.i -= (int)selws->nstack;
-	setnstack(&a);
+	opt = optparse(argv, (char **)parseropts[Min], &i, NULL, 0);
+	adjmstack(i, opt, 1);
 }
 
-char *cmdoptparse(char **argv, char **opts, int *argi)
+void cmdnstack(char **argv)
 {
-	int n;
-	char *opt = NULL;
+	int i;
+	char *opt;
 
-	if (argi)
-		*argi = UNSET;
-	while (*argv) {
-		if (argi && ((n = strtol(*argv, NULL, 0)) || **argv == '0'))
-			*argi = n;
-		else for (; !opt && opts && *opts; opts++)
-			if (!strcmp(*opts, *argv))
-				opt = *argv;
-		argv++;
-	}
-	return opt;
+	opt = optparse(argv, (char **)parseropts[Min], &i, NULL, 0);
+	adjmstack(i, opt, 0);
 }
 
 void cmdparse(char *buf)
 {
-	Arg arg;
 	uint i, n = 0;
 	char *k, *args[10], *dbuf, *delim = " \t\n\r";
 
@@ -588,69 +899,49 @@ void cmdparse(char *buf)
 		if (!strcmp(keywords[i].name, k)) {
 			while (n < sizeof(args) && (args[n++] = strtok(NULL, delim)))
 				;
-			if (*args || !keywords[i].requiresarg) {
-				arg.v = args;
-				keywords[i].func(&arg);
-			}
+			if (*args)
+				keywords[i].func((char **)args);
 			break;
 		}
 out:
 	free(dbuf);
 }
 
-void cmdquit(const Arg *arg)
+void cmdset(char **argv)
 {
-	Arg a;
-	char *opt;
-	char *const argv[] = { argv0, NULL };
-
-	if ((opt = cmdoptparse((char **)arg->v, (char **)parseropts[Quit], &a.i)))
-		if ((running = !strcmp(opt, "reset")))
-			execvp(argv[0], argv);
-}
-
-void cmdsetting(const Arg *arg)
-{
-	Arg a;
 	uint i;
-	char *s;
+	char *s, **r;
 
-	s = ((char **)arg->v)[0];
-	a.v = ((char **)arg->v) + 1;
-	for (i = 0; i < LEN(settings); i++)
-		if (!strcmp(settings[i].name, s)) {
-			settings[i].func(&a);
+	s = argv[0];
+	r = argv + 1;
+	for (i = 0; i < LEN(setcmds); i++)
+		if (!strcmp(setcmds[i].name, s)) {
+			setcmds[i].func(r);
 			return;
 		}
 }
 
-void cmdsplit(const Arg *arg)
+void cmdsplit(char **argv)
 {
-	Arg a;
-	char **args, **opts, *opt = NULL;
+	char *opt;
+	float f, nf;
 
-	a.f = 0.0;
-	args = (char **)arg->v;
-	while (*args) {
-		if (strtof(*args, NULL))
-			a.f = strtof(*args, NULL);
-		else for (opts = (char **)parseropts[Abs]; !opt && opts && *opts; opts++)
-			if (!strcmp(*opts, *args))
-				opt = *args;
-		args++;
-	}
-	if (a.f == 0.0)
+	if (!selws->layout)
 		return;
-	if (opt && (a.f > 0.9 || a.f < 0.1 || !(a.f -= selws->splitratio)))
+	opt = optparse(argv, (char **)parseropts[Min], NULL, &f, 0);
+	if (f == 0.0 || (opt && (f > 0.9 || f < 0.1 || !(f -= selws->splitratio))))
 		return;
-	setsplit(&a);
+	if ((nf = f < 1.0 ? f + selws->splitratio : f - 1.0) < 0.1 || nf > 0.9)
+		return;
+	selws->splitratio = nf;
+	layoutws(selws);
 }
 
-void cmdswap(const Arg *arg)
+void cmdswap(char **argv)
 {
 	Client *c;
 
-	(void)(arg);
+	(void)(argv);
 	if (!(c = selws->sel) || c->floating || !selws->layout)
 		return;
 	if (c == nexttiled(selws->clients) && !(c = nexttiled(c->next)))
@@ -661,16 +952,45 @@ void cmdswap(const Arg *arg)
 	layoutws(c->ws);
 }
 
-void cmdws(const Arg *arg)
+void cmdwin(char **argv)
 {
-	Arg a;
-	char *opt;
-	void (*fn)(const Arg *) = view;
+	uint i;
+	char *s, **r;
 
-	if (!selws->sel || selws->sel->fullscreen)
+	if (!argv || !argv[0])
 		return;
-	opt = cmdoptparse((char **)arg->v, (char **)parseropts[Ws], &a.i);
-	if (a.i > (int)numws || a.i < 0)
+	s = argv[0];
+	r = argv + 1;
+	for (i = 0; i < LEN(wincmds); i++)
+		if (!strcmp(wincmds[i].name, s)) {
+			wincmds[i].func(r);
+			return;
+		}
+}
+
+void cmdwm(char **argv)
+{
+	char *opt;
+	char *const arg[] = { argv0, NULL };
+
+	if ((opt = optparse(argv, (char **)parseropts[Wm], NULL, NULL, 0))) {
+		if (!strcmp(opt, "reload"))
+			execcfg();
+		else if (!strcmp(opt, "restart"))
+			execvp(arg[0], arg);
+		else
+			running = 0;
+	}
+}
+
+void cmdws(char **argv)
+{
+	int i;
+	char *opt;
+	void (*fn)(int) = view;
+
+	opt = optparse(argv, (char **)parseropts[Ws], &i, NULL, 0);
+	if (i > (int)numws || i < 0)
 		return;
 	if (opt) {
 		if (!strcmp(opt, "send"))
@@ -678,7 +998,7 @@ void cmdws(const Arg *arg)
 		else if (!strcmp(opt, "follow"))
 			fn = follow;
 	}
-	fn(&a);
+	fn(i);
 }
 
 void configure(Client *c)
@@ -766,7 +1086,6 @@ void *ecalloc(size_t elems, size_t size)
 
 void eventhandle(xcb_generic_event_t *ev)
 {
-	uint i;
 	Client *c;
 	Monitor *m;
 	Workspace *ws;
@@ -787,7 +1106,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			}
 
 			if (selws->sel && e->event != selws->sel->win)
-				setfocus(selws->sel);
+				takefocus(selws->sel);
 			return;
 		}
 		case XCB_CONFIGURE_NOTIFY:
@@ -803,17 +1122,6 @@ void eventhandle(xcb_generic_event_t *ev)
 					fixupworkspaces();
 				}
 			}
-			return;
-		}
-		case XCB_MAPPING_NOTIFY:
-		{
-			xcb_mapping_notify_event_t *e = (xcb_mapping_notify_event_t *)ev;
-
-			if (e->request == XCB_MAPPING_POINTER || (e->request != XCB_MAPPING_KEYBOARD
-						&& e->request != XCB_MAPPING_MODIFIER))
-				return;
-			xcb_refresh_keyboard_mapping(keysyms, e);
-			grabkeys();
 			return;
 		}
 		case XCB_CONFIGURE_REQUEST:
@@ -898,23 +1206,19 @@ void eventhandle(xcb_generic_event_t *ev)
 		}
 		case XCB_BUTTON_PRESS:
 		{
-			xcb_button_press_event_t *b = (xcb_button_press_event_t *)ev;
+			xcb_button_press_event_t *e = (xcb_button_press_event_t *)ev;
 
-			if (!(c = wintoclient(b->event)))
+			if (!(c = wintoclient(e->event)))
 				return;
-			DBG("button press event - mouse button %d - window: 0x%08x", b->detail, b->event)
+			DBG("button press event - mouse button %d - window: 0x%08x", e->detail, e->event)
 			focus(c);
 			restack(c->ws);
-			if (CLNMOD(b->state) == XCB_NONE) {
-				xcb_allow_events(con, XCB_ALLOW_REPLAY_POINTER, b->time);
+			if (CLNMOD(e->state) == XCB_NONE) {
+				xcb_allow_events(con, XCB_ALLOW_REPLAY_POINTER, e->time);
 				xcb_flush(con);
-			} else for (i = 0; i < LEN(mousebinds); i++)
-				if (CLNMOD(mousebinds[i].mod) == CLNMOD(b->state)
-						&& b->detail == mousebinds[i].button && mousebinds[i].func)
-				{
-					mousebinds[i].func(&(mousebinds[i].arg));
-					return;
-				}
+			} else if (CLNMOD(e->state) == CLNMOD(mousemod)
+					&& (e->detail == mousemove || e->detail == mouseresize))
+				mousemvr(e->detail == mousemove);
 			return;
 		}
 		case XCB_MOTION_NOTIFY:
@@ -929,22 +1233,6 @@ void eventhandle(xcb_generic_event_t *ev)
 				changews(m->ws, 1);
 				focus(NULL);
 			}
-			return;
-		}
-		case XCB_KEY_PRESS: /* fallthrough */
-		case XCB_KEY_RELEASE:
-		{
-			xcb_keysym_t sym;
-			xcb_key_press_event_t *e = (xcb_key_press_event_t *)ev;
-
-			sym = xcb_key_symbols_get_keysym(keysyms, e->detail, 0);
-			for (i = 0; i < LEN(binds); i++)
-				if (ev->response_type == binds[i].type && sym == binds[i].keysym
-						&& CLNMOD(binds[i].mod) == CLNMOD(e->state) && binds[i].func)
-				{
-					binds[i].func(&(binds[i].arg));
-					return;
-				}
 			return;
 		}
 		case XCB_MAP_REQUEST:
@@ -982,13 +1270,13 @@ void eventhandle(xcb_generic_event_t *ev)
 			uint32_t *d = e->data.data32;
 
 			if (e->window == root && e->type == netatoms[CurrentDesktop]) {
-				view(&(const Arg){.i = d[0]});
+				view(d[0]);
 			} else if ((c = wintoclient(e->window))) {
 				if (e->type == netatoms[State] && (d[1] == fs || d[2] == fs))
 					setfullscreen(c, (d[0] == 1 || (d[0] == 2 && !c->fullscreen)));
 				else if (e->type == netatoms[ActiveWindow]) {
 					unfocus(selws->sel, 1);
-					view(&(const Arg){.i = c->ws->num});
+					view(c->ws->num);
 					focus(c);
 					restack(selws);
 				}
@@ -1001,7 +1289,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ev;
 
 			if (e->atom == netatoms[StrutPartial] && (p = wintopanel(e->window))) {
-				updatestruts(p, 1);	
+				updatestruts(p, 1);
 				layoutws(NULL);
 			} else if (e->state != XCB_PROPERTY_DELETE && (c = wintoclient(e->window))) {
 				switch (e->atom) {
@@ -1108,6 +1396,28 @@ void eventloop(void)
 	}
 }
 
+void execcfg(void)
+{
+	char *cfg, *home;
+	char path[PATH_MAX];
+
+	if (!(cfg = getenv("YAXWM_CONF"))) {
+		if (!(home = getenv("XDG_CONFIG_HOME")) && !(home = getenv("HOME")))
+			return;
+		strlcpy(path, home, sizeof(path));
+		strlcat(path, "/.config/yaxwm/", sizeof(path));
+		strlcat(path, "yaxwmrc", sizeof(path));
+		cfg = path;
+	}
+	if (!fork()) {
+		if (con)
+			close(xcb_get_file_descriptor(con));
+		setsid();
+		execle(cfg, cfg, (char *)NULL, environ);
+		warn("unable to execute config file");
+	}
+}
+
 void fixupworkspaces(void)
 { /* after monitor(s) change we need to reassign workspaces and resize fullscreen clients */
 	Client *c;
@@ -1144,7 +1454,7 @@ void focus(Client *c)
 		attachstack(c);
 		grabbuttons(c, 1);
 		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, &borders[Focus]);
-		setfocus(c);
+		takefocus(c);
 	} else {
 		DBG("no available clients on this workspace, focusing root window")
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, root, XCB_CURRENT_TIME);
@@ -1153,12 +1463,21 @@ void focus(Client *c)
 	selws->sel = c;
 }
 
-void follow(const Arg *arg)
-{ /* send selected client to a workspace and view that workspace */
-	if (selws->sel && arg->i != selws->num) {
-		send(arg);
-		view(arg);
+void follow(int num)
+{ /* follow selected client to a workspace */
+	Client *c;
+	Workspace *ws;
+
+	if (!selws->sel || num == selws->num || !(ws = itows(num)))
+		return;
+	if ((c = selws->sel)) {
+		unfocus(c, 1);
+		setclientws(c, num);
 	}
+	changews(ws, 0);
+	focus(NULL);
+	layoutws(NULL);
+	restack(selws);
 }
 
 void freeclient(Client *c, int destroyed)
@@ -1225,7 +1544,6 @@ void freewm(void)
 	FOR_EACH(ws, workspaces)
 		while (ws->stack)
 			freeclient(ws->stack, 0);
-	xcb_ungrab_key(con, XCB_GRAB_ANY, root, XCB_MOD_MASK_ANY);
 	xcb_key_symbols_free(keysyms);
 	while (panels)
 		freepanel(panels, 0);
@@ -1235,8 +1553,8 @@ void freewm(void)
 		freews(workspaces);
 	for (i = 0; i < LEN(cursors); i++)
 		xcb_free_cursor(con, cursor[i]);
-	for (i = 0; i < LEN(rules); i++)
-		regfree(&rules[i].regcomp);
+	for (i = 0; i < LEN(clientrules); i++)
+		regfree(&clientrules[i].regcomp);
 	xcb_destroy_window(con, wmcheck);
 	xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT,
 			XCB_INPUT_FOCUS_POINTER_ROOT, XCB_CURRENT_TIME);
@@ -1264,40 +1582,39 @@ void freews(Workspace *ws)
 
 void grabbuttons(Client *c, int focused)
 {
-	updatenumlock();
-	{ /* new scope to use updated numlock mask */
-		uint mods[] = { 0, XCB_MOD_MASK_LOCK, numlockmask, numlockmask | XCB_MOD_MASK_LOCK };
+	xcb_generic_error_t *e;
+	xcb_keysym_t nlock = 0xff7f;
+	xcb_keycode_t *kc, *t = NULL;
+	xcb_get_modifier_mapping_reply_t *m;
+	uint mods[] = { 0, XCB_MOD_MASK_LOCK, 0, XCB_MOD_MASK_LOCK };
 
-		DBG("grabbing buttons on client window: 0x%08x - focused: %d", c->win, focused)
-		xcb_ungrab_button(con, XCB_BUTTON_INDEX_ANY, c->win, XCB_BUTTON_MASK_ANY);
-		if (!focused)
-			xcb_grab_button(con, 0, c->win, BUTTONMASK, SYNC, SYNC, 0, XCB_WINDOW_NONE,
-					XCB_BUTTON_INDEX_ANY, XCB_BUTTON_MASK_ANY);
-		for (uint i = 0; i < LEN(mods); i++)
-			for (uint j = 0; j < LEN(mousebinds); j++)
-				xcb_grab_button(con, 0, c->win, BUTTONMASK, ASYNC, SYNC, 0, XCB_WINDOW_NONE,
-						mousebinds[j].button, mousebinds[j].mod | mods[i]);
+	numlockmask = 0;
+	if ((m = xcb_get_modifier_mapping_reply(con, xcb_get_modifier_mapping(con), &e))) {
+		if ((t = xcb_key_symbols_get_keycode(keysyms, nlock))
+				&& (kc = xcb_get_modifier_mapping_keycodes(m)))
+		{
+			for (uint i = 0; i < 8; i++)
+				for (uint j = 0; j < m->keycodes_per_modifier; j++)
+					if (kc[i * m->keycodes_per_modifier + j] == *t)
+						numlockmask = (1 << i);
+		}
+		free(t);
+		free(m);
+	} else {
+		checkerror("unable to get modifier mapping for numlock", e);
 	}
-}
-
-void grabkeys(void)
-{
-	updatenumlock();
-	{ /* new scope to use updated numlock mask */
-		xcb_keycode_t *c;
-		uint mods[] = { 0, XCB_MOD_MASK_LOCK, numlockmask, numlockmask | XCB_MOD_MASK_LOCK };
-
-		DBG("grabbing bound keys on the root window")
-		xcb_ungrab_key(con, XCB_GRAB_ANY, root, XCB_MOD_MASK_ANY);
-
-		for (uint i = 0; i < LEN(mods); i++)
-			for (uint j = 0; j < LEN(binds); j++)
-				if ((c = xcb_key_symbols_get_keycode(keysyms, binds[j].keysym))) {
-					xcb_grab_key(con, 1, root, binds[j].mod | mods[i], *c, ASYNC, ASYNC);
-					free(c);
-				}
+	/* apply the mask to search elements */
+	mods[2] |= numlockmask, mods[3] |= numlockmask;
+	xcb_ungrab_button(con, XCB_BUTTON_INDEX_ANY, c->win, XCB_BUTTON_MASK_ANY);
+	if (!focused)
+		xcb_grab_button(con, 0, c->win, BUTTONMASK, XCB_GRAB_MODE_SYNC,
+				XCB_GRAB_MODE_SYNC, XCB_NONE, XCB_NONE, XCB_BUTTON_INDEX_ANY, XCB_BUTTON_MASK_ANY);
+	for (uint i = 0; i < LEN(mods); i++) {
+			xcb_grab_button(con, 0, c->win, BUTTONMASK, XCB_GRAB_MODE_ASYNC,
+					XCB_GRAB_MODE_SYNC, XCB_NONE, XCB_NONE, mousemove, mousemod | mods[i]);
+			xcb_grab_button(con, 0, c->win, BUTTONMASK, XCB_GRAB_MODE_ASYNC,
+					XCB_GRAB_MODE_SYNC, XCB_NONE, XCB_NONE, mouseresize, mousemod | mods[i]);
 	}
-
 }
 
 int grabpointer(xcb_cursor_t cursor)
@@ -1307,7 +1624,8 @@ int grabpointer(xcb_cursor_t cursor)
 	xcb_grab_pointer_cookie_t pc;
 	xcb_grab_pointer_reply_t *ptr;
 
-	pc = xcb_grab_pointer(con, 0, root, GRABMASK, ASYNC, ASYNC, root, cursor, XCB_CURRENT_TIME);
+	pc = xcb_grab_pointer(con, 0, root, GRABMASK, XCB_GRAB_MODE_ASYNC,
+			XCB_GRAB_MODE_ASYNC, root, cursor, XCB_CURRENT_TIME);
 	if ((ptr = xcb_grab_pointer_reply(con, pc, &e))) {
 		r = ptr->status == XCB_GRAB_STATUS_SUCCESS;
 		free(ptr);
@@ -1382,7 +1700,7 @@ void initclient(xcb_window_t win, xcb_window_t trans)
 		checkerror("failed to get window geometry reply", e);
 	}
 	free(g);
-	clientcbfunc = clientrules(c, &trans);
+	clientcbfunc = applyclientrule(c, &trans);
 	c->bw = borders[Width];
 	xcb_configure_window(con, c->win, BWMASK, &c->bw);
 	configure(c);
@@ -1581,12 +1899,12 @@ void initwm(void)
 	xcb_cursor_context_free(ctx);
 
 	/* client rules regexes */
-	for (i = 0; i < LEN(rules); i++)
-		if ((r = regcomp(&rules[i].regcomp, rules[i].regex,
+	for (i = 0; i < LEN(clientrules); i++)
+		if ((r = regcomp(&clientrules[i].regcomp, clientrules[i].regex,
 						REG_NOSUB | REG_EXTENDED | REG_ICASE)))
 		{
-			regerror(r, &rules[i].regcomp, errbuf, sizeof(errbuf));
-			errx(1, "invalid regex rules[%d]: %s: %s\n", i, rules[i].regex, errbuf);
+			regerror(r, &clientrules[i].regcomp, errbuf, sizeof(errbuf));
+			errx(1, "invalid regex clientrules[%d]: %s: %s\n", i, clientrules[i].regex, errbuf);
 		}
 
 	/* atoms */
@@ -1632,7 +1950,6 @@ void initwm(void)
 	/* binds */
 	if (!(keysyms = xcb_key_symbols_alloc(con)))
 		err(1, "unable to get keysyms from X connection");
-	grabkeys();
 
 	/* fifo pipe */
 	if (!(fifo = getenv("YAXWM_FIFO"))) {
@@ -1648,16 +1965,16 @@ void initworkspaces(void)
 { /* setup default workspaces from user specified workspace rules */
 	Workspace *ws;
 
-	for (numws = 0; numws < (int)LEN(wsrules); numws++) {
+	for (numws = 0; numws < (int)LEN(workspacerules); numws++) {
 		FIND_TAIL(ws, workspaces);
 		if (ws)
-			ws->next = initws(numws, &wsrules[numws]);
+			ws->next = initws(numws, &workspacerules[numws]);
 		else
-			workspaces = initws(numws, &wsrules[numws]);
+			workspaces = initws(numws, &workspacerules[numws]);
 	}
 }
 
-Workspace *initws(int num, WsRule *r)
+Workspace *initws(int num, WorkspaceRule *r)
 {
 	Workspace *ws;
 
@@ -1725,17 +2042,33 @@ void monocle(Workspace *ws)
 
 	for (c = nexttiled(ws->clients); c; c = nexttiled(c->next))
 		resize(c, m->winarea_x, m->winarea_y, m->winarea_w, m->winarea_h,
-				smartborder ? 0 : borders[Width]);
+				borders[Smart] ? 0 : borders[Width]);
 }
 
-void movestack(const Arg *arg)
+void movefocus(int direction)
+{ /* focus the next or previous client on the active workspace */
+	Client *c, *sel = selws->sel;
+
+	if (!sel || sel->fullscreen)
+		return;
+	if (direction > 0)
+		c = sel->next ? sel->next : selws->clients;
+	else
+		FIND_PREV(c, sel, selws->clients);
+	if (c) {
+		focus(c);
+		restack(c->ws);
+	}
+}
+
+void movestack(int direction)
 {
-	Client *c;
 	int i = 0;
+	Client *c;
 
 	if (!selws->sel || selws->sel->floating || !nexttiled(selws->clients->next))
 		return;
-	if (arg->i > 0) { /* swap current and the next or move to the front when at the end */
+	if (direction > 0) { /* swap current and the next or move to the front when at the end */
 		detach(selws->sel, (c = nexttiled(selws->sel->next)) ? 0 : 1);
 		if (c) { /* attach within the list */
 			selws->sel->next = c->next;
@@ -1759,7 +2092,7 @@ void movestack(const Arg *arg)
 	focus(selws->sel);
 }
 
-void mousemoveresize(const Arg *arg)
+void mousemvr(int move)
 {
 	Client *c;
 	Monitor *m;
@@ -1775,7 +2108,7 @@ void mousemoveresize(const Arg *arg)
 	if (c != c->ws->sel)
 		focus(c);
 	restack(c->ws);
-	if (!grabpointer(arg->i ? cursor[Move] : cursor[Resize]))
+	if (!grabpointer(cursor[move ? Move : Resize]))
 		return;
 	while (running && !released) {
 		while ((ev = xcb_wait_for_event(con)) == NULL)
@@ -1790,7 +2123,7 @@ void mousemoveresize(const Arg *arg)
 			if (!querypointer(&x, &y) || (e->time - last) < (1000 / 60))
 				break;
 			last = e->time;
-			if (arg->i)
+			if (move)
 				nx = ox + (x - mx), ny = oy + (y - my);
 			else
 				nw = ow + (x - mx), nh = oh + (y - my);
@@ -1800,7 +2133,7 @@ void mousemoveresize(const Arg *arg)
 				layoutws(c->ws);
 			}
 			if (!c->ws->layout || c->floating) {
-				if (arg->i && (m = coordtomon(x, y)) != c->ws->mon) {
+				if (move && (m = coordtomon(x, y)) != c->ws->mon) {
 					setclientws(c, m->ws->num);
 					changews(m->ws, 1);
 					focus(c);
@@ -1818,7 +2151,7 @@ void mousemoveresize(const Arg *arg)
 		free(ev);
 	}
 	ungrabpointer();
-	if (!arg->i)
+	if (!move)
 		eventignore(XCB_ENTER_NOTIFY);
 }
 
@@ -1827,6 +2160,30 @@ Client *nexttiled(Client *c)
 	while (c && c->floating)
 		c = c->next;
 	return c;
+}
+
+char *optparse(char **argv, char **opts, int *argi, float *argf, int hex)
+{ /* parses argv for arguments we're interested in */
+	int n;
+	float f;
+	char *opt = NULL;
+
+	if (argi)
+		*argi = UNSET;
+	if (argf)
+		*argf = 0.0;
+	while (*argv) {
+		if (argi && ((hex && **argv == '#' && strlen(*argv) == 7)
+					|| (n = strtol(*argv, NULL, 0)) || **argv == '0'))
+			*argi = hex && **argv == '#' ? strtol(++*argv, NULL, 16) : n;
+		else if (argf && (f = strtof(*argv, NULL)))
+			*argf = f;
+		else for (; !opt && opts && *opts; opts++)
+			if (!strcmp(*opts, *argv))
+				opt = *argv;
+		argv++;
+	}
+	return opt;
 }
 
 Monitor *outputtomon(xcb_randr_output_t id)
@@ -1839,6 +2196,7 @@ Monitor *outputtomon(xcb_randr_output_t id)
 	return m;
 }
 
+#ifdef DEBUG
 void print(const char *fmt, ...)
 {
 	va_list ap;
@@ -1847,6 +2205,7 @@ void print(const char *fmt, ...)
 	va_end(ap);
 	fprintf(stderr, "\n");
 }
+#endif
 
 int querypointer(int *x, int *y)
 {
@@ -1884,9 +2243,9 @@ void resize(Client *c, int x, int y, int w, int h, int bw)
 	configure(c);
 }
 
-void resizehint(Client *c, int x, int y, int w, int h, int bw, int interact)
+void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion)
 {
-	if (usesizehints(c, &x, &y, &w, &h, interact))
+	if (applysizehints(c, &x, &y, &w, &h, usermotion))
 		resize(c, x, y, w, h, bw);
 }
 
@@ -1896,7 +2255,7 @@ void restack(Workspace *ws)
 
 	if (!ws)
 		ws = selws;
-	if (!(c = ws->sel))
+	if (!ws || !(c = ws->sel))
 		return;
 	DBG("restacking clients on workspace: %d", ws->num)
 	if (c->floating || !ws->layout)
@@ -1914,16 +2273,16 @@ int rulecmp(regex_t *r, char *class, char *inst)
 	return (!regexec(r, class, 0, NULL, 0) || !regexec(r, inst, 0, NULL, 0));
 }
 
-void send(const Arg *arg)
+void send(int num)
 {
 	Client *c;
 
-	if ((c = selws->sel) && arg->i != selws->num) {
-		unfocus(c, 1);
-		setclientws(c, arg->i);
-		focus(NULL);
-		layoutws(NULL);
-	}
+	if (!(c = selws->sel) || num == selws->num || !itows(num))
+		return;
+	unfocus(c, 1);
+	setclientws(c, num);
+	focus(NULL);
+	layoutws(NULL);
 }
 
 int sendevent(Client *c, int wmproto)
@@ -1995,15 +2354,6 @@ void setclientws(Client *c, uint num)
 	attachstack(c);
 }
 
-void setfocus(Client *c)
-{
-	if (!c->nofocus) {
-		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, c->win, XCB_CURRENT_TIME);
-		PROP_REPLACE(root, netatoms[ActiveWindow], XCB_ATOM_WINDOW, 32, 1, &c->win);
-	}
-	sendevent(c, TakeFocus);
-}
-
 void setfullscreen(Client *c, int fullscreen)
 {
 	Monitor *m;
@@ -2032,89 +2382,6 @@ void setfullscreen(Client *c, int fullscreen)
 		resize(c, c->x, c->y, c->w, c->h, c->bw);
 		layoutws(c->ws);
 	}
-}
-
-void setlayout(const Arg *arg)
-{
-	void (*f)(Workspace *);
-
-	if ((f = arg && arg->v ? (void (*)(Workspace *))arg->v : NULL) != selws->layout) {
-		selws->layout = f;
-		if (selws->sel)
-			layoutws(selws);
-	}
-}
-
-void setgappx(const Arg *arg)
-{
-	uint newgap;
-
-	if (!arg || arg->i == 0)
-		newgap = wsrules[selws->num].gappx;
-	else /* if we allow gaps or borders to be huge things would get silly,
-		  * so we limit them to 1/6 screen height - border size */
-		newgap = MAX(MIN((int)selws->gappx + arg->i,
-					(selws->mon->winarea_h / 6) - borders[Width]), 0);
-	if (newgap != selws->gappx) {
-		selws->gappx = newgap;
-		layoutws(selws);
-	}
-}
-
-void setborderpx(const Arg *arg)
-{
-	Client *c;
-	Workspace *ws;
-	int newborder;
-
-	if (!arg || arg->i == 0)
-		newborder = dborder[Width];
-	else /* if we allow borders to be huge things would get silly, so we limit
-		  * them to 1/6 screen height - gap size, we also don't allow the global
-		  * border to be <1 so we can preserve borderless windows */
-		newborder = MAX(MIN((int)((selws->mon->winarea_h / 6) - selws->gappx),
-					borders[Width] + arg->i), 1);
-	if (newborder != borders[Width]) {
-		FOR_CLIENTS(c, ws) /* update border width on clients that have borders matching the current global */
-			if (c->bw && c->bw == borders[Width])
-				c->bw = newborder;
-		borders[Width] = newborder;
-		layoutws(NULL);
-	}
-}
-
-void setnmaster(const Arg *arg)
-{
-	uint n;
-
-	if ((n = MAX(selws->nmaster + arg->i, 0)) != selws->nmaster) {
-		selws->nmaster = n;
-		layoutws(selws);
-	}
-}
-
-void setnstack(const Arg *arg)
-{
-	uint n;
-
-	if ((n = MAX(selws->nstack + arg->i, 0)) != selws->nstack) {
-		selws->nstack = n;
-		layoutws(selws);
-	}
-}
-
-void setsplit(const Arg *arg)
-{
-	float f;
-
-	if (!arg || !selws->layout)
-		return;
-	f = arg->f < 1.0 ? arg->f + selws->splitratio : arg->f - 1.0;
-	if (f < 0.1 || f > 0.9)
-		return;
-	DBG("setting split splitratio: %f -> %f", selws->splitratio, f)
-	selws->splitratio = f;
-	layoutws(selws);
 }
 
 void seturgency(Client *c, int urg)
@@ -2256,6 +2523,15 @@ size_t strlcpy(char *dst, const char *src, size_t size)
 	return src - osrc - 1;
 }
 
+void takefocus(Client *c)
+{
+	if (!c->nofocus) {
+		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, c->win, XCB_CURRENT_TIME);
+		PROP_REPLACE(root, netatoms[ActiveWindow], XCB_ATOM_WINDOW, 32, 1, &c->win);
+	}
+	sendevent(c, TakeFocus);
+}
+
 void tile(Workspace *ws)
 {
 	Client *c;
@@ -2267,7 +2543,7 @@ void tile(Workspace *ws)
 		;
 	if (!n)
 		return;
-	if (n > 1 || !smartborder)
+	if (n > 1 || !borders[Smart])
 		bw = borders[Width];
 	if (n <= ws->nmaster)
 		mw = m->winarea_w, ss = 1;
@@ -2329,37 +2605,11 @@ void ungrabpointer(void)
 	}
 }
 
-void updatenumlock(void)
-{
-	xcb_keycode_t *c, *t;
-	xcb_generic_error_t *e;
-	xcb_get_modifier_mapping_reply_t *m;
-
-	DBG("updating numlock bit mask")
-	numlockmask = 0;
-	if ((m = xcb_get_modifier_mapping_reply(con, xcb_get_modifier_mapping(con), &e))) {
-		if (!(t = xcb_key_symbols_get_keycode(keysyms, XK_Num_Lock)))
-			return;
-		if (!(c = xcb_get_modifier_mapping_keycodes(m))) {
-			free(t);
-			return;
-		}
-		for (uint i = 0; i < 8; i++)
-			for (uint j = 0; j < m->keycodes_per_modifier; j++)
-				if (c[i * m->keycodes_per_modifier + j] == *t)
-					numlockmask = (1 << i);
-		free(t);
-		free(m);
-	} else {
-		checkerror("unable to get modifier mapping for numlock", e);
-	}
-}
-
 void updatenumws(int needed)
 {
-	WsRule r;
 	char name[4]; /* we're never gonna have more than 999 workspaces */
 	Workspace *ws;
+	WorkspaceRule r;
 
 	DBG("more monitors than workspaces, allocating enough for each monitor")
 	if (needed > 999)
@@ -2443,7 +2693,7 @@ int updateoutputs(xcb_randr_output_t *outs, int len, xcb_timestamp_t timestamp)
 		free(o);
 	}
 	if ((po = xcb_randr_get_output_primary_reply(con, xcb_randr_get_output_primary(con, root), NULL))) {
-		primary = outputtomon(po->output);	
+		primary = outputtomon(po->output);
 		free(po);
 		xcb_warp_pointer(con, root, root, 0, 0, 0, 0,
 				primary->x + (primary->w / 2), primary->y + (primary->h / 2));
@@ -2494,72 +2744,11 @@ void updatestruts(Panel *p, int apply)
 			applypanelstrut(p);
 }
 
-int usesizehints(Client *c, int *x, int *y, int *w, int *h, int interact)
-{
-	int baseismin;
-	Monitor *m = c->ws->mon;
-
-	/* set minimum possible */
-	*w = MAX(1, *w);
-	*h = MAX(1, *h);
-	if (interact) { /* don't confine */
-		if (*x > scr_w)
-			*x = scr_w - W(c);
-		if (*y > scr_h)
-			*y = scr_h - H(c);
-		if (*x + *w + 2 * c->bw < 0)
-			*x = 0;
-		if (*y + *h + 2 * c->bw < 0)
-			*y = 0;
-	} else { /* confine to monitor */
-		if (*x > m->winarea_x + m->winarea_w)
-			*x = m->winarea_x + m->winarea_w - W(c);
-		if (*y > m->winarea_y + m->winarea_h)
-			*y = m->winarea_y + m->winarea_h - H(c);
-		if (*x + *w + 2 * c->bw < m->winarea_x)
-			*x = m->winarea_x;
-		if (*y + *h + 2 * c->bw < m->winarea_y)
-			*y = m->winarea_y;
-	}
-	if (c->floating || !c->ws->layout) {
-		if (!(baseismin = c->base_w == c->min_w && c->base_h == c->min_h)) {
-			/* temporarily remove base dimensions */
-			*w -= c->base_w;
-			*h -= c->base_h;
-		}
-		if (c->min_aspect > 0 && c->max_aspect > 0) { /* adjust for aspect limits */
-			if (c->max_aspect < (float)*w / *h)
-				*w = *h * c->max_aspect + 0.5;
-			else if (c->min_aspect < (float)*h / *w)
-				*h = *w * c->min_aspect + 0.5;
-		}
-		if (baseismin) { /* increment calculation requires this */
-			*w -= c->base_w;
-			*h -= c->base_h;
-		}
-		/* adjust for increment value */
-		if (c->increment_w)
-			*w -= *w % c->increment_w;
-		if (c->increment_h)
-			*h -= *h % c->increment_h;
-		/* restore base dimensions */
-		*w += c->base_w;
-		*h += c->base_h;
-		*w = MAX(*w, c->min_w);
-		*h = MAX(*h, c->min_h);
-		if (c->max_w)
-			*w = MIN(*w, c->max_w);
-		if (c->max_h)
-			*h = MIN(*h, c->max_h);
-	}
-	return *x != c->x || *y != c->y || *w != c->w || *h != c->h;
-}
-
-void view(const Arg *arg)
+void view(int num)
 {
 	Workspace *ws;
 
-	if (arg->i == selws->num || !(ws = itows(arg->i)))
+	if (num == selws->num || !(ws = itows(num)))
 		return;
 	changews(ws, 0);
 	focus(NULL);

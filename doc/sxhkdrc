@@ -1,0 +1,81 @@
+# launcher
+super + p
+    dmenu_run
+
+# terminal
+super + shift + Return
+    st
+
+# screenshot
+{_,super + }@Print
+    scrot {_,-s}
+
+# dedicated volume keys
+{XF86AudioRaiseVolume,XF86AudioLowerVolume}
+    pamixer {-i,-d} 2
+
+# dedicated backlight keys
+{XF86MonBrightnessUp,XF86MonBrightnessDown}
+    xbacklight {+10,-10}
+
+# alt volume keys
+super + {Insert,Delete}
+    pamixer {-i,-d} 2
+
+# reload sxhkd
+super + shift + x
+    pkill -USR1 -x sxhkd
+
+
+#********************#
+#***** wm binds *****#
+#********************#
+
+# quit yaxwm
+super + shift + q
+    yaxcmd wm exit
+
+# reload yaxwmrc or fully restart yaxwm (fork exec)
+super + {_,ctrl + }shift + r
+    yaxcmd wm {reload,restart}
+
+# change layout
+super + {t,m,f}
+    yaxcmd set layout {tile,monocle,none}
+
+# change master area size
+super + {h,l}
+    yaxcmd set split {-0.01,+0.01}
+
+# change number of windows in master or first stack
+super + {_,shift + }{i,d}
+    yaxcmd set {master,stack} {+1,-1}
+
+# change gap or border size
+super + {_,ctrl + }{equal,minus}
+    yaxcmd set {gap,border width} {+2,-2}
+super + {_,ctrl + }shift + equal
+    yaxcmd set {gap,border width} reset
+
+# kill active window
+super + q
+    yaxcmd win kill
+
+# swap window in or out of master
+super + {_,shift + }Tab
+    yaxcmd win swap
+
+# toggle window floating state
+super + shift + space
+    yaxcmd win float
+super + button2
+    yaxcmd win float
+
+# focus or move up/down
+super + {_,shift + }{j,k}
+    yaxcmd win {focus,move} {next,prev}
+
+# view, send, or follow to the given workspace
+super + {_,shift + ,ctrl + }{1-9,0}
+    yaxcmd ws {view,send,follow} {0-8,9}
+

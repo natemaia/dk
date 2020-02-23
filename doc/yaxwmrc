@@ -1,0 +1,16 @@
+#!/bin/sh
+
+# load keybinds
+pkill sxhkd; sxhkd &
+
+# window manager configuration
+yaxcmd set layout tile
+yaxcmd set master absolute 1
+yaxcmd set stack  absolute 2
+yaxcmd set gap    absolute 20
+yaxcmd set split  absolute 0.60
+
+yaxcmd set border smart 1
+yaxcmd set border width  absolute 2
+yaxcmd set border colour focus   '#669900'
+yaxcmd set border colour unfocus '#000000'

@@ -2,10 +2,9 @@
 
 Yet another X window manager, as if we didn't have enough..
 
-After using dwm for some time and changing it a lot *(and learning a lot)* I decided to try writing my own.
-As is common with most of the dwm-based window managers, some of the code is based on (or straight ripped from) dwm,
-so a can expect similar behavior and binds. I'm not afraid to say dwm is great and does so much right when
-it comes to tiling window management.
+After using dwm for some time and changing it a lot *(and learning a lot)*
+I decided to try writing my own. I'm not afraid to say dwm is great
+and does so much right when it comes to tiling window management.
 
 Yaxwm differs in several ways:
 
@@ -15,26 +14,43 @@ Yaxwm differs in several ways:
 
 - Workspace centric.
 
+- Likely more bugs/errors.
+
+- Supports more [ewmh standards](https://specifications.freedesktop.org/wm-spec/wm-spec-latest.html).
+
 - Based on xcb rather than xlib.
 
-- Supports most [ewmh standards](https://specifications.freedesktop.org/wm-spec/wm-spec-latest.html).
+- No source lines restrictions yet.
 
-- No SLOC restrictions yet.
+- Fifo pipe communication for controlling and configuring the wm.
 
-- Likely more bugs/errors.
+- Simple startup script for easy configuration once the wm is running.
+
+- No Keybinds, control can be done fifo commands and an external program.
 
 
 #### Installation
 
-You will need the xcb headers, on an Arch Linux system you can run
+###### Requirements
+You will need various xcb headers, on Arch Linux you can run
+
 ```
 pacman -S xcb-proto xcb-util xcb-util-wm xcb-util-cursor xcb-util-keysyms
 ```
-On other systems packages of similar names should be available. Once complete run
+On other systems packages with similar names should be available.
+
+
+Furthermore yaxwm offers no key binds so you will need a third party
+program like `sxhkd` in order to launch programs and control the wm.
+
+
+###### Build
+To compile run
 ```
 make
 ```
-as a normal user so the created config.h is editable, edit `config.h` to your liking, finally run
+
+Edit `src/config.h` to your liking, then to install run
 ```
 sudo make clean install
 ```
@@ -49,48 +65,55 @@ To start yaxwm you can add `exec yaxwm` to your xinitrc.
 
 #### Configuration
 
-Copy the default config header `config.def.h` to `config.h` then edit it to suit your liking and recompile.
+Copy the default config header `src/config.def.h` to `src/config.h`
+then edit it to suit your liking and recompile.
+
+There is an example yaxwmrc and sxhkdrc in the `doc/`, or `/usr/share/doc/yaxwm` once installed.
+
+Yaxwm looks for a file `YAXWM_CONF`, `XDG_CONFIG_HOME/yaxwm/yaxwmrc`, or `HOME/.config/yaxwm/yaxwmrc`
+and tries to execute it, this file is just a shell script and must be executable.
 
 
 #### Todo
 
-- More layouts?
+- Simplify.
 
-- Text config and parser or fifo reader for better control without recompiling?
-
-- Verify proper multi-head support*.
-
-- Code simplifications and better error handling *(ongoing battle)*.
+- Improve/finish commands.
 
 
 #### Contributing
 
-I'm very open to contributions and input or ideas so feel free. I don't use a ton of comments and the xcb documentation is kinda shit,
+I'm open to contributions or ideas so feel free. I don't use a ton of comments and the xcb documentation is kinda shit,
 but if you're familiar with other window managers most of it will be simple. If you're coming from xlib, most of
 the calls are easily translated to xcb with minor fiddling. There are some make flags I use often when testing.
 
-To enable stderr debug output
+To enable internal stderr debug output
 ```
-make DFLAGS='-DDEBUG'
-```
-Then you can start yaxwm and redirect stderr to a file for tailing with `tail -f` or parsing.
-```
-exec yaxwm 2> ~/.yaxwm.log
+make debug
 ```
 
-To leave debug symbols in the final executable *(for debuggers: gdb, valgrind, etc.)*.
+To leave debug symbols in *(for debuggers: gdb, valgrind, etc.)*.
 ```
-make DFLAGS='-DNOSTRIP'
+make nostrip
 ```
+
 
 ### Credits
 
 See the LICENSE file for a list of authors/contributors.
 
-Huge thanks to [dwm](https://dmw.suckless.org) and the suckless community for the awesome software and knowledge.
+Huge thanks to:
+- [dwm](https://dmw.suckless.org) and the suckless community for the awesome software and knowledge.
 
-Also thanks to [4wm](https://github.com/dct2012/4wm), [awesome](https://github.com/awesomeWM/awesome),
-[monsterwm-xcb](https://github.com/Cloudef/monsterwm-xcb), and [frankenwm](https://github.com/sulami/FrankenWM)
-for helping me to understand some of the xcb library and window management in general.
+- [bspwm](https://github.com/baskerville/bspwm) for some of the cool ideas for wm design.
 
-Finally, thanks to the [xcb docs](https://xcb.freedesktop.org) for being one of the slowest websites of all time XD.
+- [monsterwm-xcb](https://github.com/Cloudef/monsterwm-xcb)
+
+- [awesome](https://github.com/awesomeWM/awesome)
+
+- [frankenwm](https://github.com/sulami/FrankenWM)
+
+- [4wm](https://github.com/dct2012/4wm)
+
+- [xcb docs](https://xcb.freedesktop.org) for being one of the slowest websites of all time XD.
+

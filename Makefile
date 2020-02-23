@@ -3,52 +3,54 @@
 
 VERSION = 0.2
 
-# installation paths
-PREFIX = /usr
-MANPREFIX = ${PREFIX}/share/man
+# install paths
+PREFIX    ?= /usr
+MANPREFIX ?= ${PREFIX}/share/man
+DOCPREFIX ?= ${PREFIX}/share/doc
 
 # compiler and linker flags
-CC = cc
-CFLAGS = -O3 -Wall -DVERSION=\"${VERSION}\"
-LDFLAGS = -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
+CPPFLAGS += -DVERSION=\"${VERSION}\"
+CFLAGS   += -Wall
+LDFLAGS  ?=
+LDLIBS    = -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
 
+VPATH = src
 
-# debug build (make DFLAGS=' -DDEBUG ...')
-ifneq ($(findstring DEBUG,$(DFLAGS)),)
-	LDFLAGS += -lxkbcommon
-	CFLAGS += -Wextra -Wno-missing-field-initializers
-endif
+all: yaxwm yaxcmd
 
-# no strip build (make DFLAGS='-DNOSTRIP ...')
-ifneq ($(findstring NOSTRIP,$(DFLAGS)),)
-	CFLAGS += -g
-endif
+debug: CFLAGS += -Wextra -Wno-missing-field-initializers
+debug: CPPFLAGS += -DDEBUG
+debug: all
 
-SRC = yaxwm.c
-OBJ := ${SRC:.c=.o}
-CFLAGS += ${DFLAGS}
+nostrip: CFLAGS += -g -O0
+nostrip: debug
 
-all: yaxwm
+yaxwm: yaxwm.o
+
+yaxcmd: yaxcmd.o
+
+yaxwm.o: config.h
+
+yaxcmd.o:
 
 config.h:
 	cp config.def.h $@
 
-${OBJ}: config.h
-
-yaxwm: ${OBJ}
-
 clean:
-	rm -f yaxwm ${OBJ}
+	rm -f yaxwm yaxcmd yaxwm.o yaxcmd.o
 
 install: all
 	mkdir -p ${DESTDIR}${PREFIX}/bin
-	cp -f yaxwm ${DESTDIR}${PREFIX}/bin
-	chmod 755 ${DESTDIR}${PREFIX}/bin/yaxwm
+	cp -f yaxwm yaxcmd ${DESTDIR}${PREFIX}/bin
+	chmod 755 ${DESTDIR}${PREFIX}/bin/yaxcmd ${DESTDIR}${PREFIX}/bin/yaxwm
 	mkdir -p ${DESTDIR}${MANPREFIX}/man1
-	sed "s/VERSION/${VERSION}/g" yaxwm.1 > ${DESTDIR}${MANPREFIX}/man1/yaxwm.1
+	sed "s/VERSION/${VERSION}/g" man/yaxwm.1 > ${DESTDIR}${MANPREFIX}/man1/yaxwm.1
 	chmod 644 ${DESTDIR}${MANPREFIX}/man1/yaxwm.1
+	mkdir -p ${DESTDIR}${DOCPREFIX}/yaxwm
+	cp -rfp doc ${DESTDIR}${DOCPREFIX}/yaxwm
 
 uninstall:
-	rm -f ${DESTDIR}${PREFIX}/bin/yaxwm ${DESTDIR}${MANPREFIX}/man1/yaxwm.1
+	rm -f ${DESTDIR}${PREFIX}/bin/yaxwm ${DESTDIR}${PREFIX}/bin/yaxcmd \
+		${DESTDIR}${MANPREFIX}/man1/yaxwm.1 ${DESTDIR}${DOCPREFIX}/yaxwm
 
-.PHONY: all clean install uninstall
+.PHONY: all debug nostrip clean install uninstall

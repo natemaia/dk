@@ -14,3 +14,7 @@ yaxcmd set border smart 1
 yaxcmd set border width  absolute 2
 yaxcmd set border colour focus   '#669900'
 yaxcmd set border colour unfocus '#000000'
+
+# define mouse mod and move/resize buttons
+yaxcmd set mouse  mod super  move button1  resize button3
+

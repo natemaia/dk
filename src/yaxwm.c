@@ -197,6 +197,7 @@ static void cmdgappx(char **argv);
 static void cmdkill(char **argv);
 static void cmdlayout(char **argv);
 static void cmdmove(char **argv);
+static void cmdmouse(char **argv);
 static void cmdnmaster(char **argv);
 static void cmdnstack(char **argv);
 static void cmdparse(char *buf);
@@ -312,6 +313,7 @@ static Keyword setcmds[] = {
 	{ "stack",   cmdnstack  },
 	{ "master",  cmdnmaster },
 	{ "layout",  cmdlayout  },
+	{ "mouse",   cmdmouse   },
 };
 
 /* "win" keyword options, used by cmdwin() to parse arguments */
@@ -877,6 +879,42 @@ void cmdmove(char **argv)
 	if (!selws->sel || selws->sel->fullscreen || selws->sel->floating)
 		return;
 	adjmvfocus(argv, movestack);
+}
+
+void cmdmouse(char **argv)
+{
+	if (!argv || !*argv)
+		return;
+	while (*argv) {
+		if (!strcmp("mod", *argv)) {
+			argv++;
+			if (!strcmp("alt", *argv) || !strcmp("mod1", *argv))
+				mousemod = XCB_MOD_MASK_1;
+			else if (!strcmp("super", *argv) || !strcmp("mod4", *argv))
+				mousemod = XCB_MOD_MASK_4;
+			else if (!strcmp("ctrl", *argv) || !strcmp("control", *argv))
+				mousemod = XCB_MOD_MASK_CONTROL;
+		} else if (!strcmp("move", *argv)) {
+			argv++;
+			if (!strcmp("button1", *argv))
+				mousemove = XCB_BUTTON_INDEX_1;
+			else if (!strcmp("button2", *argv))
+				mousemove = XCB_BUTTON_INDEX_2;
+			else if (!strcmp("button3", *argv))
+				mousemove = XCB_BUTTON_INDEX_3;
+		} else if (!strcmp("resize", *argv)) {
+			argv++;
+			if (!strcmp("button1", *argv))
+				mouseresize = XCB_BUTTON_INDEX_1;
+			else if (!strcmp("button2", *argv))
+				mouseresize = XCB_BUTTON_INDEX_2;
+			else if (!strcmp("button3", *argv))
+				mouseresize = XCB_BUTTON_INDEX_3;
+		}
+		argv++;
+	}
+	if (selws->sel)
+		grabbuttons(selws->sel, 1);
 }
 
 void cmdnmaster(char **argv)

@@ -10,7 +10,7 @@ DOCPREFIX ?= ${PREFIX}/share/doc
 
 # compiler and linker flags
 CPPFLAGS += -DVERSION=\"${VERSION}\"
-CFLAGS   += -Wall
+CFLAGS   += -pedantic -Wall -Wextra -Wno-missing-field-initializers
 LDFLAGS  ?=
 LDLIBS    = -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
 
@@ -18,7 +18,6 @@ VPATH = src
 
 all: yaxwm yaxcmd
 
-debug: CFLAGS += -Wextra -Wno-missing-field-initializers
 debug: CPPFLAGS += -DDEBUG
 debug: all
 

@@ -36,17 +36,9 @@ static Command wscommands[] = {
 	{ "follow",  follow },
 };
 
-static ClientRule clientrules[] = {
-	/* In order to get monitor and window info you can use the following commands:
-	 * window class/instance: `xprop` (the regex matching is case insensitive)
-	 * monitor name: `xrandr` (or use an index 0-n, the order is not guaranteed)
-	 * format: class/instance, monitor, workspace, floating, callback function */
-	{ "^firefox$",                       "0",        -1, 0, NULL }, /* active workspace on monitor 0, tiled */
-	{ "^chromium$",                      "HDMI-A-0", -1, 1, NULL }, /* active workspace on HDMI-A-0, floating */
-	{ "^gimp$",                           NULL,       2, 1, NULL }, /* workspace 2, floating */
-	{ "^(steam|lxappearance)$",           NULL,      -1, 1, NULL }, /* current workspace, floating */
-	{ "^(pavucontrol|transmission-gtk)$", NULL,      -1, 1, NULL }, /* current workspace, floating */
-	{ "^gl$",                             NULL,      -1, 1, mpvart }, /* current workspace, floating, with callback */
+static Callback callbacks[] = {
+	/* name,     function */
+	{ "mpvart",  mpvart },
 };
 
 static WorkspaceRule workspacerules[] = {

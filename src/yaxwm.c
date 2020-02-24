@@ -421,7 +421,7 @@ static Workspace *selws;        /* selected workspace */
 static Monitor *primary;        /* primary monitor detected with RANDR */
 static Monitor *monitors;       /* monitor linked list head */
 static WindowRule *winrules;    /* workspace linked list head */
-static Workspace *workspaces;   /* workspace linked list head */
+static Workspace *workspaces, *lastws;   /* workspace linked list head */
 
 static xcb_screen_t *scr;                      /* the X screen */
 static xcb_connection_t *con;                  /* xcb connection to the X server */
@@ -740,6 +740,7 @@ void changews(Workspace *ws, int usermotion)
 { /* change the currently active workspace and warp the mouse if needed */
 	int diffmon = selws ? selws->mon != ws->mon : 1;
 
+	lastws = selws;
 	selws = ws;
 	selws->mon->ws = ws;
 	PROP_REPLACE(root, netatoms[CurrentDesktop], XCB_ATOM_CARDINAL, 32, 1, &ws->num);
@@ -1423,9 +1424,20 @@ void eventhandle(xcb_generic_event_t *ev)
 			if (e->window == root && e->type == netatoms[CurrentDesktop]) {
 				view(d[0]);
 			} else if ((c = wintoclient(e->window))) {
-				if (e->type == netatoms[State] && (d[1] == fs || d[2] == fs))
+				if (e->type == netatoms[Desktop] && d[0] == STICKY) {
+					setsticky(c, 1);
+				} else if (e->type == netatoms[Desktop] && d[0] < (uint)numws) {
+					if (c == selws->sel) {
+						unfocus(c, 1);
+						focus(NULL);
+					}
+					ws = c->ws;
+					setclientws(c, d[0]);
+					if (d[0] == (uint)itows(d[0])->mon->ws->num || ws == ws->mon->ws)
+						layoutws(NULL);
+				} else if (e->type == netatoms[State] && (d[1] == fs || d[2] == fs)) {
 					setfullscreen(c, (d[0] == 1 || (d[0] == 2 && !c->fullscreen)));
-				else if (e->type == netatoms[ActiveWindow]) {
+				} else if (e->type == netatoms[ActiveWindow]) {
 					unfocus(selws->sel, 1);
 					view(c->ws->num);
 					focus(c);
@@ -2590,32 +2602,6 @@ int sendevent(Client *c, int wmproto)
 	return exists;
 }
 
-void setstackmode(xcb_window_t win, uint mode)
-{
-	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_STACK_MODE, &mode);
-}
-
-void setwinstate(xcb_window_t win, uint32_t state)
-{
-	uint32_t s[] = { state, XCB_ATOM_NONE };
-	PROP_REPLACE(win, wmatoms[WMState], wmatoms[WMState], 32, 2, s);
-}
-
-void setnetworkareavp(void)
-{
-	uint wa[4];
-	Workspace *ws;
-
-	xcb_delete_property(con, root, netatoms[WorkArea]);
-	xcb_delete_property(con, root, netatoms[DesktopViewport]);
-	FOR_EACH(ws, workspaces) {
-		wa[0] = ws->mon->wx, wa[1] = ws->mon->wy;
-		wa[2] = ws->mon->ww, wa[3] = ws->mon->wh;
-		PROP_APPEND(root, netatoms[WorkArea], XCB_ATOM_CARDINAL, 32, 4, wa);
-		PROP_APPEND(root, netatoms[DesktopViewport], XCB_ATOM_CARDINAL, 32, 2, wa);
-	}
-}
-
 void setclientws(Client *c, uint num)
 {
 	DBG("setclientws: setting client atom -- _NET_WM_DESKTOP: %d", num)
@@ -2659,20 +2645,38 @@ void setfullscreen(Client *c, int fullscreen)
 	}
 }
 
+void setnetworkareavp(void)
+{
+	uint wa[4];
+	Workspace *ws;
+
+	xcb_delete_property(con, root, netatoms[WorkArea]);
+	xcb_delete_property(con, root, netatoms[DesktopViewport]);
+	FOR_EACH(ws, workspaces) {
+		wa[0] = ws->mon->wx, wa[1] = ws->mon->wy;
+		wa[2] = ws->mon->ww, wa[3] = ws->mon->wh;
+		PROP_APPEND(root, netatoms[WorkArea], XCB_ATOM_CARDINAL, 32, 4, wa);
+		PROP_APPEND(root, netatoms[DesktopViewport], XCB_ATOM_CARDINAL, 32, 2, wa);
+	}
+}
+
 void setsticky(Client *c, int sticky)
 {
-	if (sticky && !c->sticky) {
-		c->oldstate = c->floating;
+	if (sticky && !c->sticky)
 		c->sticky = 1;
-		c->floating = 1;
-		c->old_x = c->x, c->old_y = c->y, c->old_h = c->h, c->old_w = c->w;
-		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-		layoutws(selws);
-	} else if (!sticky && c->sticky) {
-		c->floating = c->oldstate;
+	else if (!sticky && c->sticky)
 		c->sticky = 0;
-		layoutws(selws);
-	}
+}
+
+void setstackmode(xcb_window_t win, uint mode)
+{
+	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_STACK_MODE, &mode);
+}
+
+void setwinstate(xcb_window_t win, uint32_t state)
+{
+	uint32_t s[] = { state, XCB_ATOM_NONE };
+	PROP_REPLACE(win, wmatoms[WMState], wmatoms[WMState], 32, 2, s);
 }
 
 void seturgency(Client *c, int urg)
@@ -2695,11 +2699,11 @@ void seturgency(Client *c, int urg)
 
 void showhide(Client *c)
 {
+	Client *sel;
+
 	if (!c)
 		return;
-	if (c->ws == c->ws->mon->ws || (c->sticky && c->ws->mon == selws->mon)) { /* show clients top down */
-		if (c->sticky && c->ws->mon == selws->mon && c->ws != c->ws->mon->ws)
-			setclientws(c, selws->num);
+	if (c->ws == c->ws->mon->ws) { /* show clients top down */
 		DBG("showhide: showing window: 0x%08x - workspace: %d", c->win, c->ws->num)
 		MOVE(c->win, c->x, c->y);
 		if ((!c->ws->layout->fn || c->floating) && !c->fullscreen)
@@ -2708,7 +2712,13 @@ void showhide(Client *c)
 	} else { /* hide clients bottom up */
 		showhide(c->snext);
 		DBG("showhide: hiding window: 0x%08x - workspace: %d", c->win, c->ws->num)
-		MOVE(c->win, W(c) * -2, c->y);
+		if (!c->sticky)
+			MOVE(c->win, W(c) * -2, c->y);
+		else if (c->ws != selws && c->ws->mon == selws->mon) {
+			sel = lastws->sel == c ? c : selws->sel;
+			setclientws(c, selws->num); /* keep sticky windows on the current workspace on one monitor */
+			focus(sel);
+		}
 	}
 }
 

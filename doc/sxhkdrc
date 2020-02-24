@@ -58,8 +58,8 @@ super + {_,ctrl + }shift + equal
     yaxcmd set {gap,border width} reset
 
 # kill active window
-super + q
-    yaxcmd win kill
+super + {q,s}
+    yaxcmd win {kill,stick}
 
 # swap window in or out of master
 super + {_,shift + }Tab

@@ -30,10 +30,10 @@ static Layout layouts[] = {
 };
 
 static Command wscommands[] = {
-	/* name,    function */
-	{ "view",    view   },
-	{ "send",    send   },
-	{ "follow",  follow },
+	/* name,     function */
+	{ "view",    cmdview   },
+	{ "send",    cmdsend   },
+	{ "follow",  cmdfollow },
 };
 
 static Callback callbacks[] = {

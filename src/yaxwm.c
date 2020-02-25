@@ -8,27 +8,22 @@
 
 #include <err.h>
 #include <stdio.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <ctype.h>
 #include <regex.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <unistd.h>
 #include <limits.h>
 #include <signal.h>
 #include <locale.h>
-#include <string.h>
-#include <strings.h>
-#include <sys/stat.h>
+
+#include <sys/un.h>
 #include <sys/wait.h>
 #include <sys/select.h>
+#include <sys/socket.h>
+
 #include <xcb/xcb.h>
 #include <xcb/randr.h>
 #include <xcb/xproto.h>
 #include <xcb/xcb_util.h>
-#include <xcb/xcb_atom.h>
-#include <xcb/xcb_event.h>
 #include <xcb/xcb_icccm.h>
 #include <xcb/xcb_cursor.h>
 #include <xcb/xcb_keysyms.h>
@@ -203,6 +198,7 @@ static void checkerror(char *msg, xcb_generic_error_t *e);
 static void cmdborder(char **argv);
 static void cmdfloat(char **argv);
 static void cmdfocus(char **argv);
+static void cmdfollow(int num);
 static void cmdgappx(char **argv);
 static void cmdkill(char **argv);
 static void cmdlayout(char **argv);
@@ -212,6 +208,7 @@ static void cmdnmaster(char **argv);
 static void cmdnstack(char **argv);
 static void cmdparse(char *buf);
 static void cmdrule(char **argv);
+static void cmdsend(int num);
 static void cmdset(char **argv);
 static void cmdsplit(char **argv);
 static void cmdstick(char **argv);
@@ -220,6 +217,7 @@ static void cmdwin(char **argv);
 static void cmdwinrule(char **argv);
 static void cmdwm(char **argv);
 static void cmdws(char **argv);
+static void cmdview(int num);
 static void configure(Client *c);
 static Monitor *coordtomon(int x, int y);
 static void detach(Client *c, int reattach);
@@ -231,7 +229,6 @@ static void eventloop(void);
 static void execcfg(void);
 static void fixupworkspaces(void);
 static void focus(Client *c);
-static void follow(int num);
 static void freeclient(Client *c, int destroyed);
 static void freemon(Monitor *m);
 static void freepanel(Panel *panel, int destroyed);
@@ -269,7 +266,6 @@ static void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermo
 static void restack(Workspace *ws);
 static int rulecmp(WindowRule *r, char *title, char *class, char *inst);
 static int sendevent(Client *c, int wmproto);
-static void send(int num);
 static void setclientws(Client *c, uint num);
 static void setfullscreen(Client *c, int fullscreen);
 static void setnetworkareavp(void);
@@ -280,8 +276,6 @@ static void setwinstate(xcb_window_t win, uint32_t state);
 static void showhide(Client *c);
 static void sighandle(int);
 static void sizehints(Client *c);
-static size_t strlcat(char *dst, const char *src, size_t size);
-static size_t strlcpy(char *dst, const char *src, size_t size);
 static void takefocus(Client *c);
 static void tile(Workspace *ws);
 static void unfocus(Client *c, int focusroot);
@@ -290,7 +284,6 @@ static void updatenumws(int needed);
 static int updateoutputs(xcb_randr_output_t *outputs, int len, xcb_timestamp_t timestamp);
 static int updaterandr(void);
 static void updatestruts(Panel *p, int apply);
-static void view(int num);
 static xcb_get_window_attributes_reply_t *winattr(xcb_window_t win);
 static void winhints(Client *c);
 static xcb_atom_t winprop(xcb_window_t win, xcb_atom_t prop);
@@ -402,13 +395,15 @@ static const char *netatomnames[] = {
 	[WorkArea] = "_NET_WORKAREA",
 };
 
+#include "stringl.c"
 #include "config.h"
 
 extern char **environ;            /* environment variables */
 
 static char *argv0;               /* program name */
-static char *fifo;                /* path to fifo file, loaded from YAXWM_FIFO env */
-static int fifofd;                /* fifo pipe file descriptor */
+static char *sock;                /* path to socket, loaded from YAXWM_FIFO env */
+static int sockfd;                /* socket file descriptor */
+static FILE *cmdresp;             /* file used for writing messages to after command */
 static int numws = 0;             /* number of workspaces currently allocated */
 static int scr_w, scr_h;          /* root window size */
 static uint running = 1;          /* continue handling events */
@@ -416,12 +411,13 @@ static int randrbase = -1;        /* randr extension response */
 static uint numlockmask = 0;      /* numlock modifier bit mask */
 static int dborder[LEN(borders)]; /* default border values used for resetting */
 
-static Panel *panels;           /* panel linked list head */
-static Workspace *selws;        /* selected workspace */
-static Monitor *primary;        /* primary monitor detected with RANDR */
-static Monitor *monitors;       /* monitor linked list head */
-static WindowRule *winrules;    /* workspace linked list head */
-static Workspace *workspaces, *lastws;   /* workspace linked list head */
+static Panel *panels;          /* panel linked list head */
+static Monitor *primary;       /* primary monitor */
+static Monitor *monitors;      /* monitor linked list head */
+static Workspace *selws;       /* active workspace */
+static Workspace *lastws;      /* last active workspace */
+static Workspace *workspaces;  /* workspace linked list head */
+static WindowRule *winrules;   /* window rule list head */
 
 static xcb_screen_t *scr;                      /* the X screen */
 static xcb_connection_t *con;                  /* xcb connection to the X server */
@@ -472,12 +468,11 @@ int main(int argc, char *argv[])
 		if (sigaction(sigs[i], &sa, NULL) < 0)
 			err(1, "unable to setup handler for signal: %d", sigs[i]);
 
-	/* setup the wm and existing windows before entering the event loop */
 	initwm();
+	execcfg();
 	initscan();
 	layoutws(NULL);
 	focus(NULL);
-	execcfg();
 	eventloop();
 
 	return 0;
@@ -899,6 +894,23 @@ void cmdfocus(char **argv)
 	adjmvfocus(argv, movefocus);
 }
 
+void cmdfollow(int num)
+{ /* follow selected client to a workspace */
+	Client *c;
+	Workspace *ws;
+
+	if (!selws->sel || num == selws->num || !(ws = itows(num)))
+		return;
+	if ((c = selws->sel)) {
+		unfocus(c, 1);
+		setclientws(c, num);
+	}
+	changews(ws, 0);
+	focus(NULL);
+	layoutws(NULL);
+	restack(selws);
+}
+
 void cmdgappx(char **argv)
 {
 	int i, n;
@@ -1021,23 +1033,28 @@ void cmdnstack(char **argv)
 
 void cmdparse(char *buf)
 {
-	uint i, n = 0;
-	char *k, *args[10], *dbuf, *delim = " \t\n\r";
+	char *k, *args[10], *dbuf;
+	uint i, n = 0, matched = 0;
 
 	dbuf = strdup(buf);
-	if (!(k = strtok(dbuf, delim)))
-		goto out;
-	delim = " =\"\t\n\r";
-	for (i = 0; i < LEN(keywords); i++)
-		if (!strcmp(keywords[i].name, k)) {
-			while (n < sizeof(args) && (args[n++] = strtok(NULL, delim)))
-				;
-			if (*args)
-				keywords[i].func((char **)args);
-			break;
-		}
-out:
+	if ((k = strtok(dbuf, " \t\n\r"))) {
+		for (i = 0; i < LEN(keywords); i++)
+			if (!strcmp(keywords[i].name, k)) {
+				matched = 1;
+				while (n < sizeof(args) && (args[n++] = strtok(NULL, " =\"\t\n\r")))
+					;
+				if (*args)
+					keywords[i].func((char **)args);
+				else
+					fprintf(cmdresp, "keyword requires additional arguments: %s", k);
+				break;
+			}
+		if (!matched)
+			fprintf(cmdresp, "unknown keyword: %s", k);
+	}
 	free(dbuf);
+	fflush(cmdresp);
+	fclose(cmdresp);
 }
 
 void cmdrule(char **argv)
@@ -1053,6 +1070,18 @@ void cmdrule(char **argv)
 			rulecmds[i].func(r);
 			return;
 		}
+}
+
+void cmdsend(int num)
+{
+	Client *c;
+
+	if (!(c = selws->sel) || num == selws->num || !itows(num))
+		return;
+	unfocus(c, 1);
+	setclientws(c, num);
+	focus(NULL);
+	layoutws(NULL);
 }
 
 void cmdset(char **argv)
@@ -1146,7 +1175,7 @@ void cmdws(char **argv)
 {
 	uint j;
 	int i = UNSET, n;
-	void (*fn)(int) = view; /* assume view so `ws 1` is the same as `ws view 1` */
+	void (*fn)(int) = cmdview; /* assume view so `ws 1` is the same as `ws view 1` */
 
 	if (!argv || !*argv)
 		return;
@@ -1160,6 +1189,18 @@ void cmdws(char **argv)
 	}
 	if (i < (int)numws && i >= 0)
 		fn(i);
+}
+
+void cmdview(int num)
+{
+	Workspace *ws;
+
+	if (num == selws->num || !(ws = itows(num)))
+		return;
+	changews(ws, 0);
+	focus(NULL);
+	layoutws(NULL);
+	restack(selws);
 }
 
 void configure(Client *c)
@@ -1422,7 +1463,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			uint32_t *d = e->data.data32;
 
 			if (e->window == root && e->type == netatoms[CurrentDesktop]) {
-				view(d[0]);
+				cmdview(d[0]);
 			} else if ((c = wintoclient(e->window))) {
 				if (e->type == netatoms[Desktop] && d[0] == STICKY) {
 					setsticky(c, 1);
@@ -1439,7 +1480,7 @@ void eventhandle(xcb_generic_event_t *ev)
 					setfullscreen(c, (d[0] == 1 || (d[0] == 2 && !c->fullscreen)));
 				} else if (e->type == netatoms[ActiveWindow]) {
 					unfocus(selws->sel, 1);
-					view(c->ws->num);
+					cmdview(c->ws->num);
 					focus(c);
 					restack(selws);
 				}
@@ -1518,24 +1559,56 @@ void eventloop(void)
 	ssize_t n;
 	fd_set read_fds;
 	char buf[PIPE_BUF];
-	int num, confd, nfds, e;
 	xcb_generic_event_t *ev;
+	int confd, nfds, cmdfd, e;
+	static struct sockaddr_un sockaddr;
 
-	nfds = (confd = xcb_get_file_descriptor(con)) > fifofd ? confd : fifofd;
+
+	/* setup socket path */
+	if (!(sock = getenv("YAXWM_SOCK"))) {
+		sock = "/tmp/yaxwmsock";
+		if (setenv("YAXWM_SOCK", sock, 0) < 0)
+			err(1, "unable to export socket path to environment: %s", sock);
+	}
+
+	/* open and ready socket */
+	sockaddr.sun_family = AF_UNIX;
+	strlcpy(sockaddr.sun_path, sock, sizeof(sockaddr.sun_path));
+	if (sockaddr.sun_path[0] == '\0')
+		err(1, "unable to write socket path: %s", sock);
+	if ((sockfd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
+		err(1, "unable to create socket: %s", sock);
+	unlink(sock);
+	if (bind(sockfd, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) < 0)
+		err(1, "unable to bind socket: %s", sock);
+	if (listen(sockfd, SOMAXCONN) < 0)
+		err(1, "unable to listen to socket: %s", sock);
+
+	confd = xcb_get_file_descriptor(con);
+	nfds = MAX(confd, sockfd);
 	nfds++;
 	while (running) {
 		xcb_flush(con);
 		FD_ZERO(&read_fds);
-		FD_SET(fifofd, &read_fds);
+		FD_SET(sockfd, &read_fds);
 		FD_SET(confd, &read_fds);
-		if ((num = select(nfds, &read_fds, NULL, NULL, NULL)) > 0) {
-			if (FD_ISSET(fifofd, &read_fds))
-				if ((n = read(fifofd, buf, sizeof(buf) - 1)) > 0 && *buf != '#' && *buf != '\n') {
+		if (select(nfds, &read_fds, NULL, NULL, NULL) > 0) {
+			if (FD_ISSET(sockfd, &read_fds)) {
+				cmdfd = accept(sockfd, NULL, 0);
+				if (cmdfd > 0 && (n = recv(cmdfd, buf, sizeof(buf)-1, 0)) > 0
+						&& *buf != '#' && *buf != '\n')
+				{
 					if (buf[n - 1] == '\n')
 						n--;
 					buf[n] = '\0';
-					cmdparse(buf);
+					if ((cmdresp = fdopen(cmdfd, "w")) != NULL)
+						cmdparse(buf);
+					else {
+						warn("unable to open the socket as file: %s", sock);
+						close(cmdfd);
+					}
 				}
+			}
 			if (FD_ISSET(confd, &read_fds)) {
 				while ((ev = xcb_poll_for_event(con))) {
 					eventhandle(ev);
@@ -1546,13 +1619,27 @@ void eventloop(void)
 		if ((e = xcb_connection_has_error(con))) {
 			warnx("connection to the server was closed");
 			switch (e) {
-			case XCB_CONN_ERROR:                   warn("socket, pipe or stream error"); break;
-			case XCB_CONN_CLOSED_EXT_NOTSUPPORTED: warn("unsupported extension"); break;
-			case XCB_CONN_CLOSED_MEM_INSUFFICIENT: warn("not enough memory"); break;
-			case XCB_CONN_CLOSED_REQ_LEN_EXCEED:   warn("request length exceeded"); break;
-			case XCB_CONN_CLOSED_INVALID_SCREEN:   warn("invalid screen"); break;
-			case XCB_CONN_CLOSED_FDPASSING_FAILED: warn("failed to pass FD"); break;
-			default: warn("unknown error.\n"); break;
+			case XCB_CONN_ERROR:
+				warn("socket, pipe or stream error");
+				break;
+			case XCB_CONN_CLOSED_EXT_NOTSUPPORTED:
+				warn("unsupported extension");
+				break;
+			case XCB_CONN_CLOSED_MEM_INSUFFICIENT:
+				warn("not enough memory");
+				break;
+			case XCB_CONN_CLOSED_REQ_LEN_EXCEED:
+				warn("request length exceeded");
+				break;
+			case XCB_CONN_CLOSED_INVALID_SCREEN:
+				warn("invalid screen");
+				break;
+			case XCB_CONN_CLOSED_FDPASSING_FAILED:
+				warn("failed to pass FD");
+				break;
+			default:
+				warn("unknown error.\n");
+				break;
 			}
 			running = 0;
 		}
@@ -1613,8 +1700,8 @@ void focus(Client *c)
 		DBG("focus: focusing client window: 0x%08x", c->win)
 		if (c->urgent)
 			seturgency(c, 0);
-		if (c->floating)
-			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+		/* if (c->floating) */
+		/* 	setstackmode(c->win, XCB_STACK_MODE_ABOVE); */
 		detachstack(c);
 		attachstack(c);
 		grabbuttons(c, 1);
@@ -1626,23 +1713,6 @@ void focus(Client *c)
 		xcb_delete_property(con, root, netatoms[ActiveWindow]);
 	}
 	selws->sel = c;
-}
-
-void follow(int num)
-{ /* follow selected client to a workspace */
-	Client *c;
-	Workspace *ws;
-
-	if (!selws->sel || num == selws->num || !(ws = itows(num)))
-		return;
-	if ((c = selws->sel)) {
-		unfocus(c, 1);
-		setclientws(c, num);
-	}
-	changews(ws, 0);
-	focus(NULL);
-	layoutws(NULL);
-	restack(selws);
 }
 
 void freeclient(Client *c, int destroyed)
@@ -1749,8 +1819,8 @@ void freewm(void)
 	xcb_flush(con);
 	xcb_delete_property(con, root, netatoms[ActiveWindow]);
 	xcb_disconnect(con);
-	close(fifofd);
-	unlink(fifo);
+	close(sockfd);
+	unlink(sock);
 }
 
 void freews(Workspace *ws)
@@ -2214,15 +2284,6 @@ void initwm(void)
 	/* binds */
 	if (!(keysyms = xcb_key_symbols_alloc(con)))
 		err(1, "unable to get keysyms from X connection");
-
-	/* fifo pipe */
-	if (!(fifo = getenv("YAXWM_FIFO"))) {
-		fifo = "/tmp/yaxwm.fifo";
-		setenv("YAXWM_FIFO", fifo, 0);
-	}
-	if ((mkfifo(fifo, 0666) < 0 && errno != EEXIST)
-			|| (fifofd = open(fifo, O_RDONLY | O_NONBLOCK | O_DSYNC | O_SYNC | O_RSYNC)) < 0)
-		err(1, "unable to open fifo: %s", fifo);
 }
 
 void initworkspaces(void)
@@ -2560,18 +2621,6 @@ int rulecmp(WindowRule *r, char *title, char *class, char *inst)
 	return 0;
 }
 
-void send(int num)
-{
-	Client *c;
-
-	if (!(c = selws->sel) || num == selws->num || !itows(num))
-		return;
-	unfocus(c, 1);
-	setclientws(c, num);
-	focus(NULL);
-	layoutws(NULL);
-}
-
 int sendevent(Client *c, int wmproto)
 {
 	int n, exists = 0;
@@ -2714,7 +2763,7 @@ void showhide(Client *c)
 		DBG("showhide: hiding window: 0x%08x - workspace: %d", c->win, c->ws->num)
 		if (!c->sticky)
 			MOVE(c->win, W(c) * -2, c->y);
-		else if (c->ws != selws && c->ws->mon == selws->mon) {
+		else if (c->ws != selws && selws && c->ws->mon == selws->mon) {
 			sel = lastws->sel == c ? c : selws->sel;
 			setclientws(c, selws->num); /* keep sticky windows on the current workspace on one monitor */
 			focus(sel);
@@ -2782,48 +2831,6 @@ void sizehints(Client *c)
 	}
 	c->fixed = (c->max_w && c->max_h && c->max_w == c->min_w && c->max_h == c->min_h);
 	DBG("sizehints: window is %s size", c->fixed ? "fixed" : "variable")
-}
-
-size_t strlcat(char *dst, const char *src, size_t size)
-{
-	size_t n = size, dlen;
-	const char *odst = dst;
-	const char *osrc = src;
-
-	while (n-- != 0 && *dst != '\0')
-		dst++;
-	dlen = dst - odst;
-	n = size - dlen;
-
-	if (n-- == 0)
-		return dlen + strlen(src);
-	while (*src != '\0') {
-		if (n != 0) {
-			*dst++ = *src;
-			n--;
-		}
-		src++;
-	}
-	*dst = '\0';
-
-	return dlen + (src - osrc);
-}
-
-size_t strlcpy(char *dst, const char *src, size_t size)
-{
-	size_t n = size;
-	const char *osrc = src;
-
-	if (n != 0)
-		while (--n != 0)
-			if ((*dst++ = *src++) == '\0')
-				break;
-	if (n == 0) {
-		if (size != 0)
-			*dst = '\0';
-		while (*src++);
-	}
-	return src - osrc - 1;
 }
 
 void takefocus(Client *c)
@@ -3044,18 +3051,6 @@ void updatestruts(Panel *p, int apply)
 	FOR_EACH(n, panels)
 		if ((apply || n != p) && (n->strut_l || n->strut_r || n->strut_t || n->strut_b))
 			applypanelstrut(p);
-}
-
-void view(int num)
-{
-	Workspace *ws;
-
-	if (num == selws->num || !(ws = itows(num)))
-		return;
-	changews(ws, 0);
-	focus(NULL);
-	layoutws(NULL);
-	restack(selws);
 }
 
 xcb_get_window_attributes_reply_t *winattr(xcb_window_t win)

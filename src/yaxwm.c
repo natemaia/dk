@@ -154,7 +154,7 @@ struct Workspace {
 };
 
 struct WindowRule {
-	int ws, floating;
+	int ws, floating, sticky;
 	char *class, *inst, *title, *mon;
 	Callback *cb;
 	regex_t classreg, instreg, titlereg;
@@ -218,7 +218,6 @@ static void cmdwinrule(char **argv);
 static void cmdwm(char **argv);
 static void cmdws(char **argv);
 static void cmdview(int num);
-static void configure(Client *c);
 static Monitor *coordtomon(int x, int y);
 static void detach(Client *c, int reattach);
 static void detachstack(Client *c);
@@ -244,7 +243,7 @@ static void initpanel(xcb_window_t win);
 static int initrandr(void);
 static void initscan(void);
 static void initwinrule(char *class, char *inst, char *title, char *mon,
-		int ws, int floating, Callback *cb);
+		int ws, int floating, int sticky, Callback *cb);
 static int initwinruleregcomp(WindowRule *r, char *class, char *inst, char *title);
 static void initwm(void);
 static void initworkspaces(void);
@@ -265,7 +264,9 @@ static void resize(Client *c, int x, int y, int w, int h, int bw);
 static void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion);
 static void restack(Workspace *ws);
 static int rulecmp(WindowRule *r, char *title, char *class, char *inst);
-static int sendevent(Client *c, int wmproto);
+static void sendconfigure(Client *c);
+static int sendevent(Client *c, const char *ev, long mask);
+static int sendwmproto(Client *c, int wmproto);
 static void setclientws(Client *c, uint num);
 static void setfullscreen(Client *c, int fullscreen);
 static void setnetworkareavp(void);
@@ -642,9 +643,11 @@ Callback *applywinrule(Client *c, xcb_window_t *trans)
 		for (r = winrules; r; r = r->next) {
 			if (!rulecmp(r, title, prop.class_name, prop.instance_name))
 				continue;
-			DBG("applywinrule: client matched rule: class: %s - inst: %s - title: %s",
+			DBG("applywinrule: matched rule: class: %s - inst: %s - title: %s",
 					r->class, r->inst, r->title)
 			c->floating = r->floating;
+			c->sticky = r->sticky;
+			cb = r->cb;
 			if (r->ws >= 0)
 				ws = r->ws;
 			else if (r->mon) {
@@ -657,7 +660,6 @@ Callback *applywinrule(Client *c, xcb_window_t *trans)
 					}
 				}
 			}
-			cb = r->cb;
 		}
 		xcb_icccm_get_wm_class_reply_wipe(&prop);
 	} else {
@@ -819,7 +821,7 @@ void cmdwinrule(char **argv)
 	Monitor *m;
 	Workspace *ws;
 	Callback *cb = NULL;
-	int i, floating = 0, workspace = -1;
+	int i, floating = 0, workspace = -1, sticky = 0;
 	char *mon = NULL, *class = NULL, *inst = NULL, *title = NULL;
 
 	while (*argv) {
@@ -861,12 +863,14 @@ void cmdwinrule(char **argv)
 					}
 			} else if (!strcmp(*argv, "floating")) {
 				floating = 1;
+			} else if (!strcmp(*argv, "floating")) {
+				sticky = 1;
 			}
 		}
 		argv++;
 	}
-	if ((class || inst || title) && (mon || workspace != -1 || floating))
-		initwinrule(class, inst, title, mon, workspace, floating, cb);
+	if ((class || inst || title) && (mon || workspace != -1 || floating || sticky))
+		initwinrule(class, inst, title, mon, workspace, floating, sticky, cb);
 }
 
 void cmdfloat(char **argv)
@@ -941,7 +945,7 @@ void cmdkill(char **argv)
 		return;
 	DBG("cmdkill: user requested kill current client")
 	(void)(argv);
-	if (!sendevent(selws->sel, Delete)) {
+	if (!sendwmproto(selws->sel, Delete)) {
 		xcb_grab_server(con);
 		xcb_set_close_down_mode(con, XCB_CLOSE_DOWN_DESTROY_ALL);
 		xcb_kill_client(con, selws->sel->win);
@@ -1203,29 +1207,6 @@ void cmdview(int num)
 	restack(selws);
 }
 
-void configure(Client *c)
-{ /* send client a configure notify event */
-	xcb_void_cookie_t vc;
-	xcb_generic_error_t *e;
-	xcb_configure_notify_event_t ce;
-
-	ce.event = c->win;
-	ce.window = c->win;
-	ce.response_type = XCB_CONFIGURE_NOTIFY;
-	ce.x = c->x;
-	ce.y = c->y;
-	ce.width = c->w;
-	ce.height = c->h;
-	ce.border_width = c->bw;
-	ce.above_sibling = XCB_NONE;
-	ce.override_redirect = 0;
-	vc = xcb_send_event_checked(con, 0, c->win, XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char *)&ce);
-	if ((e = xcb_request_check(con, vc))) {
-		free(e);
-		warnx("failed sending configure notify event to client window: 0x%x", c->win);
-	}
-}
-
 Client *coordtoclient(int x, int y)
 {
 	Client *c;
@@ -1348,11 +1329,11 @@ void eventhandle(xcb_generic_event_t *ev)
 					if ((c->y + H(c)) > m->y + m->h)
 						c->y = (m->wy + m->wh - H(c)) / 2;
 					if ((e->value_mask & XYMASK) && !(e->value_mask & WHMASK))
-						configure(c);
+						sendconfigure(c);
 					if (c->ws == c->ws->mon->ws)
 						resize(c, c->x, c->y, c->w, c->h, c->bw);
 				} else {
-					configure(c);
+					sendconfigure(c);
 				}
 			} else {
 				DBG("eventhandle: configure request event for unmanaged window: 0x%x", e->window)
@@ -1960,7 +1941,7 @@ void initclient(xcb_window_t win, xcb_window_t trans)
 	cb = applywinrule(c, &trans);
 	c->bw = borders[Width];
 	xcb_configure_window(con, c->win, BWMASK, &c->bw);
-	configure(c);
+	sendconfigure(c);
 	wintype(c);
 	sizehints(c);
 	winhints(c);
@@ -1993,7 +1974,7 @@ void initclient(xcb_window_t win, xcb_window_t trans)
 }
 
 void initwinrule(char *class, char *inst, char *title, char *mon,
-		int ws, int floating, Callback *cb)
+		int ws, int floating, int sticky, Callback *cb)
 {
 	size_t len;
 	WindowRule *r;
@@ -2005,6 +1986,7 @@ void initwinrule(char *class, char *inst, char *title, char *mon,
 	r->mon = NULL;
 	r->ws = ws;
 	r->floating = floating;
+	r->sticky = sticky;
 	r->cb = cb;
 	if (mon) {
 		len = strlen(mon) + 1;
@@ -2015,13 +1997,13 @@ void initwinrule(char *class, char *inst, char *title, char *mon,
 		goto error;
 	r->next = winrules;
 	winrules = r;
-	DBG("initwinrule: initialized rule: class: %s - inst: %s - title: %s - mon: %s - ws: %d, floating: %d",
-			r->class, r->inst, r->title, r->mon, r->ws, r->floating)
+	DBG("initwinrule: initialized rule: class: %s - inst: %s - title: %s - mon: %s - ws: %d - floating: %d - sticky: %d",
+			r->class, r->inst, r->title, r->mon, r->ws, r->floating, r->sticky)
 	return;
 
 error:
-	DBG("initwinrule: FAILED to initialize rule: class: %s - inst: %s - title: %s - mon: %s - ws: %d, floating: %d",
-			r->class, r->inst, r->title, r->mon, r->ws, r->floating)
+	DBG("initwinrule: FAILED to initialized rule: class: %s - inst: %s - title: %s - mon: %s - ws: %d - floating: %d - sticky: %d",
+			r->class, r->inst, r->title, r->mon, r->ws, r->floating, r->sticky)
 	free(r->mon);
 	free(r);
 }
@@ -2567,7 +2549,7 @@ void resize(Client *c, int x, int y, int w, int h, int bw)
 	c->old_w = c->w, c->old_h = c->h;
 	c->x = x, c->y = y, c->w = w, c->h = h;
 	xcb_configure_window(con, c->win, XYMASK | WHMASK | BWMASK, v);
-	configure(c);
+	sendconfigure(c);
 }
 
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion)
@@ -2621,7 +2603,38 @@ int rulecmp(WindowRule *r, char *title, char *class, char *inst)
 	return 0;
 }
 
-int sendevent(Client *c, int wmproto)
+void sendconfigure(Client *c)
+{ /* send client a configure notify event */
+	xcb_configure_notify_event_t ce;
+
+	ce.event = c->win;
+	ce.window = c->win;
+	ce.response_type = XCB_CONFIGURE_NOTIFY;
+	ce.x = c->x;
+	ce.y = c->y;
+	ce.width = c->w;
+	ce.height = c->h;
+	ce.border_width = c->bw;
+	ce.above_sibling = XCB_NONE;
+	ce.override_redirect = 0;
+	sendevent(c, (char *)&ce, XCB_EVENT_MASK_STRUCTURE_NOTIFY);
+}
+
+int sendevent(Client *c, const char *ev, long mask)
+{
+	xcb_void_cookie_t vc;
+	xcb_generic_error_t *e;
+
+	vc = xcb_send_event_checked(con, 0, c->win, mask, ev);
+	if ((e = xcb_request_check(con, vc))) {
+		free(e);
+		warnx("failed sending configure notify event to client window: 0x%x", c->win);
+		return 0;
+	}
+	return 1;
+}
+
+int sendwmproto(Client *c, int wmproto)
 {
 	int n, exists = 0;
 	xcb_generic_error_t *e;
@@ -2635,10 +2648,8 @@ int sendevent(Client *c, int wmproto)
 		while (!exists && n--)
 			exists = proto.atoms[n] == wmatoms[wmproto];
 		xcb_icccm_get_wm_protocols_reply_wipe(&proto);
-	} else {
-		checkerror("unable to get wm protocol for requested send event", e);
-	}
-
+	} else
+		checkerror("unable to get requested wm protocol", e);
 	if (exists) {
 		cme.response_type = XCB_CLIENT_MESSAGE;
 		cme.window = c->win;
@@ -2646,7 +2657,7 @@ int sendevent(Client *c, int wmproto)
 		cme.format = 32;
 		cme.data.data32[0] = wmatoms[wmproto];
 		cme.data.data32[1] = XCB_TIME_CURRENT_TIME;
-		xcb_send_event(con, 0, c->win, XCB_EVENT_MASK_NO_EVENT, (const char *)&cme);
+		sendevent(c, (char *)&cme, XCB_EVENT_MASK_NO_EVENT);
 	}
 	return exists;
 }
@@ -2839,7 +2850,7 @@ void takefocus(Client *c)
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, c->win, XCB_CURRENT_TIME);
 		PROP_REPLACE(root, netatoms[ActiveWindow], XCB_ATOM_WINDOW, 32, 1, &c->win);
 	}
-	sendevent(c, TakeFocus);
+	sendwmproto(c, TakeFocus);
 }
 
 void tile(Workspace *ws)

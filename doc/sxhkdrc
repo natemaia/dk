@@ -37,7 +37,7 @@ super + shift + q
 
 # reload yaxwmrc or fully restart yaxwm (fork exec)
 super + {_,ctrl + }shift + r
-    yaxcmd wm {reload,restart}
+    pkill sxhkd && yaxcmd wm {reload,restart}
 
 # change layout
 super + {t,m,f}
@@ -65,17 +65,24 @@ super + {q,s}
 super + {_,shift + }Tab
     yaxcmd win swap
 
+# focus or move up/down
+super + {_,shift + }{j,k}
+    yaxcmd win {focus,mvstack} {next,prev}
+
+# view, send, or follow to the given workspace
+super + {_,shift + ,ctrl + }{1-9,0}
+    yaxcmd ws {_,send,follow} {0-8,9}
+
 # toggle window floating state
 super + shift + space
     yaxcmd win float
 super + button2
     yaxcmd win float
 
-# focus or move up/down
-super + {_,shift + }{j,k}
-    yaxcmd win {focus,move} {next,prev}
+# move floating window
+super + alt + shift + {h,j,k,l}
+    yaxcmd win mvresize {w=-10,h=10,h=-10,w=10}
 
-# view, send, or follow to the given workspace
-super + {_,shift + ,ctrl + }{1-9,0}
-    yaxcmd ws {_,send,follow} {0-8,9}
-
+# resize floating window
+super + alt + {h,j,k,l}
+    yaxcmd win mvresize {x=-10,y=10,y=-10,x=10}

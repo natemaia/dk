@@ -186,7 +186,8 @@ static void cmdgappx(char **argv);
 static void cmdkill(char **argv);
 static void cmdlayout(char **argv);
 static void cmdmouse(char **argv);
-static void cmdmove(char **argv);
+static void cmdmvresize(char **argv);
+static void cmdmvstack(char **argv);
 static void cmdnmaster(char **argv);
 static void cmdnstack(char **argv);
 static void cmdparse(char *buf);
@@ -201,8 +202,10 @@ static void cmdwinrule(char **argv);
 static void cmdwm(char **argv);
 static void cmdws(char **argv);
 static void cmdview(int num);
+static void confine(Client *c);
 static void detach(Client *c, int reattach);
 static void *ecalloc(size_t elems, size_t size);
+static void eventignore(uint8_t type);
 static void eventloop(void);
 static void execcfg(void);
 static void fixupworkspaces(void);
@@ -292,12 +295,13 @@ static Keyword setcmds[] = {
 
 /* "win" keyword options, used by cmdwin() to parse arguments */
 static Keyword wincmds[] = {
-	{ "float",  cmdfloat },
-	{ "focus",  cmdfocus },
-	{ "kill",   cmdkill  },
-	{ "move",   cmdmove  },
-	{ "stick",  cmdstick },
-	{ "swap",   cmdswap  },
+	{ "float",    cmdfloat    },
+	{ "focus",    cmdfocus    },
+	{ "kill",     cmdkill     },
+	{ "mvstack",  cmdmvstack  },
+	{ "mvresize", cmdmvresize },
+	{ "stick",    cmdstick    },
+	{ "swap",     cmdswap     },
 };
 
 /* "rule" keyword options, used by cmdrule() to parse arguments */
@@ -509,14 +513,12 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int usermotion)
 		if (*y + *h + 2 * c->bw < 0)
 			*y = 0;
 	} else { /* confine to monitor */
-		if (*x > m->wx + m->ww)
+		*x = MAX(*x, m->wx);
+		*y = MAX(*y, m->wy);
+		if (*x + W(c) > m->wx + m->ww)
 			*x = m->wx + m->ww - W(c);
-		if (*y > m->wy + m->wh)
+		if (*y + H(c) > m->wy + m->wh)
 			*y = m->wy + m->wh - H(c);
-		if (*x + *w + 2 * c->bw < m->wx)
-			*x = m->wx;
-		if (*y + *h + 2 * c->bw < m->wy)
-			*y = m->wy;
 	}
 	if (c->floating || !c->ws->layout->fn) {
 		if (!(baseismin = c->base_w == c->min_w && c->base_h == c->min_h)) {
@@ -899,13 +901,6 @@ void cmdlayout(char **argv)
 	}
 }
 
-void cmdmove(char **argv)
-{
-	if (!selws->sel || selws->sel->fullscreen || selws->sel->floating)
-		return;
-	adjmvfocus(argv, movestack);
-}
-
 void cmdmouse(char **argv)
 {
 	if (!argv || !*argv)
@@ -940,6 +935,55 @@ void cmdmouse(char **argv)
 	}
 	if (selws->sel)
 		grabbuttons(selws->sel, 1);
+}
+
+void cmdmvresize(char **argv)
+{
+	Client *c;
+	int i = 0, n, arg, absolute, x = 0, y = 0, w = 0, h = 0;
+
+	if (!(c = selws->sel) || c->fullscreen)
+		return;
+	if (!selws->sel->floating) {
+		adjmvfocus(argv, movestack);
+		return;
+	}
+	if ((absolute = !strcmp(*argv, "absolute"))) {
+		w = c->w, h = c->h, x = c->x, y = c->y;
+		argv++;
+	}
+
+	while (*argv && i < 4) {
+		n = strtol(*argv, NULL, 0);
+		if ((arg = !strcmp("x", *argv)) || n || !strcmp(*argv, "0")) {
+			argv++;
+			x = arg ? strtol(*argv, NULL, 0) : n;
+		} else if ((arg = !strcmp("y", *argv)) || n || !strcmp(*argv, "0")) {
+			argv++;
+			y = arg ? strtol(*argv, NULL, 0) : n;
+		} else if ((arg = !strcmp("w", *argv)) || n) {
+			argv++;
+			w = arg ? strtol(*argv, NULL, 0) : n;
+		} else if ((arg = !strcmp("h", *argv)) || n) {
+			argv++;
+			h = arg ? strtol(*argv, NULL, 0) : n;
+		}
+		argv++;
+		i++;
+	}
+	if (absolute)
+		resize(c, x, y, MAX(50, w), MAX(50, h), c->bw);
+	else
+		resize(c, c->x + x, c->y + y, MAX(50, c->w + w), MAX(50, c->h + h), c->bw);
+	confine(c);
+	eventignore(XCB_ENTER_NOTIFY);
+}
+
+void cmdmvstack(char **argv)
+{
+	if (!selws->sel || selws->sel->fullscreen || selws->sel->floating)
+		return;
+	adjmvfocus(argv, movestack);
 }
 
 void cmdnmaster(char **argv)
@@ -1190,7 +1234,7 @@ Monitor *coordtomon(int x, int y)
 	return selws->mon;
 }
 
-void contain(Client *c)
+void confine(Client *c)
 {
 	Monitor *m = c->ws->mon;
 
@@ -1837,7 +1881,6 @@ void initatoms(xcb_atom_t *atoms, const char **names, int num)
 
 void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *g)
 { /* allocate and setup new client from window */
-	int x, y;
 	Client *c, *t;
 	Callback *cb = NULL;
 	xcb_window_t none = XCB_WINDOW_NONE;
@@ -1851,7 +1894,7 @@ void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *
 		setclientws(c, t->ws->num);
 	else
 		cb = applywinrule(c);
-	contain(c);
+	confine(c);
 	c->bw = borders[Width];
 	xcb_configure_window(con, c->win, BWMASK, &c->bw);
 	sendconfigure(c);
@@ -1864,11 +1907,8 @@ void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *
 			| XCB_EVENT_MASK_STRUCTURE_NOTIFY });
 	grabbuttons(c, 0);
 	if (c->floating || (c->floating = c->oldstate = trans != none || c->fixed)) {
-		if (querypointer(&x, &y)) { /* try to center floating windows under the cursor */
-			c->x = x - (W(c) / 2);
-			c->y = y - (H(c) / 2);
-			contain(c);
-		}
+		if (c->x + c->y == 0)
+			gravitate(c, Center, Center, 0);
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	}
 	PROP_APPEND(root, netatoms[ClientList], XCB_ATOM_WINDOW, 32, 1, &c->win);

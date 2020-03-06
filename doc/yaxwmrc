@@ -12,22 +12,22 @@ yaxcmd set layout tile
 yaxcmd set master absolute 1
 
 # set the amount of first stack windows on the active workspace
-yaxcmd set stack  absolute 2
+yaxcmd set stack  absolute 3
 
 # set the gap width on the active workspace to an absolute value in pixels
-yaxcmd set gap    absolute 20
+yaxcmd set gap    absolute 0
 
 # set the split ratio between master and stack on the active workspace
-yaxcmd set split  absolute 0.60
+yaxcmd set split  absolute 0.55
 
 # disable borders in monocle layout and tile layout with one window
 yaxcmd set border smart 1
 
 # set border width in pixels to an absolute value
-yaxcmd set border width  absolute 2
+yaxcmd set border width  absolute 1
 
 # set the border colour for focused and unfocused windows
-yaxcmd set border colour focus   '#669900'
+yaxcmd set border colour focus   '#6699cc'
 yaxcmd set border colour unfocus '#000000'
 
 # define mouse mod and move/resize buttons

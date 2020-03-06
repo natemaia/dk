@@ -381,8 +381,6 @@ static xcb_atom_t netatoms[LEN(netatomnames)]; /* _NET atoms */
 
 int main(int argc, char *argv[])
 {
-	Client *c;
-	Workspace *ws;
 	argv0 = argv[0];
 	xcb_void_cookie_t ck;
 	struct sigaction sa;
@@ -418,12 +416,6 @@ int main(int argc, char *argv[])
 
 	initwm();
 	initscan();
-	execcfg();
-	if (winrules)
-		FOR_CLIENTS(c, ws)
-			applywinrule(c);
-	layoutws(NULL);
-	focus(NULL);
 	eventloop();
 
 	return 0;
@@ -432,8 +424,7 @@ int main(int argc, char *argv[])
 int adjbdorgap(int i, int opt, int changing, int other)
 {
 	int r;
-	/* if opt is NULL or empty we assume absolute sizes, however we still use
-	 * a relative calculation so we can just call the set* function and save code repetition */
+
 	if (opt != -1) {
 		if (opt == stdreset) {
 			return 0;
@@ -688,11 +679,9 @@ void checkerror(char *msg, xcb_generic_error_t *e)
 
 void cmdborder(char **argv)
 {
-	int opt;
 	Client *c;
 	Workspace *ws;
-	int i, n, newborder, col = UNSET;
-	int f = borders[Focus], u = borders[Unfocus];
+	int i, n, opt, f = borders[Focus], u = borders[Unfocus];
 
 	enum { colreset, colfocus, colunfocus };
 	enum { absolute, width, colour, color, smart };
@@ -710,14 +699,15 @@ void cmdborder(char **argv)
 		if (opt == colreset) {
 			borders[Focus] = dborder[Focus];
 			borders[Unfocus] = dborder[Unfocus];
-		} else if (col <= 0xffffff || col >= 0) {
+		} else if (i <= 0xffffff && i >= 0) {
 			if (opt == colfocus) {
-				borders[Focus] = col;
-				xcb_change_window_attributes(con, selws->sel->win,
-						XCB_CW_BORDER_PIXEL, &borders[Focus]);
+				borders[Focus] = i;
+				if (selws->sel)
+					xcb_change_window_attributes(con, selws->sel->win,
+							XCB_CW_BORDER_PIXEL, &borders[Focus]);
 				return;
 			} else if (opt == colunfocus) {
-				borders[Unfocus] = col;
+				borders[Unfocus] = i;
 			}
 		}
 		if (f != borders[Focus] || u != borders[Unfocus])
@@ -728,18 +718,17 @@ void cmdborder(char **argv)
 		opt = optparse(argv + 1, stdopts, &i, NULL, 0);
 		if (opt < 0 && i == UNSET)
 			return;
-		if ((n = adjbdorgap(i, opt, selws->gappx, borders[Width])) != UNSET) {
+		if ((n = adjbdorgap(i, opt, borders[Width], selws->gappx)) != UNSET) {
 			if (n == 0)
-				newborder = dborder[Width];
+				i = dborder[Width];
 			else /* limit border width to 1/6 screen height - gap size and > 0 */
-				newborder = MAX(MIN((int)((selws->mon->wh / 6) - selws->gappx),
-							borders[Width] + n), 1);
-			if (newborder != borders[Width]) {
+				i = MAX(MIN((int)((selws->mon->wh / 6) - selws->gappx), borders[Width] + n), 1);
+			if (i != borders[Width]) {
 				/* update border width on clients that have borders matching the current global */
 				FOR_CLIENTS(c, ws)
 					if (c->bw && c->bw == borders[Width])
-						c->bw = newborder;
-				borders[Width] = newborder;
+						c->bw = i;
+				borders[Width] = i;
 				layoutws(NULL);
 			}
 		}
@@ -848,21 +837,21 @@ void cmdfollow(int num)
 
 void cmdgappx(char **argv)
 {
-	uint newgap;
+	uint ng;
 	int i, n, opt;
 
 	opt = optparse(argv, stdopts, &i, NULL, 0);
 
 	if (opt < 0 && i == UNSET)
 		return;
-	if ((n = adjbdorgap(i, opt, borders[Width], selws->gappx)) == UNSET)
+	if ((n = adjbdorgap(i, opt, selws->gappx, borders[Width])) == UNSET)
 		return;
 	if (n == 0)
-		newgap = workspacerules[selws->num].gappx;
+		ng = workspacerules[selws->num].gappx;
 	else /* limit gaps to 1/6 screen height - border size */
-		newgap = MAX(MIN((int)selws->gappx + n, (selws->mon->wh / 6) - borders[Width]), 0);
-	if (newgap != selws->gappx) {
-		selws->gappx = newgap;
+		ng = MAX(MIN((int)selws->gappx + n, (selws->mon->wh / 6) - borders[Width]), 0);
+	if (ng != selws->gappx) {
+		selws->gappx = ng;
 		layoutws(selws);
 	}
 }
@@ -1525,12 +1514,14 @@ void eventignore(uint8_t type)
 }
 
 void eventloop(void)
-{ /* wait for events while the user hasn't requested quit */
+{ /* wait for events or commands while the user hasn't requested quit */
+	Client *c;
 	ssize_t n;
+	Workspace *ws;
 	fd_set read_fds;
 	char buf[PIPE_BUF];
+	int confd, nfds, cmdfd;
 	xcb_generic_event_t *ev;
-	int confd, nfds, cmdfd, e;
 	static struct sockaddr_un sockaddr;
 
 	if (!(sock = getenv("YAXWM_SOCK"))) {
@@ -1549,6 +1540,13 @@ void eventloop(void)
 		err(1, "unable to bind socket: %s", sock);
 	if (listen(sockfd, SOMAXCONN) < 0)
 		err(1, "unable to listen to socket: %s", sock);
+
+	execcfg();
+	if (winrules)
+		FOR_CLIENTS(c, ws)
+			applywinrule(c);
+	layoutws(NULL);
+	focus(NULL);
 
 	confd = xcb_get_file_descriptor(con);
 	nfds = MAX(confd, sockfd);
@@ -1581,24 +1579,6 @@ void eventloop(void)
 					free(ev);
 				}
 			}
-		}
-
-		if ((e = xcb_connection_has_error(con))) {
-			warnx("connection to the server was closed");
-#define WRN(t, s) case t: warn(s); break
-			switch (e) {
-			WRN(XCB_CONN_ERROR, "socket, pipe or stream error");
-			WRN(XCB_CONN_CLOSED_INVALID_SCREEN, "invalid screen");
-			WRN(XCB_CONN_CLOSED_FDPASSING_FAILED, "failed to pass fd");
-			WRN(XCB_CONN_CLOSED_MEM_INSUFFICIENT, "not enough memory");
-			WRN(XCB_CONN_CLOSED_EXT_NOTSUPPORTED, "unsupported extension");
-			WRN(XCB_CONN_CLOSED_REQ_LEN_EXCEED, "request length exceeded");
-			default:
-				warn("unknown error");
-				break;
-			}
-			running = 0;
-#undef WRN
 		}
 	}
 }
@@ -2393,10 +2373,13 @@ int optparse(char **argv, char **opts, int *argi, float *argf, int hex)
 	if (argf)
 		*argf = 0.0;
 	while (*argv) {
+		DBG("argv: %s", *argv)
 		if (argi && ((hex && **argv == '#' && strlen(*argv) == 7)
-					|| (i = strtol(*argv, NULL, 0)) || !strcmp(*argv, "0")))
-			*argi = hex && **argv == '#' ? strtol(++*argv, NULL, 16) : i;
-		else if (argf && (f = strtof(*argv, NULL)))
+					|| (i = strtol(*argv, NULL, 0)) || !strcmp(*argv, "0"))) {
+
+			*argi = hex && **argv == '#' ? strtol(*argv + 1, NULL, 16) : i;
+			DBG("*argi: %d", *argi)
+		} else if (argf && (f = strtof(*argv, NULL)))
 			*argf = f;
 		else if (opts)
 			for (s = opts, i = 0; ret < 0 && s && *s; s++, i++)
@@ -2664,14 +2647,14 @@ void showhide(Client *c)
 	if (!c)
 		return;
 	if (c->ws == c->ws->mon->ws) { /* show clients top down */
-		DBG("showhide: showing window: 0x%08x - workspace: %d - active workspace: %d", c->win, c->ws->num, selws)
+		DBG("showhide: showing window: 0x%08x - workspace: %d - active workspace: %d", c->win, c->ws->num, selws->num)
 		MOVE(c->win, c->x, c->y);
 		if ((!c->ws->layout->fn || c->floating) && !c->fullscreen)
 			resize(c, c->x, c->y, c->w, c->h, c->bw);
 		showhide(c->snext);
 	} else { /* hide clients bottom up */
 		showhide(c->snext);
-		DBG("showhide: hiding window: 0x%08x - workspace: %d - active workspace: %d", c->win, c->ws->num, selws)
+		DBG("showhide: hiding window: 0x%08x - workspace: %d - active workspace: %d", c->win, c->ws->num, selws->num)
 		if (!c->sticky)
 			MOVE(c->win, W(c) * -2, c->y);
 		else if (c->ws != selws && selws && c->ws->mon == selws->mon) {
@@ -3018,7 +3001,6 @@ int wintextprop(xcb_window_t w, xcb_atom_t atom, char *text, size_t size)
 		checkerror("failed to get text property", e);
 		return 0;
 	}
-
 	/* FIXME: encoding */
 
 	if(!r.name || !r.name_len)

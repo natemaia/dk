@@ -2069,31 +2069,52 @@ int initrandr(void)
 
 void initscan(void)
 { /* walk root window tree and init existing windows */
-	uint i;
+	uint i, num;
+	xcb_atom_t *state;
 	xcb_window_t *win;
+	xcb_window_t *trans;
 	xcb_generic_error_t *e;
 	xcb_query_tree_cookie_t c;
+	xcb_get_geometry_reply_t **g;
 	xcb_query_tree_reply_t *tree;
-	xcb_get_geometry_reply_t *g = NULL;
-	xcb_get_window_attributes_reply_t *wa;
+	xcb_get_window_attributes_reply_t **wa;
 
 	c = xcb_query_tree(con, root);
 	if ((tree = xcb_query_tree_reply(con, c, &e))) {
+		num = tree->children_len;
 		win = xcb_query_tree_children(tree);
-		for (i = 0; i < tree->children_len; i++, g = NULL) {
-			if ((wa = winattr(win[i])) && (g = wingeom(win[i]))
-					&& (wa->map_state == XCB_MAP_STATE_VIEWABLE
+		state = ecalloc(num, sizeof(xcb_atom_t));
+		trans = ecalloc(num, sizeof(xcb_window_t));
+		g = ecalloc(num, sizeof(xcb_get_geometry_reply_t *));
+		wa = ecalloc(num, sizeof(xcb_get_window_attributes_reply_t *));
+
+		for (i = 0; i < num; i++) { /* top level parents */
+			trans[i] = state[i] = XCB_WINDOW_NONE;
+			g[i] = NULL;
+			if (!(wa[i] = winattr(win[i])) || !(g[i] = wingeom(win[i]))
+					|| !(wa[i]->map_state == XCB_MAP_STATE_VIEWABLE
 						|| winprop(win[i], wmatoms[WMState]) == XCB_ICCCM_WM_STATE_ICONIC))
 			{
-				if (winprop(win[i], netatoms[WindowType]) == netatoms[Dock])
-					initpanel(win[i], g);
-				else if (!wa->override_redirect)
-					initclient(win[i], wintrans(win[i]), g);
+				win[i] = 0;
+			} else if (winprop(win[i], netatoms[WindowType]) == netatoms[Dock]) {
+				initpanel(win[i], g[i]);
+				win[i] = 0;
+			} else if (!wa[i]->override_redirect && (trans[i] = wintrans(win[i])) == XCB_WINDOW_NONE) {
+				initclient(win[i], trans[i], g[i]);
+				win[i] = 0;
 			}
-			free(g);
-			free(wa);
+		}
+		for (i = 0; i < num; i++) { /* transients */
+			if (win[i] && trans[i] && !wa[i]->override_redirect)
+				initclient(win[i], trans[i], g[i]);
+			free(wa[i]);
+			free(g[i]);
 		}
 		free(tree);
+		free(state);
+		free(trans);
+		free(wa);
+		free(g);
 	} else {
 		checkerror(1, "unable to query tree from root window", e);
 	}

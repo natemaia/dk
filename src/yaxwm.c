@@ -229,7 +229,7 @@ static void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_re
 static void initpanel(xcb_window_t win, xcb_get_geometry_reply_t *g);
 static void initscan(void);
 static void initwinrule(char *class, char *inst, char *title, char *mon,
-		int ws, int floating, int sticky, Callback *cb);
+		int ws, int floating, int sticky, Callback *cb, int x, int y, int w, int h);
 static int initwinruleregcomp(WindowRule *r, char *class, char *inst, char *title);
 static void initwm(void);
 static void initworkspaces(void);
@@ -578,6 +578,14 @@ Callback *applywinrule(Client *c)
 			c->floating = r->floating;
 			c->sticky = r->sticky;
 			cb = r->cb;
+			if (r->x >= 0)
+				c->x = r->x;
+			if (r->y >= 0)
+				c->y = r->y;
+			if (r->w >= 0)
+				c->w = r->w;
+			if (r->h >= 0)
+				c->h = r->h;
 			if (r->ws >= 0)
 				ws = r->ws;
 			else if (r->mon) {
@@ -736,64 +744,6 @@ void cmdborder(char **argv)
 			layoutws(NULL);
 		}
 	}
-}
-
-void cmdwinrule(char **argv)
-{
-	uint ui;
-	Monitor *m;
-	Workspace *ws;
-	Callback *cb = NULL;
-	int i, floating = 0, workspace = -1, sticky = 0;
-	char *mon = NULL, *class = NULL, *inst = NULL, *title = NULL;
-
-	while (*argv) {
-		if (!class && !strcmp(*argv, "class")) {
-			argv++;
-			class = *argv;
-		} else if (!inst && !strcmp(*argv, "instance")) {
-			argv++;
-			inst = *argv;
-		} else if (!title && !strcmp(*argv, "title")) {
-			argv++;
-			title = *argv;
-		} else if (class || inst || title) {
-			if (!strcmp(*argv, "mon")) {
-				argv++;
-				if ((i = strtol(*argv, NULL, 0)) || !strcmp(*argv, "0"))
-					mon = *argv;
-				else FOR_EACH(m, monitors)
-					if (!strcmp(m->name, *argv)) {
-						mon = m->name;
-						break;
-					}
-			} else if (!strcmp(*argv, "ws")) {
-				argv++;
-				i = strtol(*argv, NULL, 0);
-				if ((i < numws && i > 0) || !strcmp(*argv, "0"))
-					workspace = i;
-				else FOR_EACH(ws, workspaces)
-					if (!strcmp(ws->name, *argv)) {
-						workspace = ws->num;
-						break;
-					}
-			} else if (!strcmp(*argv, "callback")) {
-				argv++;
-				for (ui = 0; ui < LEN(callbacks); ui++)
-					if (!strcmp(callbacks[ui].name, *argv)) {
-						cb = &callbacks[ui];
-						break;
-					}
-			} else if (!strcmp(*argv, "floating")) {
-				floating = 1;
-			} else if (!strcmp(*argv, "floating")) {
-				sticky = 1;
-			}
-		}
-		argv++;
-	}
-	if ((class || inst || title) && (mon || workspace != -1 || floating || sticky))
-		initwinrule(class, inst, title, mon, workspace, floating, sticky, cb);
 }
 
 void cmdfloat(char **argv)
@@ -1002,16 +952,22 @@ void cmdnstack(char **argv)
 
 void cmdparse(char *buf)
 {
-	char *k, *args[10], *dbuf;
+	char *k, *args[10], *dbuf, *saveptr;
 	uint i, n = 0, matched = 0;
 
 	dbuf = strdup(buf);
-	if ((k = strtok(dbuf, " \t\n\r"))) {
+	if ((k = strtok_r(dbuf, " \t\n\r", &saveptr))) {
 		for (i = 0; i < LEN(keywords); i++)
 			if (!strcmp(keywords[i].name, k)) {
 				matched = 1;
-				while (n < sizeof(args) && (args[n++] = strtok(NULL, " =\"\t\n\r")))
-					;
+				while (n < sizeof(args)) {
+					if (!(args[n] = strtok_r(NULL, " =\"\t\n\r", &saveptr)))
+						break;
+					/* if (!(args[n] = strtok_r(NULL, "=\"", &saveptr)) && !(args[n] = strtok_r(NULL, " \t\n\r", &saveptr))) */
+					/* 	break; */
+					DBG("cmdparse: args[%d] = %s", n, args[n]);
+					n++;
+				}
 				if (*args)
 					keywords[i].func((char **)args);
 				else
@@ -1124,6 +1080,75 @@ void cmdwin(char **argv)
 		}
 }
 
+void cmdwinrule(char **argv)
+{
+	uint ui;
+	Workspace *ws;
+	Callback *cb = NULL;
+	int i, floating = 0, workspace = -1, sticky = 0;
+	int x = -1, y = -1, w = -1, h = -1;
+	char *mon = NULL, *class = NULL, *inst = NULL, *title = NULL;
+
+	while (*argv) {
+		if (!class && !strcmp(*argv, "class")) {
+			argv++;
+			class = *argv;
+		} else if (!inst && !strcmp(*argv, "instance")) {
+			argv++;
+			inst = *argv;
+		} else if (!title && !strcmp(*argv, "title")) {
+			argv++;
+			title = *argv;
+		} else if (class || inst || title) {
+			if (!strcmp(*argv, "mon")) {
+				argv++;
+				if (*argv)
+					mon = *argv;
+			} else if (!strcmp(*argv, "ws")) {
+				argv++;
+				i = strtol(*argv, NULL, 0);
+				if ((i < numws && i > 0) || !strcmp(*argv, "0"))
+					workspace = i;
+				else FOR_EACH(ws, workspaces)
+					if (!strcmp(ws->name, *argv)) {
+						workspace = ws->num;
+						break;
+					}
+			} else if (!strcmp(*argv, "callback")) {
+				argv++;
+				for (ui = 0; ui < LEN(callbacks); ui++)
+					if (!strcmp(callbacks[ui].name, *argv)) {
+						cb = &callbacks[ui];
+						break;
+					}
+			} else if (!strcmp(*argv, "x")) {
+				argv++;
+				if ((i = strtol(*argv, NULL, 0)) || !strcmp(*argv, "0"))
+					x = i;
+			} else if (!strcmp(*argv, "y")) {
+				argv++;
+				if ((i = strtol(*argv, NULL, 0)) || !strcmp(*argv, "0"))
+					y = i;
+			} else if (!strcmp(*argv, "w")) {
+				argv++;
+				if ((i = strtol(*argv, NULL, 0)) >= 50)
+					w = i;
+			} else if (!strcmp(*argv, "h")) {
+				argv++;
+				if ((i = strtol(*argv, NULL, 0)) >= 50)
+					h = i;
+			} else if (!strcmp(*argv, "floating")) {
+				floating = 1;
+			} else if (!strcmp(*argv, "sticky")) {
+				sticky = 1;
+			}
+		}
+		argv++;
+	}
+	if ((class || inst || title) && (mon || workspace != -1 || floating || sticky || x != -1 || y != -1 || w != -1 || h != -1))
+		initwinrule(class, inst, title, mon, workspace, floating, sticky, cb, x, y, w, h);
+}
+
 void cmdwm(char **argv)
 {
 	int opt;
@@ -1151,6 +1176,10 @@ void cmdws(char **argv)
 
 	if (!argv || !*argv)
 		return;
+	if (!strcmp("print", *argv)) { /* print active workspace so we can do *a little* scripting */
+		fprintf(cmdresp, "%d", selws->num);	
+		return;
+	}
 	while (*argv) {
 		if ((n = strtol(*argv, NULL, 0)) || !strcmp(*argv, "0"))
 			i = n;
@@ -1879,8 +1908,13 @@ void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *
 	c->old_bw = g->border_width;
 	if ((trans != none || (trans = wintrans(c->win)) != none) && (t = wintoclient(trans)))
 		setclientws(c, t->ws->num);
-	else
+	else {
 		cb = applywinrule(c);
+		if (c->w > c->ws->mon->ww)
+			c->w = c->ws->mon->ww;
+		if (c->y > c->ws->mon->wy)
+			c->y = c->ws->mon->wy;
+	}
 	confine(c);
 	c->bw = border[Width];
 	xcb_configure_window(con, c->win, BWMASK, &c->bw);
@@ -1918,7 +1952,7 @@ void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *
 }
 
 void initwinrule(char *class, char *inst, char *title, char *mon,
-		int ws, int floating, int sticky, Callback *cb)
+		int ws, int floating, int sticky, Callback *cb, int x, int y, int w, int h)
 {
 	size_t len;
 	WindowRule *r;
@@ -1932,6 +1966,10 @@ void initwinrule(char *class, char *inst, char *title, char *mon,
 	r->floating = floating;
 	r->sticky = sticky;
 	r->cb = cb;
+	r->x = x;
+	r->y = y;
+	r->w = w;
+	r->h = h;
 	if (mon) {
 		len = strlen(mon) + 1;
 		r->mon = ecalloc(1, len);
@@ -1944,8 +1982,8 @@ void initwinrule(char *class, char *inst, char *title, char *mon,
 		free(r->mon);
 		free(r);
 	}
-	DBG("initwinrule: SUCCESS rule: class: %s - inst: %s - title: %s - mon: %s - ws: %d - floating: %d - sticky: %d",
-			r->class, r->inst, r->title, r->mon, r->ws, r->floating, r->sticky)
+	DBG("initwinrule: SUCCESS rule: class: %s - inst: %s - title: %s - mon: %s - ws: %d - floating: %d - sticky: %d - %d,%d @ %dx%d",
+			r->class, r->inst, r->title, r->mon, r->ws, r->floating, r->sticky, r->x, r->y, r->w, r->h)
 	return;
 
 }

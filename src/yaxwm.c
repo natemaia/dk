@@ -975,7 +975,7 @@ void cmdparse(char *buf)
 				break;
 			}
 		if (!matched)
-			fprintf(cmdresp, "!unknown keyword: %s", k);
+			fprintf(cmdresp, "!invalid keyword: %s", k);
 	}
 	free(dbuf);
 	fflush(cmdresp);
@@ -995,6 +995,7 @@ void cmdrule(char **argv)
 			rulecmds[i].func(r);
 			return;
 		}
+	fprintf(cmdresp, "!invalid rule keyword: %s", s);
 }
 
 void cmdsend(int num)
@@ -1022,6 +1023,7 @@ void cmdset(char **argv)
 			setcmds[i].func(r);
 			return;
 		}
+	fprintf(cmdresp, "!invalid set keyword: %s", s);
 }
 
 void cmdsplit(char **argv)
@@ -1174,8 +1176,10 @@ void cmdws(char **argv)
 	int i = INT_MAX, n;
 	void (*fn)(int) = cmdview; /* assume view so `ws 1` is the same as `ws view 1` */
 
-	if (!argv || !*argv)
+	if (!argv || !*argv) {
+		fprintf(cmdresp, "!ws command requires additional arguments but none were given");
 		return;
+	}
 	if (!strcmp("print", *argv)) { /* print active workspace so we can do *a little* scripting */
 		fprintf(cmdresp, "%d", selws->num);	
 		return;
@@ -1474,11 +1478,8 @@ void eventhandle(xcb_generic_event_t *ev)
 					DBG("%s client message on window: 0x%08x - data: %d", netatoms[Fullscreen], c->win, d[0])
 					setfullscreen(c, (d[0] == 1 || (d[0] == 2 && !c->fullscreen)));
 				} else if (e->type == netatom[ActiveWindow] && d[0] < (uint)numws) {
-					DBG("%s client message on window: 0x%08x", netatoms[ActiveWindow], c->win)
-					unfocus(selws->sel, 1);
-					cmdview(c->ws->num);
-					focus(c);
-					restack(selws);
+					if (c != selws->sel && !c->urgent)
+						seturgency(c, 1);
 				}
 			}
 			DBG("---- CLIENT MESSAGE LEAVE ----")

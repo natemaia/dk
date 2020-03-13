@@ -2921,12 +2921,9 @@ int updateoutputs(xcb_randr_output_t *outs, int len, xcb_timestamp_t timestamp)
 	}
 
 	po = xcb_randr_get_output_primary_reply(con, xcb_randr_get_output_primary(con, root), NULL);
-	if (po) {
-		primary = outputtomon(po->output);
-		DBG("updateoutputs: setting primary monitor: %s - centering cursor", primary->name)
+	if (po && (primary = outputtomon(po->output)))
 		xcb_warp_pointer(con, root, root, 0, 0, 0, 0,
 				primary->x + (primary->w / 2), primary->y + (primary->h / 2));
-	}
 	free(po);
 	return changed;
 }

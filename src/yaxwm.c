@@ -102,6 +102,12 @@ enum Gravity {
 	Left, Right, Center, Top, Bottom,
 };
 
+enum Cursors {
+	Normal,
+	Move,
+	Resize
+};
+
 struct Panel {
 	int x, y, w, h;
 	int strut_l, strut_r, strut_t, strut_b;
@@ -148,6 +154,7 @@ struct Workspace {
 };
 
 struct WindowRule {
+	int x, y, w, h;
 	int ws, floating, sticky;
 	char *class, *inst, *title, *mon;
 	Callback *cb;
@@ -275,55 +282,6 @@ enum { stdreset, stdabsolute };
 static char *minopts[] = { "absolute", NULL };
 static char *stdopts[] = { [stdreset] = "reset", [stdabsolute] = "absolute", NULL };
 
-/* command keywords and parser functions */
-static Keyword keywords[] = {
-	{ "set",  cmdset  },
-	{ "win",  cmdwin  },
-	{ "wm",   cmdwm   },
-	{ "ws",   cmdws   },
-	{ "rule", cmdrule },
-};
-
-/* "set" keyword options, used by cmdset() to parse arguments */
-static Keyword setcmds[] = {
-	{ "border",  cmdborder  },
-	{ "gap",     cmdgappx   },
-	{ "layout",  cmdlayout  },
-	{ "master",  cmdnmaster },
-	{ "mouse",   cmdmouse   },
-	{ "split",   cmdsplit   },
-	{ "stack",   cmdnstack  },
-};
-
-/* "win" keyword options, used by cmdwin() to parse arguments */
-static Keyword wincmds[] = {
-	{ "float",    cmdfloat    },
-	{ "focus",    cmdfocus    },
-	{ "kill",     cmdkill     },
-	{ "mvstack",  cmdmvstack  },
-	{ "mvresize", cmdmvresize },
-	{ "stick",    cmdstick    },
-	{ "swap",     cmdswap     },
-};
-
-/* "rule" keyword options, used by cmdrule() to parse arguments */
-static Keyword rulecmds[] = {
-	{ "win", cmdwinrule },
-	/* { "ws",  cmdwsrule }, */
-};
-
-/* cursors used for normal operation, moving, and resizing */
-enum Cursors {
-	Normal,
-	Move,
-	Resize
-};
-static const char *cursors[] = {
-	[Move] = "fleur",
-	[Normal] = "arrow",
-	[Resize] = "sizing"
-};
-
 /* supported WM_* atoms */
 enum WMAtoms {
 	Delete,
@@ -378,11 +336,24 @@ static const char *netatoms[] = {
 	[WmDesktop] = "_NET_WM_DESKTOP"
 };
 
+static int border[] = {
+	[Width] = 1,          /* border width in pixels */
+	[Smart] = 1,          /* disable borders in monocle layout or with only one tiled window */
+	[Focus] = 0x6699cc,   /* focused window border colours, hex 0x000000-0xffffff */
+	[Unfocus] = 0x000000, /* unfocused window border colours, hex 0x000000-0xffffff */
+};
+
+static const char *cursors[] = {
+	/* cursors used for normal operation, moving, and resizing */
+	[Move] = "fleur",
+	[Normal] = "arrow",
+	[Resize] = "sizing"
+};
+
 #include "stringl.c"
 #include "config.h"
 
 extern char **environ;            /* environment variables */
-
 static char *argv0;               /* program name */
 static int sockfd;                /* socket file descriptor */
 static char *sock;                /* socket path, loaded from YAXWM_SOCK environment variable */
@@ -390,9 +361,15 @@ static FILE *cmdresp;             /* file used for writing messages to after com
 static int numws = 0;             /* number of workspaces currently allocated */
 static int scr_w, scr_h;          /* root window size */
 static uint running = 1;          /* continue handling events */
+static int focusmouse = 1;        /* enable focus follows mouse */
 static int randrbase = -1;        /* randr extension response */
 static uint numlockmask = 0;      /* numlock modifier bit mask */
-static int dborder[LEN(borders)]; /* default border values used for resetting */
+static int dborder[LEN(border)];  /* default border values used for resetting */
+
+/* default modifier and mouse buttons used to activate move and resize */
+static xcb_mod_mask_t mousemod = XCB_MOD_MASK_4;
+static xcb_button_t   mousemove = XCB_BUTTON_INDEX_1;
+static xcb_button_t   mouseresize = XCB_BUTTON_INDEX_3;
 
 static Panel *panels;         /* panel list head */
 static Monitor *primary;      /* primary monitor */
@@ -453,19 +430,14 @@ int main(int argc, char *argv[])
 
 int adjbdorgap(int i, int opt, int changing, int other)
 {
-	int r;
-
 	if (opt != -1) {
-		if (opt == stdreset) {
+		if (opt == stdreset)
 			return 0;
-		} else if (opt == stdabsolute) {
-			if (!(r = MAX(MIN(i, (selws->mon->wh / 6) - other), 0) - changing))
-				return INT_MAX;
-		} else
-			return INT_MAX;
-	} else if (!(r = i))
+		else if (opt == stdabsolute)
+			return MAX(MIN(i, (selws->mon->wh / 6) - other), 0) - changing;
 		return INT_MAX;
-	return r;
+	}
+	return i;
 }
 
 void adjmstack(int i, int opt, int master)
@@ -715,56 +687,53 @@ void cmdborder(char **argv)
 {
 	Client *c;
 	Workspace *ws;
-	int i, n, opt, f = borders[Focus], u = borders[Unfocus];
+	int i, n, opt, f = border[Focus], u = border[Unfocus];
 
 	enum { colreset, colfocus, colunfocus };
-	enum { absolute, width, colour, color, smart };
 	char *colopt[] = { "reset",    "focus", "unfocus", NULL };
-	char *bdropt[] = { "absolute", "width", "colour", "color", "smart", NULL };
+	enum { width, colour, color, smart };
+	char *bdropt[] = { "width", "colour", "color", "smart", NULL };
 
 	if ((opt = optparse(argv, bdropt, &i, NULL, 0)) < 0)
 		return;
 	if (opt == smart) {
 		if (i != INT_MAX)
-			borders[Smart] = i;
+			border[Smart] = i;
 	} else if (opt == colour || opt == color) {
 		if ((opt = optparse(argv + 1, colopt, &i, NULL, 1)) < 0)
 			return;
 		if (opt == colreset) {
-			borders[Focus] = dborder[Focus];
-			borders[Unfocus] = dborder[Unfocus];
+			border[Focus] = dborder[Focus];
+			border[Unfocus] = dborder[Unfocus];
 		} else if (i <= 0xffffff && i >= 0) {
 			if (opt == colfocus) {
-				borders[Focus] = i;
+				border[Focus] = i;
 				if (selws->sel)
 					xcb_change_window_attributes(con, selws->sel->win,
-							XCB_CW_BORDER_PIXEL, &borders[Focus]);
+							XCB_CW_BORDER_PIXEL, &border[Focus]);
 				return;
 			} else if (opt == colunfocus) {
-				borders[Unfocus] = i;
+				border[Unfocus] = i;
 			}
 		}
-		if (f != borders[Focus] || u != borders[Unfocus])
+		if (f != border[Focus] || u != border[Unfocus])
 			FOR_CLIENTS(c, ws)
 				xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL,
-						&borders[c == c->ws->sel ? Focus : Unfocus]);
+						&border[c == c->ws->sel ? Focus : Unfocus]);
 	} else if (opt == width) {
 		opt = optparse(argv + 1, stdopts, &i, NULL, 0);
 		if (opt < 0 && i == INT_MAX)
 			return;
-		if ((n = adjbdorgap(i, opt, borders[Width], selws->gappx)) != INT_MAX) {
-			if (n == 0)
-				i = dborder[Width];
-			else /* limit border width to 1/6 screen height - gap size and > 0 */
-				i = MAX(MIN((int)((selws->mon->wh / 6) - selws->gappx), borders[Width] + n), 1);
-			if (i != borders[Width]) {
-				/* update border width on clients that have borders matching the current global */
-				FOR_CLIENTS(c, ws)
-					if (c->bw && c->bw == borders[Width])
-						c->bw = i;
-				borders[Width] = i;
-				layoutws(NULL);
-			}
+		else if (opt == stdreset)
+			i = dborder[Width];
+		else if ((n = adjbdorgap(i, opt, border[Width], selws->gappx)) != INT_MAX)
+			i = MAX(MIN((int)((selws->mon->wh / 6) - selws->gappx), border[Width] + n), 0);
+		if (i != border[Width]) {
+			FOR_CLIENTS(c, ws)
+				if (c->bw && c->bw == border[Width])
+					c->bw = i;
+			border[Width] = i;
+			layoutws(NULL);
 		}
 	}
 }
@@ -878,12 +847,12 @@ void cmdgappx(char **argv)
 
 	if (opt < 0 && i == INT_MAX)
 		return;
-	if ((n = adjbdorgap(i, opt, selws->gappx, borders[Width])) == INT_MAX)
+	if ((n = adjbdorgap(i, opt, selws->gappx, border[Width])) == INT_MAX)
 		return;
 	if (n == 0)
 		ng = workspacerules[selws->num].gappx;
 	else /* limit gaps to 1/6 screen height - border size */
-		ng = MAX(MIN((int)selws->gappx + n, (selws->mon->wh / 6) - borders[Width]), 0);
+		ng = MAX(MIN((int)selws->gappx + n, (selws->mon->wh / 6) - border[Width]), 0);
 	if (ng != selws->gappx) {
 		selws->gappx = ng;
 		layoutws(selws);
@@ -929,7 +898,13 @@ void cmdmouse(char **argv)
 	if (!argv || !*argv)
 		return;
 	while (*argv) {
-		if (!strcmp("mod", *argv)) {
+		if (!strcmp("focus", *argv)) {
+			argv++;
+			if (!strcmp("1", *argv) || !strcmp("on", *argv) || !strcmp("enable", *argv))
+				focusmouse = 1;
+			else if (!strcmp("0", *argv) || !strcmp("off", *argv) || !strcmp("disable", *argv))
+				focusmouse = 0;
+		} else if (!strcmp("mod", *argv)) {
 			argv++;
 			if (!strcmp("alt", *argv) || !strcmp("mod1", *argv))
 				mousemod = XCB_MOD_MASK_1;
@@ -1666,7 +1641,7 @@ void focus(Client *c)
 		detachstack(c);
 		attachstack(c);
 		grabbuttons(c, 1);
-		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, &borders[Focus]);
+		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, &border[Focus]);
 		takefocus(c);
 	} else {
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, root, XCB_CURRENT_TIME);
@@ -1691,6 +1666,8 @@ void freeclient(Client *c, int destroyed)
 		xcb_flush(con);
 		xcb_ungrab_server(con);
 	}
+	if (running)
+		xcb_delete_property(con, c->win, netatom[WmDesktop]);
 	free(c);
 	xcb_delete_property(con, root, netatom[ClientList]);
 	FOR_CLIENTS(c, ws)
@@ -1905,14 +1882,14 @@ void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *
 	else
 		cb = applywinrule(c);
 	confine(c);
-	c->bw = borders[Width];
+	c->bw = border[Width];
 	xcb_configure_window(con, c->win, BWMASK, &c->bw);
 	sendconfigure(c);
 	wintype(c);
 	sizehints(c);
 	winhints(c);
 	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK | XCB_CW_BORDER_PIXEL,
-			(uint []){ borders[Unfocus], XCB_EVENT_MASK_ENTER_WINDOW
+			(uint []){ border[Unfocus], XCB_EVENT_MASK_ENTER_WINDOW
 			| XCB_EVENT_MASK_FOCUS_CHANGE | XCB_EVENT_MASK_PROPERTY_CHANGE
 			| XCB_EVENT_MASK_STRUCTURE_NOTIFY });
 	grabbuttons(c, 0);
@@ -2159,7 +2136,7 @@ void initwm(void)
 	assignworkspaces();
 
 	for (i = 0; i < LEN(dborder); i++)
-		dborder[i] = borders[i];
+		dborder[i] = border[i];
 
 	if (xcb_cursor_context_new(con, scr, &ctx) < 0)
 		err(1, "unable to create cursor context");
@@ -2280,7 +2257,7 @@ void monocle(Workspace *ws)
 
 	for (c = nextt(ws->clients); c; c = nextt(c->next))
 		resize(c, m->wx, m->wy, m->ww, m->wh,
-				borders[Smart] ? 0 : borders[Width]);
+				border[Smart] ? 0 : border[Width]);
 }
 
 void movefocus(int direction)
@@ -2412,21 +2389,21 @@ int optparse(char **argv, char **opts, int *argi, float *argf, int hex)
 	if (argf)
 		*argf = 0.0;
 	while (*argv) {
-		DBG("argv: %s", *argv)
 		if (argi && ((hex && **argv == '#' && strlen(*argv) == 7)
-					|| (i = strtol(*argv, NULL, 0)) || !strcmp(*argv, "0"))) {
-
+					|| (i = strtol(*argv, NULL, 0)) || !strcmp(*argv, "0")))
 			*argi = hex && **argv == '#' ? strtol(*argv + 1, NULL, 16) : i;
-			DBG("*argi: %d", *argi)
-		} else if (argf && (f = strtof(*argv, NULL)))
+		else if (argf && (f = strtof(*argv, NULL)))
 			*argf = f;
-		else if (opts)
+		else if (opts) {
 			for (s = opts, i = 0; ret < 0 && s && *s; s++, i++)
 				if (!strcmp(*s, *argv)) {
 					if ((argi && *argi != INT_MAX) || (argf && *argf != 0.0))
 						return i; /* we don't need to parse the rest */
 					ret = i;
 				}
+		}
+		else
+			return ret;
 		argv++;
 	}
 	return ret;
@@ -2664,7 +2641,6 @@ void seturgency(Client *c, int urg)
 
 	pc = xcb_icccm_get_wm_hints(con, c->win);
 	c->urgent = urg;
-	DBG("seturgency: setting urgency hint for window: 0x%08x -- value: %d", c->win, urg)
 	if (xcb_icccm_get_wm_hints_reply(con, pc, &wmh, &e)) {
 		if (urg)
 			wmh.flags |= XCB_ICCCM_WM_HINT_X_URGENCY;
@@ -2683,14 +2659,12 @@ void showhide(Client *c)
 	if (!c)
 		return;
 	if (c->ws == c->ws->mon->ws) { /* show clients top down */
-		DBG("showhide: showing window: 0x%08x - workspace: %d - active workspace: %d", c->win, c->ws->num, selws->num)
 		MOVE(c->win, c->x, c->y);
 		if ((!c->ws->layout->fn || c->floating) && !c->fullscreen)
 			resize(c, c->x, c->y, c->w, c->h, c->bw);
 		showhide(c->snext);
 	} else { /* hide clients bottom up */
 		showhide(c->snext);
-		DBG("showhide: hiding window: 0x%08x - workspace: %d - active workspace: %d", c->win, c->ws->num, selws->num)
 		if (!c->sticky)
 			MOVE(c->win, W(c) * -2, c->y);
 		else if (c->ws != selws && selws && c->ws->mon == selws->mon) {
@@ -2775,8 +2749,8 @@ void tile(Workspace *ws)
 		;
 	if (!n)
 		return;
-	if (n > 1 || !borders[Smart])
-		bw = borders[Width];
+	if (n > 1 || !border[Smart])
+		bw = border[Width];
 	if (n <= ws->nmaster)
 		mw = m->ww, ss = 1;
 	else if (ws->nmaster)
@@ -2810,7 +2784,7 @@ void unfocus(Client *c, int focusroot)
 	if (!c)
 		return;
 	grabbuttons(c, 0);
-	xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, &borders[Unfocus]);
+	xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, &border[Unfocus]);
 	if (focusroot) {
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, root, XCB_CURRENT_TIME);
 		xcb_delete_property(con, root, netatom[ActiveWindow]);
@@ -3034,7 +3008,6 @@ int wintextprop(xcb_window_t w, xcb_atom_t atom, char *text, size_t size)
 		return 0;
 	}
 	/* FIXME: encoding */
-
 	if(!r.name || !r.name_len)
 		return 0;
 	strlcpy(text, r.name, size);
@@ -3083,18 +3056,18 @@ Workspace *wintows(xcb_window_t win)
 
 xcb_window_t wintrans(xcb_window_t win)
 {
-	xcb_window_t trans;
+	xcb_window_t t;
 	xcb_get_property_cookie_t pc;
 	xcb_generic_error_t *e = NULL;
 
 	pc = xcb_icccm_get_wm_transient_for(con, win);
-	trans = XCB_WINDOW_NONE;
-	if (!xcb_icccm_get_wm_transient_for_reply(con, pc, &trans, &e) && e) {
+	t = XCB_WINDOW_NONE;
+	if (!xcb_icccm_get_wm_transient_for_reply(con, pc, &t, &e) && e) {
 		warnx("unable to get wm transient for hint - X11 error: %d: %s",
 				e->error_code, xcb_event_get_error_label(e->error_code));
 		free(e);
 	}
-	return trans;
+	return t;
 }
 
 void wintype(Client *c)

@@ -17,6 +17,8 @@ yaxcmd set stack  absolute 3
 # set the gap width on the active workspace to an absolute value in pixels
 yaxcmd set gap    absolute 0
 
+# yaxcmd set gap    absolute 0
+
 # set the split ratio between master and stack on the active workspace
 yaxcmd set split  absolute 0.55
 

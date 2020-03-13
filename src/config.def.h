@@ -3,32 +3,58 @@
  * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
  */
 
-/* enable focus follows mouse */
-static int focusmouse = 1;
-
-/* modifier and mouse buttons used to activate move and resize */
-static xcb_mod_mask_t mousemod = XCB_MOD_MASK_1;
-static xcb_button_t   mousemove = XCB_BUTTON_INDEX_1;
-static xcb_button_t   mouseresize = XCB_BUTTON_INDEX_3;
+/* ---------------------------- */
+/* Command keywords and options */
+/* ---------------------------- */
 
 /* simple example of a client callback function for mpv album art */
 /* move mpv album art window to the bottom left of the screen and focus the last window */
 static void mpvart(Client *c) { gravitate(c, Bottom, Right, 1); focus(c->snext); }
 
-static int borders[] = {
-	[Width] = 1,          /* border width in pixels */
-	[Smart] = 1,          /* disable borders in monocle layout or with only one tiled window */
-	[Focus] = 0x6699cc,   /* focused window border colours, hex 0x000000-0xffffff */
-	[Unfocus] = 0x000000, /* unfocused window border colours, hex 0x000000-0xffffff */
+/* callbacks recognized for use with window rules */
+static Callback callbacks[] = {
+	/* name,     function */
+	{ "mpvart",  mpvart },
 };
 
-static Layout layouts[] = {
-	/* name,     function (NULL is floating) */
-	{ "tile",     tile    },
-	{ "monocle",  monocle },
-	{ "none",     NULL    },
+/* primary keywords and parser functions */
+static Keyword keywords[] = {
+	{ "set",  cmdset  },
+	{ "win",  cmdwin  },
+	{ "wm",   cmdwm   },
+	{ "ws",   cmdws   },
+	{ "rule", cmdrule },
 };
 
+/* "set" keyword options, used by cmdset() to parse arguments */
+static Keyword setcmds[] = {
+	{ "border",  cmdborder  },
+	{ "gap",     cmdgappx   },
+	{ "layout",  cmdlayout  },
+	{ "master",  cmdnmaster },
+	{ "mouse",   cmdmouse   },
+	{ "split",   cmdsplit   },
+	{ "stack",   cmdnstack  },
+};
+
+/* "win" keyword options, used by cmdwin() to parse arguments */
+static Keyword wincmds[] = {
+	{ "float",    cmdfloat    },
+	{ "focus",    cmdfocus    },
+	{ "kill",     cmdkill     },
+	{ "mvstack",  cmdmvstack  },
+	{ "mvresize", cmdmvresize },
+	{ "stick",    cmdstick    },
+	{ "swap",     cmdswap     },
+};
+
+/* "rule" keyword options, used by cmdrule() to parse arguments */
+static Keyword rulecmds[] = {
+	{ "win", cmdwinrule },
+	/* { "ws",  cmdwsrule }, /1* unfinished *1/ */
+};
+
+/* "ws" names used by cmdws() to parse arguments */
 static Command wscommands[] = {
 	/* name,     function */
 	{ "view",    cmdview   },
@@ -36,10 +62,17 @@ static Command wscommands[] = {
 	{ "follow",  cmdfollow },
 };
 
-static Callback callbacks[] = {
-	/* name,     function */
-	{ "mpvart",  mpvart },
+/* "layout" names used by cmdlayout() to parse arguments */
+static Layout layouts[] = {
+	/* name,     function (NULL is floating) */
+	{ "tile",     tile    },
+	{ "monocle",  monocle },
+	{ "none",     NULL    },
 };
+
+/* ------------------------------------------------- */
+/* Basic configuration still not handled by commands */
+/* ------------------------------------------------- */
 
 static WorkspaceRule workspacerules[] = {
 	/* workspace default settings and how many to allocate if more are
@@ -56,3 +89,4 @@ static WorkspaceRule workspacerules[] = {
 	{ "8", 1, 3, 0, 0.5, &layouts[0] },
 	{ "9", 1, 3, 0, 0.5, &layouts[0] },
 };
+

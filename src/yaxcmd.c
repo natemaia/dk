@@ -56,7 +56,7 @@ int main(int argc, char *argv[])
 		if (fds[0].revents & POLLIN) {
 			if ((s = recv(fd, resp, sizeof(resp) - 1, 0)) > 0) {
 				resp[s] = '\0';
-				if ((r = *resp == '!'))
+				if (*resp == '!')
 					fprintf(stderr, "error: %s\n", resp + 1);
 				else {
 					fprintf(stdout, "%s\n", resp);

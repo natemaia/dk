@@ -1,50 +1,80 @@
 #!/bin/sh
 
-# load keybinds
+# (re)load sxhkd for keybinds
 pkill sxhkd; sxhkd &
 
-# window manager configuration
+# determine where to place the log file
+logfile="$HOME/.yaxcmd.log"
+[ -d "$HOME/.local/share/xorg" ] && logfile="$HOME/.local/share/xorg/yaxcmd.log"
+# create and clear it
+: > "$logfile"
 
-# set the layout used for on the active workspace
-yaxcmd set layout tile
+# window manager configuration run as a compound command to
+# redirect all output to the log file without redirecting each command
+{
+	# ----------------------------------------------------------
+	# per workspace settings (loop to apply to each workspace)
+	# ----------------------------------------------------------
+	# save active workspace number
+	ws=$(yaxcmd ws print)
+	for i in seq 0 9; do
+		# set the active workspace for commands
+		yaxcmd ws "$i"
+		# set the layout on the active workspace
+		yaxcmd set layout tile
+		# set number of master windows on the active workspace
+		yaxcmd set master absolute 1
+		# set number of first stack windows on the active workspace
+		yaxcmd set stack absolute 3
+		# set gap width on the active workspace to an absolute value in pixels
+		yaxcmd set gap absolute 0
+		# set split ratio between master and stack on the active workspace
+		yaxcmd set split absolute 0.55
+	done
+	# restore active workspace
+	yaxcmd ws "$ws"
 
-# set the amount of master windows on the active workspace
-yaxcmd set master absolute 1
+	# ----------------------------------------------------------
+	# global settings and rules
+	# ----------------------------------------------------------
 
-# set the amount of first stack windows on the active workspace
-yaxcmd set stack  absolute 3
+	# mouse window control
+	# ---------------------
+	# define mouse mod and move/resize buttons
+	yaxcmd set mouse  mod alt  move button1  resize button3
 
-# set the gap width on the active workspace to an absolute value in pixels
-yaxcmd set gap    absolute 0
+	# borders
+	# ---------------------
+	# disable borders in monocle layout and tile layout with one window
+	yaxcmd set border smart 1
+	# set border width in pixels to an absolute value
+	yaxcmd set border width  absolute 1
+	# set the border colour for focused and unfocused windows
+	yaxcmd set border colour focus   '#6699cc'
+	yaxcmd set border colour unfocus '#000000'
 
-# yaxcmd set gap    absolute 0
+	# window rules
+	# ---------------------
+	# open window(s) on a specific workspace (and monitor it's assigned to)
+	yaxcmd rule win class="^gimp$" ws=2
+	# open window(s) on a specific monitor by-number (and active workspace on it)
+	yaxcmd rule win class="^firefox$" mon=0
+	# or by-name
+	yaxcmd rule win class="^chromium$" mon="HDMI-A-0"
+	# open window(s) and use a pre-defined callback function
+	yaxcmd rule win class="^mpv$" instance="^gl$" callback=mpvart floating
+	# open window(s) with a specific geometry and/or coordinates
+	yaxcmd rule win class="^google-chrome$" title="^open[[:space:]]files$" w=1280 h=720 floating
+	# open window(s) in a floating state
+	yaxcmd rule win class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" floating
 
-# set the split ratio between master and stack on the active workspace
-yaxcmd set split  absolute 0.55
+} >> "$logfile" 2>&1 # append responses
 
-# disable borders in monocle layout and tile layout with one window
-yaxcmd set border smart 1
+# errors encountered in logfile
+if grep -q 'error:' "$logfile"; then
+	hash notify-send > /dev/null 2>&1 || exit 1
+	# inform of errors in a notification that doesn't timeout
+	notify-send -t 0 -u critical "Yaxwmrc Has Errors" "$(awk '/error:/ {sub(/^error: /, ""); print}' "$logfile")"
+fi
 
-# set border width in pixels to an absolute value
-yaxcmd set border width  absolute 1
-
-# set the border colour for focused and unfocused windows
-yaxcmd set border colour focus   '#6699cc'
-yaxcmd set border colour unfocus '#000000'
-
-# define mouse mod and move/resize buttons
-yaxcmd set mouse  mod super  move button1  resize button3
-
-# open window(s) on a specific workspace (and monitor it's assigned to)
-yaxcmd rule win class="^gimp$" ws=2
-
-# open window(s) on a specific monitor by-number (and active workspace on it)
-yaxcmd rule win class="^firefox$" mon=0
-# or by-name
-yaxcmd rule win class="^chromium$" mon="HDMI-A-0"
-
-# open window(s) and use a pre-defined callback function
-yaxcmd rule win class="^mpv$" instance="^gl$" floating callback=mpvart
-
-# open window(s) in a floating state
-yaxcmd rule win class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" floating
+exit 0

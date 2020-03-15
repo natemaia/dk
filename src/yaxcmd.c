@@ -50,15 +50,16 @@ int main(int argc, char *argv[])
 	if (send(fd, buf, n, 0) < 0)
 		err(1, "unable to send the command");
 
-	while (poll(fds, 2, -1) > 0) {
+	while (poll(fds, 2, 1000) > 0) {
 		if (fds[1].revents & (POLLERR | POLLHUP))
 			break;
 		if (fds[0].revents & POLLIN) {
 			if ((s = recv(fd, resp, sizeof(resp) - 1, 0)) > 0) {
 				resp[s] = '\0';
-				if (*resp == '!')
+				if (*resp == '!') {
 					fprintf(stderr, "error: %s\n", resp + 1);
-				else {
+					fflush(stderr);
+				} else {
 					fprintf(stdout, "%s\n", resp);
 					fflush(stdout);
 				}

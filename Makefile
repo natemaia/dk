@@ -1,7 +1,7 @@
 # yaxwm - yet another x window manager
 # see license file for copyright and license details
 
-VERSION = 0.2
+VERSION = 0.3
 
 # install paths
 PREFIX    ?= /usr

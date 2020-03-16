@@ -9,7 +9,7 @@
 #include "stringl.c"
 
 #ifndef VERSION
-#define VERSION "0.2"
+#define VERSION "0.3"
 #endif
 
 int main(int argc, char *argv[])
@@ -25,8 +25,8 @@ int main(int argc, char *argv[])
 	};
 
 	if (argc == 1 || !strcmp(argv[1], "-h"))
-		errx(argc == 1 ? 1 : 0, "usage: %s command", argv[0]);
-	if (argv[1][0] == '-' && argv[1][1] == 'v')
+		errx(argc == 1 ? 1 : 0, "usage: %s [-hv] command", argv[0]);
+	if (!strcmp(argv[1], "-v"))
 		errx(0, "%s "VERSION, argv[0]);
 
 	addr.sun_family = AF_UNIX;

@@ -39,7 +39,7 @@ static void print(const char *fmt, ...);
 #endif
 
 #ifndef VERSION
-#define VERSION "0.1"
+#define VERSION "0.3"
 #endif
 
 #define W(x)          ((x)->w + 2 * (x)->bw)
@@ -408,10 +408,10 @@ int main(int argc, char *argv[])
 			if (*end != '\0')
 				sockfd = -1;
 		} else if ((arg = !strcmp(argv[1], "-v")) || !strcmp(argv[1], "-h")) {
-			fprintf(stderr, arg ? "%s "VERSION"\n" : "usage: %s [-v] [-s FD]\n", argv0);
+			fprintf(stderr, arg ? "%s "VERSION"\n" : "usage: %s [-hv] [-s SOCKET_FD]\n", argv0);
 			exit(0);
 		} else {
-			fprintf(stderr, "usage: %s [-v] [-s FD]\n", argv0);
+			fprintf(stderr, "usage: %s [-hv] [-s SOCKET_FD]\n", argv0);
 			exit(1);
 		}
 	}
@@ -446,13 +446,8 @@ int main(int argc, char *argv[])
 
 int adjbdorgap(int i, int opt, int changing, int other)
 {
-	if (opt != -1) {
-		if (opt == stdreset)
-			return 0;
-		else if (opt == stdabsolute)
-			return MAX(MIN(i, (selws->mon->wh / 6) - other), 0) - changing;
-		return INT_MAX;
-	}
+	if (opt == stdabsolute)
+		return MAX(MIN(i, (selws->mon->wh / 6) - other), 0) - changing;
 	return i;
 }
 
@@ -808,18 +803,16 @@ void cmdfollow(int num)
 
 void cmdgappx(char **argv)
 {
-	uint ng;
 	int i, n, opt;
+	uint ng = selws->gappx;
 
 	opt = optparse(argv, stdopts, &i, NULL, 0);
 
 	if (opt < 0 && i == INT_MAX)
 		return;
-	if ((n = adjbdorgap(i, opt, selws->gappx, border[Width])) == INT_MAX)
-		return;
-	if (n == 0)
+	else if (opt == stdreset)
 		ng = workspacerules[selws->num].gappx;
-	else /* limit gaps to 1/6 screen height - border size */
+	else if ((n = adjbdorgap(i, opt, selws->gappx, border[Width])) != INT_MAX)
 		ng = MAX(MIN((int)selws->gappx + n, (selws->mon->wh / 6) - border[Width]), 0);
 	if (ng != selws->gappx) {
 		selws->gappx = ng;

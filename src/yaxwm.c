@@ -32,10 +32,10 @@
 #include <xcb/xcb_keysyms.h>
 
 #ifdef DEBUG
-#define DBG(fmt, ...) print("yaxwm:%d:"fmt, __LINE__, ##__VA_ARGS__);
+#define DBG(fmt, ...); print("yaxwm:%d:"fmt, __LINE__, ##__VA_ARGS__);
 static void print(const char *fmt, ...);
 #else
-#define DBG(fmt, ...)
+#define DBG(fmt, ...);
 #endif
 
 #ifndef VERSION
@@ -212,7 +212,7 @@ static void cmdwinrule(char **argv);
 static void cmdwm(char **argv);
 static void cmdws(char **argv);
 static void cmdview(int num);
-static void confine(Client *c);
+static void confinetomon(Client *c);
 static void detach(Client *c, int reattach);
 static void *ecalloc(size_t elems, size_t size);
 static char *itoa(int n, char *s);
@@ -370,6 +370,7 @@ static int focusmouse = 1;        /* enable focus follows mouse */
 static int randrbase = -1;        /* randr extension response */
 static uint numlockmask = 0;      /* numlock modifier bit mask */
 static int dborder[LEN(border)];  /* default border values used for resetting */
+static int wrpending = 1;         /* whether there is a new window rule pending */
 
 /* default modifier and mouse buttons used to activate move and resize */
 static xcb_mod_mask_t mousemod = XCB_MOD_MASK_4;
@@ -485,8 +486,8 @@ void adjmvfocus(char **argv, void (*fn)(int))
 
 void applypanelstrut(Panel *p)
 {
-	DBG("applypanelstrut: %s window area before: %d,%d @ %dx%d", p->mon->name, p->mon->wx,
-			p->mon->wy, p->mon->ww, p->mon->wh);
+	DBG("applypanelstrut: %s window area before: %d,%d @ %dx%d",
+			p->mon->name, p->mon->wx, p->mon->wy, p->mon->ww, p->mon->wh);
 	if (p->mon->x + p->strut_l > p->mon->wx)
 		p->mon->wx = p->strut_l;
 	if (p->mon->y + p->strut_t > p->mon->wy)
@@ -495,8 +496,8 @@ void applypanelstrut(Panel *p)
 		p->mon->ww = p->mon->w - (p->strut_r + p->strut_l);
 	if (p->mon->h - (p->strut_b + p->strut_t) < p->mon->wh)
 		p->mon->wh = p->mon->h - (p->strut_b + p->strut_t);
-	DBG("applypanelstrut: %s window area after: %d,%d @ %dx%d", p->mon->name, p->mon->wx,
-			p->mon->wy, p->mon->ww, p->mon->wh);
+	DBG("applypanelstrut: %s window area after: %d,%d @ %dx%d",
+			p->mon->name, p->mon->wx, p->mon->wy, p->mon->ww, p->mon->wh);
 }
 
 int applysizehints(Client *c, int *x, int *y, int *w, int *h, int usermotion)
@@ -578,11 +579,13 @@ Callback *applywinrule(Client *c)
 	if (!c->trans && (ws = winprop(c->win, netatom[WmDesktop])) < 0)
 		ws = selws->num;
 	if (xcb_icccm_get_wm_class_reply(con, pc, &prop, &e)) {
-		DBG("applywinrule: window class: %s - instance: %s - title: %s", prop.class_name, prop.instance_name, title)
+		DBG("applywinrule: window class: %s - instance: %s - title: %s",
+				prop.class_name, prop.instance_name, title);
 		for (r = winrules; r; r = r->next) {
 			if (!rulecmp(r, title, prop.class_name, prop.instance_name))
 				continue;
-			DBG("applywinrule: match: class: %s - inst: %s - title: %s", r->class, r->inst, r->title)
+			DBG("applywinrule: matched -- class: %s, inst: %s, title: %s",
+					r->class, r->inst, r->title);
 			c->floating = r->floating;
 			c->sticky = r->sticky;
 			cb = r->cb;
@@ -598,14 +601,12 @@ Callback *applywinrule(Client *c)
 				if (r->ws >= 0)
 					ws = r->ws;
 				else if (r->mon) {
-					if (strtol(r->mon, NULL, 0) || !strcmp(r->mon, "0"))
-						num = strtol(r->mon, NULL, 0);
-					for (n = 0, m = monitors; m; m = m->next, n++) {
-						if ((num >= 0 && num == n) || !strcmp(r->mon, m->name)) {
-							ws = m->ws->num;
-							break;
-						}
-					}
+					if ((num = strtol(r->mon, NULL, 0)) || !strcmp(r->mon, "0"))
+						for (n = 0, m = monitors; m; m = m->next, n++)
+							if ((num >= 0 && num == n) || !strcmp(r->mon, m->name)) {
+								ws = m->ws->num;
+								break;
+							}
 				}
 			}
 			break;
@@ -614,11 +615,10 @@ Callback *applywinrule(Client *c)
 	} else {
 		checkerror(0, "failed to get window class", e);
 	}
-	if (!c->trans) {
-		setclientws(c, ws);
-		DBG("applywinrule: applied -- workspace: %d, monitor: %s, floating: %d, sticky: %d",
-				c->ws->num, c->ws->mon->name, c->floating, c->sticky)
-	}
+	setclientws(c, c->trans ? c->trans->ws->num : ws);
+	DBG("applywinrule: done -- workspace: %d, monitor: %s, floating: %d, sticky: %d, x: %d, y: %d, w: %d, h: %d",
+			c->ws->num, c->ws->mon->name, c->floating, c->sticky, c->x, c->y, c->w, c->h);
+
 	return cb;
 }
 
@@ -934,7 +934,7 @@ void cmdmvresize(char **argv)
 		resize(c, x, y, MAX(50, w), MAX(50, h), c->bw);
 	else
 		resize(c, c->x + x, c->y + y, MAX(50, c->w + w), MAX(50, c->h + h), c->bw);
-	confine(c);
+	confinetomon(c);
 	eventignore(XCB_ENTER_NOTIFY);
 }
 
@@ -1103,9 +1103,10 @@ void cmdwinrule(char **argv)
 {
 	uint ui;
 	Workspace *ws;
+	WindowRule *wr;
 	Callback *cb = NULL;
-	int i, floating = 0, workspace = -1, sticky = 0;
 	int x = -1, y = -1, w = -1, h = -1;
+	int i, floating = 0, workspace = -1, sticky = 0;
 	char *mon = NULL, *class = NULL, *inst = NULL, *title = NULL;
 
 	while (*argv) {
@@ -1118,54 +1119,75 @@ void cmdwinrule(char **argv)
 		} else if (!title && !strcmp(*argv, "title")) {
 			argv++;
 			title = *argv;
-		} else if (class || inst || title) {
-			if (!strcmp(*argv, "mon")) {
-				argv++;
-				if (*argv)
-					mon = *argv;
-			} else if (!strcmp(*argv, "ws")) {
-				argv++;
-				i = strtol(*argv, NULL, 0);
-				if ((i < numws && i > 0) || !strcmp(*argv, "0"))
-					workspace = i;
-				else FOR_EACH(ws, workspaces)
-					if (!strcmp(ws->name, *argv)) {
-						workspace = ws->num;
-						break;
-					}
-			} else if (!strcmp(*argv, "callback")) {
-				argv++;
-				for (ui = 0; ui < LEN(callbacks); ui++)
-					if (!strcmp(callbacks[ui].name, *argv)) {
-						cb = &callbacks[ui];
-						break;
-					}
-			} else if (!strcmp(*argv, "x")) {
-				argv++;
-				if ((i = strtol(*argv, NULL, 0)) || !strcmp(*argv, "0"))
-					x = i;
-			} else if (!strcmp(*argv, "y")) {
-				argv++;
-				if ((i = strtol(*argv, NULL, 0)) || !strcmp(*argv, "0"))
-					y = i;
-			} else if (!strcmp(*argv, "w")) {
-				argv++;
-				if ((i = strtol(*argv, NULL, 0)) >= 50)
-					w = i;
-			} else if (!strcmp(*argv, "h")) {
-				argv++;
-				if ((i = strtol(*argv, NULL, 0)) >= 50)
-					h = i;
-			} else if (!strcmp(*argv, "floating")) {
-				floating = 1;
-			} else if (!strcmp(*argv, "sticky")) {
-				sticky = 1;
-			}
+		} else if (!strcmp(*argv, "mon")) {
+			argv++;
+			if (*argv)
+				mon = *argv;
+		} else if (!strcmp(*argv, "ws")) {
+			argv++;
+			i = strtol(*argv, NULL, 0);
+			if ((i < numws && i > 0) || !strcmp(*argv, "0"))
+				workspace = i;
+			else FOR_EACH(ws, workspaces)
+				if (!strcmp(ws->name, *argv)) {
+					workspace = ws->num;
+					break;
+				}
+		} else if (!strcmp(*argv, "callback")) {
+			argv++;
+			for (ui = 0; ui < LEN(callbacks); ui++)
+				if (!strcmp(callbacks[ui].name, *argv)) {
+					cb = &callbacks[ui];
+					break;
+				}
+		} else if (!strcmp(*argv, "x")) {
+			argv++;
+			if ((i = strtol(*argv, NULL, 0)) || !strcmp(*argv, "0"))
+				x = i;
+		} else if (!strcmp(*argv, "y")) {
+			argv++;
+			if ((i = strtol(*argv, NULL, 0)) || !strcmp(*argv, "0"))
+				y = i;
+		} else if (!strcmp(*argv, "w")) {
+			argv++;
+			if ((i = strtol(*argv, NULL, 0)) >= 50)
+				w = i;
+		} else if (!strcmp(*argv, "h")) {
+			argv++;
+			if ((i = strtol(*argv, NULL, 0)) >= 50)
+				h = i;
+		} else if (!strcmp(*argv, "floating")) {
+			floating = 1;
+		} else if (!strcmp(*argv, "sticky")) {
+			sticky = 1;
+		} else {
+			fprintf(cmdresp, "!invalid argument to win rule: %s", *argv);
 		}
 		argv++;
 	}
-	if ((class || inst || title) && (mon || workspace != -1 || floating || sticky || x != -1 || y != -1 || w != -1 || h != -1))
-		initwinrule(class, inst, title, mon, workspace, floating, sticky, cb, x, y, w, h);
+
+	if ((class || inst || title) && (mon || workspace != -1 || floating || sticky
+				|| x != -1 || y != -1 || w != -1 || h != -1))
+	{
+		FOR_EACH(wr, winrules) {
+			if (class && (class != wr->class || strcmp(class, wr->class)))
+				continue;
+			if (inst && (inst != wr->inst || strcmp(inst, wr->inst)))
+				continue;
+			if (title && (title != wr->title || strcmp(title, wr->title)))
+				continue;
+			DBG("initwinrule: updating existing rule with the same match patterns");
+			wr->mon = mon;
+			wr->ws = workspace;
+			wr->floating = floating;
+			wr->sticky = sticky;
+			wr->x = x; wr->y = y;
+			wr->w = w; wr->h = h;
+			break;
+		}
+		if (!wr)
+			initwinrule(class, inst, title, mon, workspace, floating, sticky, cb, x, y, w, h);
+	}
 }
 
 void cmdwm(char **argv)
@@ -1281,10 +1303,14 @@ Monitor *coordtomon(int x, int y)
 	return selws->mon;
 }
 
-void confine(Client *c)
+void confinetomon(Client *c)
 {
 	Monitor *m = c->ws->mon;
 
+	if (c->w > m->ww)
+		c->w = m->ww - (2 * c->bw);
+	if (c->h > m->wh)
+		c->h = m->wh - (2 * c->bw);
 	if (c->x + W(c) > m->wx + m->ww)
 		c->x = c->ws->mon->wx + c->ws->mon->ww - W(c);
 	if (c->y + H(c) > m->wy + m->wh)
@@ -1368,10 +1394,10 @@ void eventhandle(xcb_generic_event_t *ev)
 			xcb_configure_request_event_t *e = (xcb_configure_request_event_t *)ev;
 
 			if ((c = wintoclient(e->window))) {
-				DBG("eventhandle: configure request on managed window: 0x%x", e->window)
+				DBG("eventhandle: configure request on managed window: 0x%x", e->window);
 				clientconfigurerequest(c, e);
 			} else {
-				DBG("eventhandle: configure request on unmanaged window: 0x%x", e->window)
+				DBG("eventhandle: configure request on unmanaged window: 0x%x", e->window);
 				xcb_params_configure_window_t wc;
 				wc.x = e->x;
 				wc.y = e->y;
@@ -1481,14 +1507,14 @@ void eventhandle(xcb_generic_event_t *ev)
 			xcb_atom_t fs = netatom[Fullscreen];
 			uint32_t *d = e->data.data32;
 
-			DBG("---- CLIENT MESSAGE ENTER ----")
+			DBG("---- CLIENT MESSAGE ENTER ----");
 			if (e->type == netatom[CurDesktop]) {
-				DBG("%s client message - data: %d", netatoms[CurDesktop], d[0])
+				DBG("%s client message - data: %d", netatoms[CurDesktop], d[0]);
 				cmdview(d[0]);
 			} else if ((c = wintoclient(e->window))) {
 				if (e->type == netatom[WmDesktop]) {
 					DBG("%s client message window: 0x%08x - data: %d - sticky: %d",
-							netatoms[WmDesktop], c->win, d[0], d[0] == 0xffffffff)
+							netatoms[WmDesktop], c->win, d[0], d[0] == 0xffffffff);
 					if (d[0] == 0xffffffff) {
 						setsticky(c, 1);
 						layoutws(NULL);
@@ -1503,7 +1529,8 @@ void eventhandle(xcb_generic_event_t *ev)
 							layoutws(NULL);
 					}
 				} else if (e->type == netatom[State] && (d[1] == fs || d[2] == fs)) {
-					DBG("%s client message on window: 0x%08x - data: %d", netatoms[Fullscreen], c->win, d[0])
+					DBG("%s client message on window: 0x%08x - data: %d", netatoms[Fullscreen],
+							c->win, d[0]);
 					setfullscreen(c, (d[0] == 1 || (d[0] == 2 && !c->fullscreen)));
 				} else if (e->type == netatom[ActiveWindow] && c != selws->sel) {
 					if (c->ws == selws) {
@@ -1513,14 +1540,14 @@ void eventhandle(xcb_generic_event_t *ev)
 							seturgency(c, 0);
 					} else if (!c->urgent)
 						seturgency(c, 1);
-					/* DBG("%s client message on window: 0x%08x", netatoms[ActiveWindow], c->win) */
+					/* DBG("%s client message on window: 0x%08x", netatoms[ActiveWindow], c->win); */
 					/* unfocus(selws->sel, 1); */
 					/* cmdview(c->ws->num); */
 					/* focus(c); */
 					/* restack(selws); */
 				}
 			}
-			DBG("---- CLIENT MESSAGE LEAVE ----")
+			DBG("---- CLIENT MESSAGE LEAVE ----");
 			return;
 		}
 		case XCB_PROPERTY_NOTIFY:
@@ -1639,9 +1666,6 @@ void eventloop(void)
 	}
 
 	execcfg();
-	if (winrules)
-		FOR_CLIENTS(c, ws)
-			applywinrule(c);
 	layoutws(NULL);
 	focus(NULL);
 
@@ -1675,6 +1699,12 @@ void eventloop(void)
 					eventhandle(ev);
 					free(ev);
 				}
+			}
+			if (wrpending) {
+				if (winrules)
+					FOR_CLIENTS(c, ws)
+						applywinrule(c);
+				wrpending--;
 			}
 		}
 	}
@@ -1972,27 +2002,20 @@ void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *
 { /* allocate and setup new client from window */
 	Client *c;
 	Callback *cb = NULL;
-	xcb_window_t none = XCB_WINDOW_NONE;
 
 	c = ecalloc(1, sizeof(Client));
 	c->win = win;
 	c->x = c->old_x = g->x, c->y = c->old_y = g->y;
 	c->w = c->old_w = g->width, c->h = c->old_h = g->height;
 	c->old_bw = g->border_width;
-	if ((trans != none || (trans = wintrans(c->win)) != none) && (c->trans = wintoclient(trans)))
-		setclientws(c, c->trans->ws->num);
+	if ((trans != XCB_WINDOW_NONE || (trans = wintrans(c->win)) != XCB_WINDOW_NONE))
+		c->trans = wintoclient(trans);
 	cb = applywinrule(c);
-	if (c->w > c->ws->mon->ww)
-		c->w = c->ws->mon->ww - (2 * c->bw);
-	if (c->h > c->ws->mon->wh)
-		c->h = c->ws->mon->wh - (2 * c->bw);
-	if (c->trans) {
-		if (c->x != c->trans->ws->mon->wx + c->trans->x + ((W(c->trans) - W(c)) / 2))
-			c->x = c->trans->ws->mon->wx + c->trans->x + ((W(c->trans) - W(c)) / 2);
-		if (c->y != c->trans->ws->mon->wy + c->trans->y + ((H(c->trans) - H(c)) / 2))
-			c->y = c->trans->ws->mon->wy + c->trans->y + ((H(c->trans) - H(c)) / 2);
+	confinetomon(c);
+	if (c->trans) { /* center transient windows over the parent */
+		c->x = c->trans->ws->mon->wx + c->trans->x + ((W(c->trans) - W(c)) / 2);
+		c->y = c->trans->ws->mon->wy + c->trans->y + ((H(c->trans) - H(c)) / 2);
 	}
-	confine(c);
 	c->bw = border[Width];
 	xcb_configure_window(con, c->win, BWMASK, &c->bw);
 	sendconfigure(c);
@@ -2004,7 +2027,7 @@ void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *
 			| XCB_EVENT_MASK_FOCUS_CHANGE | XCB_EVENT_MASK_PROPERTY_CHANGE
 			| XCB_EVENT_MASK_STRUCTURE_NOTIFY });
 	grabbuttons(c, 0);
-	if (c->floating || (c->floating = c->oldstate = trans != none || c->fixed)) {
+	if (c->floating || (c->floating = c->oldstate = trans != XCB_WINDOW_NONE || c->fixed)) {
 		if (c->x + c->y == 0)
 			gravitate(c, Center, Center, 0);
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
@@ -2024,8 +2047,8 @@ void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *
 	focus(NULL);
 	if (cb)
 		cb->fn(c);
-	DBG("initclient: client mapped - workspace %d: %d,%d @ %dx%d - floating: %d - nofocus: %d",
-			c->ws->num, c->x, c->y, c->w, c->h, c->floating, c->nofocus)
+	DBG("initclient: done: 0x%08x - workspace %d: %d,%d @ %dx%d - floating: %d - nofocus: %d",
+			c->win, c->ws->num, c->x, c->y, c->w, c->h, c->floating, c->nofocus);
 }
 
 void initwinrule(char *class, char *inst, char *title, char *mon,
@@ -2056,7 +2079,7 @@ void initwinrule(char *class, char *inst, char *title, char *mon,
 	}
 	DBG("initwinrule: complete: class: %s - inst: %s - title: %s - mon: %s - ws: %d "
 			"- floating: %d - sticky: %d - position: %d,%d - size: %dx%d", r->class,
-			r->inst, r->title, r->mon, r->ws, r->floating, r->sticky, r->x, r->y, r->w, r->h)
+			r->inst, r->title, r->mon, r->ws, r->floating, r->sticky, r->x, r->y, r->w, r->h);
 }
 
 int initwinruleregcomp(WindowRule *r, char *class, char *inst, char *title)
@@ -2133,7 +2156,7 @@ void initpanel(xcb_window_t win, xcb_get_geometry_reply_t *g)
 			checkerror(0, "unable to get _NET_WM_STRUT or _NET_WM_STRUT_PARTIAL from window", e);
 	}
 	if (r && r->value_len && (s = xcb_get_property_value(r))) {
-		DBG("initpanel: struts: %d, %d, %d, %d", s[0], s[1], s[2], s[3])
+		DBG("initpanel: struts: %d, %d, %d, %d", s[0], s[1], s[2], s[3]);
 		p->strut_l = s[0], p->strut_r = s[1], p->strut_t = s[2], p->strut_b = s[3];
 		updatestruts(p, 1);
 	}
@@ -2143,7 +2166,8 @@ void initpanel(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	setwinstate(p->win, XCB_ICCCM_WM_STATE_NORMAL);
 	xcb_map_window(con, p->win);
 	layoutws(NULL);
-	DBG("initpanel: panel mapped - mon: %s - geom: %d,%d @ %dx%d", p->mon->name, p->x, p->y, p->w, p->h)
+	DBG("initpanel: panel mapped - mon: %s - geom: %d,%d @ %dx%d",
+			p->mon->name, p->x, p->y, p->w, p->h);
 }
 
 Monitor *initmon(char *name, xcb_randr_output_t id, int x, int y, int w, int h)
@@ -2151,7 +2175,7 @@ Monitor *initmon(char *name, xcb_randr_output_t id, int x, int y, int w, int h)
 	Monitor *m;
 	uint len = strlen(name) + 1;
 
-	DBG("initmon: initializing new monitor: %s - %d,%d - %dx%d", name, x, y, w, h)
+	DBG("initmon: initializing new monitor: %s - %d,%d - %dx%d", name, x, y, w, h);
 	m = ecalloc(1, sizeof(Monitor));
 	m->x = m->wx = x;
 	m->y = m->wy = y;
@@ -2243,6 +2267,8 @@ void initwm(void)
 		monitors = initmon("default", 0, 0, 0, scr_w, scr_h);
 	if (!primary)
 		primary = monitors;
+	xcb_warp_pointer(con, root, root, 0, 0, 0, 0,
+			primary->x + (primary->w / 2), primary->y + (primary->h / 2));
 	initworkspaces();
 	assignworkspaces();
 
@@ -2304,7 +2330,7 @@ Workspace *initws(int num, WorkspaceRule *r)
 {
 	Workspace *ws;
 
-	DBG("initws: initializing new workspace: '%s': %d", r->name, num)
+	DBG("initws: initializing new workspace: '%s': %d", r->name, num);
 	ws = ecalloc(1, sizeof(Workspace));
 	ws->num = num;
 	ws->name = r->name;
@@ -2606,7 +2632,7 @@ int rulecmp(WindowRule *r, char *title, char *class, char *inst)
 	if (!r)
 		return 0;
 	DBG("rulecmp: testing: class: %s, inst: %s, title: %s -- class: %s, inst: %s, title: %s",
-			r->class, r->inst, r->title, class, inst, title)
+			r->class, r->inst, r->title, class, inst, title);
 	if (r->title && r->class && r->inst)
 		return (!regexec(&(r->titlereg), title, 0, NULL, 0)
 				&& !regexec(&(r->classreg), class, 0, NULL, 0)
@@ -2686,7 +2712,7 @@ int sendwmproto(Client *c, int wmproto)
 
 void setclientws(Client *c, uint num)
 {
-	DBG("setclientws: setting client atom -- _NET_WM_DESKTOP: %d", num)
+	DBG("setclientws: setting client atom -- _NET_WM_DESKTOP: %d", num);
 	if (c->ws) {
 		detach(c, 0);
 		detachstack(c);
@@ -2754,9 +2780,9 @@ void seturgency(Client *c, int urg)
 
 	pc = xcb_icccm_get_wm_hints(con, c->win);
 	c->urgent = urg;
-	DBG("seturgency: window: 0x%08x - urgency: %d", c->win, urg)
+	DBG("seturgency: window: 0x%08x - urgency: %d", c->win, urg);
 	if (xcb_icccm_get_wm_hints_reply(con, pc, &wmh, &e)) {
-		DBG("seturgency: received WM_HINTS reply")
+		DBG("seturgency: received WM_HINTS reply");
 		wmh.flags = urg ? (wmh.flags | XCB_ICCCM_WM_HINT_X_URGENCY)
 			: (wmh.flags & ~XCB_ICCCM_WM_HINT_X_URGENCY);
 		xcb_icccm_set_wm_hints(con, c->win, &wmh);
@@ -2811,17 +2837,19 @@ void sizehints(Client *c, int uss)
 	xcb_get_property_cookie_t pc;
 
 	pc = xcb_icccm_get_wm_normal_hints(con, c->win);
-	DBG("sizehints: getting size hints for window: 0x%08x", c->win)
+	DBG("sizehints: getting size hints for window: 0x%08x", c->win);
 	c->max_aspect = c->min_aspect = 0.0;
 	c->increment_w = c->increment_h = 0;
 	c->min_w = c->min_h = c->max_w = c->max_h = c->base_w = c->base_h = 0;
 	if (xcb_icccm_get_wm_normal_hints_reply(con, pc, &s, &e)) {
 		if (uss && s.flags & XCB_ICCCM_SIZE_HINT_US_POSITION) {
-			DBG("sizehints: applying user specified position: %d,%d - current: %d,%d", s.x - c->bw, s.y - c->bw, c->x, c->y)
+			DBG("sizehints: applying user specified position: %d,%d - current: %d,%d",
+					s.x - c->bw, s.y - c->bw, c->x, c->y);
 			c->x = s.x, c->y = s.y;
 		}
 		if (uss && s.flags & XCB_ICCCM_SIZE_HINT_US_SIZE) {
-			DBG("sizehints: applying user specified size: %dx%d - current: %dx%d", s.width, s.height, c->w, c->h)
+			DBG("sizehints: applying user specified size: %dx%d - current: %dx%d",
+					s.width, s.height, c->w, c->h);
 			c->w = s.width, c->h = s.height;
 		}
 		if (s.flags & XCB_ICCCM_SIZE_HINT_P_ASPECT) {
@@ -2970,10 +2998,10 @@ int updateoutputs(xcb_randr_output_t *outs, int len, xcb_timestamp_t timestamp)
 			n = xcb_randr_get_output_info_name_length(o) + 1;
 			strlcpy(name, (char *)xcb_randr_get_output_info_name(o), MIN(sizeof(name), n));
 			DBG("updateoutputs: crtc: %s -- location: %d,%d -- size: %dx%d -- status: %d",
-					name, c->x, c->y, c->width, c->height, c->status)
+					name, c->x, c->y, c->width, c->height, c->status);
 			if ((m = randrclone(outs[i], c->x, c->y))) {
 				DBG("updateoutputs: monitor %s, id %d is a clone of %s, id %d, skipping",
-						name, outs[i], m->name, m->id)
+						name, outs[i], m->name, m->id);
 			} else if ((m = outputtomon(outs[i]))) {
 				changed = (c->x != m->x || c->y != m->y || c->width != m->w || c->height != m->h);
 				m->x = m->wx = c->x;
@@ -2981,7 +3009,7 @@ int updateoutputs(xcb_randr_output_t *outs, int len, xcb_timestamp_t timestamp)
 				m->w = m->ww = c->width;
 				m->h = m->wh = c->height;
 				DBG("updateoutputs: new size and location for monitor: %s -- %d,%d @ %dx%d -- %s",
-						m->name, m->x, m->y, m->w, m->h, changed ? "updated" : "unchanged")
+						m->name, m->x, m->y, m->w, m->h, changed ? "updated" : "unchanged");
 			} else {
 				FIND_TAIL(m, monitors);
 				if (m)
@@ -2992,7 +3020,7 @@ int updateoutputs(xcb_randr_output_t *outs, int len, xcb_timestamp_t timestamp)
 			}
 			free(c);
 		} else if ((m = outputtomon(outs[i])) && o->connection == XCB_RANDR_CONNECTION_DISCONNECTED) {
-			DBG("updateoutputs: output is inactive or disconnected: %s -- freeing", m->name)
+			DBG("updateoutputs: output is inactive or disconnected: %s -- freeing", m->name);
 			freemon(m);
 			changed = 1;
 		}
@@ -3000,9 +3028,7 @@ int updateoutputs(xcb_randr_output_t *outs, int len, xcb_timestamp_t timestamp)
 	}
 
 	po = xcb_randr_get_output_primary_reply(con, xcb_randr_get_output_primary(con, root), NULL);
-	if (po && (primary = outputtomon(po->output)))
-		xcb_warp_pointer(con, root, root, 0, 0, 0, 0,
-				primary->x + (primary->w / 2), primary->y + (primary->h / 2));
+	primary = outputtomon(po->output);
 	free(po);
 	return changed;
 }
@@ -3016,7 +3042,7 @@ int updaterandr(void)
 	xcb_randr_get_screen_resources_current_reply_t *r;
 	xcb_randr_get_screen_resources_current_cookie_t rc;
 
-	DBG("updaterandr: querying current randr outputs")
+	DBG("updaterandr: querying current randr outputs");
 	rc = xcb_randr_get_screen_resources_current(con, root);
 	if (!(r = xcb_randr_get_screen_resources_current_reply(con, rc, &e))) {
 		checkerror(0, "unable to get screen resources", e);
@@ -3053,9 +3079,9 @@ xcb_get_window_attributes_reply_t *winattr(xcb_window_t win)
 	xcb_get_window_attributes_reply_t *wa;
 
 	c = xcb_get_window_attributes(con, win);
-	DBG("winattr: getting window attributes from window: 0x%08x", win)
+	DBG("winattr: getting window attributes from window: 0x%08x", win);
 	if (!(wa = xcb_get_window_attributes_reply(con, c, &e)))
-		checkerror(0, "unable to get window attributes", e);
+		checkerror(0, "unable to get window attributes reply", e);
 	return wa;
 }
 
@@ -3066,9 +3092,9 @@ xcb_get_geometry_reply_t *wingeom(xcb_window_t win)
 	xcb_get_geometry_reply_t *g = NULL;
 
 	gc = xcb_get_geometry(con, win);
-	DBG("wingeom: getting window geometry from window: 0x%08x", win)
+	DBG("wingeom: getting window geometry from window: 0x%08x", win);
 	if (!(g = xcb_get_geometry_reply(con, gc, &e)))
-		checkerror(0, "failed to get window geometry reply", e);
+		checkerror(0, "unable to get window geometry reply", e);
 
 	return g;
 }
@@ -3080,6 +3106,7 @@ void winhints(Client *c)
 	xcb_get_property_cookie_t pc;
 
 	pc = xcb_icccm_get_wm_hints(con, c->win);
+	DBG("winhints: getting window wm hints from window: 0x%08x", c->win);
 	if (xcb_icccm_get_wm_hints_reply(con, pc, &wmh, &e)) {
 		if (c == selws->sel && wmh.flags & XCB_ICCCM_WM_HINT_X_URGENCY) {
 			wmh.flags &= ~XCB_ICCCM_WM_HINT_X_URGENCY;
@@ -3089,7 +3116,7 @@ void winhints(Client *c)
 		}
 		c->nofocus = (wmh.flags & XCB_ICCCM_WM_HINT_INPUT) ? !wmh.input : 0;
 	} else {
-		checkerror(0, "unable to get wm window hints", e);
+		checkerror(0, "unable to get window wm hints reply", e);
 	}
 }
 
@@ -3101,11 +3128,12 @@ xcb_atom_t winprop(xcb_window_t win, xcb_atom_t prop)
 	xcb_get_property_reply_t *r = NULL;
 
 	c = xcb_get_property(con, 0, win, prop, XCB_ATOM_ANY, 0, 1);
+	DBG("winprop: getting window property atom from window: 0x%08x", win);
 	ret = -1;
 	if ((r = xcb_get_property_reply(con, c, &e)) && xcb_get_property_value_length(r))
 		ret = *(xcb_atom_t *)xcb_get_property_value(r);
 	else
-		checkerror(0, "unable to get window property", e);
+		checkerror(0, "unable to get window property reply", e);
 	free(r);
 	return ret;
 }
@@ -3117,8 +3145,9 @@ int wintextprop(xcb_window_t w, xcb_atom_t atom, char *text, size_t size)
 	xcb_icccm_get_text_property_reply_t r;
 
 	c = xcb_icccm_get_text_property(con, w, atom);
+	DBG("wintextprop: getting window text property from window: 0x%08x", w);
 	if (!xcb_icccm_get_text_property_reply(con, c, &r, &e)) {
-		checkerror(0, "failed to get text property", e);
+		checkerror(0, "unable to get text property reply", e);
 		return 0;
 	}
 	if(!r.name || !r.name_len)
@@ -3176,12 +3205,10 @@ xcb_window_t wintrans(xcb_window_t win)
 	xcb_generic_error_t *e = NULL;
 
 	pc = xcb_icccm_get_wm_transient_for(con, win);
+	DBG("wintrans: getting transient for hint from window: 0x%08x", win);
 	t = XCB_WINDOW_NONE;
-	if (!xcb_icccm_get_wm_transient_for_reply(con, pc, &t, &e) && e) {
-		warnx("unable to get wm transient for hint - X11 error: %d: %s",
-				e->error_code, xcb_event_get_error_label(e->error_code));
-		free(e);
-	}
+	if (!xcb_icccm_get_wm_transient_for_reply(con, pc, &t, &e))
+		checkerror(0, "unable to get wm transient for hint", e);
 	return t;
 }
 

@@ -16,8 +16,8 @@ logfile="$HOME/.yaxcmd.log"
 	# per workspace settings (loop to apply to each workspace)
 	# ----------------------------------------------------------
 	# save active workspace number
-	ws=$(yaxcmd ws print)
-	for i in seq 0 9; do
+	selws=$(yaxcmd ws print | awk '/\*/ {print $1}')
+	for i in $(yaxcmd ws print | awk '{print $1}'); do
 		# set the active workspace for commands
 		yaxcmd ws "$i"
 		# set the layout on the active workspace
@@ -28,11 +28,13 @@ logfile="$HOME/.yaxcmd.log"
 		yaxcmd set stack absolute 3
 		# set gap width on the active workspace to an absolute value in pixels
 		yaxcmd set gap absolute 0
-		# set split ratio between master and stack on the active workspace
+		# set split ratio between master and stack(s)
 		yaxcmd set split absolute 0.55
+		# # set split ratio between first and second stack
+		yaxcmd set split stack absolute 0.55
 	done
 	# restore active workspace
-	yaxcmd ws "$ws"
+	yaxcmd ws "$selws"
 
 	# ----------------------------------------------------------
 	# global settings and rules
@@ -62,8 +64,8 @@ logfile="$HOME/.yaxcmd.log"
 	# or by-name
 	yaxcmd rule win class="^chromium$" mon="HDMI-A-0"
 	# open window(s) and use a pre-defined callback function
-	yaxcmd rule win class="^mpv$" instance="^gl$" callback=mpvart floating
-	# open window(s) with a specific geometry and/or coordinates
+	yaxcmd rule win class="^mpv$" instance="^gl$" floating callback=mpvart
+	# open window(s) with a specific geometry and coordinates
 	yaxcmd rule win class="^google-chrome$" title="^open[[:space:]]files$" w=1280 h=720 floating
 	# open window(s) in a floating state
 	yaxcmd rule win class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" floating

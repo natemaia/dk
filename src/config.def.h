@@ -42,7 +42,6 @@ static Keyword wincmds[] = {
 	{ "float",    cmdfloat    },
 	{ "focus",    cmdfocus    },
 	{ "kill",     cmdkill     },
-	{ "mvstack",  cmdmvstack  },
 	{ "mvresize", cmdmvresize },
 	{ "stick",    cmdstick    },
 	{ "swap",     cmdswap     },
@@ -64,10 +63,10 @@ static Command wscommands[] = {
 
 /* "layout" names used by cmdlayout() to parse arguments */
 static Layout layouts[] = {
-	/* name,     function (NULL is floating) */
-	{ "tile",     tile    },
-	{ "monocle",  monocle },
-	{ "none",     NULL    },
+	/* name,   function */
+	{ "tile",  tile },
+	{ "mono",  mono },
+	{ "none",  NULL },
 };
 
 /* ------------------------------------------------- */
@@ -77,16 +76,16 @@ static Layout layouts[] = {
 static WorkspaceRule workspacerules[] = {
 	/* workspace default settings and how many to allocate if more are
 	 * allocated later the values from the first rule will be used
-	 * format: name, master, stack, gap, split, layout */
-	{ "0", 1, 3, 0, 0.5, &layouts[0] },
-	{ "1", 1, 3, 0, 0.5, &layouts[0] },
-	{ "2", 1, 3, 0, 0.5, &layouts[0] },
-	{ "3", 1, 3, 0, 0.5, &layouts[0] },
-	{ "4", 1, 3, 0, 0.5, &layouts[0] },
-	{ "5", 1, 3, 0, 0.5, &layouts[0] },
-	{ "6", 1, 3, 0, 0.5, &layouts[0] },
-	{ "7", 1, 3, 0, 0.5, &layouts[0] },
-	{ "8", 1, 3, 0, 0.5, &layouts[0] },
-	{ "9", 1, 3, 0, 0.5, &layouts[0] },
+	 * format: name, master, stack, gap, split, ssplit, layout */
+	{ "0", 1, 3, 0, 0.5, 0.5, &layouts[0], NULL },
+	{ "1", 1, 3, 0, 0.5, 0.5, &layouts[0], NULL },
+	{ "2", 1, 3, 0, 0.5, 0.5, &layouts[0], NULL },
+	{ "3", 1, 3, 0, 0.5, 0.5, &layouts[0], NULL },
+	{ "4", 1, 3, 0, 0.5, 0.5, &layouts[0], NULL },
+	{ "5", 1, 3, 0, 0.5, 0.5, &layouts[0], NULL },
+	{ "6", 1, 3, 0, 0.5, 0.5, &layouts[0], NULL },
+	{ "7", 1, 3, 0, 0.5, 0.5, &layouts[0], NULL },
+	{ "8", 1, 3, 0, 0.5, 0.5, &layouts[0], NULL },
+	{ "9", 1, 3, 0, 0.5, 0.5, &layouts[0], NULL },
 };
 

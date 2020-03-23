@@ -1,13 +1,13 @@
 # launcher
-super + p
+alt + p
     dmenu_run
 
 # terminal
-super + shift + Return
+alt + shift + Return
     st
 
 # screenshot
-{_,super + }@Print
+{_,alt + }@Print
     scrot {_,-s}
 
 # dedicated volume keys
@@ -19,11 +19,11 @@ super + shift + Return
     xbacklight {+10,-10}
 
 # alt volume keys
-super + {Insert,Delete}
+alt + {Insert,Delete}
     pamixer {-i,-d} 2
 
 # reload sxhkd
-super + shift + x
+alt + shift + x
     pkill -USR1 -x sxhkd
 
 
@@ -32,57 +32,56 @@ super + shift + x
 #********************#
 
 # quit yaxwm
-super + shift + q
+alt + shift + q
     yaxcmd wm exit
 
-# reload yaxwmrc or fully restart yaxwm (fork exec)
-super + {_,ctrl + }shift + r
+# reload yaxwmrc or fully restart yaxwm
+alt + {_,ctrl + }shift + r
     pkill sxhkd && yaxcmd wm {reload,restart}
 
+# kill active window
+alt + {q,s}
+    yaxcmd win {kill,stick}
+
+# change focus
+alt + {j,k}
+    yaxcmd win focus {next,prev}
+
+# toggle floating state
+alt + shift + space
+    yaxcmd win float
+
+# toggle sticky state
+alt + s
+    yaxcmd win stick
+
+# move window
+alt + shift + {h,j,k,l}
+    yaxcmd win mvresize {x=-10,y=10,y=-10,x=10}
+
+# resize window
+alt + ctrl + shift + {h,j,k,l}
+    yaxcmd win mvresize {w=-10,h=10,h=-10,w=10}
+
+# swap window in or out of master
+alt + Tab
+    yaxcmd win swap
+
+# view, send, or follow to workspace
+alt + {_,shift + ,ctrl + }{1-9,0}
+    yaxcmd ws {_,send,follow} {0-8,9}
+
 # change layout
-super + {t,m,f}
+alt + {t,m,f}
     yaxcmd set layout {tile,monocle,none}
 
-# change master area size
-super + {h,l}
-    yaxcmd set split {-0.01,+0.01}
-
 # change number of windows in master or first stack
-super + {_,shift + }{i,d}
+alt + {_,shift + }{i,d}
     yaxcmd set {master,stack} {+1,-1}
 
 # change gap or border size
-super + {_,ctrl + }{equal,minus}
+alt + {_,ctrl + }{equal,minus}
     yaxcmd set {gap,border width} {+2,-2}
-super + {_,ctrl + }shift + equal
+alt + {_,ctrl + }shift + equal
     yaxcmd set {gap,border width} reset
 
-# kill active window
-super + {q,s}
-    yaxcmd win {kill,stick}
-
-# swap window in or out of master
-super + {_,shift + }Tab
-    yaxcmd win swap
-
-# focus or move up/down
-super + {_,shift + }{j,k}
-    yaxcmd win {focus,mvstack} {next,prev}
-
-# view, send, or follow to the given workspace
-super + {_,shift + ,ctrl + }{1-9,0}
-    yaxcmd ws {_,send,follow} {0-8,9}
-
-# toggle window floating state
-super + shift + space
-    yaxcmd win float
-super + button2
-    yaxcmd win float
-
-# move floating window
-super + alt + shift + {h,j,k,l}
-    yaxcmd win mvresize {w=-10,h=10,h=-10,w=10}
-
-# resize floating window
-super + alt + {h,j,k,l}
-    yaxcmd win mvresize {x=-10,y=10,y=-10,x=10}

@@ -1519,8 +1519,7 @@ void eventhandle(xcb_generic_event_t *ev)
 		DBG("eventhandle: BUTTON_PRESS -- client window");
 		focus(c);
 		restack(c->ws);
-		setstackmode(e->event, XCB_STACK_MODE_ABOVE);
-		xcb_allow_events(con, XCB_ALLOW_SYNC_POINTER, e->time);
+		xcb_allow_events(con, XCB_ALLOW_REPLAY_POINTER, e->time);
 		if (CLNMOD(e->state) == CLNMOD(mousemod))
 			if (e->detail == mousemove || e->detail == mouseresize)
 				mousemvr(e->detail == mousemove);
@@ -2546,15 +2545,14 @@ void mousemvr(int move)
 	if (!(c = selws->sel) || c->fullscreen || !querypointer(&mx, &my))
 		return;
 	ox = nx = c->x, oy = ny = c->y, ow = nw = c->w, oh = nh = c->h;
-	if (c != c->ws->sel)
-		focus(c);
-	restack(c->ws);
 	if (!grabpointer(cursor[move ? Move : Resize]))
 		return;
 	while (running && !released) {
-		if (!(ev = xcb_poll_for_event(con)))
+		if (!(ev = xcb_poll_for_event(con))) {
+			querypointer(&x, &y);
 			while (!(ev = xcb_wait_for_event(con)))
 				xcb_flush(con);
+		}
 		switch (XCB_EVENT_RESPONSE_TYPE(ev)) {
 		case XCB_MOTION_NOTIFY:
 			e = (xcb_motion_notify_event_t *)ev;
@@ -3030,7 +3028,13 @@ int tileresize(Client *c, Client *prev, Workspace *ws, int x, int y, int w, int 
 	DBG("tileresize: entering -- win: 0x%08x -- %d,%d @ %dx%d -- newy: %d, nremain: %d, left; %d",
 			c->win, x, y, w, h, *newy, nremain, left);
 
-	if (nremain > 1 && (nremain - 1) * minh > left) {
+	if (!c->hoff && h < minh) {
+		c->floating = 1;
+		w = m->ww / 6, h = m->ww / 6;
+		x = (m->wx + m->ww - w) / 2;
+		y = (m->wy + m->wh - h) / 2;
+		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+	} else if (nremain > 1 && (nremain - 1) * minh > left) {
 		h += left - ((nremain - 1) * minh);
 		ret = -1;
 	} else if (nremain == 1 && *newy + h != (uint)m->wh) {
@@ -3059,7 +3063,8 @@ int tileresize(Client *c, Client *prev, Workspace *ws, int x, int y, int w, int 
 	}
 
 	resize(c, x, y, w, h - (2 * bw), bw);
-	*newy += h + gap;
+	if (!c->floating)
+		*newy += h + gap;
 
 	return ret;
 }

@@ -10,7 +10,7 @@ DOCPREFIX ?= ${PREFIX}/share/doc
 
 # compiler and linker flags
 CPPFLAGS += -DVERSION=\"${VERSION}\"
-CFLAGS   += -pedantic -Wall -Wextra
+CFLAGS   += -O2 -pedantic -Wall -Wextra
 LDFLAGS  ?=
 LDLIBS    = -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
 

@@ -545,7 +545,7 @@ Callback *applywinrule(Client *c)
 	Monitor *m;
 	WindowRule *r;
 	Callback *cb = NULL;
-	int ws, n, num = -1;
+	int n, num = -1, ws = selws->num;
 	char title[NAME_MAX];
 	xcb_generic_error_t *e;
 	xcb_get_property_cookie_t pc;
@@ -2606,7 +2606,7 @@ int optparse(char **argv, char **opts, int *argi, float *argf, int hex)
 {
 	float f;
 	char **s = opts;
-	int i, ret = -1;
+	int i = INT_MAX, ret = -1;
 
 	DBG("optparse: entering");
 	if (!argv || !*argv)

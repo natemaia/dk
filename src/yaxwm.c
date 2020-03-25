@@ -464,7 +464,7 @@ void adjmstack(int i, int opt, int master)
 		selws->nmaster = n;
 	else if (!master && (n = MAX(selws->nstack + i, 0)) != selws->nstack)
 		selws->nstack = n;
-	if (n != INT_MAX)
+	if (n != INT_MAX && selws->clients)
 		layoutws(selws);
 }
 
@@ -852,7 +852,8 @@ void cmdlayout(char **argv)
 			if (!strcmp(layouts[i].name, *argv)) {
 				if (&layouts[i] != selws->layout) {
 					selws->layout = &layouts[i];
-					layoutws(selws);
+					if (selws->sel)
+						layoutws(selws);
 				}
 				return;
 			}
@@ -1116,7 +1117,7 @@ void cmdsplit(char **argv)
 	if ((nf = f < 1.0 ? f + *sf : f - 1.0) < 0.1 || nf > 0.9)
 		return;
 	*sf = nf;
-	if (selws->clients)
+	if (selws->sel)
 		layoutws(selws);
 }
 
@@ -1496,14 +1497,17 @@ void eventhandle(xcb_generic_event_t *ev)
 	{
 		xcb_enter_notify_event_t *e = (xcb_enter_notify_event_t *)ev;
 
-		if (e->mode != XCB_NOTIFY_MODE_NORMAL || e->detail == XCB_NOTIFY_DETAIL_INFERIOR)
+		if ((e->mode != XCB_NOTIFY_MODE_NORMAL || e->detail == XCB_NOTIFY_DETAIL_INFERIOR) && e->event != root)
 			return;
 		DBG("eventhandle: ENTER_NOTIFY");
-		if ((ws = (c = wintoclient(e->event)) ? c->ws : wintows(e->event)) != selws) {
+		c = wintoclient(e->event);
+		ws = c ? c->ws : wintows(e->event);
+		if (ws != selws) {
 			unfocus(selws->sel, 1);
 			changews(ws, 1);
-		} else if (focusmouse && c && c != selws->sel)
-			focus(c);
+		} else if (!focusmouse || !c || c == selws->sel)
+			return;
+		focus(c);
 		return;
 	}
 	case XCB_BUTTON_PRESS:
@@ -1595,10 +1599,8 @@ void eventhandle(xcb_generic_event_t *ev)
 						unfocus(c, 1);
 						focus(NULL);
 					}
-					ws = c->ws;
 					setclientws(c, d[0]);
-					if (d[0] == (uint)itows(d[0])->mon->ws->num || ws == ws->mon->ws)
-						layoutws(NULL);
+					layoutws(NULL);
 				}
 			} else if (e->type == netatom[State] && (d[1] == fs || d[2] == fs)) {
 				DBG("CLIENT_MESSAGE %s -- window: 0x%08x - data: %d", netatoms[Fullscreen],
@@ -1630,9 +1632,8 @@ void eventhandle(xcb_generic_event_t *ev)
 			switch (e->atom) {
 				case XCB_ATOM_WM_TRANSIENT_FOR:
 					DBG("eventhandle: PROPERTY_NOTIFY - WM_TRANSIENT_FOR");
-					if (c->floating || (trans = wintrans(c->win)) == XCB_NONE)
-						return;
-					if ((c->floating = ((c->trans = wintoclient(trans)) != NULL) || c->fixed))
+					if (!c->floating && (trans = wintrans(c->win))
+							&& (c->floating = (c->trans = wintoclient(trans)) != NULL))
 						layoutws(c->ws);
 					break;
 				case XCB_ATOM_WM_NORMAL_HINTS:
@@ -1807,8 +1808,6 @@ void fixupworkspaces(void)
 void focus(Client *c)
 {
 	DBG("focus: entering");
-	if (!selws)
-		return;
 	if (!c || c->ws != c->ws->mon->ws)
 		c = selws->stack;
 	if (selws->sel && selws->sel != c)
@@ -1830,10 +1829,10 @@ void focus(Client *c)
 
 void freeclient(Client *c, int destroyed)
 {
+	Workspace *ws;
+
 	if (!c)
 		return;
-	Workspace *ws, *cws = c->ws;
-
 	DBG("freeclient: entering -- freeing %sdestroyed window: 0x%08x", destroyed ? "" : "non-", c->win);
 	detach(c, 0);
 	detachstack(c);
@@ -1848,12 +1847,12 @@ void freeclient(Client *c, int destroyed)
 	if (running)
 		xcb_delete_property(con, c->win, netatom[WmDesktop]);
 	free(c);
+	focus(NULL);
 	DBG("freeclient: updating _NET_CLIENT_LIST");
 	xcb_delete_property(con, root, netatom[ClientList]);
 	FOR_CLIENTS(c, ws)
 		PROP_APPEND(root, netatom[ClientList], XCB_ATOM_WINDOW, 32, 1, &c->win);
-	layoutws(cws);
-	focus(NULL);
+	layoutws(NULL);
 }
 
 void freewinrule(WindowRule *r)
@@ -1925,10 +1924,10 @@ void freewm(void)
 	xcb_key_symbols_free(keysyms);
 	while (panels)
 		freepanel(panels, 0);
-	while (monitors)
-		freemon(monitors);
 	while (workspaces)
 		freews(workspaces);
+	while (monitors)
+		freemon(monitors);
 	while (winrules)
 		freewinrule(winrules);
 	for (i = 0; i < LEN(cursors); i++)
@@ -1947,7 +1946,6 @@ void freewm(void)
 		char *const arg[] = { argv0, "-s", fdstr, NULL };
 		execvp(arg[0], arg);
 	}
-
 	close(sockfd);
 	unlink(sock);
 }
@@ -2933,7 +2931,6 @@ void showhide(Client *c)
 {
 	Client *sel;
 
-	DBG("showhide: entering");
 	if (!c)
 		return;
 	if (c->ws == c->ws->mon->ws) {
@@ -2945,7 +2942,7 @@ void showhide(Client *c)
 		showhide(c->snext);
 		if (!c->sticky)
 			MOVE(c->win, W(c) * -2, c->y);
-		else if (c->ws != selws && selws && c->ws->mon == selws->mon) {
+		else if (selws && c->ws != selws && c->ws->mon == selws->mon) {
 			sel = lastws->sel == c ? c : selws->sel;
 			setclientws(c, selws->num);
 			focus(sel);

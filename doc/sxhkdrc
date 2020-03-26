@@ -75,6 +75,11 @@ alt + {_,shift + ,ctrl + }{1-9,0}
 alt + {t,m,f}
     yaxcmd set layout {tile,monocle,none}
 
+# make a pseudo layout by toggling padding with a bit of shell help
+alt + shift + p
+	yaxcmd set pad print | awk 'BEGIN\{ i = 0 \} \{ if ($2 != 0) i++ \} END\{ if (i) exit 1 \}' \
+		&& yaxcmd set pad l=400 r=200 t=200 b=400 || yaxcmd set pad l=0 r=0 t=0 b=0
+
 # change number of windows in master or first stack
 alt + {_,shift + }{i,d}
     yaxcmd set {master,stack} {+1,-1}

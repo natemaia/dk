@@ -12,11 +12,12 @@ logfile="$HOME/.yaxcmd.log"
 # window manager configuration run as a compound command to
 # redirect all output to the log file without redirecting each command
 {
-	# ----------------------------------------------------------
-	# per workspace settings (loop to apply to each workspace)
-	# ----------------------------------------------------------
+	# workspace settings
+	# ------------------------
 	# save active workspace number
 	selws=$(yaxcmd ws print | awk '/\*/ {print $1}')
+	last=$(yaxcmd ws print | awk 'BEGIN{ s="" }; { s=$1 }; END{ print s }')
+
 	for i in $(yaxcmd ws print | awk '{print $1}'); do
 		# set the active workspace for commands
 		yaxcmd ws "$i"
@@ -32,13 +33,13 @@ logfile="$HOME/.yaxcmd.log"
 		yaxcmd set split absolute 0.55
 		# # set split ratio between first and second stack
 		yaxcmd set split stack absolute 0.55
+		# set the last 2 workspaces to use a 200px padding
+		if [ "$i" -eq "$last" ] || [ "$i" -eq $(( last - 1 )) ]; then
+			yaxcmd set pad l=400 r=400 t=200 b=200
+		fi
 	done
 	# restore active workspace
 	yaxcmd ws "$selws"
-
-	# ----------------------------------------------------------
-	# global settings and rules
-	# ----------------------------------------------------------
 
 	# mouse window control
 	# ---------------------
@@ -46,7 +47,7 @@ logfile="$HOME/.yaxcmd.log"
 	yaxcmd set mouse  mod alt  move button1  resize button3
 
 	# borders
-	# ---------------------
+	# ---------
 	# disable borders in monocle layout and tile layout with one window
 	yaxcmd set border smart 1
 	# set border width in pixels to an absolute value
@@ -56,19 +57,22 @@ logfile="$HOME/.yaxcmd.log"
 	yaxcmd set border colour unfocus '#000000'
 
 	# window rules
-	# ---------------------
+	# --------------
 	# open window(s) on a specific workspace (and monitor it's assigned to)
-	yaxcmd rule win class="^gimp$" ws=2
+	yaxcmd rule class="^gimp$" ws=2
 	# open window(s) on a specific monitor by-number (and active workspace on it)
-	yaxcmd rule win class="^firefox$" mon=0
-	# or by-name
-	yaxcmd rule win class="^chromium$" mon="HDMI-A-0"
+	yaxcmd rule class="^firefox$" mon=0
+	# or by monitor name
+	yaxcmd rule class="^chromium$" mon="HDMI-A-0"
 	# open window(s) and use a pre-defined callback function
-	yaxcmd rule win class="^mpv$" instance="^gl$" floating callback=mpvart
+	yaxcmd rule class="^mpv$" instance="^gl$" floating callback=mpvart
 	# open window(s) with a specific geometry and coordinates
-	yaxcmd rule win class="^google-chrome$" title="^open[[:space:]]files$" w=1280 h=720 floating
+	yaxcmd rule class="^google-chrome$" title="^open[[:space:]]files$" w=1280 h=720 floating
 	# open window(s) in a floating state
-	yaxcmd rule win class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" floating
+	yaxcmd rule class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" floating
+
+	# delete a previously created rule
+	yaxcmd rule delete class="^chromium$" mon="HDMI-A-0"
 
 } >> "$logfile" 2>&1 # append responses
 

@@ -748,6 +748,24 @@ void cmdborder(char **argv)
 	}
 }
 
+void cmdffs(char **argv)
+{
+	Client *c;
+	Monitor *m;
+
+	if (!(c = selws->sel) || !(m = c->ws->mon))
+		return;
+	if ((c->ffs = !c->ffs) && c->fullscreen) {
+		c->bw = c->old_bw;
+		layoutws(c->ws);
+	} else if (c->fullscreen) {
+		c->bw = 0;
+		resize(c, m->x, m->y, m->w, m->h, c->bw);
+		layoutws(c->ws);
+	}
+	(void)(argv);
+}
+
 void cmdfloat(char **argv)
 {
 	Client *c;
@@ -1032,18 +1050,17 @@ void cmdpad(char **argv)
 		return;
 	}
 	while (*argv && i < 4) {
-		arg = 0;
 		n = strtol(*argv, NULL, 0);
-		if (n || !strcmp("0", *argv) || (arg = !strcmp("l", *argv))) {
+		if ((arg = !strcmp("l", *argv)) || n || !strcmp("0", *argv)) {
 			argv++;
 			pad[0] = arg ? strtol(*argv, NULL, 0) : n;
-		} else if (n || !strcmp("0", *argv) || (arg = !strcmp("r", *argv))) {
+		} else if ((arg = !strcmp("r", *argv)) || n || !strcmp("0", *argv)) {
 			argv++;
 			pad[1] = arg ? strtol(*argv, NULL, 0) : n;
-		} else if (n || !strcmp("0", *argv) || (arg = !strcmp("t", *argv))) {
+		} else if ((arg = !strcmp("t", *argv)) || n || !strcmp("0", *argv)) {
 			argv++;
 			pad[2] = arg ? strtol(*argv, NULL, 0) : n;
-		} else if (n || !strcmp("0", *argv) || (arg = !strcmp("b", *argv))) {
+		} else if ((arg = !strcmp("b", *argv)) || n || !strcmp("0", *argv)) {
 			argv++;
 			pad[3] = arg ? strtol(*argv, NULL, 0) : n;
 		} else
@@ -1056,24 +1073,6 @@ void cmdpad(char **argv)
 	selws->padt = pad[2] >= 0 ? pad[2] : 0;
 	selws->padb = pad[3] >= 0 ? pad[3] : 0;
 	layoutws(selws);
-}
-
-void cmdffs(char **argv)
-{
-	Client *c;
-	Monitor *m;
-
-	if (!(c = selws->sel) || !(m = c->ws->mon))
-		return;
-	if ((c->ffs = !c->ffs) && c->fullscreen) {
-		c->bw = c->old_bw;
-		layoutws(c->ws);
-	} else if (c->fullscreen) {
-		c->bw = 0;
-		resize(c, m->x, m->y, m->w, m->h, c->bw);
-		layoutws(c->ws);
-	}
-	(void)(argv);
 }
 
 void cmdparse(char *buf)
@@ -1105,6 +1104,31 @@ void cmdparse(char *buf)
 	free(dbuf);
 	fflush(cmdresp);
 	fclose(cmdresp);
+
+	/* uint i, n = 0, matched = 0; */
+	/* char *s, dbuf[BUFSIZ], k[BUFSIZ], tok[BUFSIZ], args[10][BUFSIZ]; */
+
+	/* DBG("cmdparse: entering"); */
+	/* strlcpy(dbuf, buf, sizeof(dbuf)); */
+	/* s = dbuf; */
+	/* if (strqetok(&s, k, sizeof(k))) { */
+	/* 	for (i = 0; i < LEN(keywords); i++) */
+	/* 		if ((matched = !strcmp(keywords[i].name, k))) { */
+	/* 			while (n < LEN(args) && s && *s && strqetok(&s, tok, sizeof(tok))) { */
+	/* 				strlcpy(args[n], tok, sizeof(args[n])); */
+	/* 				DBG("cmdparse: %s keyword: args[%d] = %s", k, n, args[n]); */
+	/* 				n++; */
+	/* 			} */
+	/* 			args[n][0] = '\0'; */
+	/* 			if (n) */
+	/* 				keywords[i].func((char **)args); */
+	/* 			else */
+	/* 				fprintf(cmdresp, "!keyword requires additional arguments: %s", k); */
+	/* 			break; */
+	/* 		} */
+	/* 	if (!matched) */
+	/* 		fprintf(cmdresp, "!invalid or unknown command keyword: %s", k); */
+	/* } */
 }
 
 void cmdrule(char **argv)
@@ -1383,18 +1407,22 @@ void clientcfgreq(Client *c, xcb_configure_request_event_t *e)
 	else if (c->floating || !c->ws->layout->fn) {
 		m = c->ws->mon;
 		if (e->value_mask & XCB_CONFIG_WINDOW_X) {
+			DBG("clientcfgreq: XCB_CONFIG_WINDOW_X: %d -> %d", c->x, m->x + e->x - c->bw);
 			c->old_x = c->x;
 			c->x = m->x + e->x - c->bw;
 		}
 		if (e->value_mask & XCB_CONFIG_WINDOW_Y) {
+			DBG("clientcfgreq: XCB_CONFIG_WINDOW_Y: %d -> %d", c->y, m->y + e->y - c->bw);
 			c->old_y = c->y;
 			c->y = m->y + e->y - c->bw;
 		}
 		if (e->value_mask & XCB_CONFIG_WINDOW_WIDTH) {
+			DBG("clientcfgreq: XCB_CONFIG_WINDOW_WIDTH: %d -> %d", c->w, e->width);
 			c->old_w = c->w;
 			c->w = e->width;
 		}
 		if (e->value_mask & XCB_CONFIG_WINDOW_HEIGHT) {
+			DBG("clientcfgreq: XCB_CONFIG_WINDOW_HEIGHT: %d -> %d", c->h, e->height);
 			c->old_h = c->h;
 			c->h = e->height;
 		}
@@ -1404,8 +1432,10 @@ void clientcfgreq(Client *c, xcb_configure_request_event_t *e)
 			c->y = m->wy + (m->wh / 2 - H(c) / 2);
 		if ((e->value_mask & XYMASK) && !(e->value_mask & WHMASK))
 			sendconfigure(c);
-		if (c->ws == c->ws->mon->ws)
+		if (c->ws == c->ws->mon->ws || (c->sticky && c->ws->mon == selws->mon))
 			xcb_configure_window(con, c->win, XYMASK|WHMASK, (uint []){c->x, c->y, c->w, c->h});
+		if (c->floating)
+			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	} else {
 		sendconfigure(c);
 	}

@@ -40,6 +40,7 @@ static Keyword setcmds[] = {
 /* "win" keyword options, used by cmdwin() to parse arguments
  * Keyword functions have the following prototype: void function(char **); */
 static Keyword wincmds[] = {
+	{ "fakefs",   cmdffs      },
 	{ "float",    cmdfloat    },
 	{ "focus",    cmdfocus    },
 	{ "kill",     cmdkill     },

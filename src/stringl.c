@@ -16,6 +16,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <ctype.h>
 #include <string.h>
 #include <sys/types.h>
 
@@ -59,4 +60,39 @@ size_t strlcpy(char *dst, const char *src, size_t size)
 		while (*src++);
 	}
 	return src - osrc - 1;
+}
+
+int strqetok(char **src, char *dst, size_t size)
+{
+	size_t n = 0;
+    int q, sq = 0;
+    char *s, *head, *tail;
+
+    while (**src && (isspace(**src) || **src == '='))
+		(*src)++;
+
+    if ((q = **src == '"' || (sq = **src == '\''))) {
+        head = *src + 1;
+        if (!(tail = strchr(head, sq ? '\'' : '"')))
+			return 0;
+		if (!sq)
+			while (*(tail - 1) == '\\')
+				tail = strchr(tail + 1, '"');
+    } else {
+        head = *src;
+        tail = strpbrk(*src, " =\t\n");
+    }
+
+    s = head;
+    while (n + 1 < size && tail ? s < tail : *s)
+        if (q && !sq && *s == '\\' && *(s + 1) == '"')
+            s++;
+        else {
+            n++;
+            *dst++ = *s++;
+        }
+    *dst = '\0';
+	*src = tail ? ++tail : '\0';
+
+    return n || q;
 }

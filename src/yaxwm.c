@@ -1042,7 +1042,7 @@ void cmdnstack(char **argv)
 void cmdpad(char **argv)
 {
 	int i = 0, n, arg;
-	int pad[4] = { 0, 0, 0, 0 };
+	int pad[4] = { -1, -1, -1, -1 };
 
 	if (!strcmp("print", *argv)) {
 		fprintf(cmdresp, "l %d\nr %d\nt %d\nb %d",
@@ -1068,67 +1068,42 @@ void cmdpad(char **argv)
 		argv++;
 		i++;
 	}
-	selws->padl = pad[0] >= 0 ? pad[0] : 0;
-	selws->padr = pad[1] >= 0 ? pad[1] : 0;
-	selws->padt = pad[2] >= 0 ? pad[2] : 0;
-	selws->padb = pad[3] >= 0 ? pad[3] : 0;
+	selws->padl = pad[0] >= 0 ? (uint)pad[0] : selws->padl;
+	selws->padr = pad[1] >= 0 ? (uint)pad[1] : selws->padr;
+	selws->padt = pad[2] >= 0 ? (uint)pad[2] : selws->padt;
+	selws->padb = pad[3] >= 0 ? (uint)pad[3] : selws->padb;
 	layoutws(selws);
 }
 
 void cmdparse(char *buf)
 {
-	char *k, *args[10], *dbuf, *saveptr;
 	uint i, n = 0, matched = 0;
+	char *s, *argv[15], dbuf[BUFSIZ], k[BUFSIZ], tok[BUFSIZ], args[15][BUFSIZ];
 
 	DBG("cmdparse: entering");
-	dbuf = strdup(buf);
-	if ((k = strtok_r(dbuf, " \t\n\r", &saveptr))) {
+	strlcpy(dbuf, buf, sizeof(dbuf));
+	s = dbuf;
+	if (strqetok(&s, k, sizeof(k))) {
 		for (i = 0; i < LEN(keywords); i++)
-			if (!strcmp(keywords[i].name, k)) {
-				matched = 1;
-				while (n < sizeof(args)) {
-					if (!(args[n] = strtok_r(NULL, " =\"\t\n\r", &saveptr)))
-						break;
-					DBG("cmdparse: %s args[%d] = %s", k, n, args[n]);
+			if ((matched = !strcmp(keywords[i].name, k))) {
+				while (n + 1 < LEN(args) && s && *s && strqetok(&s, tok, sizeof(tok))) {
+					strlcpy(args[n], tok, sizeof(args[n]));
+					argv[n] = args[n];
+					DBG("cmdparse: %s keyword: argv[%d] = %s", k, n, argv[n]);
 					n++;
 				}
-				if (*args)
-					keywords[i].func((char **)args);
+				argv[n] = NULL;
+				if (*argv)
+					keywords[i].func(argv);
 				else
 					fprintf(cmdresp, "!keyword requires additional arguments: %s", k);
 				break;
 			}
 		if (!matched)
-			fprintf(cmdresp, "!invalid command for keyword: %s", k);
+			fprintf(cmdresp, "!invalid or unknown command keyword: %s", k);
 	}
-	free(dbuf);
 	fflush(cmdresp);
 	fclose(cmdresp);
-
-	/* uint i, n = 0, matched = 0; */
-	/* char *s, dbuf[BUFSIZ], k[BUFSIZ], tok[BUFSIZ], args[10][BUFSIZ]; */
-
-	/* DBG("cmdparse: entering"); */
-	/* strlcpy(dbuf, buf, sizeof(dbuf)); */
-	/* s = dbuf; */
-	/* if (strqetok(&s, k, sizeof(k))) { */
-	/* 	for (i = 0; i < LEN(keywords); i++) */
-	/* 		if ((matched = !strcmp(keywords[i].name, k))) { */
-	/* 			while (n < LEN(args) && s && *s && strqetok(&s, tok, sizeof(tok))) { */
-	/* 				strlcpy(args[n], tok, sizeof(args[n])); */
-	/* 				DBG("cmdparse: %s keyword: args[%d] = %s", k, n, args[n]); */
-	/* 				n++; */
-	/* 			} */
-	/* 			args[n][0] = '\0'; */
-	/* 			if (n) */
-	/* 				keywords[i].func((char **)args); */
-	/* 			else */
-	/* 				fprintf(cmdresp, "!keyword requires additional arguments: %s", k); */
-	/* 			break; */
-	/* 		} */
-	/* 	if (!matched) */
-	/* 		fprintf(cmdresp, "!invalid or unknown command keyword: %s", k); */
-	/* } */
 }
 
 void cmdrule(char **argv)
@@ -3204,7 +3179,7 @@ int tile(Workspace *ws)
 		ss = 1, ssw = ww - mw - sw;
 
 	DBG("tile: m->ww: %d - mw: %d - sw: %d - ssw: %d", m->ww, mw, sw, ssw);
-	for (my = sy = ssy = ws->padt + gap, c = nextt(ws->clients); c; c = nextt(c->next), ++i) {
+	for (my = sy = ssy = gap, c = nextt(ws->clients); c; c = nextt(c->next), ++i) {
 		if (i < ws->nmaster) {
 			nr = MIN(n, ws->nmaster) - i;
 			h = ((wh - my) / MAX(1, nr)) - gap + c->hoff;

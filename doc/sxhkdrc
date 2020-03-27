@@ -67,6 +67,10 @@ alt + ctrl + shift + {h,j,k,l}
 alt + Tab
     yaxcmd win swap
 
+# toggle fake fullscreen. allows move, resize, tiling, etc.
+alt + F11
+    yaxcmd win fakefs
+
 # view, send, or follow to workspace
 alt + {_,shift + ,ctrl + }{1-9,0}
     yaxcmd ws {_,send,follow} {0-8,9}

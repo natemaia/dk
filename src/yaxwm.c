@@ -122,7 +122,7 @@ struct Client {
 	int max_w, max_h, min_w, min_h;
 	int base_w, base_h, increment_w, increment_h;
 	float min_aspect, max_aspect;
-	int sticky, fixed, floating, fullscreen, urgent, nofocus, oldstate;
+	int sticky, fixed, floating, fullscreen, ffs, urgent, nofocus, oldstate;
 	Client *trans, *next, *snext;
 	Workspace *ws;
 	xcb_window_t win;
@@ -192,6 +192,7 @@ struct WorkspaceRule {
 static Callback *applyrule(Client *c);
 static int checkerror(int lvl, char *msg, xcb_generic_error_t *e);
 static void cmdborder(char **argv);
+static void cmdffs(char **argv);
 static void cmdfloat(char **argv);
 static void cmdfocus(char **argv);
 static void cmdfollow(int num);
@@ -401,7 +402,6 @@ int main(int argc, char *argv[])
 	int sigs[] = { SIGTERM, SIGINT, SIGHUP, SIGCHLD };
 	uint mask = XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT;
 
-	DBG("main: entering");
 	if (argc > 1) {
 		if (!strcmp(argv[1], "-s") && argv[2]) {
 			sockfd = strtol(argv[2], &end, 0);
@@ -444,19 +444,19 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
-int adjbdorgap(int i, int opt, int changing, int other)
+int adjbordergap(int i, int opt, int changing, int other)
 {
-	DBG("adjbdorgap: entering");
+	DBG("adjbordergap: entering");
 	if (opt == stdabsolute)
 		return MAX(MIN(i, (selws->mon->wh / 6) - other), 0) - changing;
 	return i;
 }
 
-void adjmstack(int i, int opt, int master)
+void adjnmasterstack(int i, int opt, int master)
 {
 	uint n = INT_MAX;
 
-	DBG("adjmstack: entering");
+	DBG("adjnmasterstack: entering");
 	if (i == INT_MAX)
 		return;
 	if (opt != -1)
@@ -598,7 +598,8 @@ Callback *applyrule(Client *c)
 		checkerror(0, "failed to get window class", e);
 	}
 	setclientws(c, c->trans ? c->trans->ws->num : ws);
-	DBG("applyrule: done -- workspace: %d, monitor: %s, floating: %d, sticky: %d, x: %d, y: %d, w: %d, h: %d",
+	DBG("applyrule: done -- workspace: %d, monitor: %s, "
+			"floating: %d, sticky: %d, x: %d, y: %d, w: %d, h: %d",
 			c->ws->num, c->ws->mon->name, c->floating, c->sticky, c->x, c->y, c->w, c->h);
 
 	return cb;
@@ -735,7 +736,7 @@ void cmdborder(char **argv)
 			return;
 		else if (opt == stdreset)
 			i = dborder[Width];
-		else if ((n = adjbdorgap(i, opt, border[Width], selws->gappx)) != INT_MAX)
+		else if ((n = adjbordergap(i, opt, border[Width], selws->gappx)) != INT_MAX)
 			i = MAX(MIN((int)((selws->mon->wh / 6) - selws->gappx), border[Width] + n), 0);
 		if (i != border[Width]) {
 			FOR_CLIENTS(c, ws)
@@ -752,7 +753,7 @@ void cmdfloat(char **argv)
 	Client *c;
 
 	DBG("cmdfloat: entering");
-	if (!(c = selws->sel) || c->fullscreen)
+	if (!(c = selws->sel) || (c->fullscreen && !c->ffs))
 		return;
 	if ((c->floating = !c->floating || c->fixed)) {
 		c->w = c->old_w, c->h = c->old_h;
@@ -773,7 +774,7 @@ void cmdfocus(char **argv)
 	char *opts[] = { "next", "prev", NULL };
 
 	DBG("cmdfocus: entering");
-	if (!selws->sel || selws->sel->fullscreen)
+	if (!selws->sel || (selws->sel->fullscreen && !selws->sel->ffs))
 		return;
 	opt = optparse(argv, opts, &i, NULL, 0);
 	if (opt < 0 && i == INT_MAX) {
@@ -817,7 +818,7 @@ void cmdgappx(char **argv)
 		return;
 	else if (opt == stdreset)
 		ng = workspacerules[selws->num].gappx;
-	else if ((n = adjbdorgap(i, opt, selws->gappx, border[Width])) != INT_MAX)
+	else if ((n = adjbordergap(i, opt, selws->gappx, border[Width])) != INT_MAX)
 		ng = MAX(MIN((int)selws->gappx + n, (selws->mon->wh / 6) - border[Width]), 0);
 	if (ng != selws->gappx) {
 		selws->gappx = ng;
@@ -913,7 +914,8 @@ void cmdmvresize(char **argv)
 	int i = 0, n, arg, absolute, ohoff, x = 0, y = 0, w = 0, h = 0;
 
 	DBG("cmdmvresize: entering");
-	if (!(c = selws->sel) || c->fullscreen || (!c->floating && c->ws->layout->fn != tile))
+	if (!(c = selws->sel) || (c->fullscreen && !c->ffs)
+			|| (!c->floating && c->ws->layout->fn != tile))
 		return;
 	if ((absolute = !strcmp(*argv, "absolute"))) {
 		w = c->w, h = c->h, x = c->x, y = c->y;
@@ -942,10 +944,11 @@ void cmdmvresize(char **argv)
 		}
 
 		if (absolute)
-			resize(c, x, y, MIN(c->ws->mon->ww, MAX(100, w)), MIN(c->ws->mon->wh, MAX(100, h)), c->bw);
+			resize(c, x, y, MIN(c->ws->mon->ww, MAX(100, w)),
+					MIN(c->ws->mon->wh, MAX(100, h)), c->bw);
 		else
-			resize(c, c->x + x, c->y + y, MIN(c->ws->mon->ww, MAX(100, c->w + w)), MIN(c->ws->mon->wh,
-						MAX(100, c->h + h)), c->bw);
+			resize(c, c->x + x, c->y + y, MIN(c->ws->mon->ww, MAX(100, c->w + w)),
+					MIN(c->ws->mon->wh, MAX(100, c->h + h)), c->bw);
 		confinetomon(c);
 	} else {
 		if (!strcmp(*argv, "y")) {
@@ -963,9 +966,13 @@ void cmdmvresize(char **argv)
 					if (t == c) {
 						sf = (selws->nmaster && j < selws->nmaster + selws->nstack) ? &c->ws->split
 							: &c->ws->ssplit;
-						f = absolute ? w / c->ws->mon->ww : ((c->ws->mon->ww * *sf) + w) / c->ws->mon->ww;
+						if (absolute)
+							f = w / c->ws->mon->ww;
+						else
+							f = ((c->ws->mon->ww * *sf) + w) / c->ws->mon->ww;
 						if (f < 0.1 || f > 0.9) {
-							fprintf(cmdresp, "!width adjustment for tiled window exceeded limit: %f", c->ws->mon->ww * f);
+							fprintf(cmdresp, "!width adjustment for window exceeded limit: %f",
+									c->ws->mon->ww * f);
 							return;
 						}
 						*sf = f;
@@ -982,7 +989,7 @@ void cmdmvresize(char **argv)
 				c->hoff = absolute ? h : c->hoff + h;
 				DBG("cmdmvresize: new height offset: %d", c->hoff);
 				if (layoutws(selws) == -1) {
-					fprintf(cmdresp, "!height adjustment for tiled window exceeded limit: %d", c->hoff);
+					fprintf(cmdresp, "!height adjustment for window exceeded limit: %d", c->hoff);
 					c->hoff = ohoff;
 				}
 			} else
@@ -1002,7 +1009,7 @@ void cmdnmaster(char **argv)
 
 	DBG("cmdnmaster: entering");
 	opt = optparse(argv, minopts, &i, NULL, 0);
-	adjmstack(i, opt, 1);
+	adjnmasterstack(i, opt, 1);
 }
 
 void cmdnstack(char **argv)
@@ -1011,7 +1018,7 @@ void cmdnstack(char **argv)
 
 	DBG("cmdnstack: entering");
 	opt = optparse(argv, minopts, &i, NULL, 0);
-	adjmstack(i, opt, 0);
+	adjnmasterstack(i, opt, 0);
 }
 
 void cmdpad(char **argv)
@@ -1020,7 +1027,8 @@ void cmdpad(char **argv)
 	int pad[4] = { 0, 0, 0, 0 };
 
 	if (!strcmp("print", *argv)) {
-		fprintf(cmdresp, "l %d\nr %d\nt %d\nb %d", selws->padl, selws->padr, selws->padt, selws->padb);
+		fprintf(cmdresp, "l %d\nr %d\nt %d\nb %d",
+				selws->padl, selws->padr, selws->padt, selws->padb);
 		return;
 	}
 	while (*argv && i < 4) {
@@ -1048,6 +1056,24 @@ void cmdpad(char **argv)
 	selws->padt = pad[2] >= 0 ? pad[2] : 0;
 	selws->padb = pad[3] >= 0 ? pad[3] : 0;
 	layoutws(selws);
+}
+
+void cmdffs(char **argv)
+{
+	Client *c;
+	Monitor *m;
+
+	if (!(c = selws->sel) || !(m = c->ws->mon))
+		return;
+	if ((c->ffs = !c->ffs) && c->fullscreen) {
+		c->bw = c->old_bw;
+		layoutws(c->ws);
+	} else if (c->fullscreen) {
+		c->bw = 0;
+		resize(c, m->x, m->y, m->w, m->h, c->bw);
+		layoutws(c->ws);
+	}
+	(void)(argv);
 }
 
 void cmdparse(char *buf)
@@ -1248,7 +1274,7 @@ void cmdstick(char **argv)
 	Client *c;
 
 	DBG("cmdstick: entering");
-	if (!(c = selws->sel) || c->fullscreen)
+	if (!(c = selws->sel) || (c->fullscreen && !c->ffs))
 		return;
 	setsticky(c, !c->sticky);
 	(void)(argv);
@@ -1525,7 +1551,8 @@ void eventhandle(xcb_generic_event_t *ev)
 	{
 		xcb_enter_notify_event_t *e = (xcb_enter_notify_event_t *)ev;
 
-		if ((e->mode != XCB_NOTIFY_MODE_NORMAL || e->detail == XCB_NOTIFY_DETAIL_INFERIOR) && e->event != root)
+		if ((e->mode != XCB_NOTIFY_MODE_NORMAL || e->detail == XCB_NOTIFY_DETAIL_INFERIOR)
+				&& e->event != root)
 			return;
 		DBG("eventhandle: ENTER_NOTIFY");
 		c = wintoclient(e->event);
@@ -1822,7 +1849,7 @@ void fixupworkspaces(void)
 	DBG("fixupworkspaces: entering");
 	assignworkspaces();
 	FOR_CLIENTS(c, ws)
-		if (c->fullscreen)
+		if (c->fullscreen && (!c->ffs || (c->w == ws->mon->w && c->h == ws->mon->h)))
 			resize(c, ws->mon->x, ws->mon->y, ws->mon->w, ws->mon->h, c->bw);
 	if (panels)
 		FOR_EACH(p, panels)
@@ -1860,7 +1887,8 @@ void freeclient(Client *c, int destroyed)
 
 	if (!c)
 		return;
-	DBG("freeclient: entering -- freeing %sdestroyed window: 0x%08x", destroyed ? "" : "non-", c->win);
+	DBG("freeclient: entering -- freeing %sdestroyed window: 0x%08x",
+			destroyed ? "" : "non-", c->win);
 	detach(c, 0);
 	detachstack(c);
 	if (!destroyed) {
@@ -2277,11 +2305,15 @@ int initrulereg(WindowRule *r, WindowRule *wr)
 		regerror(i, &(r->classreg), buf, sizeof(buf));
 		e = "class";
 		goto error;
-	} else if (r->inst && (i = regcomp(&(r->instreg), r->inst, REG_NOSUB | REG_EXTENDED | REG_ICASE))) {
+	} else if (r->inst
+			&& (i = regcomp(&(r->instreg), r->inst, REG_NOSUB | REG_EXTENDED | REG_ICASE)))
+	{
 		regerror(i, &(r->instreg), buf, sizeof(buf));
 		e = "instance";
 		goto error;
-	} else if (r->title && (i = regcomp(&(r->titlereg), r->title, REG_NOSUB | REG_EXTENDED | REG_ICASE))) {
+	} else if (r->title
+			&& (i = regcomp(&(r->titlereg), r->title, REG_NOSUB | REG_EXTENDED | REG_ICASE)))
+	{
 		regerror(i, &(r->titlereg), buf, sizeof(buf));
 		e = "title";
 		goto error;
@@ -2518,15 +2550,15 @@ int mono(Workspace *ws)
 
 void movefocus(int direction)
 {
-	Client *c, *sel = selws->sel;
+	Client *c;
 
 	DBG("movefocus: entering");
-	if (!sel || sel->fullscreen)
+	if (!selws->sel || (selws->sel->fullscreen && !selws->sel->ffs))
 		return;
 	if (direction > 0)
-		c = sel->next ? sel->next : selws->clients;
+		c = selws->sel->next ? selws->sel->next : selws->clients;
 	else
-		FIND_PREV(c, sel, selws->clients);
+		FIND_PREV(c, selws->sel, selws->clients);
 	if (c) {
 		focus(c);
 		restack(c->ws);
@@ -2575,7 +2607,7 @@ void mousemvr(int move)
 	int mx, my, ox, oy, ow, oh, nw, nh, nx, ny, x, y, released = 0;
 
 	DBG("mousemvr: entering");
-	if (!(c = selws->sel) || c->fullscreen || !querypointer(&mx, &my))
+	if (!(c = selws->sel) || (c->fullscreen && !c->ffs) || !querypointer(&mx, &my))
 		return;
 	ox = nx = c->x, oy = ny = c->y, ow = nw = c->w, oh = nh = c->h;
 	if (!grabpointer(cursor[move ? Move : Resize]))
@@ -2599,7 +2631,9 @@ void mousemvr(int move)
 				nx = ox + (x - mx), ny = oy + (y - my);
 			else
 				nw = ow + (x - mx), nh = oh + (y - my);
-			if ((nw != c->w || nh != c->h || nx != c->x || ny != c->y) && !c->floating && selws->layout->fn) {
+			if ((nw != c->w || nh != c->h || nx != c->x || ny != c->y)
+					&& !c->floating && selws->layout->fn)
+			{
 				c->old_x = c->x, c->old_y = c->y, c->old_h = c->h, c->old_w = c->w;
 				cmdfloat(NULL);
 				layoutws(c->ws);
@@ -2966,7 +3000,8 @@ void showhide(Client *c)
 		return;
 	if (c->ws == c->ws->mon->ws) {
 		MOVE(c->win, c->x, c->y);
-		if ((!c->ws->layout->fn || c->floating) && !c->fullscreen)
+		if ((!c->ws->layout->fn || c->floating)
+				&& (!c->fullscreen || (c->ffs && c->w != c->ws->mon->w && c->h != c->ws->mon->h)))
 			resize(c, c->x, c->y, c->w, c->h, c->bw);
 		showhide(c->snext);
 	} else {
@@ -3111,32 +3146,35 @@ int tile(Workspace *ws)
 	int h, w, ret = 1;
 	Monitor *m = ws->mon;
 	Client *c, *prev = NULL;
-	uint i, n, my, ssy, sy, nr, gap = 0;
+	uint i = 0, n, nr, my, sy, ssy, gap = 0;
 	uint mw = 0, ss = 0, sw = 0, ssw = 0, ns = 1, bw = 0;
 	uint wx = m->wx + ws->padl;
 	uint wy = m->wy + ws->padt;
 	uint ww = m->ww - ws->padl - ws->padr;
 	uint wh = m->wh - ws->padt - ws->padb;
 
-	DBG("tile: entering");
 	for (n = 0, c = nextt(ws->clients); c; c = nextt(c->next), n++)
 		;
 	if (!n)
 		return 1;
 	if (n > 1 || !border[Smart])
 		bw = border[Width], gap = ws->gappx;
+
 	if (n <= ws->nmaster)
 		mw = ww, ss = 1;
 	else if (ws->nmaster)
 		ns = 2, mw = ww * ws->split;
+
 	if (n - ws->nmaster <= ws->nstack)
 		sw = ww - mw;
 	else
 		sw = (ww - mw) * ws->ssplit;
+
 	if (ws->nstack && n - ws->nmaster > ws->nstack)
 		ss = 1, ssw = ww - mw - sw;
+
 	DBG("tile: m->ww: %d - mw: %d - sw: %d - ssw: %d", m->ww, mw, sw, ssw);
-	for (i = 0, my = sy = ssy = ws->padt + gap, c = nextt(ws->clients); c; c = nextt(c->next), ++i) {
+	for (my = sy = ssy = ws->padt + gap, c = nextt(ws->clients); c; c = nextt(c->next), ++i) {
 		if (i < ws->nmaster) {
 			nr = MIN(n, ws->nmaster) - i;
 			h = ((wh - my) / MAX(1, nr)) - gap + c->hoff;
@@ -3275,7 +3313,9 @@ int updateoutputs(xcb_randr_output_t *outs, int len, xcb_timestamp_t timestamp)
 				changed = 1;
 			}
 			free(c);
-		} else if ((m = outputtomon(outs[i])) && o->connection == XCB_RANDR_CONNECTION_DISCONNECTED) {
+		} else if ((m = outputtomon(outs[i]))
+				&& o->connection == XCB_RANDR_CONNECTION_DISCONNECTED)
+		{
 			DBG("updateoutputs: output is inactive or disconnected: %s -- freeing", m->name);
 			freemon(m);
 			changed = 1;

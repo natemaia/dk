@@ -70,15 +70,15 @@ static WorkspaceRule workspacerules[] = {
 	/* workspace default settings and how many to allocate if more are
 	 * allocated later the values from the first rule will be use
 	 * name, master, stack, gap, split, ssplit, padr, padl, padt, padb,  layout,     next */
-	{ "0",     1,      3,    0,   0.5,   0.5,    0,    0,    0,    0,   &layouts[0], NULL },
-	{ "1",     1,      3,    0,   0.5,   0.5,    0,    0,    0,    0,   &layouts[0], NULL },
-	{ "2",     1,      3,    0,   0.5,   0.5,    0,    0,    0,    0,   &layouts[0], NULL },
-	{ "3",     1,      3,    0,   0.5,   0.5,    0,    0,    0,    0,   &layouts[0], NULL },
-	{ "4",     1,      3,    0,   0.5,   0.5,    0,    0,    0,    0,   &layouts[0], NULL },
-	{ "5",     1,      3,    0,   0.5,   0.5,    0,    0,    0,    0,   &layouts[0], NULL },
-	{ "6",     1,      3,    0,   0.5,   0.5,    0,    0,    0,    0,   &layouts[0], NULL },
-	{ "7",     1,      3,    0,   0.5,   0.5,    0,    0,    0,    0,   &layouts[0], NULL },
-	{ "8",     1,      3,    0,   0.5,   0.5,    0,    0,    0,    0,   &layouts[0], NULL },
-	{ "9",     1,      3,    0,   0.5,   0.5,    0,    0,    0,    0,   &layouts[0], NULL },
+	{ "0",     1,      3,    0,  0.55,   0.55,   0,    0,    0,    0,   &layouts[0], NULL },
+	{ "1",     1,      3,    0,  0.55,   0.55,   0,    0,    0,    0,   &layouts[0], NULL },
+	{ "2",     1,      3,    0,  0.55,   0.55,   0,    0,    0,    0,   &layouts[0], NULL },
+	{ "3",     1,      3,    0,  0.55,   0.55,   0,    0,    0,    0,   &layouts[0], NULL },
+	{ "4",     1,      3,    0,  0.55,   0.55,   0,    0,    0,    0,   &layouts[0], NULL },
+	{ "5",     1,      3,    0,  0.55,   0.55,   0,    0,    0,    0,   &layouts[0], NULL },
+	{ "6",     1,      3,    0,  0.55,   0.55,   0,    0,    0,    0,   &layouts[0], NULL },
+	{ "7",     1,      3,    0,  0.55,   0.55,   0,    0,    0,    0,   &layouts[0], NULL },
+	{ "8",     1,      3,    0,  0.55,   0.55,   0,    0,    0,    0,   &layouts[0], NULL },
+	{ "9",     1,      3,    0,  0.55,   0.55,   0,    0,    0,    0,   &layouts[0], NULL },
 };
 

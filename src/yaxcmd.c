@@ -15,9 +15,9 @@
 int main(int argc, char *argv[])
 {
 	ssize_t s;
-	int i, fd, r = 0;
+	int i, fd, r = 0, offs = 1;
 	size_t j = 0, n = 0;
-	char *sock, buf[BUFSIZ], resp[BUFSIZ];
+	char *sock, *eq = NULL, *sp = NULL, buf[BUFSIZ], resp[BUFSIZ];
 	struct sockaddr_un addr;
 	struct pollfd fds[] = {
 		{ -1,            POLLIN,  0 },
@@ -41,9 +41,21 @@ int main(int argc, char *argv[])
 	if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0)
 		err(1, "unable to connect to socket: %s", sock);
 
-	for (i = 1; n + 1 < sizeof(buf) && i < argc; i++) {
-		for (j = 0; n + 1 < sizeof(buf) && argv[i][j]; j++)
-			buf[n++] = argv[i][j];	
+	for (i = 1, j = 0, offs = 1; n + 1 < sizeof(buf) && i < argc; i++, j = 0, offs = 1) {
+		if ((sp = strchr(argv[i], ' ')) || (sp = strchr(argv[i], '\t'))) {
+			if (!(eq = strchr(argv[i], '=')) || sp < eq) /* no equal found or equal is part of the quoted string */
+				buf[n++] = '"';
+			offs++;
+		}
+		while (n + offs < sizeof(buf) && argv[i][j]) {
+			buf[n++] = argv[i][j++];
+			if (eq && sp > eq && buf[n - 1] == '=') {
+				buf[n++] = '"';
+				eq = NULL;
+			}
+		}
+		if (offs > 1)
+			buf[n++] = '"';
 		buf[n++] = ' ';
 	}
 	buf[n - 1] = '\0';

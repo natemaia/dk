@@ -447,9 +447,9 @@ int main(int argc, char *argv[])
 int adjbordergap(int i, int opt, int changing, int other)
 {
 	DBG("adjbordergap: entering");
-	if (opt == stdabsolute)
-		return MAX(MIN(i, (selws->mon->wh / 6) - other), 0) - changing;
-	return i;
+	if (opt != stdabsolute)
+		return i;
+	return MAX(MIN(i, (int)(selws->mon->wh - selws->padb - selws->padt / 6) - other), 0) - changing;
 }
 
 void adjnmasterstack(int i, int opt, int master)
@@ -3113,10 +3113,11 @@ int tileresize(Client *c, Client *prev, uint wx, uint wy, uint ww, uint wh,
 		y = MAX(wy + wh - h, (wy + offset + wh - h) / 4);
 		offset += (x < (wx + offset + ww - w) && y < (wy + offset + wh - h)) ? 20 : offset * -1;
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-	} else if (nremain > 1 && (nremain - 1) * minh > left) {
-		h += left - ((nremain - 1) * minh);
+	} else if (nremain > 1 && (nremain - 1) * (minh + gap) > left) {
+		h += left - ((nremain - 1) * (minh + gap));
 		ret = -1;
-	} else if (nremain == 1 && *newy + h != wh) {
+	} else if (nremain == 1 && *newy + (h - gap) != wh) {
+		DBG("tileresize: last client in stack but not using space")
 		if (prev) {
 			if (prev->h + left < minh) {
 				ret = -1;
@@ -3133,14 +3134,14 @@ int tileresize(Client *c, Client *prev, uint wx, uint wy, uint ww, uint wh,
 				y += left;
 			}
 		} else {
-			h = wh - gap;
+			h = wh;
 			ret = -1;
 		}
 	} else if (h < minh) {
 		ret = -1;
 		h = minh;
 	}
-	resize(c, x, y, w, h - (2 * bw), bw);
+	resize(c, x, y, w - (2 * bw), h - (2 * bw), bw);
 	if (!c->floating)
 		*newy += h + gap;
 	return ret;
@@ -3183,26 +3184,28 @@ int tile(Workspace *ws)
 		if (i < ws->nmaster) {
 			nr = MIN(n, ws->nmaster) - i;
 			h = ((wh - my) / MAX(1, nr)) - gap + c->hoff;
-			w = (mw - gap * (5 - ns) / 2) - (2 * bw);
-			if (tileresize(c, prev, wx, wy, ww, wh, wx + gap, wy + my,
-						w, h, bw, gap, &my, nr, wh - (my + h)) < 0)
+			w = mw - gap * (5 - ns) / 2;
+			if (tileresize(c, prev, wx + gap, wy + gap, ww - (2 * gap), wh - (2 * gap),
+						wx + gap, wy + my, w, h, bw, gap, &my, nr, wh - (my + h + gap)) < 0)
 				ret = -1;
 		} else if (i - ws->nmaster < ws->nstack) {
 			nr = MIN(n - ws->nmaster, ws->nstack) - (i - ws->nmaster);
 			h = ((wh - sy) / MAX(1, nr)) - gap + c->hoff;
-			w = (sw - gap * (5 - ns - ss) / 2) - (2 * bw);
-			if (ws->nmaster == 0 || i != ws->nmaster)
+			w = sw - gap * (5 - ns - ss) / 2;
+			if (ws->nmaster > 0 && i == ws->nmaster)
 				prev = NULL;
-			if (tileresize(c, prev, wx, wy, ww, wh, wx + mw + gap, wy + sy,
-						w, h, bw, gap, &sy, nr, wh - (sy + h)) < 0)
+			if (tileresize(c, prev, wx + gap, wy + gap, ww - (2 * gap), wh - (2 * gap),
+						wx + mw + (gap / ns), wy + sy, w, h, bw,
+						gap, &sy, nr, wh - (sy + h + gap)) < 0)
 				ret = -1;
 		} else {
 			h = ((wh - ssy) / MAX(1, n - i)) - gap + c->hoff;
-			w = (ssw - gap * (5 - ns) / 2) - (2 * bw);
-			if (ws->nstack + ws->nmaster == 0 || i != ws->nmaster + ws->nstack)
+			w = ssw - gap * (5 - ns) / 2;
+			if (ws->nstack + ws->nmaster > 0 && i == ws->nmaster + ws->nstack)
 				prev = NULL;
-			if (tileresize(c, prev, wx, wy, ww, wh, wx + mw + sw + (gap / ns), wy + ssy,
-						w, h, bw, gap, &ssy, n - i, wh - (ssy + h)) < 0)
+			if (tileresize(c, prev, wx + gap, wy + gap, ww - (2 * gap), wh - (2 * gap),
+						wx + mw + sw + (gap / ns), wy + ssy, w, h, bw,
+						gap, &ssy, n - i, wh - (ssy + h + gap)) < 0)
 				ret = -1;
 		}
 		prev = c;

@@ -71,9 +71,6 @@ logfile="$HOME/.yaxcmd.log"
 	# open window(s) in a floating state
 	yaxcmd rule class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" floating
 
-	# delete a previously created rule
-	yaxcmd rule delete class="^chromium$" mon="HDMI-A-0"
-
 } >> "$logfile" 2>&1 # append responses
 
 # errors encountered in logfile

@@ -192,6 +192,7 @@ struct WorkspaceRule {
 static Callback *applyrule(Client *c);
 static int checkerror(int lvl, char *msg, xcb_generic_error_t *e);
 static void cmdborder(char **argv);
+static void cmdcycle(char **argv);
 static void cmdffs(char **argv);
 static void cmdfloat(char **argv);
 static void cmdfocus(char **argv);
@@ -230,7 +231,7 @@ static void freewm(void);
 static void freews(Workspace *ws);
 static void grabbuttons(Client *c, int focused);
 static void gravitate(Client *c, int vert, int horz, int matchgap);
-static void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *g);
+static void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *g, xcb_atom_t type);
 static void initpanel(xcb_window_t win, xcb_get_geometry_reply_t *g);
 static int initrulereg(WindowRule *r, WindowRule *wr);
 static void initrule(WindowRule *r);
@@ -306,6 +307,7 @@ enum NetAtoms {
 	Check,
 	ClientList,
 	CurDesktop,
+	Desktop,
 	DesktopNames,
 	Dialog,
 	Dock,
@@ -328,6 +330,7 @@ static const char *netatoms[] = {
 	[DesktopNames] = "_NET_DESKTOP_NAMES",
 	[Dialog] = "_NET_WM_WINDOW_TYPE_DIALOG",
 	[Dock] = "_NET_WM_WINDOW_TYPE_DOCK",
+	[Desktop] = "_NET_WM_WINDOW_TYPE_DESKTOP",
 	[Fullscreen] = "_NET_WM_STATE_FULLSCREEN",
 	[Name] = "_NET_WM_NAME",
 	[NumDesktops] = "_NET_NUMBER_OF_DESKTOPS",
@@ -746,6 +749,21 @@ void cmdborder(char **argv)
 			layoutws(NULL);
 		}
 	}
+}
+
+void cmdcycle(char **argv)
+{
+	Client *c;
+
+	if (!(c = selws->sel) || c->floating || (c->fullscreen && !c->ffs))
+		return;
+	if (!c->ws->layout->fn || (c == nextt(selws->clients) && !nextt(c->next)))
+		return;
+	if (!(c = nextt(selws->sel->next)))
+		c = nextt(selws->clients);
+	movestack(-1);
+	focus(c);
+	(void)(argv);
 }
 
 void cmdffs(char **argv)
@@ -1284,7 +1302,7 @@ void cmdswap(char **argv)
 	Client *c;
 
 	DBG("cmdswap: entering");
-	if (!(c = selws->sel) || c->floating || !selws->layout->fn)
+	if (!(c = selws->sel) || (c->fullscreen && !c->ffs) || c->floating || !selws->layout->fn)
 		return;
 	if (c == nextt(selws->clients) && !(c = nextt(c->next)))
 		return;
@@ -1334,7 +1352,7 @@ void cmdws(char **argv)
 {
 	uint j;
 	Workspace *ws;
-	int i = INT_MAX, n;
+	int i = -1, n;
 	void (*fn)(int) = cmdview;
 
 	DBG("cmdws: entering");
@@ -1344,18 +1362,23 @@ void cmdws(char **argv)
 	}
 	if (!strcmp("print", *argv)) {
 		FOR_EACH(ws, workspaces)
-			fprintf(cmdresp, "%d%s%s", ws->num, ws == selws ? " *" : "", ws->next ? "\n" : "");	
+			fprintf(cmdresp, "%d%s%s", ws->num + 1, ws == selws ? " *" : "", ws->next ? "\n" : "");	
 		return;
 	}
 	while (*argv) {
-		if ((n = strtol(*argv, NULL, 0)) || !strcmp(*argv, "0"))
-			i = n;
-		else for (j = 0; j < LEN(wscommands); j++)
+		if ((n = strtol(*argv, NULL, 0))) {
+			if (n >= 1 && n <= numws)
+				i = n - 1;
+			else {
+				fprintf(cmdresp, "!workspace index out of range: %d", n);
+				return;
+			}
+		} else for (j = 0; j < LEN(wscommands); j++)
 			if (wscommands[j].fn && !strcmp(wscommands[j].name, *argv))
 				fn = wscommands[j].fn;
 		argv++;
 	}
-	if (i < (int)numws && i >= 0)
+	if (i >= 0)
 		fn(i);
 }
 
@@ -1607,19 +1630,15 @@ void eventhandle(xcb_generic_event_t *ev)
 		xcb_get_window_attributes_reply_t *wa;
 		xcb_map_request_event_t *e = (xcb_map_request_event_t *)ev;
 
+		if (!(g = wingeom(e->window)) || !(wa = winattr(e->window)))
+			return;
 		if ((c = wintoclient(e->window)) || (p = wintopanel(e->window)))
 			return;
 		DBG("eventhandle: MAP_REQUEST -- unmanaged window");
-		if (!(wa = winattr(e->window)) || !(g = wingeom(e->window)))
-			return;
 		if ((type = winprop(e->window, netatom[WindowType])) == netatom[Dock])
 			initpanel(e->window, g);
-		else if (!wa->override_redirect) {
-			if (type != netatom[Splash])
-				initclient(e->window, XCB_WINDOW_NONE, g);
-			else
-				xcb_map_window(con, e->window);
-		}
+		else if (!wa->override_redirect)
+			initclient(e->window, XCB_WINDOW_NONE, g, type);
 		free(wa);
 		free(g);
 		return;
@@ -2122,12 +2141,17 @@ void initatoms(xcb_atom_t *atoms, const char **names, int num)
 	}
 }
 
-void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *g)
+void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *g, xcb_atom_t type)
 {
-	Client *c;
+	Client *c = NULL;
 	Callback *cb = NULL;
 
 	DBG("initclient: entering");
+	if (type == netatom[Splash] || type == netatom[Desktop]) {
+		DBG("initclient: mapping %s window", type == netatom[Splash] ? "splash" : "desktop");
+		xcb_map_window(con, win);
+		return;
+	}
 	c = ecalloc(1, sizeof(Client));
 	c->win = win;
 	c->x = c->old_x = g->x, c->y = c->old_y = g->y;
@@ -2168,7 +2192,7 @@ void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *
 	} else {
 		MOVE(c->win, H(c) * -2, c->y);
 	}
-	xcb_map_window(con, c->win);
+	xcb_map_window(con, win);
 	focus(NULL);
 	if (cb)
 		cb->fn(c);
@@ -2367,19 +2391,21 @@ void initscan(void)
 				w[i] = XCB_WINDOW_NONE;
 			} else if (!(wa[i]->map_state == v || winprop(w[i], wmatom[WMState]) == ic)) {
 				w[i] = 0;
-			} else if (!wa[i]->override_redirect && !(t[i] = wintrans(w[i]))) {
-				if ((type = winprop(w[i], netatom[WindowType])) != netatom[Splash]) {
-					if (type == netatom[Dock])
-						initpanel(w[i], g[i]);
-					else
-						initclient(w[i], t[i], g[i]);
-				}
+			} else if (!(t[i] = wintrans(w[i]))) {
+				if ((type = winprop(w[i], netatom[WindowType])) == netatom[Dock])
+					initpanel(w[i], g[i]);
+				else if (!wa[i]->override_redirect)
+					initclient(w[i], t[i], g[i], type);
 				w[i] = 0;
 			}
 		}
 		for (i = 0; i < rt->children_len; i++) {
-			if (w[i] && t[i] && !wa[i]->override_redirect)
-				initclient(w[i], t[i], g[i]);
+			if (w[i] && t[i]) {
+				if ((type = winprop(w[i], netatom[WindowType])) == netatom[Dock])
+					initpanel(w[i], g[i]);
+				else if (!wa[i]->override_redirect)
+					initclient(w[i], t[i], g[i], type);
+			}
 			free(wa[i]);
 			free(g[i]);
 		}

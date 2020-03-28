@@ -35,24 +35,28 @@ alt + shift + x
 alt + shift + q
     yaxcmd wm exit
 
-# reload yaxwmrc or fully restart yaxwm
-alt + {_,ctrl + }shift + r
-    pkill sxhkd && yaxcmd wm {reload,restart}
+# reload yaxwmrc
+alt + shift + r
+    yaxcmd wm reload
 
-# kill active window
-alt + {q,s}
-    yaxcmd win {kill,stick}
+# restart yaxwm
+alt + ctrl + shift + r
+    yaxcmd wm restart
 
 # change focus
 alt + {j,k}
     yaxcmd win focus {next,prev}
+
+# close active window
+alt + q
+    yaxcmd win kill
 
 # toggle floating state
 alt + shift + space
     yaxcmd win float
 
 # toggle sticky state
-alt + s
+alt + shift + s
     yaxcmd win stick
 
 # move window
@@ -60,29 +64,33 @@ alt + shift + {h,j,k,l}
     yaxcmd win mvresize {x=-10,y=10,y=-10,x=10}
 
 # resize window
-alt + ctrl + shift + {h,j,k,l}
+alt + ctrl + {h,j,k,l}
     yaxcmd win mvresize {w=-10,h=10,h=-10,w=10}
 
 # swap window in or out of master
-alt + Tab
+alt + space
     yaxcmd win swap
 
-# toggle fake fullscreen. allows move, resize, tiling, etc.
-alt + F11
-    yaxcmd win fakefs
+# cycle tiled windows in place
+alt + Tab
+    yaxcmd win cycle
 
 # view, send, or follow to workspace
 alt + {_,shift + ,ctrl + }{1-9,0}
-    yaxcmd ws {_,send,follow} {0-8,9}
+    yaxcmd ws {_,send,follow} {1-9,10}
+
+# toggle window fake fullscreen. allows move, resize, tiling, etc.
+alt + F11
+    yaxcmd win fakefs
 
 # change layout
 alt + {t,m,f}
     yaxcmd set layout {tile,monocle,none}
 
-# make a pseudo layout by toggling padding with a bit of shell help
+# make a pseudo layout by toggling padding
 alt + shift + p
 	yaxcmd set pad print | awk 'BEGIN\{ i = 0 \} \{ if ($2 != 0) i++ \} END\{ if (i) exit 1 \}' \
-		&& yaxcmd set pad l=400 r=200 t=200 b=400 || yaxcmd set pad l=0 r=0 t=0 b=0
+		&& yaxcmd set pad l=400 r=400 t=200 b=200 || yaxcmd set pad l=0 r=0 t=0 b=0
 
 # change number of windows in master or first stack
 alt + {_,shift + }{i,d}
@@ -90,7 +98,7 @@ alt + {_,shift + }{i,d}
 
 # change gap or border size
 alt + {_,ctrl + }{equal,minus}
-    yaxcmd set {gap,border width} {+2,-2}
+    yaxcmd set {gap,border width} {+1,-1}
 alt + {_,ctrl + }shift + equal
     yaxcmd set {gap,border width} reset
 

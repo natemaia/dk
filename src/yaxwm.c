@@ -3016,7 +3016,7 @@ void showhide(Client *c)
 		MOVE(c->win, c->x, c->y);
 		if ((!c->ws->layout->fn || c->floating)
 				&& (!c->fullscreen || (c->ffs && c->w != c->ws->mon->w && c->h != c->ws->mon->h)))
-			resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0);
+			resize(c, c->x, c->y, c->w, c->h, c->bw);
 		showhide(c->snext);
 	} else {
 		showhide(c->snext);

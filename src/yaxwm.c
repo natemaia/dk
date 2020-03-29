@@ -372,7 +372,6 @@ static int focusmouse = 1;        /* enable focus follows mouse */
 static int randrbase = -1;        /* randr extension response */
 static uint numlockmask = 0;      /* numlock modifier bit mask */
 static int dborder[LEN(border)];  /* default border values used for resetting */
-static int wrpending = 1;         /* whether there is a new window rule pending */
 
 static xcb_mod_mask_t mousemod = XCB_MOD_MASK_4;
 static xcb_button_t   mousemove = XCB_BUTTON_INDEX_1;
@@ -402,6 +401,7 @@ int main(int argc, char *argv[])
 	argv0 = argv[0];
 	xcb_void_cookie_t ck;
 	struct sigaction sa;
+	static struct sockaddr_un sockaddr;
 	int sigs[] = { SIGTERM, SIGINT, SIGHUP, SIGCHLD };
 	uint mask = XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT;
 
@@ -441,6 +441,29 @@ int main(int argc, char *argv[])
 			err(1, "unable to setup handler for signal: %d", sigs[i]);
 
 	initwm();
+
+	if (sockfd == -1) {
+		if (!(sock = getenv("YAXWM_SOCK"))) {
+			sock = "/tmp/yaxwmsock";
+			if (setenv("YAXWM_SOCK", sock, 0) < 0)
+				err(1, "unable to export socket path to environment: %s", sock);
+		}
+		sockaddr.sun_family = AF_UNIX;
+		strlcpy(sockaddr.sun_path, sock, sizeof(sockaddr.sun_path));
+		if (sockaddr.sun_path[0] == '\0')
+			err(1, "unable to write socket path: %s", sock);
+		if ((sockfd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
+			err(1, "unable to create socket: %s", sock);
+		unlink(sock);
+		if (bind(sockfd, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) < 0)
+			err(1, "unable to bind socket: %s", sock);
+		if (listen(sockfd, SOMAXCONN) < 0)
+			err(1, "unable to listen to socket: %s", sock);
+	} else {
+		DBG("main: using existing socket file descriptor: %d", sockfd);
+	}
+
+	execcfg();
 	initscan();
 	eventloop();
 
@@ -1098,29 +1121,27 @@ void cmdpad(char **argv)
 void cmdparse(char *buf)
 {
 	uint i, n = 0, matched = 0;
-	char *s, *argv[15], dbuf[BUFSIZ], k[BUFSIZ], tok[BUFSIZ], args[15][BUFSIZ];
+	char *argv[15], k[BUFSIZ], tok[BUFSIZ], args[15][BUFSIZ];
 
-	DBG("cmdparse: entering");
-	strlcpy(dbuf, buf, sizeof(dbuf));
-	s = dbuf;
-	if (strqetok(&s, k, sizeof(k))) {
+	DBG("cmdparse: entering -- input buffer: %s", buf);
+	if (strqetok(&buf, k, sizeof(k))) {
 		for (i = 0; i < LEN(keywords); i++)
 			if ((matched = !strcmp(keywords[i].name, k))) {
-				while (n + 1 < LEN(args) && s && *s && strqetok(&s, tok, sizeof(tok))) {
+				while (n + 1 < LEN(args) && buf && *buf && strqetok(&buf, tok, sizeof(tok))) {
 					strlcpy(args[n], tok, sizeof(args[n]));
 					argv[n] = args[n];
-					DBG("cmdparse: %s keyword: argv[%d] = %s", k, n, argv[n]);
+					DBG("cmdparse: keyword: %s -- argv[%d]: %s", k, n, argv[n]);
 					n++;
 				}
 				argv[n] = NULL;
 				if (*argv)
 					keywords[i].func(argv);
 				else
-					fprintf(cmdresp, "!keyword requires additional arguments: %s", k);
+					fprintf(cmdresp, "!%s command requires additional arguments but none were given", k);
 				break;
 			}
 		if (!matched)
-			fprintf(cmdresp, "!invalid or unknown command keyword: %s", k);
+			fprintf(cmdresp, "!invalid or unknown command: %s", k);
 	}
 	fflush(cmdresp);
 	fclose(cmdresp);
@@ -1129,9 +1150,11 @@ void cmdparse(char *buf)
 void cmdrule(char **argv)
 {
 	uint ui;
-	int i, rem;
+	Client *c;
 	Workspace *ws;
 	WindowRule *wr, r;
+	Callback *cb = NULL;
+	int i, rem, matched = 0;
 
 	DBG("cmdrule: entering");
 	r.cb = NULL;
@@ -1147,6 +1170,7 @@ void cmdrule(char **argv)
 			return;
 		}
 	}
+
 	while (*argv) {
 		if (!r.class && !strcmp(*argv, "class")) {
 			argv++;
@@ -1222,15 +1246,18 @@ void cmdrule(char **argv)
 			wr->sticky = r.sticky;
 			wr->floating = r.floating;
 			wr->x = r.x, wr->y = r.y, wr->w = r.w, wr->h = r.h;
-			return;
+			matched = 1;
+			break;
 		}
-		if (rem) {
-			if (wr)
-				freerule(wr);
-			else
-				fprintf(cmdresp, "!no matching rule allocated");
-		} else
-			initrule(&r);
+		if (rem && wr) {
+			freerule(wr);
+		} else if (!rem) {
+			if (!matched)
+				initrule(&r);
+			FOR_CLIENTS(c, ws)
+				if ((cb = applyrule(c)))
+					cb->fn(c);
+		}
 	}
 }
 
@@ -1261,13 +1288,13 @@ void cmdset(char **argv)
 			setcmds[i].func(r);
 			return;
 		}
-	fprintf(cmdresp, "!invalid set keyword: %s", s);
+	fprintf(cmdresp, "!invalid argument for set command: %s", s);
 }
 
 void cmdsplit(char **argv)
 {
 	int opt;
-	float f, nf, *sf;
+	float f = 0.0, nf, *sf = &selws->split;
 
 	DBG("cmdsplit: entering");
 	if (!selws->layout->fn)
@@ -1275,9 +1302,8 @@ void cmdsplit(char **argv)
 	if (!strcmp("stack", *argv)) {
 		sf = &selws->ssplit;
 		argv++;
-	} else {
-		sf = &selws->split;
-	}
+	} else if (!strcmp("master", *argv))
+		argv++;
 	opt = optparse(argv, minopts, NULL, &f, 0);
 	if (f == 0.0 || (opt != -1 && (f > 0.9 || f < 0.1 || !(f -= *sf))))
 		return;
@@ -1320,34 +1346,28 @@ void cmdwin(char **argv)
 	char *s, **r;
 
 	DBG("cmdwin: entering");
-	if (!argv || !argv[0])
+	if (!(s = argv[0]))
 		return;
-	s = argv[0];
 	r = argv + 1;
 	for (i = 0; i < LEN(wincmds); i++)
 		if (!strcmp(wincmds[i].name, s)) {
 			wincmds[i].func(r);
 			return;
 		}
+	fprintf(cmdresp, "!invalid argument for win command: %s", s);
 }
 
 void cmdwm(char **argv)
 {
-	int opt;
-	enum { wmrld,  wmrst,  wmext };
-	char *opts[] = {
-		[wmrld] = "reload", [wmrst] = "restart", [wmext] = "exit", NULL
-	};
-
 	DBG("cmdwm: entering");
-	if ((opt = optparse(argv, opts, NULL, NULL, 0)) != -1) {
-		if (opt == wmrld)
-			execcfg();
-		else if (opt == wmrst || opt == wmext) {
-			running = 0;
-			restart = opt == wmrst;
-		}
-	}
+	if (!strcmp("exit", *argv))
+		running = 0;
+	else if (!strcmp("reload", *argv))
+		execcfg();
+	else if (!strcmp("restart", *argv))
+		running = 0, restart = 1;
+	else
+		fprintf(cmdresp, "!invalid argument for wm command: %s", *argv);
 }
 
 void cmdws(char **argv)
@@ -1361,8 +1381,7 @@ void cmdws(char **argv)
 	if (!argv || !*argv) {
 		fprintf(cmdresp, "!ws command requires additional arguments but none were given");
 		return;
-	}
-	if (!strcmp("print", *argv)) {
+	} else if (!strcmp("print", *argv)) {
 		FOR_EACH(ws, workspaces)
 			fprintf(cmdresp, "%d%s%s", ws->num + 1, ws == selws ? " *" : "", ws->next ? "\n" : "");
 		return;
@@ -1434,8 +1453,7 @@ void clientcfgreq(Client *c, xcb_configure_request_event_t *e)
 			sendconfigure(c);
 		if (c->ws == c->ws->mon->ws || (c->sticky && c->ws->mon == selws->mon))
 			xcb_configure_window(con, c->win, XYMASK|WHMASK, (uint []){c->x, c->y, c->w, c->h});
-		if (c->floating)
-			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	} else {
 		sendconfigure(c);
 	}
@@ -1767,41 +1785,13 @@ void eventignore(uint8_t type)
 
 void eventloop(void)
 {
-	Client *c;
 	ssize_t n;
-	Workspace *ws;
 	fd_set read_fds;
 	char buf[PIPE_BUF];
 	int confd, nfds, cmdfd;
 	xcb_generic_event_t *ev;
-	static struct sockaddr_un sockaddr;
 
 	DBG("eventloop: entering");
-	if (sockfd == -1) {
-		if (!(sock = getenv("YAXWM_SOCK"))) {
-			sock = "/tmp/yaxwmsock";
-			if (setenv("YAXWM_SOCK", sock, 0) < 0)
-				err(1, "unable to export socket path to environment: %s", sock);
-		}
-		sockaddr.sun_family = AF_UNIX;
-		strlcpy(sockaddr.sun_path, sock, sizeof(sockaddr.sun_path));
-		if (sockaddr.sun_path[0] == '\0')
-			err(1, "unable to write socket path: %s", sock);
-		if ((sockfd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
-			err(1, "unable to create socket: %s", sock);
-		unlink(sock);
-		if (bind(sockfd, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) < 0)
-			err(1, "unable to bind socket: %s", sock);
-		if (listen(sockfd, SOMAXCONN) < 0)
-			err(1, "unable to listen to socket: %s", sock);
-	} else {
-		DBG("eventloop: using existing socket file descriptor: %d", sockfd);
-	}
-
-	execcfg();
-	layoutws(NULL);
-	focus(NULL);
-
 	confd = xcb_get_file_descriptor(con);
 	nfds = MAX(confd, sockfd);
 	nfds++;
@@ -1813,9 +1803,7 @@ void eventloop(void)
 		if (select(nfds, &read_fds, NULL, NULL, NULL) > 0) {
 			if (FD_ISSET(sockfd, &read_fds)) {
 				cmdfd = accept(sockfd, NULL, 0);
-				if (cmdfd > 0 && (n = recv(cmdfd, buf, sizeof(buf)-1, 0)) > 0
-						&& *buf != '#' && *buf != '\n')
-				{
+				if (cmdfd > 0 && (n = recv(cmdfd, buf, sizeof(buf) - 1, 0)) > 0) {
 					if (buf[n - 1] == '\n')
 						n--;
 					buf[n] = '\0';
@@ -1832,12 +1820,6 @@ void eventloop(void)
 					eventhandle(ev);
 					free(ev);
 				}
-			}
-			if (wrpending) {
-				if (rules)
-					FOR_CLIENTS(c, ws)
-						applyrule(c);
-				wrpending--;
 			}
 		}
 	}
@@ -2149,8 +2131,14 @@ void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *
 	Callback *cb = NULL;
 
 	DBG("initclient: entering");
-	if (type == netatom[Splash] || type == netatom[Desktop]) {
-		DBG("initclient: mapping %s window", type == netatom[Splash] ? "splash" : "desktop");
+	if (type == netatom[Desktop]) {
+		uint v[] = { selws->mon->wx, selws->mon->wy, selws->mon->ww, selws->mon->wh, 0 };
+		xcb_configure_window(con, win, XYMASK | WHMASK | BWMASK, v);
+		DBG("initclient: mapping desktop window");
+		xcb_map_window(con, win);
+		return;
+	} else if (type == netatom[Splash]) {
+		DBG("initclient: mapping splash window");
 		xcb_map_window(con, win);
 		return;
 	}
@@ -2380,7 +2368,7 @@ void initscan(void)
 	uint8_t v = XCB_MAP_STATE_VIEWABLE, ic = XCB_ICCCM_WM_STATE_ICONIC;
 
 	DBG("initscan: entering");
-	if ((rt = xcb_query_tree_reply(con, xcb_query_tree(con, root), &e))) {
+	if ((rt = xcb_query_tree_reply(con, xcb_query_tree(con, root), &e)) && rt->children_len) {
 		w = xcb_query_tree_children(rt);
 		s = ecalloc(rt->children_len, sizeof(xcb_atom_t));
 		t = ecalloc(rt->children_len, sizeof(xcb_window_t));

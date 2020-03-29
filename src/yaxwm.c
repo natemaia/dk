@@ -753,14 +753,16 @@ void cmdborder(char **argv)
 
 void cmdcycle(char **argv)
 {
-	Client *c;
+	Client *c, *first;
 
 	if (!(c = selws->sel) || c->floating || (c->fullscreen && !c->ffs))
 		return;
-	if (!c->ws->layout->fn || (c == nextt(selws->clients) && !nextt(c->next)))
+	if (!c->ws->layout->fn || (c == (first = nextt(selws->clients)) && !nextt(c->next)))
 		return;
-	if (!(c = nextt(selws->sel->next)))
-		c = nextt(selws->clients);
+	if (!(c = nextt(selws->sel->next))) // end of list
+		c = first;
+	unfocus(selws->sel, 0);
+	selws->sel = first;
 	movestack(-1);
 	focus(c);
 	(void)(argv);
@@ -1362,7 +1364,7 @@ void cmdws(char **argv)
 	}
 	if (!strcmp("print", *argv)) {
 		FOR_EACH(ws, workspaces)
-			fprintf(cmdresp, "%d%s%s", ws->num + 1, ws == selws ? " *" : "", ws->next ? "\n" : "");	
+			fprintf(cmdresp, "%d%s%s", ws->num + 1, ws == selws ? " *" : "", ws->next ? "\n" : "");
 		return;
 	}
 	while (*argv) {
@@ -2586,13 +2588,18 @@ void movefocus(int direction)
 	DBG("movefocus: entering");
 	if (!selws->sel || (selws->sel->fullscreen && !selws->sel->ffs))
 		return;
-	if (direction > 0)
-		c = selws->sel->next ? selws->sel->next : selws->clients;
-	else
-		FIND_PREV(c, selws->sel, selws->clients);
-	if (c) {
-		focus(c);
-		restack(c->ws);
+	while (direction) {
+		if (direction > 0) {
+			c = selws->sel->next ? selws->sel->next : selws->clients;
+			direction--;
+		} else {
+			FIND_PREV(c, selws->sel, selws->clients);
+			direction++;
+		}
+		if (c) {
+			focus(c);
+			restack(c->ws);
+		}
 	}
 }
 
@@ -2604,24 +2611,28 @@ void movestack(int direction)
 	DBG("movestack: entering");
 	if (!selws->sel || selws->sel->floating || !nextt(selws->clients->next))
 		return;
-	if (direction > 0) {
-		detach(selws->sel, (c = nextt(selws->sel->next)) ? 0 : 1);
-		if (c) {
-			selws->sel->next = c->next;
-			c->next = selws->sel;
-		}
-	} else {
-		if (selws->sel == nextt(selws->clients)) {
-			detach(selws->sel, 0);
-			attach(selws->sel, 0);
-		} else {
-			FIND_PREVTILED(c, selws->sel, selws->clients);
-			detach(selws->sel, (i = (c == nextt(selws->clients)) ? 1 : 0));
-			if (!i) {
-				selws->sel->next = c;
-				FIND_PREV(c, selws->sel->next, selws->clients);
+	while (direction) {
+		if (direction > 0) {
+			detach(selws->sel, (c = nextt(selws->sel->next)) ? 0 : 1);
+			if (c) {
+				selws->sel->next = c->next;
 				c->next = selws->sel;
 			}
+			direction--;
+		} else {
+			if (selws->sel == nextt(selws->clients)) {
+				detach(selws->sel, 0);
+				attach(selws->sel, 0);
+			} else {
+				FIND_PREVTILED(c, selws->sel, selws->clients);
+				detach(selws->sel, (i = (c == nextt(selws->clients)) ? 1 : 0));
+				if (!i) {
+					selws->sel->next = c;
+					FIND_PREV(c, selws->sel->next, selws->clients);
+					c->next = selws->sel;
+				}
+			}
+			direction++;
 		}
 	}
 	layoutws(selws);

@@ -44,11 +44,11 @@ int main(int argc, char *argv[])
 	for (i = 1, j = 0, offs = 1; n + 1 < sizeof(buf) && i < argc; i++, j = 0, offs = 1) {
 		if ((sp = strchr(argv[i], ' ')) || (sp = strchr(argv[i], '\t'))) {
 			if (!(eq = strchr(argv[i], '=')) || sp < eq) /* no equal found or equal is part of the quoted string */
-				buf[n++] = '"';
+				buf[n++] = '"';	
 			offs++;
 		}
 		while (n + offs < sizeof(buf) && argv[i][j]) {
-			buf[n++] = argv[i][j++];
+			buf[n++] = argv[i][j++];	
 			if (eq && sp > eq && buf[n - 1] == '=') {
 				buf[n++] = '"';
 				eq = NULL;

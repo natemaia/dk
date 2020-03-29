@@ -41,8 +41,8 @@ static void print(const char *fmt, ...);
 #define VERSION "0.3"
 #endif
 
-#define W(x)          ((x)->w + 2 * (x)->bw)
-#define H(x)          ((x)->h + 2 * (x)->bw)
+#define W(x)          ((x)->w + (2 * (x)->bw))
+#define H(x)          ((x)->h + (2 * (x)->bw))
 #define MAX(a, b)     ((a) > (b) ? (a) : (b))
 #define MIN(a, b)     ((a) < (b) ? (a) : (b))
 #define LEN(x)        (sizeof(x) / sizeof(x[0]))
@@ -216,7 +216,6 @@ static void cmdview(int num);
 static void cmdwin(char **argv);
 static void cmdwm(char **argv);
 static void cmdws(char **argv);
-static void confinetomon(Client *c);
 static void detach(Client *c, int reattach);
 static void *ecalloc(size_t elems, size_t size);
 static void eventignore(uint8_t type);
@@ -463,8 +462,9 @@ int main(int argc, char *argv[])
 		DBG("main: using existing socket file descriptor: %d", sockfd);
 	}
 
-	execcfg();
 	initscan();
+	execcfg();
+	focus(NULL);
 	eventloop();
 
 	return 0;
@@ -520,21 +520,11 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int usermotion)
 	*w = MAX(1, *w);
 	*h = MAX(1, *h);
 	if (usermotion) {
-		if (*x > scr_w)
-			*x = scr_w - W(c);
-		if (*y > scr_h)
-			*y = scr_h - H(c);
-		if (*x + *w + 2 * c->bw < 0)
-			*x = 0;
-		if (*y + *h + 2 * c->bw < 0)
-			*y = 0;
+		*x = MIN(MAX(0, *x), scr_w - W(c));
+		*y = MIN(MAX(0, *y), scr_h - H(c));
 	} else {
-		*x = MAX(*x, m->wx);
-		*y = MAX(*y, m->wy);
-		if (*x + W(c) > m->wx + m->ww)
-			*x = m->wx + m->ww - W(c);
-		if (*y + H(c) > m->wy + m->wh)
-			*y = m->wy + m->wh - H(c);
+		*x = MIN(MAX(*x, m->wx), m->wx + m->ww - W(c));
+		*y = MIN(MAX(*y, m->wy), m->wy + m->wh - H(c));
 	}
 	if (c->floating || !c->ws->layout->fn) {
 		if (!(baseismin = c->base_w == c->min_w && c->base_h == c->min_h)) {
@@ -782,10 +772,9 @@ void cmdcycle(char **argv)
 		return;
 	if (!c->ws->layout->fn || (c == (first = nextt(selws->clients)) && !nextt(c->next)))
 		return;
-	if (!(c = nextt(selws->sel->next))) // end of list
+	if (!(c = nextt(selws->sel->next)))
 		c = first;
-	unfocus(selws->sel, 0);
-	selws->sel = first;
+	focus(first);
 	movestack(-1);
 	focus(c);
 	(void)(argv);
@@ -820,7 +809,7 @@ void cmdfloat(char **argv)
 		c->w = c->old_w, c->h = c->old_h;
 		c->x = c->old_x ? c->old_x : (c->ws->mon->wx + c->ws->mon->ww - W(c)) / 2;
 		c->y = c->old_y ? c->old_y : (c->ws->mon->wy + c->ws->mon->wh - H(c)) / 2;
-		resize(c, c->x, c->y, c->w, c->h, c->bw);
+		resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0);
 	} else {
 		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 	}
@@ -1003,14 +992,12 @@ void cmdmvresize(char **argv)
 			argv++;
 			i++;
 		}
-
 		if (absolute)
-			resize(c, x, y, MIN(c->ws->mon->ww, MAX(100, w)),
-					MIN(c->ws->mon->wh, MAX(100, h)), c->bw);
+			resizehint(c, x, y, MIN(c->ws->mon->ww, MAX(100, w)),
+					MIN(c->ws->mon->wh, MAX(100, h)), c->bw, 1);
 		else
-			resize(c, c->x + x, c->y + y, MIN(c->ws->mon->ww, MAX(100, c->w + w)),
-					MIN(c->ws->mon->wh, MAX(100, c->h + h)), c->bw);
-		confinetomon(c);
+			resizehint(c, c->x + x, c->y + y, MIN(c->ws->mon->ww, MAX(100, c->w + w)),
+					MIN(c->ws->mon->wh, MAX(100, c->h + h)), c->bw, 1);
 	} else {
 		if (!strcmp(*argv, "y")) {
 			DBG("cmdmvresize: active window is tiled -- adjusting stack location");
@@ -1469,23 +1456,6 @@ Monitor *coordtomon(int x, int y)
 	return selws->mon;
 }
 
-void confinetomon(Client *c)
-{
-	Monitor *m = c->ws->mon;
-
-	DBG("confinetomon: entering");
-	if (c->w > m->ww)
-		c->w = m->ww - (2 * c->bw);
-	if (c->h > m->wh)
-		c->h = m->wh - (2 * c->bw);
-	if (c->x + W(c) > m->wx + m->ww)
-		c->x = c->ws->mon->wx + c->ws->mon->ww - W(c);
-	if (c->y + H(c) > m->wy + m->wh)
-		c->y = c->ws->mon->wy + c->ws->mon->wh - H(c);
-	c->x = MAX(c->x, c->ws->mon->wx);
-	c->y = MAX(c->y, c->ws->mon->wy);
-}
-
 void detach(Client *c, int reattach)
 {
 	Client **tc = &c->ws->clients;
@@ -1793,8 +1763,7 @@ void eventloop(void)
 
 	DBG("eventloop: entering");
 	confd = xcb_get_file_descriptor(con);
-	nfds = MAX(confd, sockfd);
-	nfds++;
+	nfds = MAX(confd, sockfd) + 1;
 	while (running) {
 		xcb_flush(con);
 		FD_ZERO(&read_fds);
@@ -2127,10 +2096,10 @@ void initatoms(xcb_atom_t *atoms, const char **names, int num)
 
 void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *g, xcb_atom_t type)
 {
+	Monitor *m;
 	Client *c = NULL;
 	Callback *cb = NULL;
 
-	DBG("initclient: entering");
 	if (type == netatom[Desktop]) {
 		uint v[] = { selws->mon->wx, selws->mon->wy, selws->mon->ww, selws->mon->wh, 0 };
 		xcb_configure_window(con, win, XYMASK | WHMASK | BWMASK, v);
@@ -2142,6 +2111,7 @@ void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *
 		xcb_map_window(con, win);
 		return;
 	}
+	DBG("initclient: mapping normal window");
 	c = ecalloc(1, sizeof(Client));
 	c->win = win;
 	c->x = c->old_x = g->x, c->y = c->old_y = g->y;
@@ -2150,10 +2120,15 @@ void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *
 	if ((trans != XCB_WINDOW_NONE || (trans = wintrans(c->win)) != XCB_WINDOW_NONE))
 		c->trans = wintoclient(trans);
 	cb = applyrule(c);
-	confinetomon(c);
+	m = c->ws->mon;
+	c->w = MIN(c->w, m->ww);
+	c->h = MIN(c->h, m->wh);
 	if (c->trans) {
 		c->x = c->trans->ws->mon->wx + c->trans->x + ((W(c->trans) - W(c)) / 2);
 		c->y = c->trans->ws->mon->wy + c->trans->y + ((H(c->trans) - H(c)) / 2);
+	} else {
+		c->x = MIN(MAX(c->x, c->ws->mon->wx), m->wx + m->ww - W(c));
+		c->y = MIN(MAX(c->y, c->ws->mon->wy), m->wy + m->wh - H(c));
 	}
 	c->bw = border[Width];
 	xcb_configure_window(con, c->win, BWMASK, &c->bw);
@@ -2179,15 +2154,14 @@ void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *
 			unfocus(selws->sel, 0);
 		c->ws->sel = c;
 		layoutws(c->ws);
-	} else {
+	} else
 		MOVE(c->win, H(c) * -2, c->y);
-	}
 	xcb_map_window(con, win);
 	focus(NULL);
 	if (cb)
 		cb->fn(c);
-	DBG("initclient: done: 0x%08x - workspace %d: %d,%d @ %dx%d - floating: %d - nofocus: %d",
-			c->win, c->ws->num, c->x, c->y, c->w, c->h, c->floating, c->nofocus);
+	DBG("initclient: mapped: 0x%08x - workspace %d - %d,%d @ %dx%d - floating: %d",
+			c->win, c->ws->num, c->x, c->y, c->w, c->h, c->floating);
 }
 
 void initpanel(xcb_window_t win, xcb_get_geometry_reply_t *g)
@@ -3032,7 +3006,7 @@ void showhide(Client *c)
 		MOVE(c->win, c->x, c->y);
 		if ((!c->ws->layout->fn || c->floating)
 				&& (!c->fullscreen || (c->ffs && c->w != c->ws->mon->w && c->h != c->ws->mon->h)))
-			resize(c, c->x, c->y, c->w, c->h, c->bw);
+			resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0);
 		showhide(c->snext);
 	} else {
 		showhide(c->snext);

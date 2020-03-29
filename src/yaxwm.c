@@ -517,8 +517,8 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int usermotion)
 	Monitor *m = c->ws->mon;
 
 	DBG("applysizehints: entering");
-	*w = MAX(1, *w);
-	*h = MAX(1, *h);
+	*w = MAX(100, *w);
+	*h = MAX(100, *h);
 	if (usermotion) {
 		*x = MIN(MAX(0, *x), scr_w - W(c));
 		*y = MIN(MAX(0, *y), scr_h - H(c));
@@ -527,6 +527,16 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int usermotion)
 		*y = MIN(MAX(*y, m->wy), m->wy + m->wh - H(c));
 	}
 	if (c->floating || !c->ws->layout->fn) {
+		if (usermotion) {
+			if (*w > c->w && c->increment_w > 1)
+				*w = c->w + c->increment_w;
+			else if (*w < c->w && c->increment_w > 1)
+				*w = c->w - c->increment_w;
+			if (*h > c->h && c->increment_h > 1)
+				*h = c->h + c->increment_h;
+			else if (*h < c->h && c->increment_h > 1)
+				*h = c->h - c->increment_h;
+		}
 		if (!(baseismin = c->base_w == c->min_w && c->base_h == c->min_h)) {
 			*w -= c->base_w;
 			*h -= c->base_h;

@@ -43,19 +43,27 @@ alt + shift + r
 alt + ctrl + shift + r
     yaxcmd wm restart
 
-# change focus
-alt + {j,k}
-    yaxcmd win focus {next,prev}
-
 # close active window
 alt + q
     yaxcmd win kill
 
-# toggle floating state
+# change focus
+alt + {j,k}
+    yaxcmd win focus {next,prev}
+
+# swap tiled window in or out of master
+alt + space
+    yaxcmd win swap
+
+# cycle tiled windows in place
+alt + Tab
+    yaxcmd win cycle
+
+# toggle floating
 alt + shift + space
     yaxcmd win float
 
-# toggle sticky state
+# toggle sticky
 alt + shift + s
     yaxcmd win stick
 
@@ -67,19 +75,11 @@ alt + shift + {h,j,k,l}
 alt + ctrl + {h,j,k,l}
     yaxcmd win mvresize {w=-10,h=10,h=-10,w=10}
 
-# swap window in or out of master
-alt + space
-    yaxcmd win swap
-
-# cycle tiled windows in place
-alt + Tab
-    yaxcmd win cycle
-
 # view, send, or follow to workspace
 alt + {_,shift + ,ctrl + }{1-9,0}
     yaxcmd ws {_,send,follow} {1-9,10}
 
-# toggle window fake fullscreen. allows move, resize, tiling, etc.
+# toggle fake fullscreen. allows move, resize, tiling, etc. on fullscreen windows.
 alt + F11
     yaxcmd win fakefs
 
@@ -99,6 +99,8 @@ alt + {_,shift + }{i,d}
 # change gap or border size
 alt + {_,ctrl + }{equal,minus}
     yaxcmd set {gap,border width} {+1,-1}
+
+# reset gap or border size
 alt + {_,ctrl + }shift + equal
     yaxcmd set {gap,border width} reset
 

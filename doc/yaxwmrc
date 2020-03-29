@@ -3,10 +3,10 @@
 # (re)load sxhkd for keybinds
 pkill sxhkd; sxhkd &
 
+
 # determine where to place the log file
 logfile="$HOME/.yaxcmd.log"
 [ -d "$HOME/.local/share/xorg" ] && logfile="$HOME/.local/share/xorg/yaxcmd.log"
-# create and clear it
 : > "$logfile"
 
 # window manager configuration run as a compound command to
@@ -14,6 +14,7 @@ logfile="$HOME/.yaxcmd.log"
 {
 	# workspace settings
 	# ------------------------
+
 	# save active workspace number
 	selws=$(yaxcmd ws print | awk '/\*/ {print $1}')
 	last=$(yaxcmd ws print | awk 'BEGIN{ s="" }; { s=$1 }; END{ print s }')
@@ -21,63 +22,82 @@ logfile="$HOME/.yaxcmd.log"
 	for i in $(yaxcmd ws print | awk '{print $1}'); do
 		# set the active workspace for commands
 		yaxcmd ws "$i"
+
 		# set the layout on the active workspace
 		yaxcmd set layout tile
+
 		# set number of master windows on the active workspace
 		yaxcmd set master absolute 1
+
 		# set number of first stack windows on the active workspace
 		yaxcmd set stack absolute 3
+
 		# set gap width on the active workspace to an absolute value in pixels
 		yaxcmd set gap absolute 0
+
 		# set split ratio between master and stack(s)
 		yaxcmd set split absolute 0.55
-		# # set split ratio between first and second stack
+
+		# set split ratio between first and second stack
 		yaxcmd set split stack absolute 0.55
+
 		# set the last 2 workspaces to use a 200px padding
 		if [ "$i" -eq "$last" ] || [ "$i" -eq $(( last - 1 )) ]; then
 			yaxcmd set pad l=400 r=400 t=200 b=200
 		fi
 	done
+
 	# restore active workspace
 	yaxcmd ws "$selws"
+
 
 	# mouse window control
 	# ---------------------
 	# define mouse mod and move/resize buttons
 	yaxcmd set mouse  mod alt  move button1  resize button3
 
+
 	# borders
 	# ---------
 	# disable borders in monocle layout and tile layout with one window
 	yaxcmd set border smart 1
+
 	# set border width in pixels to an absolute value
 	yaxcmd set border width  absolute 1
+
 	# set the border colour for focused and unfocused windows
 	yaxcmd set border colour focus   '#6699cc'
 	yaxcmd set border colour unfocus '#000000'
 
+
 	# window rules
 	# --------------
+
 	# open window(s) on a specific workspace (and monitor it's assigned to)
 	yaxcmd rule class="^gimp$" ws=2
+
 	# open window(s) on a specific monitor by-number (and active workspace on it)
 	yaxcmd rule class="^firefox$" mon=0
+
 	# or by monitor name
 	yaxcmd rule class="^chromium$" mon="HDMI-A-0"
+
 	# open window(s) and use a pre-defined callback function
 	yaxcmd rule class="^mpv$" instance="^gl$" floating callback=mpvart
+
 	# open window(s) with a specific geometry and coordinates
-	yaxcmd rule class="^google-chrome$" title="^open[[:space:]]files$" w=1280 h=720 floating
+	yaxcmd rule class="^google-chrome$" title="^open files$" w=1280 h=720 floating
+
 	# open window(s) in a floating state
 	yaxcmd rule class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" floating
 
 } >> "$logfile" 2>&1 # append responses
 
-# errors encountered in logfile
+# inform of any errors in a notification
 if grep -q 'error:' "$logfile"; then
 	hash notify-send > /dev/null 2>&1 || exit 1
-	# inform of errors in a notification that doesn't timeout
-	notify-send -t 0 -u critical "Yaxwmrc Has Errors" "$(awk '/error:/ {sub(/^error: /, ""); print}' "$logfile")"
+	notify-send -t 0 -u critical "Yaxwmrc Has Errors" \
+		"$(awk '/error:/ {sub(/^error: /, ""); print}' "$logfile")"
 fi
 
 exit 0

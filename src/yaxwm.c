@@ -86,13 +86,13 @@ typedef unsigned char uchar;
 typedef struct Panel Panel;
 typedef struct Client Client;
 typedef struct Layout Layout;
+typedef struct WsRule WsRule;
+typedef struct WinRule WinRule;
 typedef struct Monitor Monitor;
 typedef struct Keyword Keyword;
 typedef struct Command Command;
 typedef struct Callback Callback;
 typedef struct Workspace Workspace;
-typedef struct WindowRule WindowRule;
-typedef struct WorkspaceRule WorkspaceRule;
 
 enum Borders {
 	Width, Smart, Focus, Unfocus
@@ -126,6 +126,25 @@ struct Client {
 	Client *trans, *next, *snext;
 	Workspace *ws;
 	xcb_window_t win;
+};
+
+struct WsRule {
+	char *name;
+	uint nmaster, nstack, gappx;
+	float split;
+	float ssplit;
+	uint padr, padl, padt, padb;
+	Layout *layout;
+	WsRule *next;
+};
+
+struct WinRule {
+	int x, y, w, h, bw;
+	int ws, floating, sticky;
+	char *class, *inst, *title, *mon;
+	Callback *cb;
+	regex_t classreg, instreg, titlereg;
+	WinRule *next;
 };
 
 struct Monitor {
@@ -170,26 +189,7 @@ struct Workspace {
 	Client *sel, *stack, *clients, *hidden;
 };
 
-struct WindowRule {
-	int x, y, w, h;
-	int ws, floating, sticky;
-	char *class, *inst, *title, *mon;
-	Callback *cb;
-	regex_t classreg, instreg, titlereg;
-	WindowRule *next;
-};
-
-struct WorkspaceRule {
-	char *name;
-	uint nmaster, nstack, gappx;
-	float split;
-	float ssplit;
-	uint padr, padl, padt, padb;
-	Layout *layout;
-	WorkspaceRule *next;
-};
-
-static Callback *applyrule(Client *c);
+static Callback *applywinrule(Client *c);
 static int checkerror(int lvl, char *msg, xcb_generic_error_t *e);
 static void cmdborder(char **argv);
 static void cmdcycle(char **argv);
@@ -225,18 +225,18 @@ static void fixupworkspaces(void);
 static void focus(Client *c);
 static void freeclient(Client *c, int destroyed);
 static void freepanel(Panel *panel, int destroyed);
-static void freerule(WindowRule *r);
+static void freewinrule(WinRule *r);
 static void freewm(void);
 static void freews(Workspace *ws);
 static void grabbuttons(Client *c, int focused);
 static void gravitate(Client *c, int vert, int horz, int matchgap);
 static void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *g, xcb_atom_t type);
 static void initpanel(xcb_window_t win, xcb_get_geometry_reply_t *g);
-static int initrulereg(WindowRule *r, WindowRule *wr);
-static void initrule(WindowRule *r);
+static int initwinrulereg(WinRule *r, WinRule *wr);
+static void initwinrule(WinRule *r);
 static void initscan(void);
 static void initwm(void);
-static Workspace *initws(int num, WorkspaceRule *r);
+static Workspace *initws(int num, WsRule *r);
 static char *itoa(int n, char *s);
 static Workspace *itows(int num);
 static int layoutws(Workspace *ws);
@@ -249,9 +249,9 @@ static int optparse(char **argv, char **opts, int *argi, float *argf, int hex);
 static void printerror(xcb_generic_error_t *e);
 static int querypointer(int *x, int *y);
 static void resize(Client *c, int x, int y, int w, int h, int bw);
-static void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion);
+static void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, int mouse);
 static void restack(Workspace *ws);
-static int rulecmp(WindowRule *r, char *title, char *class, char *inst);
+static int rulecmp(WinRule *r, char *title, char *class, char *inst);
 static void sendconfigure(Client *c);
 static int sendevent(Client *c, const char *ev, long mask);
 static int sendwmproto(Client *c, int wmproto);
@@ -382,7 +382,7 @@ static Monitor *monitors;     /* monitor list head */
 static Workspace *selws;      /* active workspace */
 static Workspace *lastws;     /* last active workspace */
 static Workspace *workspaces; /* workspace list head */
-static WindowRule *rules;  /* window rule list head */
+static WinRule *winrules;     /* window rule list head */
 
 static xcb_screen_t *scr;                 /* the X screen */
 static xcb_connection_t *con;             /* xcb connection to the X server */
@@ -511,7 +511,7 @@ void applypanelstrut(Panel *p)
 			p->mon->name, p->mon->wx, p->mon->wy, p->mon->ww, p->mon->wh);
 }
 
-int applysizehints(Client *c, int *x, int *y, int *w, int *h, int usermotion)
+int applysizehints(Client *c, int *x, int *y, int *w, int *h, int usermotion, int mouse)
 {
 	int baseismin;
 	Monitor *m = c->ws->mon;
@@ -520,14 +520,28 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int usermotion)
 	*w = MAX(100, *w);
 	*h = MAX(100, *h);
 	if (usermotion) {
-		*x = MIN(MAX(0, *x), scr_w - W(c));
-		*y = MIN(MAX(0, *y), scr_h - H(c));
+		if (*x > scr_w)
+			*x = scr_w - W(c);
+		if (*y > scr_h)
+			*y = scr_h - H(c);
+		if (*x + *w + 2 * c->bw < 0)
+			*x = 0;
+		if (*y + *h + 2 * c->bw < 0)
+			*y = 0;
+		/* *x = MIN(MAX(0, *x), scr_w - W(c)); */
+		/* *y = MIN(MAX(0, *y), scr_h - H(c)); */
 	} else {
-		*x = MIN(MAX(*x, m->wx), m->wx + m->ww - W(c));
-		*y = MIN(MAX(*y, m->wy), m->wy + m->wh - H(c));
+		*x = MAX(*x, m->wx);
+		*y = MAX(*y, m->wy);
+		if (*x + W(c) > m->wx + m->ww)
+			*x = m->wx + m->ww - W(c);
+		if (*y + H(c) > m->wy + m->wh)
+			*y = m->wy + m->wh - H(c);
+		/* *x = MIN(MAX(*x, m->wx), m->wx + m->ww - W(c)); */
+		/* *y = MIN(MAX(*y, m->wy), m->wy + m->wh - H(c)); */
 	}
 	if (c->floating || !c->ws->layout->fn) {
-		if (usermotion) {
+		if (usermotion && !mouse) {
 			if (*w > c->w && c->increment_w > 1)
 				*w = c->w + c->increment_w;
 			else if (*w < c->w && c->increment_w > 1)
@@ -567,10 +581,10 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int usermotion)
 	return *x != c->x || *y != c->y || *w != c->w || *h != c->h;
 }
 
-Callback *applyrule(Client *c)
+Callback *applywinrule(Client *c)
 {
 	Monitor *m;
-	WindowRule *r;
+	WinRule *r;
 	Callback *cb = NULL;
 	int n, num = -1, ws = selws->num;
 	char title[NAME_MAX];
@@ -578,7 +592,7 @@ Callback *applyrule(Client *c)
 	xcb_get_property_cookie_t pc;
 	xcb_icccm_get_wm_class_reply_t prop;
 
-	DBG("applyrule: entering");
+	DBG("applywinrule: entering");
 	if (!wintextprop(c->win, netatom[Name], title, sizeof(title))
 			&& !wintextprop(c->win, XCB_ATOM_WM_NAME, title, sizeof(title)))
 		title[0] = '\0';
@@ -587,16 +601,18 @@ Callback *applyrule(Client *c)
 	if (!c->trans && (ws = winprop(c->win, netatom[WmDesktop])) < 0)
 		ws = selws->num;
 	if (xcb_icccm_get_wm_class_reply(con, pc, &prop, &e)) {
-		DBG("applyrule: window class: %s - instance: %s - title: %s",
+		DBG("applywinrule: window class: %s - instance: %s - title: %s",
 				prop.class_name, prop.instance_name, title);
-		for (r = rules; r; r = r->next) {
+		for (r = winrules; r; r = r->next) {
 			if (!rulecmp(r, title, prop.class_name, prop.instance_name))
 				continue;
-			DBG("applyrule: matched -- class: %s, inst: %s, title: %s",
+			DBG("applywinrule: matched -- class: %s, inst: %s, title: %s",
 					r->class, r->inst, r->title);
 			c->floating = r->floating;
 			c->sticky = r->sticky;
 			cb = r->cb;
+			if (r->bw != -1)
+				c->bw = r->bw;
 			if (r->x != -1)
 				c->x = r->x;
 			if (r->y != -1)
@@ -624,9 +640,9 @@ Callback *applyrule(Client *c)
 		checkerror(0, "failed to get window class", e);
 	}
 	setclientws(c, c->trans ? c->trans->ws->num : ws);
-	DBG("applyrule: done -- workspace: %d, monitor: %s, "
-			"floating: %d, sticky: %d, x: %d, y: %d, w: %d, h: %d",
-			c->ws->num, c->ws->mon->name, c->floating, c->sticky, c->x, c->y, c->w, c->h);
+	DBG("applywinrule: done -- workspace: %d, monitor: %s, "
+			"floating: %d, sticky: %d, x: %d, y: %d, w: %d, h: %d, bw: %d",
+			c->ws->num, c->ws->mon->name, c->floating, c->sticky, c->x, c->y, c->w, c->h, c->bw);
 
 	return cb;
 }
@@ -819,7 +835,7 @@ void cmdfloat(char **argv)
 		c->w = c->old_w, c->h = c->old_h;
 		c->x = c->old_x ? c->old_x : (c->ws->mon->wx + c->ws->mon->ww - W(c)) / 2;
 		c->y = c->old_y ? c->old_y : (c->ws->mon->wy + c->ws->mon->wh - H(c)) / 2;
-		resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0);
+		resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0, 1);
 	} else {
 		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 	}
@@ -877,7 +893,7 @@ void cmdgappx(char **argv)
 	if (opt < 0 && i == INT_MAX)
 		return;
 	else if (opt == stdreset)
-		ng = workspacerules[selws->num].gappx;
+		ng = wsrules[selws->num].gappx;
 	else if ((n = adjbordergap(i, opt, selws->gappx, border[Width])) != INT_MAX)
 		ng = MAX(MIN((int)selws->gappx + n, (selws->mon->wh / 6) - border[Width]), 0);
 	if (ng != selws->gappx) {
@@ -1004,10 +1020,10 @@ void cmdmvresize(char **argv)
 		}
 		if (absolute)
 			resizehint(c, x, y, MIN(c->ws->mon->ww, MAX(100, w)),
-					MIN(c->ws->mon->wh, MAX(100, h)), c->bw, 1);
+					MIN(c->ws->mon->wh, MAX(100, h)), c->bw, 1, 0);
 		else
 			resizehint(c, c->x + x, c->y + y, MIN(c->ws->mon->ww, MAX(100, c->w + w)),
-					MIN(c->ws->mon->wh, MAX(100, c->h + h)), c->bw, 1);
+					MIN(c->ws->mon->wh, MAX(100, c->h + h)), c->bw, 1, 0);
 	} else {
 		if (!strcmp(*argv, "y")) {
 			DBG("cmdmvresize: active window is tiled -- adjusting stack location");
@@ -1149,21 +1165,21 @@ void cmdrule(char **argv)
 	uint ui;
 	Client *c;
 	Workspace *ws;
-	WindowRule *wr, r;
+	WinRule *wr, r;
 	Callback *cb = NULL;
 	int i, rem, matched = 0;
 
 	DBG("cmdrule: entering");
 	r.cb = NULL;
 	r.sticky = 0, r.floating = 0;
-	r.x = -1, r.y = -1, r.w = -1, r.h = -1, r.ws = -1;
+	r.x = -1, r.y = -1, r.w = -1, r.h = -1, r.ws = -1, r.bw = -1;
 	r.class = NULL, r.inst = NULL, r.title = NULL, r.mon = NULL;
 
 	if ((rem = !strcmp("remove", *argv))) {
 		argv++;
 		if (!strcmp("all", *argv)) {
-			while (rules)
-				freerule(rules);
+			while (winrules)
+				freewinrule(winrules);
 			return;
 		}
 	}
@@ -1215,6 +1231,10 @@ void cmdrule(char **argv)
 			argv++;
 			if ((i = strtol(*argv, NULL, 0)) >= 50)
 				r.h = i;
+		} else if (!strcmp(*argv, "bw")) {
+			argv++;
+			if ((i = strtol(*argv, NULL, 0)) || !strcmp(*argv, "0"))
+				r.bw = i;
 		} else if (!strcmp(*argv, "floating")) {
 			r.floating = 1;
 		} else if (!strcmp(*argv, "sticky")) {
@@ -1226,15 +1246,15 @@ void cmdrule(char **argv)
 	}
 
 	if ((r.class || r.inst || r.title) && (r.cb || r.mon || r.ws != -1 || r.floating
-				|| r.sticky || r.x != -1 || r.y != -1 || r.w != -1 || r.h != -1))
+				|| r.sticky || r.x != -1 || r.y != -1 || r.w != -1 || r.h != -1 || r.bw != -1))
 	{
-		FOR_EACH(wr, rules) {
+		FOR_EACH(wr, winrules) {
 			if ((r.class && (r.class != wr->class || strcmp(r.class, wr->class)))
 					|| (r.inst && (r.inst != wr->inst || strcmp(r.inst, wr->inst)))
 					|| (r.title && (r.title != wr->title || strcmp(r.title, wr->title))))
 				continue;
 			if (rem && r.mon == wr->mon && r.ws == wr->ws && r.floating == wr->floating
-					&& r.sticky == wr->sticky && r.x == wr->x && r.y == wr->y
+					&& r.sticky == wr->sticky && r.x == wr->x && r.y == wr->y && r.bw == wr->bw
 					&& r.w == wr->w && r.h == wr->h && r.cb == wr->cb)
 				break;
 			DBG("cmdrule: updating existing rule with the same match patterns");
@@ -1242,17 +1262,17 @@ void cmdrule(char **argv)
 			wr->mon = r.mon;
 			wr->sticky = r.sticky;
 			wr->floating = r.floating;
-			wr->x = r.x, wr->y = r.y, wr->w = r.w, wr->h = r.h;
+			wr->x = r.x, wr->y = r.y, wr->w = r.w, wr->h = r.h, wr->bw = r.bw;
 			matched = 1;
 			break;
 		}
 		if (rem && wr) {
-			freerule(wr);
+			freewinrule(wr);
 		} else if (!rem) {
 			if (!matched)
-				initrule(&r);
+				initwinrule(&r);
 			FOR_CLIENTS(c, ws)
-				if ((cb = applyrule(c)))
+				if ((cb = applywinrule(c)))
 					cb->fn(c);
 		}
 	}
@@ -1897,11 +1917,11 @@ void freeclient(Client *c, int destroyed)
 	layoutws(NULL);
 }
 
-void freerule(WindowRule *r)
+void freewinrule(WinRule *r)
 {
-	WindowRule **cr = &rules;
+	WinRule **cr = &winrules;
 
-	DBG("freerule: entering -- freeing window rule");
+	DBG("freewinrule: entering -- freeing window rule");
 	while (*cr && *cr != r)
 		cr = &(*cr)->next;
 	*cr = r->next;
@@ -1970,8 +1990,8 @@ void freewm(void)
 		freews(workspaces);
 	while (monitors)
 		freemon(monitors);
-	while (rules)
-		freerule(rules);
+	while (winrules)
+		freewinrule(winrules);
 	for (i = 0; i < LEN(cursors); i++)
 		xcb_free_cursor(con, cursor[i]);
 	xcb_destroy_window(con, wmcheck);
@@ -2081,7 +2101,7 @@ void gravitate(Client *c, int vert, int horz, int matchgap)
 	case Bottom: y = c->ws->mon->wy + c->ws->mon->wh - H(c) - gap; break;
 	case Center: y = (c->ws->mon->wy + c->ws->mon->wh - H(c)) / 2; break;
 	}
-	resizehint(c, x, y, c->w, c->h, c->bw, 0);
+	resizehint(c, x, y, c->w, c->h, c->bw, 0, 0);
 }
 
 void initatoms(xcb_atom_t *atoms, const char **names, int num)
@@ -2127,9 +2147,10 @@ void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *
 	c->x = c->old_x = g->x, c->y = c->old_y = g->y;
 	c->w = c->old_w = g->width, c->h = c->old_h = g->height;
 	c->old_bw = g->border_width;
+	c->bw = border[Width];
 	if ((trans != XCB_WINDOW_NONE || (trans = wintrans(c->win)) != XCB_WINDOW_NONE))
 		c->trans = wintoclient(trans);
-	cb = applyrule(c);
+	cb = applywinrule(c);
 	m = c->ws->mon;
 	c->w = MIN(c->w, m->ww);
 	c->h = MIN(c->h, m->wh);
@@ -2140,7 +2161,6 @@ void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *
 		c->x = MIN(MAX(c->x, c->ws->mon->wx), m->wx + m->ww - W(c));
 		c->y = MIN(MAX(c->y, c->ws->mon->wy), m->wy + m->wh - H(c));
 	}
-	c->bw = border[Width];
 	xcb_configure_window(con, c->win, BWMASK, &c->bw);
 	sendconfigure(c);
 	wintype(c);
@@ -2245,16 +2265,16 @@ int initrandr(void)
 	return extbase;
 }
 
-void initrule(WindowRule *r)
+void initwinrule(WinRule *r)
 {
 	size_t len;
-	WindowRule *wr;
+	WinRule *wr;
 
-	DBG("initrule: entering: class: %s - inst: %s - title: %s - mon: %s - ws: %d "
+	DBG("initwinrule: entering: class: %s - inst: %s - title: %s - mon: %s - ws: %d "
 			"- floating: %d - sticky: %d - position: %d,%d - size: %dx%d",
 			r->class, r->inst, r->title, r->mon, r->ws, r->floating,
 			r->sticky, r->x, r->y, r->w, r->h);
-	wr = ecalloc(1, sizeof(WindowRule));
+	wr = ecalloc(1, sizeof(WinRule));
 	wr->class = NULL, wr->inst = NULL, wr->title = NULL, wr->mon = NULL;
 	wr->ws = r->ws;
 	wr->floating = r->floating;
@@ -2266,10 +2286,10 @@ void initrule(WindowRule *r)
 		wr->mon = ecalloc(1, len);
 		strlcpy(wr->mon, r->mon, len);
 	}
-	if (initrulereg(wr, r)) {
-		wr->next = rules;
-		rules = wr;
-		DBG("initrule: complete: class: %s - inst: %s - title: %s - mon: %s - ws: %d "
+	if (initwinrulereg(wr, r)) {
+		wr->next = winrules;
+		winrules = wr;
+		DBG("initwinrule: complete: class: %s - inst: %s - title: %s - mon: %s - ws: %d "
 				"- floating: %d - sticky: %d - position: %d,%d - size: %dx%d",
 				wr->class, wr->inst, wr->title, wr->mon, wr->ws, wr->floating,
 				wr->sticky, wr->x, wr->y, wr->w, wr->h);
@@ -2279,13 +2299,13 @@ void initrule(WindowRule *r)
 	}
 }
 
-int initrulereg(WindowRule *r, WindowRule *wr)
+int initwinrulereg(WinRule *r, WinRule *wr)
 {
 	int i;
 	size_t len;
 	char buf[NAME_MAX], *e;
 
-	DBG("initrulereg: entering: class: %s - inst: %s - title: %s - mon: %s - ws: %d "
+	DBG("initwinrulereg: entering: class: %s - inst: %s - title: %s - mon: %s - ws: %d "
 			"- floating: %d - sticky: %d - position: %d,%d - size: %dx%d",
 			wr->class, wr->inst, wr->title, wr->mon, wr->ws, wr->floating,
 			wr->sticky, wr->x, wr->y, wr->w, wr->h);
@@ -2410,12 +2430,12 @@ void initwm(void)
 	xcb_warp_pointer(con, root, root, 0, 0, 0, 0,
 			primary->x + (primary->w / 2), primary->y + (primary->h / 2));
 
-	for (numws = 0; numws < (int)LEN(workspacerules); numws++) {
+	for (numws = 0; numws < (int)LEN(wsrules); numws++) {
 		FIND_TAIL(ws, workspaces);
 		if (ws)
-			ws->next = initws(numws, &workspacerules[numws]);
+			ws->next = initws(numws, &wsrules[numws]);
 		else
-			workspaces = initws(numws, &workspacerules[numws]);
+			workspaces = initws(numws, &wsrules[numws]);
 	}
 	assignworkspaces();
 
@@ -2460,7 +2480,7 @@ void initwm(void)
 		err(1, "unable to get keysyms from X connection");
 }
 
-Workspace *initws(int num, WorkspaceRule *r)
+Workspace *initws(int num, WsRule *r)
 {
 	Workspace *ws;
 
@@ -2658,7 +2678,7 @@ void mousemvr(int move)
 					changews(m->ws, 1);
 					focus(c);
 				}
-				resizehint(c, nx, ny, nw, nh, c->bw, 1);
+				resizehint(c, nx, ny, nw, nh, c->bw, 1, 1);
 			}
 			break;
 		case XCB_BUTTON_RELEASE:
@@ -2809,10 +2829,10 @@ void resize(Client *c, int x, int y, int w, int h, int bw)
 	sendconfigure(c);
 }
 
-void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion)
+void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, int mouse)
 {
 	DBG("resizehint: entering");
-	if (applysizehints(c, &x, &y, &w, &h, usermotion))
+	if (applysizehints(c, &x, &y, &w, &h, usermotion, mouse))
 		resize(c, x, y, w, h, bw);
 }
 
@@ -2835,7 +2855,7 @@ void restack(Workspace *ws)
 	eventignore(XCB_ENTER_NOTIFY);
 }
 
-int rulecmp(WindowRule *r, char *title, char *class, char *inst)
+int rulecmp(WinRule *r, char *title, char *class, char *inst)
 {
 	if (!r)
 		return 0;
@@ -3249,7 +3269,7 @@ void updatenumws(int needed)
 	DBG("updatenumws: entering");
 	char name[4];
 	Workspace *ws;
-	WorkspaceRule r;
+	WsRule r;
 
 	if (needed > 999)
 		errx(1, "attempting to allocate too many workspaces");

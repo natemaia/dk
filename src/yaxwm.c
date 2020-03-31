@@ -99,6 +99,7 @@ typedef struct Keyword Keyword;
 typedef struct Command Command;
 typedef struct Callback Callback;
 typedef struct Workspace Workspace;
+typedef struct DeskWin DeskWin;
 
 enum Borders {
 	Width, Smart, Focus, Unfocus
@@ -131,6 +132,13 @@ struct Client {
 	int sticky, fixed, floating, fullscreen, ffs, urgent, nofocus, oldstate;
 	Client *trans, *next, *snext;
 	Workspace *ws;
+	xcb_window_t win;
+};
+
+struct DeskWin {
+	int x, y, w, h;
+	DeskWin *next;
+	Monitor *mon;
 	xcb_window_t win;
 };
 
@@ -237,9 +245,12 @@ static void freews(Workspace *ws);
 static void grabbuttons(Client *c, int focused);
 static void gravitate(Client *c, int horz, int vert, int matchgap);
 static void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *g, xcb_atom_t type);
+static void initdeskwin(xcb_window_t win, xcb_get_geometry_reply_t *g);
 static void initpanel(xcb_window_t win, xcb_get_geometry_reply_t *g);
 static void initscan(void);
 static int initwinrulereg(WinRule *r, WinRule *wr);
+static DeskWin *wintodeskwin(xcb_window_t win);
+static void freedeskwin(DeskWin *d, int destroyed);
 static void initwinrule(WinRule *r);
 static void initwm(void);
 static Workspace *initws(int num, WsRule *r);
@@ -433,6 +444,7 @@ static Panel *panels;         /* panel list head */
 static Monitor *primary;      /* primary monitor */
 static Monitor *monitors;     /* monitor list head */
 static WinRule *winrules;     /* window rule list head */
+static DeskWin *deskwins;     /* desktop windows list head */
 static Workspace *selws;      /* active workspace */
 static Workspace *lastws;     /* last active workspace */
 static Workspace *workspaces; /* workspace list head */
@@ -741,6 +753,12 @@ void attachpanel(Panel *p)
 {
 	p->next = panels;
 	panels = p;
+}
+
+void attachdeskwin(DeskWin *d)
+{
+	d->next = deskwins;
+	deskwins = d;
 }
 
 void attachstack(Client *c)
@@ -1107,7 +1125,6 @@ void cmdmvresize(char **argv)
 		fprintf(cmdresp, "!unable to move/resize windows in the current layout");
 		return;
 	}
-
 	eventignore(XCB_ENTER_NOTIFY);
 }
 
@@ -1533,6 +1550,7 @@ void *ecalloc(size_t elems, size_t size)
 void eventhandle(xcb_generic_event_t *ev)
 {
 	Client *c;
+	DeskWin *d;
 	Monitor *m;
 	Workspace *ws;
 	Panel *p = NULL;
@@ -1602,6 +1620,9 @@ void eventhandle(xcb_generic_event_t *ev)
 		} else if ((p = wintopanel(e->window))) {
 			DBG("eventhandle: DESTROY_NOTIFY - panel window");
 			freepanel(p, 1);
+		} else if ((d = wintodeskwin(e->window))) {
+			DBG("eventhandle: DESTROY_NOTIFY - desktop window");
+			freedeskwin(d, 1);
 		}
 		return;
 	}
@@ -1618,9 +1639,9 @@ void eventhandle(xcb_generic_event_t *ev)
 		if (ws != selws) {
 			unfocus(selws->sel, 1);
 			changews(ws, 1);
-		} else if (!focusmouse || !c || c == selws->sel)
-			return;
-		focus(c);
+		}
+		if (focusmouse && c && c != selws->sel)
+			focus(c);
 		return;
 	}
 	case XCB_BUTTON_PRESS:
@@ -1662,7 +1683,8 @@ void eventhandle(xcb_generic_event_t *ev)
 
 		if (!(g = wingeom(e->window)) || !(wa = winattr(e->window)))
 			return;
-		if ((c = wintoclient(e->window)) || (p = wintopanel(e->window)))
+		if ((c = wintoclient(e->window)) || (p = wintopanel(e->window))
+				|| (d = wintodeskwin(e->window)))
 			return;
 		DBG("eventhandle: MAP_REQUEST - unmanaged window");
 		if ((type = winprop(e->window, netatom[WindowType])) == netatom[Dock])
@@ -1684,6 +1706,8 @@ void eventhandle(xcb_generic_event_t *ev)
 			freeclient(c, 0);
 		else if ((p = wintopanel(e->window)))
 			freepanel(p, 0);
+		else if ((d = wintodeskwin(e->window)))
+			freedeskwin(d, 0);
 		return;
 	}
 	case XCB_CLIENT_MESSAGE:
@@ -1858,6 +1882,7 @@ void fixupworkspaces(void)
 {
 	Panel *p;
 	Client *c;
+	DeskWin *d;
 	Workspace *ws;
 
 	assignworkspaces();
@@ -1866,9 +1891,13 @@ void fixupworkspaces(void)
 			DBG("fixupworkspaces: resizing fullscreen window to fit new screen size");
 			resize(c, ws->mon->x, ws->mon->y, ws->mon->w, ws->mon->h, c->bw);
 		}
-	if (panels)
-		FOR_EACH(p, panels)
-			updatestruts(p, 1);
+	FOR_EACH(p, panels)
+		updatestruts(p, 1);
+	FOR_EACH(d, deskwins)
+		if (d->w != d->mon->w || d->h != d->mon->h) {
+			d->x = d->mon->wx, d->y = d->mon->wy, d->w = d->mon->ww, d->h = d->mon->wh;
+			MOVERESIZE(d->win, d->x, d->y, d->w, d->h, 0);
+		}
 	focus(NULL);
 	layoutws(NULL);
 	restack(selws);
@@ -1939,24 +1968,21 @@ void freeclient(Client *c, int destroyed)
 	layoutws(NULL);
 }
 
-void freewinrule(WinRule *r)
+void freedeskwin(DeskWin *d, int destroyed)
 {
-	WinRule **cr = &winrules;
+	DeskWin **dd = &deskwins;
 
-	while (*cr && *cr != r)
-		cr = &(*cr)->next;
-	*cr = r->next;
-	if (r->class)
-		regfree(&(r->classreg));
-	if (r->inst)
-		regfree(&(r->instreg));
-	if (r->title)
-		regfree(&(r->titlereg));
-	free(r->mon);
-	free(r->inst);
-	free(r->title);
-	free(r->class);
-	free(r);
+	while (*dd && *dd != d)
+		dd = &(*dd)->next;
+	*dd = d->next;
+	if (!destroyed) {
+		xcb_grab_server(con);
+		setwinstate(d->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
+		xcb_flush(con);
+		xcb_ungrab_server(con);
+	}
+	free(d);
+	layoutws(NULL);
 }
 
 void freemon(Monitor *m)
@@ -1992,6 +2018,26 @@ void freepanel(Panel *p, int destroyed)
 	layoutws(NULL);
 }
 
+void freewinrule(WinRule *r)
+{
+	WinRule **cr = &winrules;
+
+	while (*cr && *cr != r)
+		cr = &(*cr)->next;
+	*cr = r->next;
+	if (r->class)
+		regfree(&(r->classreg));
+	if (r->inst)
+		regfree(&(r->instreg));
+	if (r->title)
+		regfree(&(r->titlereg));
+	free(r->mon);
+	free(r->inst);
+	free(r->title);
+	free(r->class);
+	free(r);
+}
+
 void freewm(void)
 {
 	uint i;
@@ -2004,6 +2050,8 @@ void freewm(void)
 	xcb_key_symbols_free(keysyms);
 	while (panels)
 		freepanel(panels, 0);
+	while (deskwins)
+		freedeskwin(deskwins, 0);
 	while (workspaces)
 		freews(workspaces);
 	while (monitors)
@@ -2144,16 +2192,15 @@ void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *
 	Callback *cb = NULL;
 
 	if (type == netatom[Desktop]) {
-		DBG("initclient: mapping desktop - 0x%08x - %d,%d @ %dx%d",
-				win, selws->mon->wx, selws->mon->wy, selws->mon->ww, selws->mon->wh);
-		MOVERESIZE(win, selws->mon->wx, selws->mon->wy, selws->mon->ww, selws->mon->wh, 0);
-		goto map;
+		initdeskwin(win, g);
+		return;
 	} else if (type == netatom[Splash]) {
-		DBG("initclient: mapping splash - 0x%08x - %d,%d @ %dx%d",
-				win, g->x, g->y, g->width, g->height);
-		goto map;
+		DBG("initclient: splash - 0x%08x - %d,%d @ %dx%d", win, g->x, g->y, g->width, g->height);
+		xcb_map_window(con, win);
+		focus(NULL);
+		return;
 	}
-	DBG("initclient: managing normal - 0x%08x", win);
+	DBG("initclient: normal - 0x%08x", win);
 	c = ecalloc(1, sizeof(Client));
 	c->win = win;
 	c->x = c->old_x = g->x, c->y = c->old_y = g->y;
@@ -2198,13 +2245,51 @@ void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *
 		layoutws(c->ws);
 	} else
 		MOVE(c->win, H(c) * -2, c->y);
-	DBG("initclient: mapped - 0x%08x - workspace %d - %d,%d @ %dx%d - floating: %d",
-			c->win, c->ws->num, c->x, c->y, c->w, c->h, FLOATING(c));
-map:
 	xcb_map_window(con, win);
 	focus(NULL);
 	if (cb)
 		cb->fn(c);
+	DBG("initclient: mapped - 0x%08x - workspace %d - %d,%d @ %dx%d - floating: %d",
+			c->win, c->ws->num, c->x, c->y, c->w, c->h, FLOATING(c));
+}
+
+void initdeskwin(xcb_window_t win, xcb_get_geometry_reply_t *g)
+{
+	DeskWin *d;
+	uint m = XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
+
+	DBG("initdesktopwin: entering - 0x%08x - %d,%d @ %dx%d",
+			win, g->x, g->y, g->width, g->height);
+	d = ecalloc(1, sizeof(DeskWin));
+	d->win = win;
+	d->mon = coordtomon(g->x, g->y);
+	attachdeskwin(d);
+	xcb_change_window_attributes(con, d->win, XCB_CW_EVENT_MASK, &m);
+	d->x = d->mon->wx, d->y = d->mon->wy, d->w = d->mon->ww, d->h = d->mon->wh;
+	MOVERESIZE(d->win, d->x, d->y, d->w, d->h, 0);
+	setwinstate(d->win, XCB_ICCCM_WM_STATE_NORMAL);
+	setstackmode(d->win, XCB_STACK_MODE_BELOW);
+	xcb_map_window(con, d->win);
+	focus(NULL);
+	layoutws(NULL);
+}
+
+Monitor *initmon(char *name, xcb_randr_output_t id, int x, int y, int w, int h)
+{
+	Monitor *m;
+	uint len = strlen(name) + 1;
+
+	DBG("initmon: entering - %s - %d,%d @ %dx%d", name, x, y, w, h);
+	m = ecalloc(1, sizeof(Monitor));
+	m->x = m->wx = x;
+	m->y = m->wy = y;
+	m->w = m->ww = w;
+	m->h = m->wh = h;
+	m->id = id;
+	m->name = ecalloc(1, len);
+	if (len > 1)
+		strlcpy(m->name, name, len);
+	return m;
 }
 
 void initpanel(xcb_window_t win, xcb_get_geometry_reply_t *g)
@@ -2244,24 +2329,6 @@ void initpanel(xcb_window_t win, xcb_get_geometry_reply_t *g)
 			p->win, p->mon->name, p->x, p->y, p->w, p->h);
 }
 
-Monitor *initmon(char *name, xcb_randr_output_t id, int x, int y, int w, int h)
-{
-	Monitor *m;
-	uint len = strlen(name) + 1;
-
-	DBG("initmon: entering - %s - %d,%d @ %dx%d", name, x, y, w, h);
-	m = ecalloc(1, sizeof(Monitor));
-	m->x = m->wx = x;
-	m->y = m->wy = y;
-	m->w = m->ww = w;
-	m->h = m->wh = h;
-	m->id = id;
-	m->name = ecalloc(1, len);
-	if (len > 1)
-		strlcpy(m->name, name, len);
-	return m;
-}
-
 int initrandr(void)
 {
 	int extbase;
@@ -2276,6 +2343,58 @@ int initrandr(void)
 			|XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE|XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE
 			|XCB_RANDR_NOTIFY_MASK_OUTPUT_PROPERTY);
 	return extbase;
+}
+
+void initscan(void)
+{
+	uint i;
+	xcb_atom_t *s, type;
+	xcb_window_t *w, *t;
+	xcb_generic_error_t *e;
+	xcb_query_tree_reply_t *rt;
+	xcb_get_geometry_reply_t **g;
+	xcb_get_window_attributes_reply_t **wa;
+	uint8_t v = XCB_MAP_STATE_VIEWABLE, ic = XCB_ICCCM_WM_STATE_ICONIC;
+
+	if ((rt = xcb_query_tree_reply(con, xcb_query_tree(con, root), &e)) && rt->children_len) {
+		w = xcb_query_tree_children(rt);
+		s = ecalloc(rt->children_len, sizeof(xcb_atom_t));
+		t = ecalloc(rt->children_len, sizeof(xcb_window_t));
+		g = ecalloc(rt->children_len, sizeof(xcb_get_geometry_reply_t *));
+		wa = ecalloc(rt->children_len, sizeof(xcb_get_window_attributes_reply_t *));
+		for (i = 0; i < rt->children_len; i++) {
+			g[i] = NULL;
+			t[i] = s[i] = XCB_WINDOW_NONE;
+			if (!(wa[i] = winattr(w[i])) || !(g[i] = wingeom(w[i]))) {
+				w[i] = XCB_WINDOW_NONE;
+			} else if (!(wa[i]->map_state == v || winprop(w[i], wmatom[WMState]) == ic)) {
+				w[i] = 0;
+			} else if (!(t[i] = wintrans(w[i]))) {
+				if ((type = winprop(w[i], netatom[WindowType])) == netatom[Dock])
+					initpanel(w[i], g[i]);
+				else if (!wa[i]->override_redirect)
+					initclient(w[i], t[i], g[i], type);
+				w[i] = 0;
+			}
+		}
+		for (i = 0; i < rt->children_len; i++) {
+			if (w[i] && t[i]) {
+				if ((type = winprop(w[i], netatom[WindowType])) == netatom[Dock])
+					initpanel(w[i], g[i]);
+				else if (!wa[i]->override_redirect)
+					initclient(w[i], t[i], g[i], type);
+			}
+			free(wa[i]);
+			free(g[i]);
+		}
+		free(rt);
+		free(s);
+		free(t);
+		free(wa);
+		free(g);
+	} else {
+		checkerror(1, "unable to query tree from root window", e);
+	}
 }
 
 void initwinrule(WinRule *r)
@@ -2293,6 +2412,7 @@ void initwinrule(WinRule *r)
 	wr->floating = r->floating;
 	wr->sticky = r->sticky;
 	wr->cb = r->cb;
+	wr->bw = r->bw;
 	wr->x = r->x, wr->y = r->y, wr->w = r->w, wr->h = r->h;
 	if (r->mon) {
 		len = strlen(r->mon) + 1;
@@ -2367,58 +2487,6 @@ error:
 		free(r->title);
 	}
 	return 0;
-}
-
-void initscan(void)
-{
-	uint i;
-	xcb_atom_t *s, type;
-	xcb_window_t *w, *t;
-	xcb_generic_error_t *e;
-	xcb_query_tree_reply_t *rt;
-	xcb_get_geometry_reply_t **g;
-	xcb_get_window_attributes_reply_t **wa;
-	uint8_t v = XCB_MAP_STATE_VIEWABLE, ic = XCB_ICCCM_WM_STATE_ICONIC;
-
-	if ((rt = xcb_query_tree_reply(con, xcb_query_tree(con, root), &e)) && rt->children_len) {
-		w = xcb_query_tree_children(rt);
-		s = ecalloc(rt->children_len, sizeof(xcb_atom_t));
-		t = ecalloc(rt->children_len, sizeof(xcb_window_t));
-		g = ecalloc(rt->children_len, sizeof(xcb_get_geometry_reply_t *));
-		wa = ecalloc(rt->children_len, sizeof(xcb_get_window_attributes_reply_t *));
-		for (i = 0; i < rt->children_len; i++) {
-			g[i] = NULL;
-			t[i] = s[i] = XCB_WINDOW_NONE;
-			if (!(wa[i] = winattr(w[i])) || !(g[i] = wingeom(w[i]))) {
-				w[i] = XCB_WINDOW_NONE;
-			} else if (!(wa[i]->map_state == v || winprop(w[i], wmatom[WMState]) == ic)) {
-				w[i] = 0;
-			} else if (!(t[i] = wintrans(w[i]))) {
-				if ((type = winprop(w[i], netatom[WindowType])) == netatom[Dock])
-					initpanel(w[i], g[i]);
-				else if (!wa[i]->override_redirect)
-					initclient(w[i], t[i], g[i], type);
-				w[i] = 0;
-			}
-		}
-		for (i = 0; i < rt->children_len; i++) {
-			if (w[i] && t[i]) {
-				if ((type = winprop(w[i], netatom[WindowType])) == netatom[Dock])
-					initpanel(w[i], g[i]);
-				else if (!wa[i]->override_redirect)
-					initclient(w[i], t[i], g[i], type);
-			}
-			free(wa[i]);
-			free(g[i]);
-		}
-		free(rt);
-		free(s);
-		free(t);
-		free(wa);
-		free(g);
-	} else {
-		checkerror(1, "unable to query tree from root window", e);
-	}
 }
 
 void initwm(void)
@@ -2590,10 +2658,8 @@ void movefocus(int direction)
 			FIND_PREV(c, selws->sel, selws->clients);
 			direction++;
 		}
-		if (c) {
+		if (c)
 			focus(c);
-			restack(c->ws);
-		}
 	}
 }
 
@@ -2828,6 +2894,7 @@ void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, i
 void restack(Workspace *ws)
 {
 	Client *c;
+	DeskWin *d;
 
 	if (!ws)
 		ws = selws;
@@ -2839,6 +2906,8 @@ void restack(Workspace *ws)
 		FOR_STACK(c, ws->stack)
 			if (!c->floating && c->ws == c->ws->mon->ws)
 				setstackmode(c->win, XCB_STACK_MODE_BELOW);
+		FOR_EACH(d, deskwins)
+			setstackmode(d->win, XCB_STACK_MODE_BELOW);
 	}
 	eventignore(XCB_ENTER_NOTIFY);
 }
@@ -3489,6 +3558,18 @@ Panel *wintopanel(xcb_window_t win)
 		if (p->win == win)
 			return p;
 	return p;
+}
+
+DeskWin *wintodeskwin(xcb_window_t win)
+{
+	DeskWin *d;
+
+	if (win == root)
+		return NULL;
+	FOR_EACH(d, deskwins)
+		if (d->win == win)
+			return d;
+	return NULL;
 }
 
 Workspace *wintows(xcb_window_t win)

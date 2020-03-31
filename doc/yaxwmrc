@@ -9,8 +9,9 @@ logfile="$HOME/.yaxcmd.log"
 [ -d "$HOME/.local/share/xorg" ] && logfile="$HOME/.local/share/xorg/yaxcmd.log"
 : > "$logfile"
 
-# window manager configuration run as a compound command to
-# redirect all output to the log file without redirecting each command
+# Window manager configuration run as a compound command to
+# redirect all output to the log file without redirecting each command.
+# Not needed but it's nice to be able to tell when there are errors.
 {
 	# workspace settings
 	# ------------------------
@@ -41,10 +42,8 @@ logfile="$HOME/.yaxcmd.log"
 		# set split ratio between first and second stack
 		yaxcmd set split stack absolute 0.55
 
-		# set the last 2 workspaces to use a 200px padding
-		if [ "$i" -eq "$last" ] || [ "$i" -eq $(( last - 1 )) ]; then
-			yaxcmd set pad l=400 r=400 t=200 b=200
-		fi
+		# set the last 2 workspaces to use some padding
+		[ "$i" -ge $(( last - 2 )) ] && yaxcmd set pad l=400 r=400 t=200 b=200
 	done
 
 	# restore active workspace
@@ -73,31 +72,30 @@ logfile="$HOME/.yaxcmd.log"
 	# window rules
 	# --------------
 
-	# open window(s) on a specific workspace (and monitor it's assigned to)
+	# open window(s) on a specific workspace (assigned monitor)
 	yaxcmd rule class="^gimp$" ws=2
 
-	# open window(s) on a specific monitor by-number (and active workspace on it)
-	yaxcmd rule class="^firefox$" mon=0
-
-	# or by monitor name
+	# open window(s) on a monitor by number or name (active workspace on monitor)
+	yaxcmd rule class="^firefox$"  mon=0
 	yaxcmd rule class="^chromium$" mon="HDMI-A-0"
-
-	# open window(s) and call a pre-defined callback function
-	yaxcmd rule class="^mpv$" instance="^gl$" floating callback=albumart
-
-	# open window(s) with a specific geometry and coordinates
-	yaxcmd rule class="^google-chrome$" title="^open files$" w=1280 h=720 floating
 
 	# open window(s) in a floating state
 	yaxcmd rule class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" floating
+
+	# open window(s) and use a callback function (defined in config.h)
+	yaxcmd rule class="^mpv$" instance="^gl$" floating callback=albumart
+
+	# open window(s) with a specific geometry and coordinates (floating only!)
+	yaxcmd rule class="^google-chrome$" title="^open files$" floating w=1280 h=720 bw=0
+
 
 } >> "$logfile" 2>&1 # append responses
 
 # inform of any errors in a notification
 if grep -q 'error:' "$logfile"; then
-	hash notify-send > /dev/null 2>&1 || exit 1
-	notify-send -t 0 -u critical "Yaxwmrc Has Errors" \
+	hash notify-send && notify-send -t 0 -u critical "Yaxwmrc Has Errors" \
 		"$(awk '/error:/ {sub(/^error: /, ""); print}' "$logfile")"
+	exit 1
 fi
 
 exit 0

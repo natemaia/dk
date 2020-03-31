@@ -4,11 +4,11 @@
  */
 
 
-/* simple example of a client callback function for album art windows */
+/* simple example of a callback function for album art windows */
 static void albumart(Client *c)
 { /* add padding for the window width + gaps,
 	 move window to the left center of the screen,
-	 and focus the last focused window */
+	 focus the last focused window */
 	c->ws->padr = c->w + (2 * c->ws->gappx);
 	gravitate(c, Center, Right, 1);
 	focus(c->snext);
@@ -19,6 +19,15 @@ static void albumart(Client *c)
  * Callback functions have the following prototype: void function(Client *); */
 static Callback callbacks[] = {
 	{ "albumart", albumart },
+};
+
+
+/* "layout" names used by cmdlayout() to parse arguments.
+ * Layout functions have the following prototype: int function(Workspace *); */
+static Layout layouts[] = {
+	{ "tile", tile },
+	{ "mono", mono },
+	{ "none", NULL },
 };
 
 

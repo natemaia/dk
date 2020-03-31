@@ -82,8 +82,8 @@ logfile="$HOME/.yaxcmd.log"
 	# or by monitor name
 	yaxcmd rule class="^chromium$" mon="HDMI-A-0"
 
-	# open window(s) and use a pre-defined callback function
-	yaxcmd rule class="^mpv$" instance="^gl$" floating callback=mpvart
+	# open window(s) and call a pre-defined callback function
+	yaxcmd rule class="^mpv$" instance="^gl$" floating callback=albumart
 
 	# open window(s) with a specific geometry and coordinates
 	yaxcmd rule class="^google-chrome$" title="^open files$" w=1280 h=720 floating

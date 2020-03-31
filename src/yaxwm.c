@@ -360,6 +360,59 @@ static const char *cursors[] = {
 	[Resize] = "sizing"
 };
 
+/* "layout" names used by cmdlayout() to parse arguments.
+ * Layout functions have the following prototype: int function(Workspace *); */
+static Layout layouts[] = {
+	{ "tile", tile },
+	{ "mono", mono },
+	{ "none", NULL },
+};
+
+/* primary keywords and parser functions
+ * Keyword functions have the following prototype: void function(char **); */
+static Keyword keywords[] = {
+	{ "rule", cmdrule },
+	{ "set",  cmdset  },
+	{ "win",  cmdwin  },
+	{ "wm",   cmdwm   },
+	{ "ws",   cmdws   },
+};
+
+/* "set" keyword options, used by cmdset() to parse arguments
+ * Keyword functions have the following prototype: void function(char **); */
+static Keyword setcmds[] = {
+	{ "border", cmdborder  },
+	{ "gap",    cmdgappx   },
+	{ "layout", cmdlayout  },
+	{ "master", cmdnmaster },
+	{ "mouse",  cmdmouse   },
+	{ "pad",    cmdpad     },
+	{ "split",  cmdsplit   },
+	{ "stack",  cmdnstack  },
+};
+
+/* "win" keyword options, used by cmdwin() to parse arguments
+ * Keyword functions have the following prototype: void function(char **); */
+static Keyword wincmds[] = {
+	{ "cycle",    cmdcycle    },
+	{ "fakefs",   cmdffs      },
+	{ "float",    cmdfloat    },
+	{ "focus",    cmdfocus    },
+	{ "kill",     cmdkill     },
+	{ "mvresize", cmdmvresize },
+	{ "stick",    cmdstick    },
+	{ "swap",     cmdswap     },
+};
+
+/* "ws" names used by cmdws() to parse arguments.
+ * Command functions have the following prototype: void function(int); */
+static Command wscommands[] = {
+	{ "follow", cmdfollow },
+	{ "send",   cmdsend   },
+	{ "view",   cmdview   },
+};
+
+
 #include "stringl.c"
 #include "config.h"
 

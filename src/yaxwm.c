@@ -41,17 +41,18 @@ static void print(const char *fmt, ...);
 #define VERSION "0.3"
 #endif
 
-#define W(x)          ((x)->w + (2 * (x)->bw))
-#define H(x)          ((x)->h + (2 * (x)->bw))
-#define MAX(a, b)     ((a) > (b) ? (a) : (b))
-#define MIN(a, b)     ((a) < (b) ? (a) : (b))
-#define LEN(x)        (sizeof(x) / sizeof(x[0]))
-#define CLNMOD(mod)   (mod & ~(numlockmask | XCB_MOD_MASK_LOCK))
+#define W(x)                ((x)->w + (2 * (x)->bw))
+#define H(x)                ((x)->h + (2 * (x)->bw))
+#define MIN(a, b)           ((a) < (b) ? (a) : (b))
+#define MAX(a, b)           ((a) > (b) ? (a) : (b))
+#define CLAMP(x, min, max)  (MIN(MAX((x), (min)), (max)))
+#define LEN(x)              (sizeof(x) / sizeof(x[0]))
+#define CLNMOD(mod)         (mod & ~(numlockmask | XCB_MOD_MASK_LOCK))
 
-#define BWMASK        (XCB_CONFIG_WINDOW_BORDER_WIDTH)
-#define XYMASK        (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y)
-#define WHMASK        (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT)
-#define BUTTONMASK    (XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE)
+#define BWMASK              (XCB_CONFIG_WINDOW_BORDER_WIDTH)
+#define XYMASK              (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y)
+#define WHMASK              (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT)
+#define BUTTONMASK          (XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE)
 
 #define FOR_EACH(v, list)   for ((v) = (list); (v); (v) = (v)->next)
 #define FOR_STACK(v, list)  for ((v) = (list); (v); (v) = (v)->snext)
@@ -72,6 +73,10 @@ static void print(const char *fmt, ...);
 
 #define MOVE(win, x, y)\
 	xcb_configure_window(con, (win), XYMASK, (uint []){(x), (y)})
+
+#define MOVERESIZE(win, x, y, w, h, bw)\
+	xcb_configure_window(con, win, XYMASK | WHMASK | BWMASK,\
+			(uint []){(x), (y), (w), (h), (bw)});
 
 #define PROP_APPEND(win, atom, type, membsize, nmemb, value)\
 	xcb_change_property(con, XCB_PROP_MODE_APPEND, (win), (atom),\
@@ -367,6 +372,8 @@ static int numws = 0;             /* number of workspaces currently allocated */
 static int scr_w, scr_h;          /* root window size */
 static uint running = 1;          /* continue handling events */
 static uint restart = 0;          /* restart wm before quitting */
+static int minxy = 10;            /* minimum amount of showing area for windows */
+static int minwh = 50;           /* minimum size for windows */
 static int focusmouse = 1;        /* enable focus follows mouse */
 static int randrbase = -1;        /* randr extension response */
 static uint numlockmask = 0;      /* numlock modifier bit mask */
@@ -475,7 +482,7 @@ int adjbordergap(int i, int opt, int changing, int other)
 	DBG("adjbordergap: entering");
 	if (opt != stdabsolute)
 		return i;
-	return MAX(MIN(i, (int)(selws->mon->wh - selws->padb - selws->padt / 6) - other), 0) - changing;
+	return CLAMP(i, 0, (int)(selws->mon->wh - selws->padb - selws->padt / 6) - other) - changing;
 }
 
 void adjnmasterstack(int i, int opt, int master)
@@ -517,40 +524,29 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int usermotion, in
 	Monitor *m = c->ws->mon;
 
 	DBG("applysizehints: entering");
-	*w = MAX(100, *w);
-	*h = MAX(100, *h);
+	*w = MAX(0, *w);
+	*h = MAX(0, *h);
 	if (usermotion) {
-		if (*x > scr_w)
-			*x = scr_w - W(c);
-		if (*y > scr_h)
-			*y = scr_h - H(c);
-		if (*x + *w + 2 * c->bw < 0)
-			*x = 0;
-		if (*y + *h + 2 * c->bw < 0)
-			*y = 0;
-		/* *x = MIN(MAX(0, *x), scr_w - W(c)); */
-		/* *y = MIN(MAX(0, *y), scr_h - H(c)); */
-	} else {
-		*x = MAX(*x, m->wx);
-		*y = MAX(*y, m->wy);
-		if (*x + W(c) > m->wx + m->ww)
-			*x = m->wx + m->ww - W(c);
-		if (*y + H(c) > m->wy + m->wh)
-			*y = m->wy + m->wh - H(c);
-		/* *x = MIN(MAX(*x, m->wx), m->wx + m->ww - W(c)); */
-		/* *y = MIN(MAX(*y, m->wy), m->wy + m->wh - H(c)); */
-	}
-	if (c->floating || !c->ws->layout->fn) {
-		if (usermotion && !mouse) {
-			if (*w > c->w && c->increment_w > 1)
+		if (!mouse) {
+			if (*w > c->w && c->increment_w > *w - c->w)
 				*w = c->w + c->increment_w;
-			else if (*w < c->w && c->increment_w > 1)
+			else if (*w < c->w && c->increment_w > c->w - *w)
 				*w = c->w - c->increment_w;
-			if (*h > c->h && c->increment_h > 1)
+			if (*h > c->h && c->increment_h > *h - c->h)
 				*h = c->h + c->increment_h;
-			else if (*h < c->h && c->increment_h > 1)
+			else if (*h < c->h && c->increment_h > c->h - *h)
 				*h = c->h - c->increment_h;
+			*h = MIN(*h, m->wh);
+			*w = MIN(*w, m->ww);
 		}
+		*x = CLAMP(*x, (*w + (2 * c->bw) - minxy) * -1, scr_w - minxy);
+		*y = CLAMP(*y, (*h + (2 * c->bw) - minxy) * -1, scr_h - minxy);
+	} else {
+		*x = CLAMP(*x, m->wx, m->wx + m->ww - W(c));
+		*y = CLAMP(*y, m->wy, m->wy + m->wh - H(c));
+	}
+
+	if (c->floating || !c->ws->layout->fn) {
 		if (!(baseismin = c->base_w == c->min_w && c->base_h == c->min_h)) {
 			*w -= c->base_w;
 			*h -= c->base_h;
@@ -779,7 +775,7 @@ void cmdborder(char **argv)
 		else if (opt == stdreset)
 			i = dborder[Width];
 		else if ((n = adjbordergap(i, opt, border[Width], selws->gappx)) != INT_MAX)
-			i = MAX(MIN((int)((selws->mon->wh / 6) - selws->gappx), border[Width] + n), 0);
+			i = CLAMP(border[Width] + n, 0, (int)((selws->mon->wh / 6) - selws->gappx));
 		if (i != border[Width]) {
 			FOR_CLIENTS(c, ws)
 				if (c->bw && c->bw == border[Width])
@@ -895,7 +891,7 @@ void cmdgappx(char **argv)
 	else if (opt == stdreset)
 		ng = wsrules[selws->num].gappx;
 	else if ((n = adjbordergap(i, opt, selws->gappx, border[Width])) != INT_MAX)
-		ng = MAX(MIN((int)selws->gappx + n, (selws->mon->wh / 6) - border[Width]), 0);
+		ng = CLAMP((int)selws->gappx + n, 0, (selws->mon->wh / 6) - border[Width]);
 	if (ng != selws->gappx) {
 		selws->gappx = ng;
 		layoutws(selws);
@@ -1019,11 +1015,9 @@ void cmdmvresize(char **argv)
 			i++;
 		}
 		if (absolute)
-			resizehint(c, x, y, MIN(c->ws->mon->ww, MAX(100, w)),
-					MIN(c->ws->mon->wh, MAX(100, h)), c->bw, 1, 0);
+			resizehint(c, x, y, w, h, c->bw, 1, 0);
 		else
-			resizehint(c, c->x + x, c->y + y, MIN(c->ws->mon->ww, MAX(100, c->w + w)),
-					MIN(c->ws->mon->wh, MAX(100, c->h + h)), c->bw, 1, 0);
+			resizehint(c, c->x + x, c->y + y, c->w + w, c->h + h, c->bw, 1, 0);
 	} else {
 		if (!strcmp(*argv, "y")) {
 			DBG("cmdmvresize: active window is tiled -- adjusting stack location");
@@ -1163,10 +1157,8 @@ void cmdparse(char *buf)
 void cmdrule(char **argv)
 {
 	uint ui;
-	Client *c;
 	Workspace *ws;
 	WinRule *wr, r;
-	Callback *cb = NULL;
 	int i, rem, matched = 0;
 
 	DBG("cmdrule: entering");
@@ -1266,15 +1258,10 @@ void cmdrule(char **argv)
 			matched = 1;
 			break;
 		}
-		if (rem && wr) {
+		if (rem && wr)
 			freewinrule(wr);
-		} else if (!rem) {
-			if (!matched)
-				initwinrule(&r);
-			FOR_CLIENTS(c, ws)
-				if ((cb = applywinrule(c)))
-					cb->fn(c);
-		}
+		else if (!rem && !matched)
+			initwinrule(&r);
 	}
 }
 
@@ -1469,7 +1456,7 @@ void clientcfgreq(Client *c, xcb_configure_request_event_t *e)
 		if ((e->value_mask & XYMASK) && !(e->value_mask & WHMASK))
 			sendconfigure(c);
 		if (c->ws == c->ws->mon->ws || (c->sticky && c->ws->mon == selws->mon))
-			xcb_configure_window(con, c->win, XYMASK|WHMASK, (uint []){c->x, c->y, c->w, c->h});
+			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	} else {
 		sendconfigure(c);
@@ -2131,13 +2118,14 @@ void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *
 	Callback *cb = NULL;
 
 	if (type == netatom[Desktop]) {
-		uint v[] = { selws->mon->wx, selws->mon->wy, selws->mon->ww, selws->mon->wh, 0 };
-		xcb_configure_window(con, win, XYMASK | WHMASK | BWMASK, v);
-		DBG("initclient: mapping desktop window");
+		DBG("initclient: mapping desktop window: 0x%08x -- %d,%d @ %dx%d",
+				win, selws->mon->wx, selws->mon->wy, selws->mon->ww, selws->mon->wh);
+		MOVERESIZE(win, selws->mon->wx, selws->mon->wy, selws->mon->ww, selws->mon->wh, 0);
 		xcb_map_window(con, win);
 		return;
 	} else if (type == netatom[Splash]) {
-		DBG("initclient: mapping splash window");
+		DBG("initclient: mapping splash window: 0x%08x -- %d,%d @ %dx%d",
+				win, g->x, g->y, g->width, g->height);
 		xcb_map_window(con, win);
 		return;
 	}
@@ -2152,14 +2140,14 @@ void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *
 		c->trans = wintoclient(trans);
 	cb = applywinrule(c);
 	m = c->ws->mon;
-	c->w = MIN(c->w, m->ww);
-	c->h = MIN(c->h, m->wh);
+	c->w = CLAMP(c->w, minwh, m->ww);
+	c->h = CLAMP(c->h, minwh, m->wh);
 	if (c->trans) {
-		c->x = c->trans->ws->mon->wx + c->trans->x + ((W(c->trans) - W(c)) / 2);
-		c->y = c->trans->ws->mon->wy + c->trans->y + ((H(c->trans) - H(c)) / 2);
+		c->x = m->wx + c->trans->x + ((W(c->trans) - W(c)) / 2);
+		c->y = m->wy + c->trans->y + ((H(c->trans) - H(c)) / 2);
 	} else {
-		c->x = MIN(MAX(c->x, c->ws->mon->wx), m->wx + m->ww - W(c));
-		c->y = MIN(MAX(c->y, c->ws->mon->wy), m->wy + m->wh - H(c));
+		c->x = CLAMP(c->x, c->ws->mon->wx, m->wx + m->ww - W(c));
+		c->y = CLAMP(c->y, c->ws->mon->wy, m->wy + m->wh - H(c));
 	}
 	xcb_configure_window(con, c->win, BWMASK, &c->bw);
 	sendconfigure(c);
@@ -2819,13 +2807,11 @@ Monitor *randrclone(xcb_randr_output_t id, int x, int y)
 
 void resize(Client *c, int x, int y, int w, int h, int bw)
 {
-	uint v[] = { x, y, w, h, bw };
-
 	DBG("resize: entering");
 	c->old_x = c->x, c->old_y = c->y;
 	c->old_w = c->w, c->old_h = c->h;
 	c->x = x, c->y = y, c->w = w, c->h = h;
-	xcb_configure_window(con, c->win, XYMASK | WHMASK | BWMASK, v);
+	MOVERESIZE(c->win, x, y, w, h, bw);
 	sendconfigure(c);
 }
 
@@ -3124,13 +3110,14 @@ void takefocus(Client *c)
 int tileresize(Client *c, Client *prev, uint wx, uint wy, uint ww, uint wh,
 		uint x, uint y, int w, int h, int bw, int gap, uint *newy, int nremain, int left)
 {
-	int ret = 1, minh = 100;
+	int ret = 1;
 	static int offset = 0;
 	static Workspace *ws = NULL;
 
 	DBG("tileresize: entering -- win: 0x%08x -- %d,%d @ %dx%d -- newy: %d, nremain: %d, left; %d",
 			c->win, x, y, w, h, *newy, nremain, left);
-	if (!c->hoff && h < minh) {
+	if (!c->hoff && h < minwh) {
+		DBG("toggling floating");
 		c->floating = 1;
 		if (ws != c->ws) {
 			ws = c->ws;
@@ -3138,37 +3125,37 @@ int tileresize(Client *c, Client *prev, uint wx, uint wy, uint ww, uint wh,
 		}
 		h = MAX(wh / 6, 240);
 		w = MAX(ww / 6, 360);
-		x = MAX(wx + ww - w, (wx + offset + ww - w) / 4);
-		y = MAX(wy + wh - h, (wy + offset + wh - h) / 4);
-		offset += (x < (wx + offset + ww - w) && y < (wy + offset + wh - h)) ? 20 : offset * -1;
+		x = MIN(wx + ww - w, (wx + ww / 4) + offset);
+		y = MIN(wy + wh - h, (wy + ww / 4) + offset);
+		offset += (x < wx + ww - w && y < wy + wh - h) ? minwh : offset * -1 + rand() % 100;
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-	} else if (nremain > 1 && (nremain - 1) * (minh + gap) > left) {
-		h += left - ((nremain - 1) * (minh + gap));
+	} else if (nremain > 1 && (nremain - 1) * (minwh + gap) > left) {
+		h += left - ((nremain - 1) * (minwh + gap));
 		ret = -1;
 	} else if (nremain == 1 && *newy + (h - gap) != wh) {
 		DBG("tileresize: last client in stack but not using space")
 		if (prev) {
-			if (prev->h + left < minh) {
+			if (prev->h + left < minwh) {
 				ret = -1;
-				resize(prev, prev->x, prev->y, prev->w, minh, bw);
-				y = prev->y + minh;
+				resizehint(prev, prev->x, prev->y, prev->w, minwh, bw, 0, 0);
+				y = prev->y + minwh;
 				h = wh - (prev->y + prev->h);
-			} else if (h < minh) {
+			} else if (h < minwh) {
 				ret = -1;
-				resize(prev, prev->x, prev->y, prev->w, prev->h + left - (minh - h), bw);
+				resizehint(prev, prev->x, prev->y, prev->w, prev->h + left - (minwh - h), bw, 0, 0);
 				y = prev->y + prev->h;
-				h = minh;
+				h = minwh;
 			} else {
-				resize(prev, prev->x, prev->y, prev->w, prev->h + left, bw);
+				resizehint(prev, prev->x, prev->y, prev->w, prev->h + left, bw, 0, 0);
 				y += left;
 			}
 		} else {
 			h = wh;
 			ret = -1;
 		}
-	} else if (h < minh) {
+	} else if (h < minwh) {
 		ret = -1;
-		h = minh;
+		h = minwh;
 	}
 	resize(c, x, y, w - (2 * bw), h - (2 * bw), bw);
 	if (!c->floating)

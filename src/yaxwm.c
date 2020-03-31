@@ -2185,7 +2185,7 @@ void initclient(xcb_window_t win, xcb_window_t trans, xcb_get_geometry_reply_t *
 	grabbuttons(c, 0);
 	if (FLOATING(c) || (c->floating = c->oldstate = trans != XCB_WINDOW_NONE || c->fixed)) {
 		if (c->x + c->y == 0)
-			floatoffset(c, 20, &c->x, &c->y, &c->w, &c->h);
+			floatoffset(c, 6, &c->x, &c->y, &c->w, &c->h);
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	}
 	PROP_APPEND(root, netatom[ClientList], XCB_ATOM_WINDOW, 32, 1, &c->win);

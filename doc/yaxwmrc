@@ -43,7 +43,7 @@ logfile="$HOME/.yaxcmd.log"
 		yaxcmd set split stack absolute 0.55
 
 		# set the last 2 workspaces to use some padding
-		[ "$i" -ge $(( last - 2 )) ] && yaxcmd set pad l=400 r=400 t=200 b=200
+		[ "$i" -gt $(( last - 2 )) ] && yaxcmd set pad l=400 r=400 t=200 b=200
 	done
 
 	# restore active workspace
@@ -66,7 +66,8 @@ logfile="$HOME/.yaxcmd.log"
 
 	# set the border colour for focused and unfocused windows
 	yaxcmd set border colour focus   '#6699cc'
-	yaxcmd set border colour unfocus '#000000'
+	yaxcmd set border colour unfocus '#111111'
+	yaxcmd set border colour urgent  '#ee5555'
 
 
 	# window rules

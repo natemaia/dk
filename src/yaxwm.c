@@ -1830,7 +1830,7 @@ void eventhandle(xcb_generic_event_t *ev)
 				DBG("eventhandle: outputs changed after randr event");
 				fixupworkspaces();
 			}
-		} else if (!ev->response_type && e) {
+		} else if (!ev->response_type && e && e->error_code != 3 && e->error_code != 5) {
 			fprintf(stderr, "yaxwm: eventhandle");
 			printerror(e);
 		}

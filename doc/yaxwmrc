@@ -80,15 +80,14 @@ logfile="$HOME/.yaxcmd.log"
 	yaxcmd rule class="^firefox$"  mon=0
 	yaxcmd rule class="^chromium$" mon="HDMI-A-0"
 
+	# open window(s) and use a callback function (defined in config.h)
+	yaxcmd rule class="^mpv$" instance="^gl$" floating callback=albumart bw=0
+
 	# open window(s) in a floating state
 	yaxcmd rule class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" floating
 
-	# open window(s) and use a callback function (defined in config.h)
-	yaxcmd rule class="^mpv$" instance="^gl$" floating callback=albumart
-
 	# open window(s) with a specific geometry and coordinates (floating only!)
-	yaxcmd rule class="^google-chrome$" title="^open files$" floating w=1280 h=720 bw=0
-
+	yaxcmd rule class="^google-chrome$" title="^open files$" floating w=1280 h=720
 
 } >> "$logfile" 2>&1 # append responses
 

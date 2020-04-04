@@ -47,9 +47,20 @@ alt + ctrl + shift + r
 alt + q
     yaxcmd win kill
 
-# change focus
+# change active window
 alt + {j,k}
     yaxcmd win focus {next,prev}
+
+# change active workspace
+alt + {1-9,0}
+    yaxcmd ws {1-9,10}
+
+alt + {bracketleft,bracketright}
+    yaxcmd ws {prev,next}
+
+# change active monitor
+alt + {comma,period}
+    yaxcmd mon {prev,next}
 
 # swap tiled window in or out of master
 alt + space
@@ -75,9 +86,16 @@ alt + shift + {h,j,k,l}
 alt + ctrl + {h,j,k,l}
     yaxcmd win mvresize {w=-10,h=10,h=-10,w=10}
 
-# view, send, or follow to workspace
-alt + {_,shift + ,ctrl + }{1-9,0}
-    yaxcmd ws {_,send,follow} {1-9,10}
+# send or follow active window to a workspace
+alt + {shift + ,ctrl + }{1-9,0}
+    yaxcmd ws {send,follow} {1-9,10}
+
+alt + {shift + ,ctrl + }{bracketleft,bracketright}
+    yaxcmd ws {send,follow} {prev,next}
+
+# send or follow active window to a monitor
+alt + {shift + ,ctrl + }{comma,period}
+    yaxcmd mon {send,follow} {prev,next}
 
 # toggle fake fullscreen. allows move, resize, tiling, etc. on fullscreen windows.
 alt + F11
@@ -90,17 +108,17 @@ alt + {t,m,f}
 # make a pseudo layout by toggling padding
 alt + shift + p
 	yaxcmd set pad print | awk 'BEGIN\{ i = 0 \} \{ if ($2 != 0) i++ \} END\{ if (i) exit 1 \}' \
-		&& yaxcmd set pad l=400 r=400 t=200 b=200 || yaxcmd set pad l=0 r=0 t=0 b=0
+		&& yaxcmd set pad l=400 r=400 t=100 b=100 || yaxcmd set pad l=0 r=0 t=0 b=0
 
 # change number of windows in master or first stack
 alt + {_,shift + }{i,d}
     yaxcmd set {master,stack} {+1,-1}
 
-# change gap or border size
+# change gap or border width
 alt + {_,ctrl + }{equal,minus}
     yaxcmd set {gap,border width} {+1,-1}
 
-# reset gap or border size
+# reset gap or border width
 alt + {_,ctrl + }shift + equal
     yaxcmd set {gap,border width} reset
 

@@ -2,37 +2,35 @@
 
 Yet another X window manager, as if we didn't have enough..
 
-After using dwm for some time and changing it a lot *(and learning a lot)*
-I decided to try writing my own. I'm not afraid to say dwm is great
-and does so much right when it comes to tiling window management.
+After using dwm for a long time, changing it, and learning. I wanted
+to write my own window manager. I'm not afraid to say dwm is great and does
+a lot of things right when it comes to simplifying window management.
+At this point yaxwm is not solely based on dwm but more of a collection of
+features and ideas in other window managers that I liked.
 
-Yaxwm differs in several ways:
+Some ways in which yaxwm differs include:
 
-- RANDR support.
+- Based on xcb rather than xlib with RANDR support for multi-head.
 
-- No built-in bar.
+- Dynamic workspaces similar to xmonad, with a workspace centric model at the core.
 
-- Workspace centric.
+- Simple startup script for easy configuration once the window manger is running.
 
-- Likely more bugs/errors.
+- Unix socket communication for controlling and configuring the wm similar to bspwm.
 
-- Supports more [ewmh standards](https://specifications.freedesktop.org/wm-spec/wm-spec-latest.html).
+- No Keybinds built in method for binding keys, you'll need an external program like `sxhkd`.
 
-- Based on xcb rather than xlib.
+- Supports more [ewmh standards](https://specifications.freedesktop.org/wm-spec/wm-spec-latest.html)
+for better interoperability with other programs and applications.
 
 - No source lines restrictions yet.
 
-- Fifo pipe communication for controlling and configuring the wm.
-
-- Simple startup script for easy configuration once the wm is running.
-
-- No Keybinds, control can be done fifo commands and an external program.
+- Likely more bugs/errors.
 
 
 #### Installation
 
-###### Requirements
-You will need various xcb headers, on Arch Linux you can run
+You need the xcb headers, on Arch Linux you can run
 
 ```
 pacman -S xcb-proto xcb-util xcb-util-wm xcb-util-cursor xcb-util-keysyms
@@ -44,18 +42,20 @@ Furthermore yaxwm offers no key binds so you will need a third party
 program like `sxhkd` in order to launch programs and control the wm.
 
 
-###### Build
 To compile run
 ```
 make
 ```
 
-Edit `src/config.h` to your liking, then to install run
+Edit `src/config.h` to your liking, then run *(as root if needed)*
 ```
-sudo make clean install
+make install
 ```
 
-If at any time you want to remove yaxwm, you can run `sudo make uninstall`.
+If at any time you want to remove yaxwm, run
+```
+make uninstall
+```
 
 
 #### Usage
@@ -65,13 +65,14 @@ To start yaxwm you can add `exec yaxwm` to your xinitrc.
 
 #### Configuration
 
-Copy the default config header `src/config.def.h` to `src/config.h`
-then edit it to suit your liking and recompile.
+There are example yaxwmrc and sxhkdrc in `doc/` or `/usr/share/doc/yaxwm` after installation.
 
-There is an example yaxwmrc and sxhkdrc in the `doc/`, or `/usr/share/doc/yaxwm` once installed.
+Yaxwm looks for a file `$YAXWM_CONF`, `$XDG_CONFIG_HOME/yaxwm/yaxwmrc`, or
+`$HOME/.config/yaxwm/yaxwmrc` and tries to execute it. This file is just a shell
+script, it must be executable.
 
-Yaxwm looks for a file `YAXWM_CONF`, `XDG_CONFIG_HOME/yaxwm/yaxwmrc`, or `HOME/.config/yaxwm/yaxwmrc`
-and tries to execute it, this file is just a shell script and must be executable.
+For advanced configuration like layout and callback functions, copy the default
+config header `src/config.def.h` to `src/config.h` then edit it, and recompile.
 
 
 #### Todo
@@ -83,9 +84,11 @@ and tries to execute it, this file is just a shell script and must be executable
 
 #### Contributing
 
-I'm open to contributions or ideas so feel free. I don't use a ton of comments and the xcb documentation is kinda shit,
-but if you're familiar with other window managers most of it will be simple. If you're coming from xlib, most of
-the calls are easily translated to xcb with minor fiddling. There are some make flags I use often when testing.
+I'm open to contributions or ideas so feel free. I don't use a ton of comments
+and the xcb documentation is kinda shit, but if you're familiar with other window
+managers most of it will be simple. If you're coming from xlib, most of the calls
+are easily translated to xcb with minor fiddling. There are some make flags I use
+often when testing.
 
 To enable internal stderr debug output
 ```
@@ -102,18 +105,8 @@ make nostrip
 
 See the LICENSE file for a list of authors/contributors.
 
-Huge thanks to:
-- [dwm](https://dmw.suckless.org) and the suckless community for the awesome software and knowledge.
-
-- [bspwm](https://github.com/baskerville/bspwm) for some of the cool ideas for wm design.
-
-- [monsterwm-xcb](https://github.com/Cloudef/monsterwm-xcb)
-
-- [awesome](https://github.com/awesomeWM/awesome)
-
-- [frankenwm](https://github.com/sulami/FrankenWM)
-
-- [4wm](https://github.com/dct2012/4wm)
-
-- [xcb docs](https://xcb.freedesktop.org) for being one of the slowest websites of all time XD.
+Others that are not included in contributors but I owe a huge thanks to:
+[dwm](https://dmw.suckless.org), [bspwm](https://github.com/baskerville/bspwm),
+[monsterwm-xcb](https://github.com/Cloudef/monsterwm-xcb),
+[4wm](https://github.com/dct2012/4wm), and [frankenwm](https://github.com/sulami/FrankenWM).
 

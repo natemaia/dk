@@ -15,49 +15,29 @@ logfile="$HOME/.yaxcmd.log"
 {
 	# workspace settings
 	# ------------------------
+	# defaults to use when allocating new workspaces
+	yaxcmd ws default layout=tile master=1 stack=3 gap=0 split=0.55 ssplit=0.55
 
-	# last workspace number
-	last=$(yaxcmd ws print | awk 'BEGIN{ s="" }; { s=$1 }; END{ print s }')
-
-	for i in $(yaxcmd ws print | awk '{print $1}'); do
-		# set the layout
-		yaxcmd set ws "$i" layout tile
-
-		# set number of master windows
-		yaxcmd set ws "$i" master absolute 1
-
-		# set number of first stack windows
-		yaxcmd set ws "$i" stack absolute 3
-
-		# set gap width to an absolute value in pixels
-		yaxcmd set ws "$i" gap absolute 0
-
-		# set split ratio between master and stack(s)
-		yaxcmd set ws "$i" split absolute 0.55
-
-		# set split ratio between first and second stack
-		yaxcmd set ws "$i" split stack absolute 0.55
-
-		# set the last 2 workspaces to use some padding
-		[ "$i" -gt $(( last - 2 )) ] && yaxcmd set ws "$i" pad l=400 r=400 t=100 b=100
-	done
-
+	# allocate 10 workspaces total 1-10, default is one per monitor
+	# if successful, set workspace 10 to use some padding
+	yaxcmd ws alloc=10 && yaxcmd set ws=10 pad l=400 r=400 t=100 b=100
 
 	# mouse window control
 	# ---------------------
 	# define mouse mod and move/resize buttons
-	yaxcmd set mouse  mod alt  move button1  resize button3
+	yaxcmd mouse mod=alt move=button1 resize=button3
 
 
-	# borders
+	# borders and gaps
 	# ---------
-	# disable borders in monocle layout and tile layout with one window
-	yaxcmd set border smart 1
+	# disable gaps and borders in monocle layout and tile layout with one window
+	yaxcmd set gap smart=1
+	yaxcmd set border smart=1
 
 	# set border width in pixels to an absolute value
-	yaxcmd set border width  absolute 1
+	yaxcmd set border width absolute=1
 
-	# set the border colour for focused and unfocused windows
+	# set the border colour for focused, unfocused, and urgent windows
 	yaxcmd set border colour focus   '#6699cc'
 	yaxcmd set border colour unfocus '#000000'
 	yaxcmd set border colour urgent  '#ee5555'
@@ -65,12 +45,11 @@ logfile="$HOME/.yaxcmd.log"
 
 	# window rules
 	# --------------
-
-	# open window(s) on a specific workspace (assigned monitor)
+	# open window(s) on a specific workspace
 	yaxcmd rule class="^gimp$" ws=2
 
-	# open window(s) on a monitor by number or name (active workspace on monitor)
-	yaxcmd rule class="^firefox$"  mon=0
+	# open window(s) on a monitor by number or by name
+	yaxcmd rule class="^firefox$"  mon=1
 	yaxcmd rule class="^chromium$" mon="HDMI-A-0"
 
 	# open window(s) and use a callback function (defined in config.h)
@@ -79,7 +58,7 @@ logfile="$HOME/.yaxcmd.log"
 	# open window(s) in a floating state
 	yaxcmd rule class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" floating
 
-	# open window(s) with a specific geometry and coordinates (floating only!)
+	# open window(s) with a specific geometry and coordinates (floating windows only!)
 	yaxcmd rule class="^google-chrome$" title="^open files$" floating w=1280 h=720
 
 } >> "$logfile" 2>&1 # append responses

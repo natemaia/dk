@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
 			if ((s = recv(fd, resp, sizeof(resp) - 1, 0)) > 0) {
 				resp[s] = '\0';
 				if (*resp == '!') {
-					fprintf(stderr, "error: %s\n", resp + 1);
+					fprintf(stderr, "yaxcmd: error: %s\n", resp + 1);
 					fflush(stderr);
 				} else {
 					fprintf(stdout, "%s\n", resp);

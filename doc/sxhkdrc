@@ -43,69 +43,44 @@ alt + shift + r
 alt + ctrl + shift + r
     yaxcmd wm restart
 
-# close active window
-alt + q
-    yaxcmd win kill
-
-# change active window
+# focus next or previous window
 alt + {j,k}
     yaxcmd win focus {next,prev}
 
-# change active workspace
-alt + {1-9,0}
-    yaxcmd ws {1-9,10}
+# close window, swap tiled window in/out of master, cycle tiled windows in
+# place, and toggle fake fullscreen; enables manipulating fullscreen window.
+alt + {q,space,Tab,F11}
+    yaxcmd win {kill,swap,cycle,fakefs}
 
-alt + {bracketleft,bracketright}
-    yaxcmd ws {prev,next}
+# toggle floating or sticky
+alt + shift + {space,s}
+    yaxcmd win {float,stick}
 
-# change active monitor
-alt + {comma,period}
-    yaxcmd mon {prev,next}
-
-# swap tiled window in or out of master
-alt + space
-    yaxcmd win swap
-
-# cycle tiled windows in place
-alt + Tab
-    yaxcmd win cycle
-
-# toggle floating
-alt + shift + space
-    yaxcmd win float
-
-# toggle sticky
-alt + shift + s
-    yaxcmd win stick
-
-# move window
+# move window, signed (+/-) for relative changes
 alt + shift + {h,j,k,l}
-    yaxcmd win mvresize {x=-10,y=10,y=-10,x=10}
+    yaxcmd win resize {x=-10,y=+10,y=-10,x=+10}
 
-# resize window
+# resize window, signed (+/-) for relative changes
 alt + ctrl + {h,j,k,l}
-    yaxcmd win mvresize {w=-10,h=10,h=-10,w=10}
+    yaxcmd win resize {w=-10,h=+10,h=-10,w=+10}
 
-# send or follow active window to a workspace
-alt + {shift + ,ctrl + }{1-9,0}
-    yaxcmd ws {send,follow} {1-9,10}
+# view, send, or follow to a workspace
+alt + {_,shift + ,ctrl + }{1-9,0}
+    yaxcmd ws {view,send,follow} {1-9,10}
 
-alt + {shift + ,ctrl + }{bracketleft,bracketright}
-    yaxcmd ws {send,follow} {prev,next}
+# view, send, or follow to the next, previous, or last active workspace
+alt + {_,shift + ,ctrl + }{bracketleft,bracketright,backspace}
+    yaxcmd ws {view,send,follow} {prev,next,last}
 
-# send or follow active window to a monitor
-alt + {shift + ,ctrl + }{comma,period}
-    yaxcmd mon {send,follow} {prev,next}
+# view, send, or follow to the next, previous, or last active monitor
+alt + {_,shift + ,ctrl + }{comma,period,backslash}
+    yaxcmd mon {view,send,follow} {prev,next,last}
 
-# toggle fake fullscreen. allows move, resize, tiling, etc. on fullscreen windows.
-alt + F11
-    yaxcmd win fakefs
-
-# change layout
+# change active workspace layout
 alt + {t,m,f}
     yaxcmd set layout {tile,monocle,none}
 
-# make a pseudo layout by toggling padding
+# toggling padding on the active workspace
 alt + shift + p
 	yaxcmd set pad print | awk 'BEGIN\{ i = 0 \} \{ if ($2 != 0) i++ \} END\{ if (i) exit 1 \}' \
 		&& yaxcmd set pad l=400 r=400 t=100 b=100 || yaxcmd set pad l=0 r=0 t=0 b=0
@@ -116,9 +91,9 @@ alt + {_,shift + }{i,d}
 
 # change gap or border width
 alt + {_,ctrl + }{equal,minus}
-    yaxcmd set {gap,border width} {+1,-1}
+    yaxcmd set {gap,border} width {+1,-1}
 
 # reset gap or border width
 alt + {_,ctrl + }shift + equal
-    yaxcmd set {gap,border width} reset
+    yaxcmd set {gap,border} width reset
 

@@ -4,129 +4,45 @@ yaxwm \- Yet another X window manager, as if we didn't have enough.
 .SH SYNOPSIS
 .B yaxwm
 .RB [ \-v ]
+.RB [ \-s
+.RB SOCKET_FD]
 .SH DESCRIPTION
 .P
-Yaxwm is a dynamic tiling window manager similar to dwm.
+Yaxwm is a tiling window manager with inspiration from dwm, xmonad, and bspwm.
 .P
 Windows are managed in tiled, monocle, or floating layouts, and are grouped by
-workspaces. Each window can be assigned to a single workspace and each will
-have a small border to indicate the focus state. Windows are arranged into
-defined layouts, a layout can be applied to workspaces and changes to one will
-not impact the others. In tiled layout windows are organized in a master and
-two stack areas, the number of masters and first stack windows can be adjusted
-from 0-n with the second stack containing all remaining windows. In monocle
-layout windows are maximized and stacked on top of each other with only one
-visible at a time. In floating layout windows are not organized or placed in
-any particular way and can be moved or resized freely.
+workspaces. Each window can be assigned to a single workspace and will have a
+small border to indicate the focus state. Windows are arranged into pre-defined
+layouts, a layout can be applied to workspaces and changes to one will
+not impact the others.
+.P
+In tiled layout windows are organized in a master and two stack areas,
+the number of masters and first stack windows can be adjusted
+from 0-n with the second stack containing all remaining windows.
+.P
+In monocle layout windows are maximized and stacked on top of each other with
+only one visible at a time.
+.P
+In floating layout windows are not organized or placed in any particular way
+and can be moved or resized freely.
 .SH OPTIONS
 .TP
 .B \-v
-prints version information to standard out and exits.
+Prints version information to standard out and exits.
+.TP
+.B \-s
+Use an existing socket connection file descriptor.
 .SH USAGE
-.SS Keyboard commands
-.TP
-.B Mod1\-Shift\-Return
-Spawn
-.BR st (1)
-terminal emulator.
-.TP
-.B Mod1\-p
-Spawn
-.BR dmenu (1)
-for launching other programs.
-.TP
-\fBPrintScreen\fR and \fBMod1\-PrintScreen\fR
-Spawn
-.BR scrot (1)
-to fullscreen capture and selection box capture respectively.
-.TP
-.B Mod1\-t
-Sets tiled layout.
-.TP
-.B Mod1\-f
-Sets floating layout.
-.TP
-.B Mod1\-j
-Focus next window.
-.TP
-.B Mod1\-k
-Focus previous window.
-.TP
-.B Mod1\-i
-Increase number of windows in master area.
-.TP
-.B Mod1\-d
-Decrease number of windows in master area.
-.TP
-.B Mod1\-Shift\-i
-Increase number of windows in first stack area.
-.TP
-.B Mod1\-Shift\-d
-Decrease number of windows in first stack area.
-.TP
-.B Mod1\-l
-Increase master area size.
-.TP
-.B Mod1\-h
-Decrease master area size.
-.TP
-.B Mod1\-equal
-Increase gap size.
-.TP
-.B Mod1\-minus
-Decrease gap size.
-.TP
-.B Mod1\-Shift\-equal
-Reset gap size.
-.TP
-.B Mod1\-Control\-equal
-Increase border size.
-.TP
-.B Mod1\-Control\-minus
-Decrease border size.
-.TP
-.B Mod1\-Control\-Shift\-equal
-Reset border size.
-.TP
-.B Mod1\-q
-Close focused window.
-.TP
-.B Mod1\-Tab
-Zooms/cycles focused window to/from master area (tiled layouts only).
-.TP
-.B Mod1\-Shift\-space
-Toggle focused window between tiled and floating state.
-.TP
-.B Mod1\-[1..n]
-Switch to workspace 1..n
-.TP
-.B Mod1\-Shift\-[1..n]
-Move focused window to workspace 1..n
-.TP
-.B Mod1\-Shift\-Ctrl-[1..n]
-Follow focused window to workspace 1..n
-.TP
-.B Mod1\-Shift\-r
-Restart yaxwm.
-.TP
-.B Mod1\-Shift\-q
-Quit yaxwm.
-.SS Mouse commands
-.TP
-.B AnyButton
-Focus the clicked window if not already focused.
-.TP
-.B Mod1\-Button1
-Move window while dragging. Tiled windows will be toggled to the floating state.
-.TP
-.B Mod1\-Button2
-Toggle window between tiled and floating state.
-.TP
-.B Mod1\-Button3
-Resize window while dragging. Tiled windows will be toggled to the floating state.
+.SS COMMANDS
+TODO - Somebody yell at me!
 .SH CUSTOMIZATION
-yaxwm is customized by creating a custom config.h and (re)compiling the source
-code.
+For basic changes yaxwm can be customized by running commands through yaxcmd.
+On startup yaxwm looks for a yaxwmrc file in $HOME/.config/yaxwm and tries
+to execute it. This file is just a shell script to run commands, it must be
+executable.
+.P
+Further configuration such as adding layouts or callbacks can be done by
+copying the default config header to config.h, editing it, and recompiling.
 .SH SEE ALSO
 .BR st (1),
 .BR dmenu (1),

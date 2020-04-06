@@ -235,7 +235,7 @@ static void eventignore(uint8_t);
 static void eventloop(void);
 static void execcfg(void);
 static void fixupworkspaces(int);
-static void fixupwsclients(Workspace *, Monitor *);
+/* static void fixupwsclients(Workspace *, Monitor *); */
 static void focus(Client *);
 static void freeclient(Client *, int);
 static void freedeskwin(DeskWin *, int);
@@ -759,7 +759,7 @@ void attachstack(Client *c)
 
 void changews(Workspace *ws, int allowswap, int allowwarp)
 {
-	Monitor *m, *oldmon;
+	Monitor *m;
 	int diffmon = allowwarp && selws->mon != ws->mon;
 
 	if (ws == selws)
@@ -771,15 +771,14 @@ void changews(Workspace *ws, int allowswap, int allowwarp)
 	m = selws->mon;
 	unfocus(selws->sel, 1);
 	if (allowswap && m != ws->mon) {
-		oldmon = ws->mon;
 		selws->mon = ws->mon;
 		if (ws->mon->ws == ws)
 			ws->mon->ws = selws;
 		ws->mon = m;
 		m->ws = ws;
 		updateviewports();
-		fixupwsclients(ws, oldmon);
-		fixupwsclients(lastws, selmon);
+		/* fixupwsclients(ws, oldmon); */
+		/* fixupwsclients(lastws, selmon); */
 	}
 	selws = ws;
 	selmon = ws->mon;
@@ -2012,9 +2011,13 @@ void fixupwsclients(Workspace *ws, Monitor *old)
 
 	FOR_EACH(c, ws->clients) {
 		m = ws->mon;
+		DBG("fixupwsclients: checking client location: %d,%d -> %d,%d @ %dx%d", c->x, c->y,
+				m->x, m->y, m->w, m->h);
 		if (FLOATING(c) && (c->x <= m->x - W(c) || c->y <= m->y - H(c)
 					|| c->x >= m->x + m->w || c->y >= m->y + m->h))
 		{
+			DBG("fixupwsclients: adjusting client location: %d,%d -> %d,%d", c->x, c->y,
+					m->x * (old->x / (c->x - old->x)), m->y * (old->y / (c->y - old->y)));
 			c->x = CLAMP(m->x * (old->x / (c->x - old->x)), m->x, m->x + m->w - W(c));
 			c->y = CLAMP(m->y * (old->y / (c->y - old->y)), m->y, m->y + m->h - H(c));
 		}

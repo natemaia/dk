@@ -985,10 +985,10 @@ void cmdkill(char **argv)
 		xcb_grab_server(con);
 		xcb_set_close_down_mode(con, XCB_CLOSE_DOWN_DESTROY_ALL);
 		xcb_kill_client(con, selws->sel->win);
-		xcb_aux_sync(con);
+		xcb_flush(con);
 		xcb_ungrab_server(con);
 	}
-	xcb_aux_sync(con);
+	xcb_flush(con);
 	(void)(argv);
 }
 
@@ -1725,7 +1725,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			wc.border_width = e->border_width;
 			xcb_configure_window(con, e->window, e->value_mask, &wc);
 		}
-		xcb_aux_sync(con);
+		xcb_flush(con);
 		return;
 	}
 	case XCB_DESTROY_NOTIFY:
@@ -1909,7 +1909,7 @@ void eventignore(uint8_t type)
 {
 	xcb_generic_event_t *ev;
 
-	xcb_aux_sync(con);
+	xcb_flush(con);
 	while (running && (ev = xcb_poll_for_event(con))) {
 		if (EVENT_TYPE(ev) != type)
 			eventhandle(ev);
@@ -1928,7 +1928,7 @@ void eventloop(void)
 	confd = xcb_get_file_descriptor(con);
 	nfds = MAX(confd, sockfd) + 1;
 	while (running) {
-		xcb_aux_sync(con);
+		xcb_flush(con);
 		FD_ZERO(&read_fds);
 		FD_SET(sockfd, &read_fds);
 		FD_SET(confd, &read_fds);
@@ -1963,11 +1963,15 @@ void execcfg(void)
 	char path[PATH_MAX];
 
 	if (!(cfg = getenv("YAXWM_CONF"))) {
-		if (!(home = getenv("XDG_CONFIG_HOME")) && !(home = getenv("HOME")))
-			return;
-		strlcpy(path, home, sizeof(path));
-		strlcat(path, "/.config/yaxwm/", sizeof(path));
-		strlcat(path, "yaxwmrc", sizeof(path));
+		if (!(home = getenv("XDG_CONFIG_HOME"))) {
+			if (!(home = getenv("HOME")))
+				return;
+			strlcpy(path, home, sizeof(path));
+			strlcat(path, "/.config", sizeof(path));
+		} else {
+			strlcpy(path, home, sizeof(path));
+		}
+		strlcat(path, "/yaxwm/yaxwmrc", sizeof(path));
 		cfg = path;
 	}
 	if (!fork()) {
@@ -2115,7 +2119,7 @@ void freeclient(Client *c, int destroyed)
 		xcb_configure_window(con, c->win, BWMASK, &c->old_bw);
 		xcb_ungrab_button(con, XCB_BUTTON_INDEX_ANY, c->win, XCB_MOD_MASK_ANY);
 		setwmwinstate(c->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
-		xcb_aux_sync(con);
+		xcb_flush(con);
 		xcb_ungrab_server(con);
 	}
 	if (running)
@@ -2136,7 +2140,7 @@ void freedeskwin(DeskWin *d, int destroyed)
 	if (!destroyed) {
 		xcb_grab_server(con);
 		setwmwinstate(d->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
-		xcb_aux_sync(con);
+		xcb_flush(con);
 		xcb_ungrab_server(con);
 	}
 	free(d);
@@ -2167,7 +2171,7 @@ void freepanel(Panel *p, int destroyed)
 	if (!destroyed) {
 		xcb_grab_server(con);
 		setwmwinstate(p->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
-		xcb_aux_sync(con);
+		xcb_flush(con);
 		xcb_ungrab_server(con);
 	}
 	updatestruts(p, 0);
@@ -2221,7 +2225,7 @@ void freewm(void)
 	xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT,
 			XCB_INPUT_FOCUS_POINTER_ROOT, XCB_CURRENT_TIME);
 	xcb_delete_property(con, root, netatom[Active]);
-	xcb_aux_sync(con);
+	xcb_flush(con);
 	xcb_disconnect(con);
 
 	if (restart) {
@@ -2291,7 +2295,7 @@ int grabpointer(xcb_cursor_t cursor)
 	xcb_grab_pointer_cookie_t pc;
 	xcb_grab_pointer_reply_t *ptr = NULL;
 
-	pc = xcb_grab_pointer(con, 0, root, XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE
+	pc = xcb_grab_pointer(con, 0, root, XCB_EVENT_MASK_BUTTON_RELEASE
 			| XCB_EVENT_MASK_BUTTON_MOTION | XCB_EVENT_MASK_POINTER_MOTION_HINT,
 			XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC, root, cursor, XCB_CURRENT_TIME);
 	if ((ptr = xcb_grab_pointer_reply(con, pc, &e)))
@@ -2888,7 +2892,7 @@ void mousemvr(int move)
 		if (!(ev = xcb_poll_for_event(con))) {
 			querypointer(&x, &y);
 			while (!(ev = xcb_wait_for_event(con)))
-				xcb_aux_sync(con);
+				xcb_flush(con);
 		}
 		switch (XCB_EVENT_RESPONSE_TYPE(ev)) {
 		case XCB_MOTION_NOTIFY:
@@ -3296,7 +3300,7 @@ void setfullscreen(Client *c, int fullscreen)
 		c->bw = 0;
 		resize(c, m->x, m->y, m->w, m->h, c->bw);
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-		xcb_aux_sync(con);
+		xcb_flush(con);
 	} else if (!fullscreen && c->fullscreen) {
 		PROP_REPLACE(c->win, netatom[State], XCB_ATOM_ATOM, 32, 0, (uchar *)0);
 		c->floating = c->oldstate;

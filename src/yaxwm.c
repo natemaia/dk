@@ -1814,12 +1814,8 @@ void eventhandle(xcb_generic_event_t *ev)
 				DBG("CLIENT_MESSAGE: %s - 0x%08x", e->type == netatom[Active] ? netatoms[Active]
 						: netatoms[DemandsAttn], c->win);
 				if (cfgfocusurgent) {
-					if (c->ws != selws) {
-						unfocus(selws->sel, 1);
-						cmdview(c->ws->num);
-					}
-					layoutws(NULL);
-					eventignore(XCB_ENTER_NOTIFY);
+					unfocus(selws->sel, 1);
+					cmdview(c->ws->num);
 					focus(c);
 				} else if (!c->urgent)
 					seturgent(c, e->type == netatom[Active] ? 1

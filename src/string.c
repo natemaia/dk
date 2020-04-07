@@ -16,9 +16,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <sys/types.h>
+
 #include <ctype.h>
 #include <string.h>
-#include <sys/types.h>
 
 size_t strlcat(char *dst, const char *src, size_t size)
 {

@@ -38,7 +38,7 @@ static void print(const char *fmt, ...);
 #endif
 
 #ifndef VERSION
-#define VERSION "0.3"
+#define VERSION "0.6"
 #endif
 
 #define W(x)                ((x)->w + (2 * (x)->bw))
@@ -234,8 +234,6 @@ static void *ecalloc(size_t, size_t);
 static void eventignore(uint8_t);
 static void eventloop(void);
 static void execcfg(void);
-static void fixupworkspaces(int);
-static void fixupwsclients(Workspace *, Monitor *);
 static void focus(Client *);
 static void freeclient(Client *, int);
 static void freedeskwin(DeskWin *, int);
@@ -265,12 +263,9 @@ static void movefocus(int);
 static void movestack(int);
 static Client *nextt(Client *);
 static void parsecmd(char *);
-static char **parsecolor(char **, char *, int *, int);
-static char **parsefloat(char **, char *, float *, int *, int);
-static char **parseint(char **, char *, int *, int *, int, int);
-static int parseopt(char **, char **, int *);
 static void printerror(xcb_generic_error_t *);
 static int querypointer(int *, int *);
+static void relocatefloating(Workspace *, Monitor *);
 static void resize(Client *, int, int, int, int, int);
 static void resizehint(Client *, int, int, int, int, int, int, int);
 static void restack(Workspace *);
@@ -296,6 +291,7 @@ static void updatenumws(int);
 static int updaterandr(void);
 static void updatestruts(Panel *, int);
 static void updateviewports(void);
+static void updateworkspaces(int);
 static WindowAttr *winattr(xcb_window_t);
 static Geometry *wingeom(xcb_window_t);
 static void winhints(Client *);
@@ -307,10 +303,6 @@ static Panel *wintopanel(xcb_window_t);
 static Workspace *wintows(xcb_window_t);
 static xcb_window_t wintrans(xcb_window_t);
 static void wintype(Client *);
-
-/* enum { optreset, optabs }; */
-/* static char *minopts[] = { "absolute", NULL }; */
-/* static char *stdopts[] = { [optreset] = "reset", [optabs] = "absolute", NULL }; */
 
 enum { optnext, optprev, optlast };
 static char *moveopts[] = { [optnext] = "next", [optprev] = "prev", [optlast] = "last", NULL };
@@ -441,14 +433,17 @@ static const Command wsmoncmds[] = {
 	{ "view",   cmdview   },
 };
 
-#include "stringl.c"
+/* file for writing command messages into, needs to be defined before including parse.c */
+static FILE *cmdresp;
+
+#include "string.c"
+#include "parse.c"
 #include "config.h"
 
 extern char **environ;            /* environment variables */
 static char *argv0;               /* program executable name/path */
 static char *sock;                /* socket path */
 static int sockfd = -1;           /* socket file descriptor */
-static FILE *cmdresp;             /* file for writing command messages into */
 static int scr_w, scr_h;          /* root window size */
 static uint running = 1;          /* continue handling events */
 static uint restart = 0;          /* restart wm before quitting */
@@ -774,8 +769,8 @@ void changews(Workspace *ws, int allowswap, int allowwarp)
 		ws->mon = m;
 		m->ws = ws;
 		updateviewports();
-		fixupwsclients(ws, oldmon);
-		fixupwsclients(lastws, selmon);
+		relocatefloating(ws, oldmon);
+		relocatefloating(lastws, selmon);
 	}
 	selws = ws;
 	selmon = ws->mon;
@@ -1684,7 +1679,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			if (randrbase < 0) {
 				monitors->w = monitors->ww = scr_w;
 				monitors->h = monitors->wh = scr_h;
-				fixupworkspaces(numws);
+				updateworkspaces(numws);
 			}
 		}
 		return;
@@ -1878,7 +1873,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			DBG("eventhandle: RANDR_NOTIFY or RANDR_SCREEN_CHANGE_NOTIFY");
 			if (updaterandr() > 0 && monitors) {
 				DBG("eventhandle: outputs changed after randr event");
-				fixupworkspaces(numws);
+				updateworkspaces(numws);
 			}
 		} else if (!ev->response_type && e && e->error_code != 3 && e->error_code != 5) {
 			fprintf(stderr, "yaxwm: eventhandle");
@@ -1967,53 +1962,6 @@ void execcfg(void)
 	}
 }
 
-void fixupworkspaces(int needed)
-{
-	Panel *p;
-	Client *c;
-	DeskWin *d;
-	Workspace *ws;
-
-	updatenumws(needed);
-	FOR_CLIENTS(c, ws)
-		if (c->fullscreen && (!c->ffs || (c->w == ws->mon->w && c->h == ws->mon->h)))
-			resize(c, ws->mon->x, ws->mon->y, ws->mon->w, ws->mon->h, c->bw);
-	FOR_EACH(p, panels)
-		updatestruts(p, 1);
-	FOR_EACH(d, deskwins)
-		if (d->x != d->mon->wx || d->y != d->mon->wy || d->w != d->mon->ww || d->h != d->mon->wh) {
-			d->x = d->mon->wx, d->y = d->mon->wy, d->w = d->mon->ww, d->h = d->mon->wh;
-			MOVERESIZE(d->win, d->x, d->y, d->w, d->h, 0);
-		}
-	layoutws(NULL);
-	focus(NULL);
-	eventignore(XCB_ENTER_NOTIFY);
-}
-
-void fixupwsclients(Workspace *ws, Monitor *old)
-{
-	Client *c;
-	Monitor *m;
-	int xoff, yoff;
-	float xdiv, ydiv;
-
-	FOR_EACH(c, ws->clients) {
-		m = ws->mon;
-		if (FLOATING(c) && (c->x < m->wx - (W(c) - minxy) || c->y < m->wy - (H(c) - minxy)
-				 || c->x >= m->wx + m->ww - minxy || c->y >= m->wy + m->wh - minxy))
-		{
-			if ((xoff = c->x - old->x) && (xdiv = old->w / xoff) != 0.0)
-				c->x = CLAMP(m->x + (m->w / xdiv), ws->mon->x - (W(c) - minxy), m->wx + m->ww - minxy);
-			else
-				c->x = CLAMP(c->x, ws->mon->x - (W(c) - minxy), m->wx + m->ww - minxy);
-			if ((yoff = c->y - old->y) && (ydiv = old->h / yoff) != 0.0)
-				c->y = CLAMP(m->y + (m->h / ydiv), ws->mon->y - (H(c) - minxy), m->wy + m->wh - minxy);
-			else
-				c->y = CLAMP(c->y, ws->mon->y - (H(c) - minxy), m->wy + m->wh - minxy);
-		}
-	}
-}
-
 void floatoffset(Client *c, int d, int *x, int *y, int *w, int *h)
 {
 	Monitor *m = c->ws->mon;
@@ -2034,20 +1982,17 @@ void floatoffset(Client *c, int d, int *x, int *y, int *w, int *h)
 
 void clientborder(Client *c, int focused)
 {
+	short w, h, b, o;
+	xcb_gcontext_t gc;
+	xcb_pixmap_t pmap;
 	uint32_t values[1];
 
 	if (!c)
 		return;
-#ifdef DOUBLE_BORDER
-	short w, h, b, o;
-	xcb_gcontext_t gc;
-	xcb_pixmap_t pmap;
-
 	w = (short)c->w;
 	h = (short)c->h;
 	b = (unsigned short)c->bw;
 	o = 1;
-
 	xcb_rectangle_t inner[] = {
 		{ w,         0,         b - o,     h + b - o },
 		{ w + b + o, 0,         b - o,     h + b - o },
@@ -2062,7 +2007,6 @@ void clientborder(Client *c, int focused)
 		{0,         h + b,     w + b * 2, o         },
 		{1,         1,         1,         1         }
 	};
-
 	pmap = xcb_generate_id(con);
 	xcb_create_pixmap(con, scr->root_depth, pmap, c->win, W(c), H(c));
 	gc = xcb_generate_id(con);
@@ -2077,10 +2021,6 @@ void clientborder(Client *c, int focused)
 	xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXMAP, values);
 	xcb_free_pixmap(con, pmap);
 	xcb_free_gc(con, gc);
-#else
-	values[0] = border[focused ? Focus : (c->urgent ? Urgent : Unfocus)];
-	xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, values);
-#endif
 }
 
 void focus(Client *c)
@@ -2387,7 +2327,7 @@ void initclient(xcb_window_t win, Geometry *g)
 		if (c->ws == selws)
 			unfocus(selws->sel, 0);
 		c->ws->sel = c;
-		layoutws(c->ws);
+		layoutws(NULL);
 	} else
 		MOVE(c->win, H(c) * -2, c->y);
 	xcb_map_window(con, win);
@@ -2643,7 +2583,7 @@ void initwm(void)
 		monitors = initmon(0, "default", 0, 0, 0, scr_w, scr_h);
 	if (monitors->next && querypointer(&x, &y)) {
 		DBG("initwm: scr_w: %d, scr_h: %d, ptr_x: %d, ptr_y: %d", scr_w, scr_h, x, y);
-		if (x == scr_w / 2 && y == scr_h / 2)
+		if (x == scr_w / 2 || y == scr_h / 2)
 			xcb_warp_pointer(con, root, root, 0, 0, 0, 0,
 					primary->x + (primary->w / 2), primary->y + (primary->h / 2));
 	}
@@ -2977,108 +2917,6 @@ void parsecmd(char *buf)
 	fclose(cmdresp);
 }
 
-char **parsecolor(char **argv, char *match, int *setting, int doincr)
-{
-	char *end;
-	int i, matched = 0;
-
-	if (!argv || !*argv)
-		return argv;
-	if (!match || (matched = !strcmp(match, *argv))) {
-		if (matched)
-			argv++;
-		if (!*argv) {
-			fprintf(cmdresp, "!%s colour %s", match ? match : "", enoargs);
-		} else if ((i = (**argv == '#' && strlen(*argv) == 7) ? strtol(*argv + 1, &end, 16)
-					: strtol(*argv, &end, 0)) >= 0x000000 && i <= 0xffffff && *end == '\0')
-		{
-			*setting = i;
-			if (doincr)
-				argv++;
-		} else {
-			if (matched && !doincr) /* incremented argv but couldn't find an argument */
-				argv--;
-			fprintf(cmdresp, "!invalid or incomplete colour argument for %s colour", match ? match : "");
-		}
-	}
-	return argv;
-}
-
-char **parseint(char **argv, char *match, int *setting, int *rel, int zero, int doincr)
-{
-	char *end;
-	int i, matched = 0;
-
-	if (!argv || !*argv)
-		return argv;
-	if (!match || (matched = !strcmp(match, *argv))) {
-		if (matched)
-			argv++;
-		if (!*argv) {
-			fprintf(cmdresp, "!%s %s", match ? match : "", enoargs);
-		} else if (((i = strtol(*argv, &end, 0)) || (zero && !strcmp("0", *argv))) && *end == '\0') {
-			if (rel) /* check if it's a relative number (has a sign) */
-				*rel = **argv == '-' || **argv == '+';
-			*setting = i;
-			if (doincr)
-				argv++;
-		} else {
-			if (matched && !doincr) /* incremented argv but couldn't find an argument */
-				argv--;
-			fprintf(cmdresp, "!invalid or incomplete integer argument for %s setting", match ? match : "");
-		}
-	}
-	return argv;
-}
-
-char **parsefloat(char **argv, char *match, float *setting, int *rel, int doincr)
-{
-	float f;
-	char *end;
-	int matched = 0;
-
-	if (!argv || !*argv)
-		return argv;
-	if (!match || (matched = !strcmp(match, *argv))) {
-		if (matched)
-			argv++;
-		if (!*argv) {
-			fprintf(cmdresp, "!%s %s", match ? match : "", enoargs);
-		} else if ((f = strtof(*argv, &end)) > 0.1 && f < 0.9 && *end == '\0') {
-			if (rel) /* check if it's a relative number (has a sign) */
-				*rel = **argv == '-' || **argv == '+';
-			*setting = f;
-			if (doincr)
-				argv++;
-		} else {
-			if (matched && !doincr) /* incremented argv but couldn't find an argument */
-				argv--;
-			fprintf(cmdresp, "!invalid or incomplete float argument for %s setting", match ? match : "");
-		}
-	}
-	return argv;
-}
-
-int parseopt(char **argv, char **opts, int *argi)
-{
-	char **s = opts;
-	int i, ret = -1;
-
-	if (!argv || !*argv)
-		return ret;
-	if (argi)
-		*argi = INT_MAX;
-	for (s = opts, i = 0; ret < 0 && s && *s; s++, i++)
-		if (!strcmp(*s, *argv)) {
-			ret = i;
-			argv++;
-			break;
-		}
-	if (argi && argv && *argv && ((i = strtol(*argv, NULL, 0)) || !strcmp(*argv, "0")))
-		*argi = i;
-	return ret;
-}
-
 void print(const char *fmt, ...)
 {
 	va_list ap;
@@ -3144,6 +2982,26 @@ Monitor *randrclone(xcb_randr_output_t id, int x, int y)
 		if (id != m->id && m->x == x && m->y == y)
 			break;
 	return m;
+}
+
+void relocatefloating(Workspace *ws, Monitor *old)
+{
+	Client *c;
+	Monitor *m;
+	int xoff, yoff;
+	float xdiv, ydiv;
+
+	FOR_EACH(c, ws->clients)
+		if (FLOATING(c) && (m = ws->mon)) {
+			if ((xoff = c->x - old->x) && (xdiv = old->w / xoff) != 0.0)
+				c->x = CLAMP(m->x + (m->w / xdiv), ws->mon->x - (W(c) - minxy), m->wx + m->ww - minxy);
+			else
+				c->x = CLAMP(c->x, ws->mon->x - (W(c) - minxy), m->wx + m->ww - minxy);
+			if ((yoff = c->y - old->y) && (ydiv = old->h / yoff) != 0.0)
+				c->y = CLAMP(m->y + (m->h / ydiv), ws->mon->y - (H(c) - minxy), m->wy + m->wh - minxy);
+			else
+				c->y = CLAMP(c->y, ws->mon->y - (H(c) - minxy), m->wy + m->wh - minxy);
+		}
 }
 
 void resize(Client *c, int x, int y, int w, int h, int bw)
@@ -3748,6 +3606,29 @@ void updateviewports(void)
 		v[0] = ws->mon->x, v[1] = ws->mon->y;
 		PROP_APPEND(root, netatom[Viewport], XCB_ATOM_CARDINAL, 32, 2, &v);
 	}
+}
+
+void updateworkspaces(int needed)
+{
+	Panel *p;
+	Client *c;
+	DeskWin *d;
+	Workspace *ws;
+
+	updatenumws(needed);
+	FOR_CLIENTS(c, ws)
+		if (c->fullscreen && (!c->ffs || (c->w == ws->mon->w && c->h == ws->mon->h)))
+			resize(c, ws->mon->x, ws->mon->y, ws->mon->w, ws->mon->h, c->bw);
+	FOR_EACH(p, panels)
+		updatestruts(p, 1);
+	FOR_EACH(d, deskwins)
+		if (d->x != d->mon->wx || d->y != d->mon->wy || d->w != d->mon->ww || d->h != d->mon->wh) {
+			d->x = d->mon->wx, d->y = d->mon->wy, d->w = d->mon->ww, d->h = d->mon->wh;
+			MOVERESIZE(d->win, d->x, d->y, d->w, d->h, 0);
+		}
+	layoutws(NULL);
+	focus(NULL);
+	eventignore(XCB_ENTER_NOTIFY);
 }
 
 WindowAttr *winattr(xcb_window_t win)

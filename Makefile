@@ -1,7 +1,7 @@
 # yaxwm - yet another x window manager
 # see license file for copyright and license details
 
-VERSION = 0.5
+VERSION = 0.6
 
 # install paths
 PREFIX    ?= /usr
@@ -43,12 +43,14 @@ install: all
 	chmod 755 ${DESTDIR}${PREFIX}/bin/yaxcmd ${DESTDIR}${PREFIX}/bin/yaxwm
 	mkdir -p ${DESTDIR}${MANPREFIX}/man1
 	sed "s/VERSION/${VERSION}/g" man/yaxwm.1 > ${DESTDIR}${MANPREFIX}/man1/yaxwm.1
+	cp -rfp man/yaxcmd.1 ${DESTDIR}${MANPREFIX}/man1/yaxcmd.1
 	chmod 644 ${DESTDIR}${MANPREFIX}/man1/yaxwm.1
 	mkdir -p ${DESTDIR}${DOCPREFIX}/yaxwm
 	cp -rfp doc ${DESTDIR}${DOCPREFIX}/yaxwm
 
 uninstall:
 	rm -f ${DESTDIR}${PREFIX}/bin/yaxwm ${DESTDIR}${PREFIX}/bin/yaxcmd \
-		${DESTDIR}${MANPREFIX}/man1/yaxwm.1 ${DESTDIR}${DOCPREFIX}/yaxwm
+		${DESTDIR}${MANPREFIX}/man1/yaxwm.1 ${DESTDIR}${MANPREFIX}/man1/yaxcmd.1 \
+		${DESTDIR}${DOCPREFIX}/yaxwm
 
 .PHONY: all debug nostrip clean install uninstall

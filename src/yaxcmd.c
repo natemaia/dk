@@ -1,15 +1,16 @@
+#include <sys/un.h>
+#include <sys/socket.h>
+
 #include <err.h>
 #include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <sys/un.h>
-#include <sys/socket.h>
 
-#include "stringl.c"
+#include "string.c"
 
 #ifndef VERSION
-#define VERSION "0.3"
+#define VERSION "0.6"
 #endif
 
 int main(int argc, char *argv[])

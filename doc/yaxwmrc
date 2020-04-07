@@ -54,13 +54,16 @@ logfile="$HOME/.yaxcmd.log"
 	yaxcmd rule class="^chromium$" mon="HDMI-A-0"
 
 	# open window(s) and use a callback function (defined in config.h)
-	yaxcmd rule class="^mpv$" instance="^gl$" floating callback=albumart bw=0
+	yaxcmd rule class="^mpv$" instance="^gl$" float callback=albumart bw=0
 
 	# open window(s) in a floating state
-	yaxcmd rule class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" floating
+	yaxcmd rule class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" float
 
 	# open window(s) with a specific geometry and coordinates (floating only!)
-	yaxcmd rule class="^google-chrome$" title="^open files$" floating w=1280 h=720
+	yaxcmd rule class="^google-chrome$" title="^open files$" float w=1280 h=720
+
+	# open window(s) with sticky and floating enabled to view on all workspaces.
+	yaxcmd rule class="^stickyterm$" stick float w=1280 h=720
 
 } >> "$logfile" 2>&1 # append responses
 

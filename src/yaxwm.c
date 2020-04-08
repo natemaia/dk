@@ -561,6 +561,7 @@ int main(int argc, char *argv[])
 	if ((sel = winprop(root, netatom[Active])) > 0)
 		c = wintoclient(sel);
 	focus(c);
+	eventignore(XCB_ENTER_NOTIFY);
 	eventloop();
 
 	return 0;
@@ -600,7 +601,7 @@ void applypanelstrut(Panel *p)
 			p->mon->wx, p->mon->wy, p->mon->ww, p->mon->wh);
 }
 
-int applysizehints(Client *c, int *x, int *y, int *w, int *h, int usermotion, int mouse)
+int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse)
 {
 	int baseismin;
 	Monitor *m = c->ws->mon;
@@ -655,7 +656,7 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int usermotion, in
 	}
 	DBG("applysizehints: 0x%08x - %d,%d @ %dx%d - usermotion: %d, mouse: %d",
 			c->win, *x, *y, *w, *h, usermotion, mouse);
-	return *x != c->x || *y != c->y || *w != c->w || *h != c->h;
+	return *x != c->x || *y != c->y || *w != c->w || *h != c->h || bw != c->bw;
 }
 
 Callback *applywinrule(Client *c)
@@ -753,7 +754,7 @@ void changews(Workspace *ws, int allowswap, int allowwarp)
 	Monitor *m, *oldmon;
 	int diffmon = allowwarp && selws->mon != ws->mon;
 
-	if (ws == selws)
+	if (!ws || ws == selws)
 		return;
 	DBG("changews: %s:%s -> %s:%s - allowswap: %d - warp: %d", selws->name,
 			selws->mon->name, ws->name, ws->mon->name, allowswap, diffmon);
@@ -1076,7 +1077,8 @@ void cmdresize(char **argv)
 						sf = &c->ws->split;
 					f = rel ? ((c->ws->mon->ww * *sf) + w) / c->ws->mon->ww : w / c->ws->mon->ww;
 					if (f < 0.1 || f > 0.9)
-						fprintf(cmdresp, "!window width exceeded limit: %f - f: %f", c->ws->mon->ww * f, f);
+						fprintf(cmdresp, "!window width exceeded limit: %f - f: %f",
+								c->ws->mon->ww * f, f);
 					else {
 						*sf = f;
 						layoutws(selws);
@@ -1093,7 +1095,8 @@ void cmdresize(char **argv)
 			}
 		}
 	} else {
-		fprintf(cmdresp, "!unable to move or resize windows in the %s layout", c->ws->layout->name);
+		fprintf(cmdresp, "!unable to move or resize windows in the %s layout",
+				c->ws->layout->name);
 		return;
 	}
 	eventignore(XCB_ENTER_NOTIFY);
@@ -1351,6 +1354,21 @@ void cmdswap(char **argv)
 	(void)(argv);
 }
 
+Monitor *opttomon(int opt)
+{
+	Monitor *m;
+
+	if (opt == optlast)
+		m = lastmon ? lastmon : selws->mon;
+	else if (opt == optnext)
+		m = selws->mon && selws->mon->next ? selws->mon->next : monitors;
+	else if (selws->mon == monitors)
+		FIND_TAIL(m, monitors);
+	else
+		FIND_PREV(m, selws->mon, monitors);
+	return m;
+}
+
 void cmdmon(char **argv)
 {
 	uint i;
@@ -1358,7 +1376,7 @@ void cmdmon(char **argv)
 	Monitor *m = NULL;
 	void (*fn)(int) = cmdview;
 
-	if (!monitors->next)
+	if (!selws || !selws->mon || !monitors || !monitors->next)
 		return;
 	if (!argv || !*argv) {
 		fprintf(cmdresp, "!mon %s", enoargs);
@@ -1376,12 +1394,13 @@ void cmdmon(char **argv)
 			}
 		if (*argv) {
 			if ((opt = parseopt(argv, moveopts, NULL)) >= 0) {
-				if (opt == optlast)
-					m = lastmon ? lastmon : selws->mon;
-				else if (opt == optnext)
-					m = selws->mon->next ? selws->mon->next : monitors;
-				else
-					FIND_PREV(m, selws->mon, monitors);
+				DBG("cmdmon: selecting %s monitor", moveopts[opt]);
+				if (!(m = opttomon(opt)) || !m->ws) {
+					DBG("cmdmon: unable to find monitor or workspace, updating and retrying");
+					updateworkspaces(numws);
+					if (!(m = opttomon(opt)) || !m->ws)
+						errx(1, "unable to locate monitor or workspace");
+				}
 			} else if ((opt = strtol(*argv, NULL, 0)) > 0 && opt <= numws) {
 				FOR_EACH(m, monitors)
 					if (m->num == opt - 1)
@@ -1539,6 +1558,7 @@ void cmdview(int num)
 {
 	Workspace *ws;
 
+	DBG("cmdview: workspace number %d", num);
 	if (num == selws->num || !(ws = itows(num)))
 		return;
 	if (!usemoncmd)
@@ -1658,7 +1678,8 @@ void eventhandle(xcb_generic_event_t *ev)
 	{
 		xcb_focus_in_event_t *e = (xcb_focus_in_event_t *)ev;
 
-		if (e->mode == XCB_NOTIFY_MODE_GRAB || e->mode == XCB_NOTIFY_MODE_UNGRAB
+		if (e->mode == XCB_NOTIFY_MODE_GRAB
+				|| e->mode == XCB_NOTIFY_MODE_UNGRAB
 				|| e->detail == XCB_NOTIFY_DETAIL_POINTER
 				|| e->detail == XCB_NOTIFY_DETAIL_POINTER_ROOT
 				|| e->detail == XCB_NOTIFY_DETAIL_NONE)
@@ -1676,7 +1697,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			DBG("eventhandle: CONFIGURE_NOTIFY - screen size changed");
 			scr_w = e->width;
 			scr_h = e->height;
-			if (randrbase < 0) {
+			if (monitors && randrbase < 0) {
 				monitors->w = monitors->ww = scr_w;
 				monitors->h = monitors->wh = scr_h;
 				updateworkspaces(numws);
@@ -1702,8 +1723,8 @@ void eventhandle(xcb_generic_event_t *ev)
 			wc.stack_mode = e->stack_mode;
 			wc.border_width = e->border_width;
 			xcb_configure_window(con, e->window, e->value_mask, &wc);
+			xcb_flush(con);
 		}
-		xcb_flush(con);
 		return;
 	}
 	case XCB_DESTROY_NOTIFY:
@@ -1814,8 +1835,10 @@ void eventhandle(xcb_generic_event_t *ev)
 				DBG("CLIENT_MESSAGE: %s - 0x%08x", e->type == netatom[Active] ? netatoms[Active]
 						: netatoms[DemandsAttn], c->win);
 				if (cfgfocusurgent) {
-					unfocus(selws->sel, 1);
-					cmdview(c->ws->num);
+					if (c->ws != selws) {
+						unfocus(selws->sel, 1);
+						cmdview(c->ws->num);
+					}
 					focus(c);
 				} else if (!c->urgent)
 					seturgent(c, e->type == netatom[Active] ? 1
@@ -1860,20 +1883,25 @@ void eventhandle(xcb_generic_event_t *ev)
 	}
 	default:
 	{
-		xcb_generic_error_t *e = (xcb_generic_error_t *)ev;
-
-		if (ev->response_type && randrbase > 0 &&
-				(ev->response_type == randrbase + XCB_RANDR_SCREEN_CHANGE_NOTIFY ||
-				 ev->response_type == randrbase + XCB_RANDR_NOTIFY))
+		if (ev->response_type && randrbase > 0
+				&& ev->response_type == randrbase + XCB_RANDR_SCREEN_CHANGE_NOTIFY)
 		{
-			DBG("eventhandle: RANDR_NOTIFY or RANDR_SCREEN_CHANGE_NOTIFY");
+			xcb_randr_screen_change_notify_event_t *re;
+
+			re = (xcb_randr_screen_change_notify_event_t *)ev;
+			if (re->root != root)
+				return;
+			DBG("eventhandle: RANDR_SCREEN_CHANGE_NOTIFY");
 			if (updaterandr() > 0 && monitors) {
 				DBG("eventhandle: outputs changed after randr event");
 				updateworkspaces(numws);
 			}
-		} else if (!ev->response_type && e && e->error_code != 3 && e->error_code != 5) {
-			fprintf(stderr, "yaxwm: eventhandle");
-			printerror(e);
+		} else {
+			xcb_generic_error_t *e = (xcb_generic_error_t *)ev;
+			if (!ev->response_type && e && e->error_code != 3 && e->error_code != 5) {
+				fprintf(stderr, "yaxwm: eventhandle");
+				printerror(e);
+			}
 		}
 		return;
 	}
@@ -1897,7 +1925,7 @@ void eventloop(void)
 	ssize_t n;
 	fd_set read_fds;
 	char buf[PIPE_BUF];
-	int confd, nfds, cmdfd;
+	int e, confd, nfds, cmdfd;
 	xcb_generic_event_t *ev;
 
 	confd = xcb_get_file_descriptor(con);
@@ -1927,6 +1955,19 @@ void eventloop(void)
 					eventhandle(ev);
 					free(ev);
 				}
+			}
+			if ((e = xcb_connection_has_error(con))) {
+				fprintf(stderr, "yaxwm: error: connection to the server was closed");
+				switch (e) {
+				case XCB_CONN_ERROR: warn("socket, pipe or stream error"); break;
+				case XCB_CONN_CLOSED_INVALID_SCREEN: warn("invalid screen"); break;
+				case XCB_CONN_CLOSED_MEM_INSUFFICIENT: warn("not enough memory"); break;
+				case XCB_CONN_CLOSED_FDPASSING_FAILED: warn("failed to pass FD"); break;
+				case XCB_CONN_CLOSED_EXT_NOTSUPPORTED: warn("unsupported extension"); break;
+				case XCB_CONN_CLOSED_REQ_LEN_EXCEED: warn("request length exceeded"); break;
+				default: warn("unknown error.\n"); break;
+				}
+				running = 0;
 			}
 		}
 	}
@@ -2147,15 +2188,18 @@ void freewm(void)
 		freemon(monitors);
 	while (winrules)
 		freewinrule(winrules);
-	for (i = 0; i < LEN(cursors); i++)
-		xcb_free_cursor(con, cursor[i]);
-	xcb_key_symbols_free(keysyms);
-	xcb_destroy_window(con, wmcheck);
-	xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT,
-			XCB_INPUT_FOCUS_POINTER_ROOT, XCB_CURRENT_TIME);
-	xcb_delete_property(con, root, netatom[Active]);
-	xcb_flush(con);
-	xcb_disconnect(con);
+	if (con) {
+		for (i = 0; i < LEN(cursors); i++)
+			xcb_free_cursor(con, cursor[i]);
+		xcb_key_symbols_free(keysyms);
+		xcb_destroy_window(con, wmcheck);
+		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT,
+				XCB_INPUT_FOCUS_POINTER_ROOT, XCB_CURRENT_TIME);
+		if (!restart)
+			xcb_delete_property(con, root, netatom[Active]);
+		xcb_flush(con);
+		xcb_disconnect(con);
+	}
 
 	if (restart) {
 		DBG("freewm: restarting")
@@ -2429,9 +2473,8 @@ int initrandr(void)
 		return -1;
 	updaterandr();
 	extbase = ext->first_event;
-	xcb_randr_select_input(con, root, XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE
-			|XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE|XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE
-			|XCB_RANDR_NOTIFY_MASK_OUTPUT_PROPERTY);
+	xcb_randr_select_input(con, root,
+			XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE | XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE);
 	return extbase;
 }
 
@@ -2518,33 +2561,31 @@ int initwinrulereg(WinRule *r, WinRule *wr)
 		len = strlen(wr->class) + 1;
 		r->class = ecalloc(1, len);
 		strlcpy(r->class, wr->class, len);
+		if ((i = regcomp(&(r->classreg), r->class, REG_NOSUB | REG_EXTENDED | REG_ICASE))) {
+			regerror(i, &(r->classreg), buf, sizeof(buf));
+			e = "class";
+			goto error;
+		}
 	}
 	if (wr->inst) {
 		len = strlen(wr->inst) + 1;
 		r->inst = ecalloc(1, len);
 		strlcpy(r->inst, wr->inst, len);
+		if ((i = regcomp(&(r->instreg), r->inst, REG_NOSUB | REG_EXTENDED | REG_ICASE))) {
+			regerror(i, &(r->instreg), buf, sizeof(buf));
+			e = "instance";
+			goto error;
+		}
 	}
 	if (wr->title) {
 		len = strlen(wr->title) + 1;
 		r->title = ecalloc(1, len);
 		strlcpy(r->title, wr->title, len);
-	}
-	if (r->class && (i = regcomp(&(r->classreg), r->class, REG_NOSUB | REG_EXTENDED | REG_ICASE))) {
-		regerror(i, &(r->classreg), buf, sizeof(buf));
-		e = "class";
-		goto error;
-	} else if (r->inst
-			&& (i = regcomp(&(r->instreg), r->inst, REG_NOSUB | REG_EXTENDED | REG_ICASE)))
-	{
-		regerror(i, &(r->instreg), buf, sizeof(buf));
-		e = "instance";
-		goto error;
-	} else if (r->title
-			&& (i = regcomp(&(r->titlereg), r->title, REG_NOSUB | REG_EXTENDED | REG_ICASE)))
-	{
-		regerror(i, &(r->titlereg), buf, sizeof(buf));
-		e = "title";
-		goto error;
+		if ((i = regcomp(&(r->titlereg), r->title, REG_NOSUB | REG_EXTENDED | REG_ICASE))) {
+			regerror(i, &(r->titlereg), buf, sizeof(buf));
+			e = "title";
+			goto error;
+		}
 	}
 	return 1;
 
@@ -2621,7 +2662,8 @@ void initwm(void)
 			| XCB_EVENT_MASK_LEAVE_WINDOW | XCB_EVENT_MASK_STRUCTURE_NOTIFY
 			| XCB_EVENT_MASK_PROPERTY_CHANGE,
 			cursor[Normal] });
-	checkerror(1, "unable to change root window event mask and cursor", xcb_request_check(con, ck));
+	checkerror(1, "unable to change root window event mask and cursor",
+			xcb_request_check(con, ck));
 	if (!(keysyms = xcb_key_symbols_alloc(con)))
 		err(1, "unable to get keysyms from X connection");
 }
@@ -2893,6 +2935,7 @@ void parsecmd(char *buf)
 	if (strqetok(&buf, k, sizeof(k))) {
 		for (i = 0; i < LEN(keywords); i++)
 			if ((matched = !strcmp(keywords[i].name, k))) {
+				DBG("parsecmd: matched command keyword: %s", k);
 				while (n + 1 < LEN(args) && buf && *buf && strqetok(&buf, tok, sizeof(tok))) {
 					strlcpy(args[n], tok, sizeof(args[n]));
 					argv[n] = args[n];
@@ -2900,9 +2943,12 @@ void parsecmd(char *buf)
 					n++;
 				}
 				argv[n] = NULL;
-				if (*argv)
+				if (*argv) {
+					usemoncmd = 0;
+					selws = selws ? selws : workspaces;
+					selmon = selws->mon;
 					keywords[i].fn(argv);
-				else
+				} else
 					fprintf(cmdresp, "!%s %s", k, enoargs);
 				break;
 			}
@@ -2990,11 +3036,13 @@ void relocatefloating(Workspace *ws, Monitor *old)
 	FOR_EACH(c, ws->clients)
 		if (FLOATING(c) && (m = ws->mon)) {
 			if ((xoff = c->x - old->x) && (xdiv = old->w / xoff) != 0.0)
-				c->x = CLAMP(m->x + (m->w / xdiv), ws->mon->x - (W(c) - minxy), m->wx + m->ww - minxy);
+				c->x = CLAMP(m->x + (m->w / xdiv), ws->mon->x - (W(c) - minxy),
+						m->wx + m->ww - minxy);
 			else
 				c->x = CLAMP(c->x, ws->mon->x - (W(c) - minxy), m->wx + m->ww - minxy);
 			if ((yoff = c->y - old->y) && (ydiv = old->h / yoff) != 0.0)
-				c->y = CLAMP(m->y + (m->h / ydiv), ws->mon->y - (H(c) - minxy), m->wy + m->wh - minxy);
+				c->y = CLAMP(m->y + (m->h / ydiv), ws->mon->y - (H(c) - minxy),
+						m->wy + m->wh - minxy);
 			else
 				c->y = CLAMP(c->y, ws->mon->y - (H(c) - minxy), m->wy + m->wh - minxy);
 		}
@@ -3011,7 +3059,7 @@ void resize(Client *c, int x, int y, int w, int h, int bw)
 
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, int mouse)
 {
-	if (applysizehints(c, &x, &y, &w, &h, usermotion, mouse))
+	if (applysizehints(c, &x, &y, &w, &h, bw, usermotion, mouse))
 		resize(c, x, y, w, h, bw);
 }
 
@@ -3210,7 +3258,8 @@ void seturgent(Client *c, int urg)
 	}
 	if (xcb_icccm_get_wm_hints_reply(con, pc, &wmh, &e)) {
 		DBG("seturgent: received WM_HINTS reply");
-		wmh.flags = urg ? (wmh.flags | XCB_ICCCM_WM_HINT_X_URGENCY) : (wmh.flags & ~XCB_ICCCM_WM_HINT_X_URGENCY);
+		wmh.flags = urg ? (wmh.flags | XCB_ICCCM_WM_HINT_X_URGENCY)
+			: (wmh.flags & ~XCB_ICCCM_WM_HINT_X_URGENCY);
 		xcb_icccm_set_wm_hints(con, c->win, &wmh);
 	} else {
 		checkerror(0, "unable to get wm window hints", e);
@@ -3465,6 +3514,13 @@ void updatenumws(int needed)
 
 	FOR_EACH(m, monitors)
 		n++;
+	/* if (primary && primary != monitors) { */
+	/* 	FIND_PREV(m, primary, monitors); */
+	/* 	if (m) */
+	/* 		m->next = primary->next; */
+	/* 	primary->next = monitors; */
+	/* 	monitors = primary; */
+	/* } */
 	if (n > 999)
 		errx(1, "attempting to allocate too many workspaces");
 	else while (!numws || n > numws || needed > numws) {
@@ -3511,9 +3567,9 @@ int updateoutputs(xcb_randr_output_t *outs, int len, xcb_timestamp_t timestamp)
 			ck = xcb_randr_get_crtc_info(con, o->crtc, timestamp);
 			if (!(crtc = xcb_randr_get_crtc_info_reply(con, ck, &e))) {
 				checkerror(0, "crtc info for randr output was NULL", e);
-				free(o);
-				continue;
-			}
+				goto cont;
+			} else if(!xcb_randr_get_crtc_info_outputs_length(crtc))
+				goto cont;
 			n = xcb_randr_get_output_info_name_length(o) + 1;
 			strlcpy(name, (char *)xcb_randr_get_output_info_name(o), MIN(sizeof(name), n));
 			DBG("updateoutputs: %s - location: %d,%d - size: %dx%d - status: %d",
@@ -3521,7 +3577,7 @@ int updateoutputs(xcb_randr_output_t *outs, int len, xcb_timestamp_t timestamp)
 			if ((m = randrclone(outs[i], crtc->x, crtc->y))) {
 				DBG("updateoutputs: %s is a clone of %s - skipping", name, m->name);
 			} else if ((m = outputtomon(outs[i]))) {
-				changed = (crtc->x != m->x || crtc->y != m->y
+				changed = changed || (crtc->x != m->x || crtc->y != m->y
 						|| crtc->width != m->w || crtc->height != m->h);
 				m->x = m->wx = crtc->x;
 				m->y = m->wy = crtc->y;
@@ -3539,6 +3595,7 @@ int updateoutputs(xcb_randr_output_t *outs, int len, xcb_timestamp_t timestamp)
 			freemon(m);
 			changed = 1;
 		}
+cont:
 		free(o);
 	}
 	po = xcb_randr_get_output_primary_reply(con,
@@ -3606,15 +3663,18 @@ void updateviewports(void)
 
 void updateworkspaces(int needed)
 {
+	int r, cws;
 	Panel *p;
 	Client *c;
 	DeskWin *d;
 	Workspace *ws;
 
+	DBG("updateworkspaces: applying changes to workspaces")
 	updatenumws(needed);
-	FOR_CLIENTS(c, ws)
+	FOR_CLIENTS(c, ws) {
 		if (c->fullscreen && (!c->ffs || (c->w == ws->mon->w && c->h == ws->mon->h)))
 			resize(c, ws->mon->x, ws->mon->y, ws->mon->w, ws->mon->h, c->bw);
+	}
 	FOR_EACH(p, panels)
 		updatestruts(p, 1);
 	FOR_EACH(d, deskwins)
@@ -3622,6 +3682,10 @@ void updateworkspaces(int needed)
 			d->x = d->mon->wx, d->y = d->mon->wy, d->w = d->mon->ww, d->h = d->mon->wh;
 			MOVERESIZE(d->win, d->x, d->y, d->w, d->h, 0);
 		}
+	cws = (r = winprop(root, netatom[CurDesktop])) >= 0 ? r : 0;
+	if (cws >= numws)
+		updatenumws(cws);
+	changews((ws = itows(cws)) ? ws : workspaces, 1, 0);
 	layoutws(NULL);
 	focus(NULL);
 	eventignore(XCB_ENTER_NOTIFY);

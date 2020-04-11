@@ -18,14 +18,11 @@
 #include <stdarg.h>
 #include <unistd.h>
 #include <limits.h>
-#include <signal.h>
 #include <locale.h>
 
-#include <xcb/xcb.h>
 #include <xcb/randr.h>
 #include <xcb/xproto.h>
 #include <xcb/xcb_util.h>
-#include <xcb/xcb_ewmh.h>
 #include <xcb/xcb_icccm.h>
 #include <xcb/xcb_cursor.h>
 #include <xcb/xcb_keysyms.h>
@@ -47,7 +44,7 @@ static void print(const char *fmt, ...);
 #define MAX(a, b)           ((a) > (b) ? (a) : (b))
 #define CLAMP(x, min, max)  (MIN(MAX((x), (min)), (max)))
 #define LEN(x)              (sizeof(x) / sizeof(x[0]))
-#define CLNMOD(mod)         (mod & ~(numlockmask | XCB_MOD_MASK_LOCK))
+#define CLNMOD(mod)         (mod & ~(lockmask | XCB_MOD_MASK_LOCK))
 #define FLOATING(c)         ((c)->floating || !(c)->ws->layout->fn)
 #define STICKY              (0xffffffff)
 #define BWMASK              (XCB_CONFIG_WINDOW_BORDER_WIDTH)
@@ -275,7 +272,7 @@ static void sendevent(Client *, const char *, long);
 static int sendwmproto(Client *, int);
 static void setclientws(Client *, int);
 static void setfullscreen(Client *, int);
-static void setinputfoocus(Client *);
+static void setinputfocus(Client *);
 static void setstackmode(xcb_window_t, uint);
 static void setsticky(Client *, int);
 static void seturgent(Client *, int);
@@ -447,7 +444,7 @@ static int sockfd = -1;           /* socket file descriptor */
 static int scr_w, scr_h;          /* root window size */
 static uint running = 1;          /* continue handling events */
 static uint restart = 0;          /* restart wm before quitting */
-static uint numlockmask = 0;      /* numlock modifier bit mask */
+static uint lockmask = 0;         /* numlock modifier bit mask */
 static int numws = 0;             /* number of workspaces currently allocated */
 static int minxy = 10;            /* minimum window area allowed inside the screen when moving */
 static int minwh = 50;            /* minimum window size allowed when resizing */
@@ -561,7 +558,6 @@ int main(int argc, char *argv[])
 	if ((sel = winprop(root, netatom[Active])) > 0)
 		c = wintoclient(sel);
 	focus(c);
-	eventignore(XCB_ENTER_NOTIFY);
 	eventloop();
 
 	return 0;
@@ -754,14 +750,15 @@ void changews(Workspace *ws, int allowswap, int allowwarp)
 	Monitor *m, *oldmon;
 	int diffmon = allowwarp && selws->mon != ws->mon;
 
-	if (!ws || ws == selws)
+	if (!ws)
 		return;
 	DBG("changews: %s:%s -> %s:%s - allowswap: %d - warp: %d", selws->name,
 			selws->mon->name, ws->name, ws->mon->name, allowswap, diffmon);
 	lastws = selws;
 	lastmon = selmon;
 	m = selws->mon;
-	unfocus(selws->sel, 1);
+	if (selws->sel)
+		unfocus(selws->sel, 1);
 	if (allowswap && m != ws->mon) {
 		oldmon = ws->mon;
 		selws->mon = ws->mon;
@@ -896,14 +893,13 @@ void cmdfloat(char **argv)
 	if (!(c = selws->sel) || (c->fullscreen && !c->ffs) || !c->ws->layout->fn)
 		return;
 	if ((c->floating = !c->floating || c->fixed)) {
-		c->w = c->old_w, c->h = c->old_h;
-		c->x = c->old_x ? c->old_x : (c->ws->mon->wx + c->ws->mon->ww - W(c)) / 2;
-		c->y = c->old_y ? c->old_y : (c->ws->mon->wy + c->ws->mon->wh - H(c)) / 2;
+		c->x = c->old_x, c->y = c->old_y, c->w = c->old_w, c->h = c->old_h;
 		resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0, 1);
+		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	} else {
 		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 	}
-	layoutws(selws);
+	layoutws(c->ws);
 	(void)(argv);
 }
 
@@ -929,12 +925,10 @@ void cmdfollow(int num)
 	Client *c;
 	Workspace *ws;
 
-	if (!selws->sel || num == selws->num || !(ws = itows(num)))
+	if (!(c = selws->sel) || num == selws->num || !(ws = itows(num)))
 		return;
-	if ((c = selws->sel)) {
-		unfocus(c, 1);
-		setclientws(c, num);
-	}
+	unfocus(c, 1);
+	setclientws(c, num);
 	cmdview(num);
 }
 
@@ -1671,6 +1665,7 @@ void eventhandle(xcb_generic_event_t *ev)
 	Client *c;
 	Monitor *m;
 	Workspace *ws;
+	static Monitor *mon = NULL;
 	static xcb_timestamp_t lasttime = 0;
 
 	switch (EVENT_TYPE(ev)) {
@@ -1686,7 +1681,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			return;
 		DBG("eventhandle: FOCUS_IN");
 		if (selws->sel && e->event != selws->sel->win)
-			setinputfoocus(selws->sel);
+			setinputfocus(selws->sel);
 		return;
 	}
 	case XCB_CONFIGURE_NOTIFY:
@@ -1744,11 +1739,11 @@ void eventhandle(xcb_generic_event_t *ev)
 		DBG("eventhandle: ENTER_NOTIFY");
 		c = wintoclient(e->event);
 		ws = c ? c->ws : wintows(e->event);
-		if (ws != selws) {
+		if (ws != selws)
 			changews(ws, 0, 0);
-			focus(NULL);
-		}
-		if (cfgfocusmouse && c && c != selws->sel)
+		else if (!c || c == selws->sel)
+			return;
+		if (cfgfocusmouse)
 			focus(c);
 		return;
 	}
@@ -1774,11 +1769,13 @@ void eventhandle(xcb_generic_event_t *ev)
 		if (e->event != root || (e->time - lasttime) < 100)
 			return;
 		lasttime = e->time;
-		if ((m = coordtomon(e->root_x, e->root_y)) && m != selws->mon) {
+		if ((m = coordtomon(e->root_x, e->root_y)) != mon && mon) {
 			DBG("eventhandle: MOTION_NOTIFY - updating active monitor");
 			changews(m->ws, 0, 0);
+			selmon = m;
 			focus(NULL);
 		}
+		mon = m;
 		return;
 	}
 	case XCB_MAP_REQUEST:
@@ -1824,6 +1821,7 @@ void eventhandle(xcb_generic_event_t *ev)
 				setsticky(c, d[0] == STICKY ? 1 : 0);
 				layoutws(NULL);
 				focus(NULL);
+				eventignore(XCB_ENTER_NOTIFY);
 			} else if (e->type == netatom[State] && (d[1] == netatom[Fullscreen]
 						|| d[2] == netatom[Fullscreen]))
 			{
@@ -2073,7 +2071,7 @@ void focus(Client *c)
 		attachstack(c);
 		grabbuttons(c, 1);
 		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, &border[Focus]);
-		setinputfoocus(c);
+		setinputfocus(c);
 	}
 	selws->sel = c;
 }
@@ -2234,21 +2232,21 @@ void grabbuttons(Client *c, int focused)
 	xcb_get_modifier_mapping_reply_t *m = NULL;
 	uint i, j, mods[] = { 0, XCB_MOD_MASK_LOCK, 0, XCB_MOD_MASK_LOCK };
 
-	numlockmask = 0;
+	lockmask = 0;
 	if ((m = xcb_get_modifier_mapping_reply(con, xcb_get_modifier_mapping(con), &e))) {
 		if ((t = xcb_key_symbols_get_keycode(keysyms, nlock))
 				&& (kc = xcb_get_modifier_mapping_keycodes(m)))
 			for (i = 0; i < 8; i++)
 				for (j = 0; j < m->keycodes_per_modifier; j++)
 					if (kc[i * m->keycodes_per_modifier + j] == *t)
-						numlockmask = (1 << i);
+						lockmask = (1 << i);
 	} else {
 		checkerror(0, "unable to get modifier mapping for numlock", e);
 	}
 	free(t);
 	free(m);
 
-	mods[2] |= numlockmask, mods[3] |= numlockmask;
+	mods[2] |= lockmask, mods[3] |= lockmask;
 	xcb_ungrab_button(con, XCB_BUTTON_INDEX_ANY, c->win, XCB_BUTTON_MASK_ANY);
 	if (!focused)
 		xcb_grab_button(con, 0, c->win, BUTTONMASK, XCB_GRAB_MODE_SYNC,
@@ -2321,24 +2319,24 @@ void initatoms(xcb_atom_t *atoms, const char **names, int num)
 
 void initclient(xcb_window_t win, Geometry *g)
 {
-	Monitor *m;
-	Client *c = NULL;
-	Callback *cb = NULL;
+	Client *c;
+	Callback *cb;
 	xcb_window_t trans;
 
 	DBG("initclient: managing new window - 0x%08x", win);
 	c = ecalloc(1, sizeof(Client));
 	c->win = win;
-	c->x = c->old_x = g->x, c->y = c->old_y = g->y;
-	c->w = c->old_w = g->width, c->h = c->old_h = g->height;
+	c->x = c->old_x = g->x;
+	c->y = c->old_y = g->y;
+	c->w = c->old_w = g->width;
+	c->h = c->old_h = g->height;
 	c->old_bw = g->border_width;
 	c->bw = border[Width];
 	if ((trans = wintrans(c->win)) != XCB_WINDOW_NONE)
 		c->trans = wintoclient(trans);
 	cb = applywinrule(c);
-	m = c->ws->mon;
-	c->w = CLAMP(c->w, minwh, m->ww);
-	c->h = CLAMP(c->h, minwh, m->wh);
+	c->w = CLAMP(c->w, minwh, c->ws->mon->ww);
+	c->h = CLAMP(c->h, minwh, c->ws->mon->wh);
 	if (c->trans) {
 		c->x = c->trans->x + ((W(c->trans) - W(c)) / 2);
 		c->y = c->trans->y + ((H(c->trans) - H(c)) / 2);
@@ -2354,22 +2352,19 @@ void initclient(xcb_window_t win, Geometry *g)
 			| XCB_EVENT_MASK_STRUCTURE_NOTIFY });
 	grabbuttons(c, 0);
 	if (FLOATING(c) || (c->floating = c->oldstate = trans != XCB_WINDOW_NONE || c->fixed)) {
-		c->x = CLAMP(c->x, c->ws->mon->wx, m->wx + m->ww - W(c));
-		c->y = CLAMP(c->y, c->ws->mon->wy, m->wy + m->wh - H(c));
-		if (c->x + c->y <= m->wx)
+		c->x = CLAMP(c->x, c->ws->mon->wx, c->ws->mon->wx + c->ws->mon->ww - W(c));
+		c->y = CLAMP(c->y, c->ws->mon->wy, c->ws->mon->wy + c->ws->mon->wh - H(c));
+		if (c->x + c->y <= c->ws->mon->wx)
 			floatoffset(c, 6, &c->x, &c->y, &c->w, &c->h);
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	}
 	PROP_APPEND(root, netatom[ClientList], XCB_ATOM_WINDOW, 32, 1, &c->win);
 	MOVE(c->win, c->x + 2 * scr_w, c->y);
 	setwmwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
-	if (c->ws == c->ws->mon->ws || c->sticky) {
-		if (c->ws == selws)
-			unfocus(selws->sel, 0);
-		c->ws->sel = c;
-		layoutws(NULL);
-	} else
-		MOVE(c->win, H(c) * -2, c->y);
+	if (c->ws == selws)
+		unfocus(selws->sel, 0);
+	c->ws->sel = c;
+	layoutws(NULL);
 	xcb_map_window(con, win);
 	focus(NULL);
 	if (cb)
@@ -2736,23 +2731,21 @@ Workspace *itows(int num)
 
 int layoutws(Workspace *ws)
 {
-	int ret = 1;
+	int i, ret = 1;
 
-	if (ws)
-		showhide(ws->stack);
-	else FOR_EACH(ws, workspaces)
-		showhide(ws->stack);
 	if (ws) {
+		showhide(ws->stack);
 		if (ws->layout->fn)
 			ret = ws->layout->fn(ws);
 		restack(ws);
-	} else FOR_EACH(ws, workspaces)
+	} else FOR_EACH(ws, workspaces) {
+		showhide(ws->stack);
 		if (ws == ws->mon->ws && ws->layout->fn) {
-			if (ws == selws)
-				ret = ws->layout->fn(ws);
-			else
-				ws->layout->fn(ws);
+			i = ws->layout->fn(ws);
+			ret = ret && ws == selws ? i : ret;
+			restack(ws);
 		}
+	}
 	return ret;
 }
 
@@ -3198,7 +3191,6 @@ void setfullscreen(Client *c, int fullscreen)
 		c->bw = 0;
 		resize(c, m->x, m->y, m->w, m->h, c->bw);
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-		xcb_flush(con);
 	} else if (!fullscreen && c->fullscreen) {
 		PROP_REPLACE(c->win, netatom[State], XCB_ATOM_ATOM, 32, 0, (uchar *)0);
 		c->floating = c->oldstate;
@@ -3211,7 +3203,7 @@ void setfullscreen(Client *c, int fullscreen)
 	}
 }
 
-void setinputfoocus(Client *c)
+void setinputfocus(Client *c)
 {
 	if (!c->nofocus) {
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, c->win, XCB_CURRENT_TIME);
@@ -3472,10 +3464,10 @@ int tile(Workspace *ws)
 
 void unfocus(Client *c, int focusroot)
 {
-	if (c) {
-		grabbuttons(c, 0);
-		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, &border[Unfocus]);
-	}
+	if (!c)
+		return;
+	grabbuttons(c, 0);
+	xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, &border[Unfocus]);
 	if (focusroot) {
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, root, XCB_CURRENT_TIME);
 		xcb_delete_property(con, root, netatom[Active]);

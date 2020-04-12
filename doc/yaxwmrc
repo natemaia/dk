@@ -18,8 +18,15 @@ logfile="$HOME/.yaxcmd.log"
 	# default values to use when allocating new workspaces
 	yaxcmd set wsdef layout=tile master=1 stack=3 gap=0 split=0.55 ssplit=0.55
 
-	# initialize 10 workspaces 1-10 and set workspace 10 to use some padding
-	yaxcmd set numws=10 ws=10 pad l=400 r=400 t=100 b=100
+	# initialize 10 workspaces (1-10)
+	yaxcmd set numws=10
+
+	# rename workspace(s)
+	yaxcmd set ws=1 name="workspace 1" ws=2 name="workspace 2"
+
+	# set workspace 10 to use some padding and gaps
+	yaxcmd set ws=10 pad l=200 r=200 t=100 b=100
+	yaxcmd set ws=10 gap width=50
 
 
 	# misc settings
@@ -54,7 +61,8 @@ logfile="$HOME/.yaxcmd.log"
 	yaxcmd rule class="^chromium$" mon="HDMI-A-0"
 
 	# open window(s) and use a callback function (defined in config.h)
-	yaxcmd rule class="^mpv$" instance="^gl$" float callback=albumart bw=0
+	# eg. mpv --x11-name=albumart /path/to/media
+	yaxcmd rule class="^mpv$" instance="^albumart$" float callback=albumart bw=0
 
 	# open window(s) in a floating state
 	yaxcmd rule class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" float

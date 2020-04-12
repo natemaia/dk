@@ -69,7 +69,7 @@ alt + {_,shift + ,ctrl + }{1-9,0}
     yaxcmd ws {view,send,follow} {1-9,10}
 
 # view, send, or follow to the next, previous, or last active workspace
-alt + {_,shift + ,ctrl + }{bracketleft,bracketright,backspace}
+alt + {_,shift + ,ctrl + }{bracketleft,bracketright,BackSpace}
     yaxcmd ws {view,send,follow} {prev,next,last}
 
 # view, send, or follow to the next, previous, or last active monitor
@@ -78,9 +78,9 @@ alt + {_,shift + ,ctrl + }{comma,period,backslash}
 
 # change active workspace layout
 alt + {t,m,f}
-    yaxcmd set layout {tile,monocle,none}
+    yaxcmd set layout {tile,mono,none}
 
-# toggling padding on the active workspace
+# toggle padding on the active workspace
 alt + shift + p
 	yaxcmd set pad print | awk 'BEGIN\{ i = 0 \} \{ if ($2 != 0) i++ \} END\{ if (i) exit 1 \}' \
 		&& yaxcmd set pad l=400 r=400 t=100 b=100 || yaxcmd set pad l=0 r=0 t=0 b=0

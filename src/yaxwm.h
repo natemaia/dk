@@ -55,19 +55,23 @@ static void print(const char *fmt, ...);
 #define EVENT_TYPE(e)       (e->response_type &  EVENT_RESPONSE_MASK)
 #define EVENT_SENT(e)       (e->response_type & ~EVENT_RESPONSE_MASK)
 
-#define FOR_EACH(v, list)   for ((v) = (list); (v); (v) = (v)->next)
-#define FOR_STACK(v, list)  for ((v) = (list); (v); (v) = (v)->snext)
-#define FOR_CLIENTS(c, ws)  FOR_EACH((ws), workspaces) FOR_EACH((c), (ws)->clients)
-
+#define FOR_EACH(v, list)\
+	for ((v) = (list); (v); (v) = (v)->next)
 #define FIND_TAIL(v, list)\
 	for ((v) = (list); (v) && (v)->next; (v) = (v)->next)
-#define FIND_TILETAIL(v, list)\
-	for ((v) = nextt((list)); (v) && nextt((v)->next); (v) = nextt((v)->next))
 #define FIND_PREV(v, cur, list)\
 	for ((v) = (list); (v) && (v)->next && (v)->next != (cur); (v) = (v)->next)
+
+#define FOR_STACK(v, list)\
+	for ((v) = (list); (v); (v) = (v)->snext)
+#define FOR_CLIENTS(c, ws)\
+	FOR_EACH((ws), workspaces) FOR_EACH((c), (ws)->clients)
+#define FIND_TILETAIL(v, list)\
+	for ((v) = nextt((list)); (v) && nextt((v)->next); (v) = nextt((v)->next))
 #define FIND_PREVTILED(v, cur, list)\
 	for ((v) = nextt((list)); (v) && nextt((v)->next)\
 			&& nextt((v)->next) != (cur); (v) = nextt((v)->next))
+
 #define MOVE(win, x, y)\
 	xcb_configure_window(con, (win), XYMASK, (uint []){(x), (y)})
 #define MOVERESIZE(win, x, y, w, h, bw)\
@@ -252,6 +256,7 @@ static int mono(Workspace *);
 static void mousemvr(int);
 static void movefocus(int);
 static void movestack(int);
+static Monitor *nextcon(Monitor *m, int direction);
 static Client *nextt(Client *);
 static Monitor *opttomon(int opt);
 static void parsecmd(char *);

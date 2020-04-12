@@ -108,6 +108,8 @@ int main(int argc, char *argv[])
 	if ((sel = winprop(root, netatom[Active])) > 0)
 		c = wintoclient(sel);
 	focus(c);
+	if (c)
+		xcb_warp_pointer(con, root, root, 0, 0, 0, 0, c->x + (c->w / 2), c->y + (c->h / 2));
 	eventloop();
 
 	return 0;
@@ -170,8 +172,6 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 	int baseismin;
 	Monitor *m = c->ws->mon;
 
-	DBG("applysizehints: 0x%08x - %d,%d @ %dx%d - usermotion: %d, mouse: %d",
-			c->win, *x, *y, *w, *h, usermotion, mouse);
 	*w = MAX(*w, MIN(globalcfg[MinWH], c->min_w));
 	*h = MAX(*h, MIN(globalcfg[MinWH], c->min_h));
 	if (usermotion) {
@@ -193,7 +193,6 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 		*x = CLAMP(*x, m->wx, m->wx + m->ww - *w + (2 * c->bw));
 		*y = CLAMP(*y, m->wy, m->wy + m->wh - *h + (2 * c->bw));
 	}
-
 	if (FLOATING(c) || globalcfg[SizeHints]) {
 		if (!(baseismin = c->base_w == c->min_w && c->base_h == c->min_h))
 			*w -= c->base_w, *h -= c->base_h;
@@ -218,8 +217,8 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 		if (c->max_h)
 			*h = MIN(*h, c->max_h);
 	}
-	DBG("applysizehints: 0x%08x - %d,%d @ %dx%d - usermotion: %d, mouse: %d",
-			c->win, *x, *y, *w, *h, usermotion, mouse);
+	DBG("applysizehints: 0x%08x - %d,%d @ %dx%d -> %d,%d @ %dx%d - usermotion: %d, mouse: %d",
+			c->win, c->x, c->y, c->w, c->h, *x, *y, *w, *h, usermotion, mouse);
 	return *x != c->x || *y != c->y || *w != c->w || *h != c->h || bw != c->bw;
 }
 
@@ -244,12 +243,12 @@ void applywinrule(Client *c)
 	else if ((ws = winprop(c->win, netatom[WmDesktop])) < 0 || ws > 99)
 		ws = selws->num;
 	if (xcb_icccm_get_wm_class_reply(con, pc, &prop, &e)) {
-		DBG("applywinrule: window property: class: %s, instance: %s, title: %s,",
-				prop.class_name, prop.instance_name, title);
+		DBG("applywinrule: class: %s, instance: %s, title: %s,", prop.class_name,
+				prop.instance_name, title);
 		for (r = winrules; r; r = r->next) {
 			if (!rulecmp(r, title, prop.class_name, prop.instance_name))
 				continue;
-			DBG("applywinrule: matched rule: class: %s, inst: %s, title: %s",
+			DBG("applywinrule: matched: class: %s, inst: %s, title: %s",
 					r->class, r->inst, r->title);
 			c->floating = r->floating;
 			c->sticky = r->sticky;
@@ -312,7 +311,7 @@ void changews(Workspace *ws, int allowswap, int allowwarp)
 	Monitor *m, *oldmon;
 	int diffmon = allowwarp && selws->mon != ws->mon;
 
-	if (!ws)
+	if (!ws || !nextcon(monitors, 1))
 		return;
 	DBG("changews: %d:%s -> %d:%s - allowswap: %d - warp: %d", selws->num,
 			selws->mon->name, ws->num, ws->mon->name, allowswap, diffmon);
@@ -832,7 +831,6 @@ void cmdrule(char **argv)
 					&& (r.title == wr->title || (r.title && !strcmp(r.title, wr->title))))
 			{
 				if (!rem) {
-					DBG("cmdrule: updating existing rule with the same match patterns");
 					fprintf(cmdresp, "updating existing rule with same match patterns");
 					wr->ws = r.ws;
 					wr->mon = r.mon;
@@ -964,21 +962,6 @@ void cmdswap(char **argv)
 	(void)(argv);
 }
 
-Monitor *opttomon(int opt)
-{
-	Monitor *m;
-
-	if (opt == optlast)
-		m = lastmon ? lastmon : selws->mon;
-	else if (opt == optnext)
-		m = selws->mon && selws->mon->next ? selws->mon->next : monitors;
-	else if (selws->mon == monitors)
-		FIND_TAIL(m, monitors);
-	else
-		FIND_PREV(m, selws->mon, monitors);
-	return m;
-}
-
 void cmdmon(char **argv)
 {
 	uint i;
@@ -1004,9 +987,7 @@ void cmdmon(char **argv)
 			}
 		if (*argv) {
 			if ((opt = parseopt(argv, moveopts, NULL)) >= 0) {
-				DBG("cmdmon: selecting %s monitor", moveopts[opt]);
 				if (!(m = opttomon(opt)) || !m->ws) {
-					DBG("cmdmon: unable to find monitor or workspace, updating and retrying");
 					updateworkspaces(globalcfg[NumWs]);
 					if (!(m = opttomon(opt)) || !m->ws)
 						errx(1, "unable to locate monitor or workspace");
@@ -2533,11 +2514,45 @@ void mousemvr(int move)
 		eventignore(XCB_ENTER_NOTIFY);
 }
 
+Monitor *nextcon(Monitor *m, int direction)
+{
+	Monitor *n;
+
+	while (m && !m->connected) {
+		if (direction > 0) {
+			if (!(m = m->next)) {
+				if (m == monitors)
+					return m;
+				m = monitors;
+			}
+		} else {
+			FIND_PREV(n, m, monitors);
+			m = n;
+		}
+	}
+	return m;
+}
+
 Client *nextt(Client *c)
 {
 	while (c && c->floating)
 		c = c->next;
 	return c;
+}
+
+Monitor *opttomon(int opt)
+{
+	Monitor *m;
+
+	if (opt == optlast)
+		m = lastmon && lastmon->connected ? lastmon : selws->mon;
+	else if (opt == optnext)
+		m = nextcon(selws->mon, 1);
+	else {
+		FIND_PREV(m, selws->mon, monitors);
+		m = nextcon(m, -1);
+	}
+	return m;
 }
 
 Monitor *outputtomon(xcb_randr_output_t id)
@@ -3173,7 +3188,8 @@ void updatenumws(int needed)
 	Monitor *m = NULL;
 
 	FOR_EACH(m, monitors)
-		n++;
+		if (m->connected)
+			n++;
 	if (n > 999 || needed > 999) {
 		warnx("attempting to allocate too many workspaces");
 		return;
@@ -3182,14 +3198,16 @@ void updatenumws(int needed)
 		globalcfg[NumWs]++;
 	}
 	FOR_EACH(ws, workspaces) {
-		if (!m)
-			m = monitors;
-		if (m && !m->ws)
+		if (!m && !(m = nextcon(monitors, 1))) {
+			DBG("updatenumws: no connected monitors to assign workspaces to");
+			break;
+		}
+		if (!m->ws)
 			m->ws = ws;
 		ws->mon = m;
-		DBG("updatenumws: %d:%s -> %s - visible: %d", ws->num, ws->name, m->name, ws == m->ws);
-		if (m)
-			m = m->next;
+		DBG("updatenumws: %d:%s -> %s - visible: %d - connected: %d",
+				ws->num, ws->name, m->name, ws == m->ws, m->connected);
+		m = nextcon(m->next, 1);
 	}
 	PROP_REPLACE(root, netatom[NumDesktops], XCB_ATOM_CARDINAL, 32, 1, &globalcfg[NumWs]);
 	updateviewports();
@@ -3234,12 +3252,13 @@ int updateoutputs(xcb_randr_output_t *outs, int len, xcb_timestamp_t timestamp)
 			} else if ((m = outputtomon(outs[i]))) {
 				changed = changed || (crtc->x != m->x || crtc->y != m->y
 						|| crtc->width != m->w || crtc->height != m->h);
+				m->num = nmons++;
 				m->x = m->wx = crtc->x;
 				m->y = m->wy = crtc->y;
 				m->w = m->ww = crtc->width;
 				m->h = m->wh = crtc->height;
 				m->connected = 1;
-				DBG("updateoutputs: new size and location for monitor: %s - %d,%d @ %dx%d",
+				DBG("updateoutputs: updated size and location for monitor: %s - %d,%d @ %dx%d",
 						m->name, m->x, m->y, m->w, m->h);
 			} else {
 				initmon(nmons++, name, outs[i], crtc->x, crtc->y, crtc->width, crtc->height);
@@ -3247,9 +3266,9 @@ int updateoutputs(xcb_randr_output_t *outs, int len, xcb_timestamp_t timestamp)
 			}
 			free(crtc);
 		} else if (o->connection == disconnected && (m = outputtomon(outs[i]))) {
-			DBG("updateoutputs: output is inactive or disconnected: %s - freeing", m->name);
+			DBG("updateoutputs: output is inactive or disconnected: %s", m->name);
 			m->connected = 0;
-			freemon(m);
+			/* freemon(m); */
 			changed = 1;
 		}
 cont:

@@ -10,7 +10,7 @@ features and ideas in other window managers that I liked.
 
 Some ways in which yaxwm differs include:
 
-- Based on xcb rather than xlib with RANDR support for multi-head.
+- Using xcb over xlib and randr support for multi-head, no xinerama support planned.
 
 - Dynamic workspaces similar to xmonad, with a workspace centric model at the core.
 
@@ -18,28 +18,26 @@ Some ways in which yaxwm differs include:
 
 - Unix socket communication for controlling and configuring the wm similar to bspwm.
 
-- No Keybinds built in method for binding keys, you'll need an external program like `sxhkd`.
+- No built in method for binding keys, you'll need an external program like sxhkd.
 
 - Supports more [ewmh standards](https://specifications.freedesktop.org/wm-spec/wm-spec-latest.html)
 for better interoperability with other programs and applications.
 
-- No source lines restrictions yet.
-
-- Likely more bugs/errors.
+- This is still under active development so expect bugs/errors, please open an issue or contact me.
 
 
 #### Installation
 
-You need the xcb headers, on Arch Linux you can run
+You need the xcb headers, if you're on Arch Linux you can run
 
 ```
 pacman -S xcb-proto xcb-util xcb-util-wm xcb-util-cursor xcb-util-keysyms
 ```
-On other systems packages with similar names should be available.
+Other systems should have packages with similar names.
 
-
-Furthermore yaxwm offers no key binds so you will need a third party
-program like `sxhkd` in order to launch programs and control the wm.
+As mentioned above, yaxwm has no key binds outside of mouse movement so
+you'll need an external program like sxhkd to launch programs and control
+the window manager.
 
 
 To compile run
@@ -65,14 +63,16 @@ To start yaxwm you can add `exec yaxwm` to your xinitrc.
 
 #### Configuration
 
-There are example yaxwmrc and sxhkdrc in `doc/` or `/usr/share/doc/yaxwm` after installation.
+There are example yaxwmrc and sxhkdrc in `doc/` or `/usr/share/doc/yaxwm` after
+installation.
 
 Yaxwm looks for a file `$YAXWM_CONF`, `$XDG_CONFIG_HOME/yaxwm/yaxwmrc`, or
 `$HOME/.config/yaxwm/yaxwmrc` and tries to execute it. This file is just a shell
 script, it must be executable.
 
 For advanced configuration like layout and callback functions, copy the default
-config header `src/config.def.h` to `src/config.h` then edit it, and recompile.
+config header `src/config.def.h` to `src/config.h` then edit it and recompile.
+This file isn't tracked by git so you can maintain configuration across updates.
 
 
 #### Todo

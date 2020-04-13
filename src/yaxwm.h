@@ -28,8 +28,7 @@
 #include <xcb/xcb_keysyms.h>
 
 #ifdef DEBUG
-#define DBG(fmt, ...); print("yaxwm:%d:"fmt, __LINE__, ##__VA_ARGS__);
-static void print(const char *fmt, ...);
+#define DBG(fmt, ...); warnx("%d:"fmt, __LINE__, ##__VA_ARGS__);
 #else
 #define DBG(fmt, ...);
 #endif
@@ -46,14 +45,13 @@ static void print(const char *fmt, ...);
 #define LEN(x)              (sizeof(x) / sizeof(x[0]))
 #define CLNMOD(mod)         (mod & ~(lockmask | XCB_MOD_MASK_LOCK))
 #define FLOATING(c)         ((c)->floating || !(c)->ws->layout->fn)
-#define STICKY              (0xffffffff)
+#define EVRESP              (0x7f)
+#define EVTYPE(e)           (e->response_type &  EVRESP)
+#define EVSENT(e)           (e->response_type & ~EVRESP)
 #define BWMASK              (XCB_CONFIG_WINDOW_BORDER_WIDTH)
 #define XYMASK              (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y)
 #define WHMASK              (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT)
 #define BUTTONMASK          (XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE)
-#define EVENT_RESPONSE_MASK (0x7f)
-#define EVENT_TYPE(e)       (e->response_type &  EVENT_RESPONSE_MASK)
-#define EVENT_SENT(e)       (e->response_type & ~EVENT_RESPONSE_MASK)
 
 #define FOR_EACH(v, list)\
 	for ((v) = (list); (v); (v) = (v)->next)
@@ -66,11 +64,17 @@ static void print(const char *fmt, ...);
 	for ((v) = (list); (v); (v) = (v)->snext)
 #define FOR_CLIENTS(c, ws)\
 	FOR_EACH((ws), workspaces) FOR_EACH((c), (ws)->clients)
+
 #define FIND_TILETAIL(v, list)\
 	for ((v) = nextt((list)); (v) && nextt((v)->next); (v) = nextt((v)->next))
+
 #define FIND_PREVTILED(v, cur, list)\
 	for ((v) = nextt((list)); (v) && nextt((v)->next)\
 			&& nextt((v)->next) != (cur); (v) = nextt((v)->next))
+
+#define FIND_PREVMON(v, cur, list)\
+	for ((v) = nextmon((list)); (v) && nextmon((v)->next)\
+			&& nextmon((v)->next) != (cur); (v) = nextmon((v)->next))
 
 #define MOVE(win, x, y)\
 	xcb_configure_window(con, (win), XYMASK, (uint []){(x), (y)})
@@ -101,9 +105,9 @@ typedef xcb_get_geometry_reply_t Geometry;
 typedef xcb_get_window_attributes_reply_t WindowAttr;
 
 enum Cursors { Move, Normal, Resize };
-enum Borders { Width, Smart, Focus, Unfocus, Urgent };
+enum Borders { Width, Focus, Unfocus, Urgent };
 enum Gravity { None, Left, Right, Center, Top, Bottom };
-enum GlobalCfg { SizeHints, FocusMouse, FocusUrgent, NumWs, MinXY, MinWH };
+enum GlobalCfg { SmartGap, SmartBorder, SizeHints, FocusMouse, FocusUrgent, NumWs, MinXY, MinWH };
 
 struct Panel {
 	int x, y, w, h;
@@ -195,7 +199,7 @@ struct WsDefault {
 };
 
 static void applywinrule(Client *c);
-static int checkerror(int, char *, xcb_generic_error_t *);
+static int iferr(int, char *, xcb_generic_error_t *);
 static void cmdborder(char **);
 static void cmdcycle(char **);
 static void cmdffs(char **);
@@ -256,13 +260,12 @@ static int mono(Workspace *);
 static void mousemvr(int);
 static void movefocus(int);
 static void movestack(int);
-static Monitor *nextcon(Monitor *m, int direction);
+static Monitor *nextmon(Monitor *m);
 static Client *nextt(Client *);
-static Monitor *opttomon(int opt);
 static void parsecmd(char *);
 static void printerror(xcb_generic_error_t *);
 static int querypointer(int *, int *);
-static void relocatefloating(Workspace *, Monitor *);
+static void relocate(Workspace *, Monitor *);
 static void resize(Client *, int, int, int, int, int);
 static void resizehint(Client *, int, int, int, int, int, int, int);
 static void restack(Workspace *);
@@ -302,15 +305,15 @@ static Panel *wintopanel(xcb_window_t);
 static xcb_window_t wintrans(xcb_window_t);
 static void wintype(Client *);
 
-enum MoveOpts {
-	optnext,
-	optprev,
-	optlast
+enum Opts {
+	Next,
+	Prev,
+	Last,
 };
-static char *moveopts[] = {
-	[optnext] = "next",
-	[optprev] = "prev",
-	[optlast] = "last",
+static char *opts[] = {
+	[Next] = "next",
+	[Prev] = "prev",
+	[Last] = "last",
 	NULL
 };
 
@@ -333,6 +336,7 @@ enum NetAtoms {
 	Active,
 	Check,
 	ClientList,
+	Close,
 	CurDesktop,
 	DemandsAttn,
 	Desktop,
@@ -355,6 +359,7 @@ static const char *netatoms[] = {
 	[Active] = "_NET_ACTIVE_WINDOW",
 	[Check] = "_NET_SUPPORTING_WM_CHECK",
 	[ClientList] = "_NET_CLIENT_LIST",
+	[Close] = "_NET_CLOSE_WINDOW",
 	[CurDesktop] = "_NET_CURRENT_DESKTOP",
 	[DemandsAttn] = "_NET_WM_STATE_DEMANDS_ATTENTION",
 	[DesktopNames] = "_NET_DESKTOP_NAMES",
@@ -373,6 +378,7 @@ static const char *netatoms[] = {
 	[WindowType] = "_NET_WM_WINDOW_TYPE",
 	[WmDesktop] = "_NET_WM_DESKTOP",
 };
+
 
 /* primary keywords and parser functions
  * Keyword functions have the following prototype: void function(char **); */
@@ -420,6 +426,7 @@ static const Command wsmoncmds[] = {
 	{ "send",   cmdsend   },
 	{ "view",   cmdview   },
 };
+
 
 static FILE *cmdresp; /* file for writing command messages into */
 static const char *enoargs = "command requires additional arguments but none were given";

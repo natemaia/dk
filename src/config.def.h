@@ -3,20 +3,16 @@
  * see license file for copyright and license details */
 
 
-static int gap[] = {
-	[Width] = 0, /* gap width in pixels */
-	[Smart] = 1, /* disable gaps in layouts with only one visible window */
-};
-
 static int border[] = {
 	[Width] = 1,          /* border width in pixels */
-	[Smart] = 1,          /* disable borders in layouts with only one visible window */
 	[Focus] = 0x6699cc,   /* focused window border colours */
 	[Unfocus] = 0x000000, /* unfocused window border colours */
 	[Urgent] = 0xee5555,  /* urgent window border colours */
 };
 
 static int globalcfg[] = {
+	[SmartGap] = 1,    /* disable gaps in layouts with only one visible window */
+	[SmartBorder] = 1, /* disable borders in layouts with only one visible window */
 	[SizeHints] = 0,   /* respect size hints in tiled layouts */
 	[FocusMouse] = 1,  /* enable focus follows mouse */
 	[FocusUrgent] = 1, /* enable focus urgent windows */
@@ -28,8 +24,9 @@ static int globalcfg[] = {
 static const char *cursors[] = {
 	[Move] = "fleur",
 	[Normal] = "arrow",
-	[Resize] = "sizing"
+	[Resize] = "sizing",
 };
+
 
 static void albumart(Client *c, int closed)
 { /* example of a simple callback for album art windows */
@@ -40,7 +37,6 @@ static void albumart(Client *c, int closed)
 		gravitate(c, Right, Center, 1); /* right center of the screen */
 		focus(c->snext); /* don't take focus */
 	}
-	layoutws(c->ws);
 }
 
 

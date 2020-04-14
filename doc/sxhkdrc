@@ -52,6 +52,10 @@ alt + {j,k}
 alt + {q,space,Tab,F11}
     yaxcmd win {kill,swap,cycle,fakefs}
 
+# toggle true fullscreen
+F11
+	yaxcmd win full
+
 # toggle floating or sticky
 alt + shift + {space,s}
     yaxcmd win {float,stick}
@@ -68,9 +72,10 @@ alt + ctrl + {h,j,k,l}
 alt + {_,shift + ,ctrl + }{1-9,0}
     yaxcmd ws {view,send,follow} {1-9,10}
 
-# view, send, or follow to the next, previous, or last active workspace
-alt + {_,shift + ,ctrl + }{bracketleft,bracketright,BackSpace}
-    yaxcmd ws {view,send,follow} {prev,next,last}
+# view, send, or follow to the next, previous, last active,
+# next non-empty, or prev non-empty workspace
+alt + {_,shift + ,ctrl + }{bracketleft,bracketright,BackSpace,Left,Right}
+    yaxcmd ws {view,send,follow} {prev,next,last,prevne,nextne}
 
 # view, send, or follow to the next, previous, or last active monitor
 alt + {_,shift + ,ctrl + }{comma,period,backslash}

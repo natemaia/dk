@@ -35,6 +35,10 @@ logfile="$HOME/.yaxcmd.log"
 	# receiving activation, and enable focus-follows-mouse
 	yaxcmd set tile_hints=0 focus_urgent=1 focus_mouse=1
 
+	# minimum width/height for resizing, and minimum allowed on-screen
+	# when moving (defines how much a window can be moved off-screen)
+	yaxcmd set win_minwh=50 win_minxy=10
+
 	# define mouse mod and move/resize buttons
 	yaxcmd set mouse mod=alt move=button1 resize=button3
 
@@ -72,6 +76,10 @@ logfile="$HOME/.yaxcmd.log"
 
 	# open window(s) with sticky and floating enabled to view on all workspaces.
 	yaxcmd rule class="^stickyterm$" stick float w=1280 h=720
+
+	# update or remove an existing rule with the same match patterns
+	yaxcmd rule class="^firefox$" mon="My New Monitor"
+	yaxcmd rule remove class="^firefox$"
 
 } >> "$logfile" 2>&1 # append responses
 

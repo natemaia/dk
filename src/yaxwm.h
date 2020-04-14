@@ -28,7 +28,7 @@
 #include <xcb/xcb_keysyms.h>
 
 #ifdef DEBUG
-#define DBG(fmt, ...); warnx("%d:"fmt, __LINE__, ##__VA_ARGS__);
+#define DBG(fmt, ...); warnx("%d: "fmt, __LINE__, ##__VA_ARGS__);
 #else
 #define DBG(fmt, ...);
 #endif
@@ -77,10 +77,10 @@
 			&& nextmon((v)->next) != (cur); (v) = nextmon((v)->next))
 
 #define MOVE(win, x, y)\
-	xcb_configure_window(con, (win), XYMASK, (uint []){(x), (y)})
+	xcb_configure_window(con, (win), XYMASK, (uint32_t []){(x), (y)})
 #define MOVERESIZE(win, x, y, w, h, bw)\
 	xcb_configure_window(con, win, XYMASK | WHMASK | BWMASK,\
-			(uint []){(x), (y), (w), (h), (bw)});
+			(uint32_t []){(x), (y), (w), (h), (bw)});
 #define PROP_APPEND(win, atom, type, membsize, nmemb, value)\
 	xcb_change_property(con, XCB_PROP_MODE_APPEND, (win), (atom),\
 			(type), (membsize), (nmemb), (value))
@@ -88,16 +88,14 @@
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, (win), (atom),\
 			(type), (membsize), (nmemb), (value))
 
-typedef unsigned int uint;
-typedef unsigned char uchar;
+typedef struct Rule Rule;
+typedef struct Desk Desk;
 typedef struct Panel Panel;
 typedef struct Client Client;
 typedef struct Layout Layout;
-typedef struct WinRule WinRule;
 typedef struct Monitor Monitor;
 typedef struct Keyword Keyword;
 typedef struct Command Command;
-typedef struct DeskWin DeskWin;
 typedef struct Callback Callback;
 typedef struct Workspace Workspace;
 typedef struct WsDefault WsDefault;
@@ -130,20 +128,20 @@ struct Client {
 	xcb_window_t win;
 };
 
-struct DeskWin {
+struct Desk {
 	int x, y, w, h;
-	DeskWin *next;
+	Desk *next;
 	Monitor *mon;
 	xcb_window_t win;
 };
 
-struct WinRule {
+struct Rule {
 	int x, y, w, h, bw;
 	int ws, floating, sticky;
 	char *class, *inst, *title, *mon;
 	Callback *cb;
 	regex_t classreg, instreg, titlereg;
-	WinRule *next;
+	Rule *next;
 };
 
 struct Monitor {
@@ -198,14 +196,13 @@ struct WsDefault {
 	Layout *layout;
 };
 
-static void applywinrule(Client *c);
-static int iferr(int, char *, xcb_generic_error_t *);
 static void cmdborder(char **);
 static void cmdcycle(char **);
 static void cmdffs(char **);
 static void cmdfloat(char **);
 static void cmdfocus(char **);
 static void cmdfollow(int);
+static void cmdfull(char **);
 static void cmdgappx(char **);
 static void cmdkill(char **);
 static void cmdlayout(char **);
@@ -233,22 +230,24 @@ static void *ecalloc(size_t, size_t);
 static void eventignore(uint8_t);
 static void eventloop(void);
 static void execcfg(void);
+static void floatoffset(Client *c, int d, int *x, int *y, int *w, int *h);
 static void focus(Client *);
 static void freeclient(Client *, int);
-static void freedeskwin(DeskWin *, int);
+static void freedesk(Desk *, int);
 static void freepanel(Panel *, int);
-static void freewinrule(WinRule *r);
+static void freerule(Rule *r);
 static void freewin(xcb_window_t, int);
 static void freewm(void);
 static void freews(Workspace *);
 static void grabbuttons(Client *, int);
 static void gravitate(Client *, int, int, int);
+static int iferr(int, char *, xcb_generic_error_t *);
 static void initclient(xcb_window_t, Geometry *);
-static void initdeskwin(xcb_window_t, Geometry *);
+static void initdesk(xcb_window_t, Geometry *);
 static void initpanel(xcb_window_t, Geometry *);
 static void initscan(void);
-static int initwinrulereg(WinRule *, WinRule *);
-static void initwinrule(WinRule *);
+static int initrulereg(Rule *, Rule *);
+static void initrule(Rule *);
 static void initwm(void);
 static Workspace *initws(int);
 static char *itoa(int n, char *);
@@ -269,15 +268,15 @@ static void relocate(Workspace *, Monitor *);
 static void resize(Client *, int, int, int, int, int);
 static void resizehint(Client *, int, int, int, int, int, int, int);
 static void restack(Workspace *);
-static int rulecmp(WinRule *, char *, char *, char *);
+static int rulecmp(Rule *, char *, char *, char *);
 static void sendconfigure(Client *);
-static void sendevent(Client *, const char *, long);
+static void sendevent(xcb_window_t, const char *, uint32_t);
 static int sendwmproto(Client *, int);
 static void setclientws(Client *, int);
 static void setfullscreen(Client *, int);
 static void setinputfocus(Client *);
 static void setnetwsnames(void);
-static void setstackmode(xcb_window_t, uint);
+static void setstackmode(xcb_window_t, uint32_t);
 static void setsticky(Client *, int);
 static void seturgent(Client *, int);
 static void setwmwinstate(xcb_window_t, uint32_t);
@@ -289,18 +288,19 @@ static void unfocus(Client *, int);
 static void ungrabpointer(void);
 static void updateclientlist(void);
 static void updatenumws(int);
-static int updaterandr(void);
+static int updaterandr();
 static void updatestruts(Panel *, int);
 static void updateviewports(void);
 static void updateworkspaces(int);
 static void usenetcurdesktop(void);
 static WindowAttr *winattr(xcb_window_t);
+static int winclassprop(xcb_window_t win, char *class, char *inst, size_t csize, size_t isize);
 static Geometry *wingeom(xcb_window_t);
 static void winhints(Client *);
-static xcb_atom_t winprop(xcb_window_t, xcb_atom_t);
+static int winprop(xcb_window_t, xcb_atom_t, xcb_atom_t *);
 static int wintextprop(xcb_window_t, xcb_atom_t, char *, size_t);
 static Client *wintoclient(xcb_window_t);
-static DeskWin *wintodeskwin(xcb_window_t);
+static Desk *wintodesk(xcb_window_t);
 static Panel *wintopanel(xcb_window_t);
 static xcb_window_t wintrans(xcb_window_t);
 static void wintype(Client *);
@@ -308,12 +308,16 @@ static void wintype(Client *);
 enum Opts {
 	Next,
 	Prev,
-	Last,
+	Last,  /* last active */
+	NextNE, /* non-empty */
+	PrevNE, /* non-empty */
 };
 static char *opts[] = {
 	[Next] = "next",
 	[Prev] = "prev",
 	[Last] = "last",
+	[NextNE] = "nextne",
+	[PrevNE] = "prevne",
 	NULL
 };
 
@@ -412,6 +416,7 @@ static const Keyword wincmds[] = {
 	{ "cycle",    cmdcycle  },
 	{ "fakefs",   cmdffs    },
 	{ "float",    cmdfloat  },
+	{ "full",     cmdfull   },
 	{ "focus",    cmdfocus  },
 	{ "kill",     cmdkill   },
 	{ "resize",   cmdresize },

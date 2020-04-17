@@ -1,4 +1,5 @@
-/* In order to customize settings in this file, copy it to config.h and edit it
+/* In order to customize settings or add new commands
+ * copy it to config.h and edit it
  *
  * see license file for copyright and license details */
 
@@ -28,24 +29,70 @@ static const char *cursors[] = {
 };
 
 
+/* primary keywords and parser functions
+ * Keyword functions have the following prototype: void function(char **); */
+static const Keyword keywords[] = {
+	{ "mon",   cmdmon  },
+	{ "rule",  cmdrule },
+	{ "set",   cmdset  },
+	{ "win",   cmdwin  },
+	{ "wm",    cmdwm   },
+	{ "ws",    cmdws   },
+};
+
+/* "set" keyword options, used by cmdset() to parse arguments
+ * Keyword functions have the following prototype: void function(char **); */
+static const Keyword setcmds[] = {
+	{ "border", cmdborder  },
+	{ "gap",    cmdgappx   },
+	{ "layout", cmdlayout  },
+	{ "master", cmdnmaster },
+	{ "mouse",  cmdmouse   },
+	{ "pad",    cmdpad     },
+	{ "split",  cmdsplit   },
+	{ "ssplit", cmdssplit  },
+	{ "stack",  cmdnstack  },
+	{ "wsdef",  cmdwsdef   },
+};
+
+/* "win" keyword options, used by cmdwin() to parse arguments
+ * Keyword functions have the following prototype: void function(char **); */
+static const Keyword wincmds[] = {
+	{ "cycle",    cmdcycle  },
+	{ "fakefs",   cmdffs    },
+	{ "float",    cmdfloat  },
+	{ "full",     cmdfull   },
+	{ "focus",    cmdfocus  },
+	{ "kill",     cmdkill   },
+	{ "resize",   cmdresize },
+	{ "stick",    cmdstick  },
+	{ "swap",     cmdswap   },
+};
+
+/* "ws" and "mon" commands used by cmdws() and cmdmon() to parse arguments.
+ * Command functions have the following prototype: void function(int); */
+static const Command wsmoncmds[] = {
+	{ "follow", cmdfollow },
+	{ "send",   cmdsend   },
+	{ "view",   cmdview   },
+};
+
 static void albumart(Client *c, int closed)
 { /* example of a simple callback for album art windows */
 	if (closed)
 		c->ws->padr = 0; /* remove padding */
 	else {
 		c->ws->padr = c->w + (2 * c->ws->gappx); /* padding to the right */
-		gravitate(c, Right, Center, 1); /* right center of the screen */
+		gravitate(c, Right, Center, 1); /* right center of the screen, respect gaps */
 		focus(c->snext); /* don't take focus */
 	}
 }
-
 
 /* "callback" names recognized for use with rules.
  * Callback functions have the following prototype: void function(Client *, int); */
 static Callback callbacks[] = {
 	{ "albumart", albumart },
 };
-
 
 /* "layout" names used by cmdlayout() to parse arguments.
  * Layout functions have the following prototype: int function(Workspace *); */
@@ -54,7 +101,6 @@ static Layout layouts[] = {
 	{ "mono", mono },
 	{ "none", NULL },
 };
-
 
 static WsDefault wsdef = { /* settings for newly created workspaces */
 	1,           /* nmaster */
@@ -69,7 +115,7 @@ static WsDefault wsdef = { /* settings for newly created workspaces */
 	&layouts[0]  /* layout */
 };
 
-/* default bindings for mouse move/resize */
+/* default modifier and buttons for mouse move/resize */
 static xcb_mod_mask_t mousemod = XCB_MOD_MASK_4;
 static xcb_button_t mousemove = XCB_BUTTON_INDEX_1;
 static xcb_button_t mouseresize = XCB_BUTTON_INDEX_3;

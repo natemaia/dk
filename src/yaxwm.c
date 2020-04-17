@@ -1266,6 +1266,7 @@ void eventhandle(xcb_generic_event_t *ev)
 	Workspace *ws;
 	static Monitor *mon = NULL;
 	static xcb_timestamp_t lasttime = 0;
+	xcb_randr_screen_change_notify_event_t *re;
 
 	switch (EVTYPE(ev)) {
 	case XCB_FOCUS_IN:
@@ -1490,12 +1491,11 @@ void eventhandle(xcb_generic_event_t *ev)
 		if (ev->response_type && randrbase != -1
 				&& ev->response_type == randrbase + XCB_RANDR_SCREEN_CHANGE_NOTIFY)
 		{
-			xcb_randr_screen_change_notify_event_t *re;
 
 			re = (xcb_randr_screen_change_notify_event_t *)ev;
 			if (re->root != root)
 				return;
-			DBG("eventhandle: RANDR_SCREEN_CHANGE_NOTIFY");
+			DBG("eventhandle: RANDR_SCREEN_CHANGE_NOTIFY -- width: %d, height: %d", re->width, re->height);
 			if (!updaterandr() && monitors) {
 				DBG("eventhandle: outputs changed after randr event");
 				updateworkspaces(globalcfg[NumWs]);
@@ -2092,14 +2092,11 @@ int initrandr(void)
 	const xcb_query_extension_reply_t *ext;
 
 	DBG("initrandr: checking randr extension is available")
-	ext = xcb_get_extension_data(con, &xcb_randr_id);
-	if (!ext->present)
+	if (!(ext = xcb_get_extension_data(con, &xcb_randr_id)) || !ext->present)
 		return -1;
 	updaterandr();
 	extbase = ext->first_event;
-	xcb_randr_select_input(con, root,
-			XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE | XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE |
-			XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE | XCB_RANDR_NOTIFY_MASK_OUTPUT_PROPERTY);
+	xcb_randr_select_input(con, root, XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE);
 	return extbase;
 }
 
@@ -2236,15 +2233,11 @@ void initwm(void)
 {
 	uint32_t i;
 	int x, y;
-	xcb_void_cookie_t ck;
+	xcb_void_cookie_t c;
 	xcb_cursor_context_t *ctx;
 	struct sigaction sa;
 	static struct sockaddr_un sockaddr;
 	int sigs[] = { SIGTERM, SIGINT, SIGHUP, SIGCHLD };
-	uint32_t m = XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT | XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY
-		| XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_POINTER_MOTION
-		| XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_LEAVE_WINDOW
-		| XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_PROPERTY_CHANGE;
 
 	DBG("initwm: starting yaxwm set up")
 	sa.sa_handler = sighandle;
@@ -2287,11 +2280,14 @@ void initwm(void)
 	xcb_delete_property(con, root, netatom[ClientList]);
 	usenetcurdesktop();
 	setnetwsnames();
-
-	ck = xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK, &m);
-	iferr(1, "unable to change root window event mask", xcb_request_check(con, ck));
-	ck = xcb_change_window_attributes_checked(con, root, XCB_CW_CURSOR, &cursor[Normal]);
-	iferr(1, "unable to change root window cursor", xcb_request_check(con, ck));
+	c = xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK | XCB_CW_CURSOR,
+			(uint32_t []){ XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT
+			| XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY | XCB_EVENT_MASK_BUTTON_PRESS
+			| XCB_EVENT_MASK_POINTER_MOTION | XCB_EVENT_MASK_ENTER_WINDOW
+			| XCB_EVENT_MASK_LEAVE_WINDOW | XCB_EVENT_MASK_STRUCTURE_NOTIFY
+			| XCB_EVENT_MASK_PROPERTY_CHANGE,
+			cursor[Normal] });
+	iferr(1, "unable to change root window event mask or cursor", xcb_request_check(con, c));
 
 	if (!(keysyms = xcb_key_symbols_alloc(con)))
 		err(1, "unable to get keysyms from X connection");
@@ -2668,23 +2664,41 @@ void relocate(Workspace *ws, Monitor *old)
 	Client *c;
 	Monitor *m;
 	int xoff, yoff;
+	/* float xoff, yoff; */
 	float xdiv, ydiv;
 
+
+	DBG("relocate: moving clients from %s to %s", old->name, ws->mon->name);
+	if (!(m = ws->mon) || m == old)
+		return;
+
 	FOR_EACH(c, ws->clients)
-		if (FLOATING(c) && (m = ws->mon)) {
-			if ((xoff = c->x - old->x) && (xdiv = old->w / xoff) != 0.0)
-				c->x = CLAMP(m->x + (m->w / xdiv), ws->mon->x - (W(c) - globalcfg[MinXY]),
-						m->wx + m->ww - globalcfg[MinXY]);
-			else
-				c->x = CLAMP(c->x, ws->mon->x - (W(c) - globalcfg[MinXY]),
-						m->wx + m->ww - globalcfg[MinXY]);
-			if ((yoff = c->y - old->y) && (ydiv = old->h / yoff) != 0.0)
-				c->y = CLAMP(m->y + (m->h / ydiv), ws->mon->y - (H(c) - globalcfg[MinXY]),
-						m->wy + m->wh - globalcfg[MinXY]);
-			else
-				c->y = CLAMP(c->y, ws->mon->y - (H(c) - globalcfg[MinXY]),
-						m->wy + m->wh - globalcfg[MinXY]);
+		if (FLOATING(c)) {
+			if ((xoff = c->x - old->x) && (xdiv = old->w / xoff) != 0.0) {
+				DBG("relocate: 0x%08x - x: %d -- xdiv: %f -- newx: %f", c->win, c->x, xdiv, m->x + (m->w / xdiv));
+				c->x = CLAMP(m->x + (m->w / xdiv), ws->mon->x - (W(c) - globalcfg[MinXY]), m->x + m->w - globalcfg[MinXY]);
+			} else
+				c->x = CLAMP(c->x, ws->mon->x - (W(c) - globalcfg[MinXY]), m->x + m->w - globalcfg[MinXY]);
+			if ((yoff = c->y - old->y) && (ydiv = old->h / yoff) != 0.0) {
+				DBG("relocate: 0x%08x - y: %d, -- ydiv: %f -- newy: %f", c->win, c->y, ydiv, m->y + (m->h / ydiv));
+				c->y = CLAMP(m->y + (m->h / ydiv), ws->mon->y - (H(c) - globalcfg[MinXY]), m->y + m->h - globalcfg[MinXY]);
+			} else
+				c->y = CLAMP(c->y, ws->mon->y - (H(c) - globalcfg[MinXY]), m->y + m->h - globalcfg[MinXY]);
 		}
+
+	/* FOR_EACH(c, ws->clients) */
+	/* 	if (FLOATING(c)) { */
+	/* 		xoff = (c->x - old->x) / old->w; */
+	/* 		yoff = (c->y - old->y) / old->h; */
+	/* 		DBG("relocate: 0x%08x - x: %d -- xdiv: %f -- newx: %f", c->win, c->x, xoff, m->wx + (m->ww * xoff)); */
+	/* 		if ((xdiv = (c->x - old->x) / old->w)) */
+	/* 			c->x = m->wx + (m->ww * xdiv); */
+	/* 		DBG("relocate: 0x%08x - y: %d -- ydiv: %f -- newy: %f", c->win, c->y, yoff, m->wy + (m->wh * xoff)); */
+	/* 		if ((ydiv = (c->y - old->y) / old->h)) */
+	/* 			c->y = m->wy + (m->wh * ydiv); */
+	/* 		c->x = CLAMP(c->x, ws->mon->wx - (W(c) - globalcfg[MinXY]), m->wx + m->ww - globalcfg[MinXY]); */
+	/* 		c->y = CLAMP(c->y, ws->mon->wy - (H(c) - globalcfg[MinXY]), m->wy + m->wh - globalcfg[MinXY]); */
+	/* 	} */
 }
 
 void resize(Client *c, int x, int y, int w, int h, int bw)
@@ -3214,13 +3228,16 @@ int updateoutputs(xcb_randr_output_t *outs, int len, xcb_timestamp_t timestamp)
 	Monitor *m;
 	char name[64];
 	int i, nmons, changed = 0;
+	xcb_void_cookie_t vc;
 	xcb_generic_error_t *e;
-	uint32_t maxw = 0, maxh = 0, mmaxw = 0, mmaxh = 0;
+	xcb_randr_set_crtc_config_cookie_t sc;
+	xcb_randr_set_crtc_config_reply_t *sr;
 	xcb_randr_get_crtc_info_cookie_t ck;
 	xcb_randr_get_output_info_reply_t *o;
 	xcb_randr_get_crtc_info_reply_t *crtc;
 	xcb_randr_get_output_info_cookie_t oc[len];
 	xcb_randr_get_output_primary_reply_t *po = NULL;
+	uint32_t maxw = 0, maxh = 0, mmaxw = 0, mmaxh = 0;
 	uint8_t disconnected = XCB_RANDR_CONNECTION_DISCONNECTED;
 
 	DBG("updateoutputs: received %d randr outputs", len);
@@ -3249,7 +3266,18 @@ int updateoutputs(xcb_randr_output_t *outs, int len, xcb_timestamp_t timestamp)
 					break;
 			if (m) {
 				DBG("updateoutputs: %s is a clone of %s - skipping", name, m->name);
-			} else if ((m = outputtomon(outs[i]))) {
+				free(crtc);
+				continue;
+			}
+			if (crtc->x + crtc->width > (int)maxw) {
+				maxw = crtc->x + crtc->width;
+				mmaxw += o->mm_width;
+			}
+			if (crtc->y + crtc->height > (int)maxh) {
+				maxh = crtc->y + crtc->height;
+				mmaxh += o->mm_height;
+			}
+			if ((m = outputtomon(outs[i]))) {
 				changed = changed || !m->connected || crtc->x != m->x || crtc->y != m->y
 						|| crtc->width != m->w || crtc->height != m->h;
 				m->num = nmons++;
@@ -3258,32 +3286,44 @@ int updateoutputs(xcb_randr_output_t *outs, int len, xcb_timestamp_t timestamp)
 				m->w = m->ww = crtc->width;
 				m->h = m->wh = crtc->height;
 				m->connected = 1;
-				DBG("updateoutputs: updated size and location for monitor: %s - %d,%d @ %dx%d",
-						m->name, m->x, m->y, m->w, m->h);
+				DBG("updateoutputs: updated %s: %d,%d @ %dx%d - changed: %d",
+						m->name, m->x, m->y, m->w, m->h, changed);
 			} else {
 				initmon(nmons++, name, outs[i], crtc->x, crtc->y, crtc->width, crtc->height);
 				changed = 1;
 			}
-			maxw = MAX(crtc->width, maxw);
-			maxh = MAX(crtc->height, maxh);
-			mmaxw = MAX(o->mm_width, mmaxw);
-			mmaxh = MAX(o->mm_height, mmaxh);
 			free(crtc);
 		} else if (o->connection == disconnected && (m = outputtomon(outs[i]))) {
 			DBG("updateoutputs: output is inactive or disconnected: %s", m->name);
 			changed = m->connected ? 1 : changed;
-			m->connected = 0;
-			nmons++;
+			if (m->connected) {
+				/* we need to disconnect the crtc, disabling it's mode and output
+				 * otherwise we can update the root screen size later */
+				sc = xcb_randr_set_crtc_config(con, o->crtc, XCB_CURRENT_TIME,
+						XCB_CURRENT_TIME, 0, 0, XCB_NONE, XCB_RANDR_ROTATION_ROTATE_0, 0, NULL);
+				if (!(sr = xcb_randr_set_crtc_config_reply(con, sc, &e))
+						|| sr->status != XCB_RANDR_SET_CONFIG_SUCCESS)
+					iferr(0, "unable to set crtc config", e);
+				m->connected = 0;
+				m->num = -1;
+				free(sr);
+			}
 		}
 cont:
 		free(o);
 	}
 
 	if (changed) {
-		/* DBG("updateoutputs: %d,%d -> %d,%d", scr_w, scr_h, maxw, maxh); */
-		/* xcb_void_cookie_t vc; */
-		/* vc = xcb_randr_set_screen_size_checked(con, root, maxw, maxh, mmaxw, mmaxh); */
-		/* iferr(0, "unable to set screen size", xcb_request_check(con, vc)); */
+		if ((int)maxw != scr_w || (int)maxh != scr_h) {
+			DBG("updateoutputs: screen size changed: %d,%d -> %d,%d", scr_w, scr_h, maxw, maxh);
+			scr_w = maxw;
+			scr_h = maxh;
+			/* here we need to update the root screen size with the new size, X doesn't update
+			 * itself when a monitor is disconnected so we're left with void space where
+			 * the cursor and windows can go but not be seen, yikes! */
+			vc = xcb_randr_set_screen_size_checked(con, root, maxw, maxh, mmaxw, mmaxh);
+			iferr(0, "unable to set new screen size", xcb_request_check(con, vc));
+		}
 		po = xcb_randr_get_output_primary_reply(con, xcb_randr_get_output_primary(con, root), NULL);
 		if (!(primary = outputtomon(po->output)) && monitors)
 			primary = monitors;

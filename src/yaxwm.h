@@ -288,7 +288,7 @@ static void unfocus(Client *, int);
 static void ungrabpointer(void);
 static void updateclientlist(void);
 static void updatenumws(int);
-static int updaterandr();
+static int updaterandr(void);
 static void updatestruts(Panel *, int);
 static void updateviewports(void);
 static void updateworkspaces(int);
@@ -382,56 +382,6 @@ static const char *netatoms[] = {
 	[WindowType] = "_NET_WM_WINDOW_TYPE",
 	[WmDesktop] = "_NET_WM_DESKTOP",
 };
-
-
-/* primary keywords and parser functions
- * Keyword functions have the following prototype: void function(char **); */
-static const Keyword keywords[] = {
-	{ "mon",   cmdmon  },
-	{ "rule",  cmdrule },
-	{ "set",   cmdset  },
-	{ "win",   cmdwin  },
-	{ "wm",    cmdwm   },
-	{ "ws",    cmdws   },
-};
-
-/* "set" keyword options, used by cmdset() to parse arguments
- * Keyword functions have the following prototype: void function(char **); */
-static const Keyword setcmds[] = {
-	{ "border", cmdborder  },
-	{ "gap",    cmdgappx   },
-	{ "layout", cmdlayout  },
-	{ "master", cmdnmaster },
-	{ "mouse",  cmdmouse   },
-	{ "pad",    cmdpad     },
-	{ "split",  cmdsplit   },
-	{ "ssplit", cmdssplit  },
-	{ "stack",  cmdnstack  },
-	{ "wsdef",  cmdwsdef   },
-};
-
-/* "win" keyword options, used by cmdwin() to parse arguments
- * Keyword functions have the following prototype: void function(char **); */
-static const Keyword wincmds[] = {
-	{ "cycle",    cmdcycle  },
-	{ "fakefs",   cmdffs    },
-	{ "float",    cmdfloat  },
-	{ "full",     cmdfull   },
-	{ "focus",    cmdfocus  },
-	{ "kill",     cmdkill   },
-	{ "resize",   cmdresize },
-	{ "stick",    cmdstick  },
-	{ "swap",     cmdswap   },
-};
-
-/* "ws" and "mon" commands used by cmdws() and cmdmon() to parse arguments.
- * Command functions have the following prototype: void function(int); */
-static const Command wsmoncmds[] = {
-	{ "follow", cmdfollow },
-	{ "send",   cmdsend   },
-	{ "view",   cmdview   },
-};
-
 
 static FILE *cmdresp; /* file for writing command messages into */
 static const char *enoargs = "command requires additional arguments but none were given";

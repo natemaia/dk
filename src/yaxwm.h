@@ -137,7 +137,7 @@ struct Desk {
 
 struct Rule {
 	int x, y, w, h, bw;
-	int ws, floating, sticky;
+	int ws, floating, sticky, focus;
 	char *class, *inst, *title, *mon;
 	Callback *cb;
 	regex_t classreg, instreg, titlereg;
@@ -245,9 +245,9 @@ static int iferr(int, char *, xcb_generic_error_t *);
 static void initclient(xcb_window_t, Geometry *);
 static void initdesk(xcb_window_t, Geometry *);
 static void initpanel(xcb_window_t, Geometry *);
-static void initscan(void);
 static int initrulereg(Rule *, Rule *);
 static void initrule(Rule *);
+static void initscan(void);
 static void initwm(void);
 static Workspace *initws(int);
 static char *itoa(int n, char *);

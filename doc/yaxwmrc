@@ -64,18 +64,21 @@ logfile="$HOME/.yaxcmd.log"
 	yaxcmd rule class="^firefox$"  mon=1
 	yaxcmd rule class="^chromium$" mon="HDMI-A-0"
 
+	# focus window and workspace on opening
+	yaxcmd rule class="^firefox$" mon=1 focus=1
+
 	# open window(s) and use a callback function (defined in config.h)
 	# eg. mpv --x11-name=albumart /path/to/media
-	yaxcmd rule class="^mpv$" instance="^albumart$" float callback=albumart bw=0
+	yaxcmd rule class="^mpv$" instance="^albumart$" float=1 callback=albumart bw=0
 
 	# open window(s) in a floating state
-	yaxcmd rule class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" float
+	yaxcmd rule class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" float=1
 
 	# open window(s) with a specific geometry and coordinates (floating only!)
-	yaxcmd rule class="^google-chrome$" title="^open files$" float w=1280 h=720
+	yaxcmd rule class="^google-chrome$" title="^open files$" float=1 w=1280 h=720
 
 	# open window(s) with sticky and floating enabled to view on all workspaces.
-	yaxcmd rule class="^stickyterm$" stick float w=1280 h=720
+	yaxcmd rule class="^stickyterm$" stick=1 float=1 w=1280 h=720
 
 	# update or remove an existing rule with the same match patterns
 	yaxcmd rule class="^firefox$" mon="My New Monitor"

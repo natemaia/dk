@@ -1982,7 +1982,7 @@ void initclient(xcb_window_t win, Geometry *g)
 	c->ws->sel = c;
 	if (c->cb)
 		c->cb->fn(c, 0);
-	layoutws(c->ws);
+	layoutws(NULL);
 	xcb_map_window(con, win);
 	focus(NULL);
 	DBG("initclient: mapped - 0x%08x - workspace %d - %d,%d @ %dx%d - floating: %d",

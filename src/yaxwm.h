@@ -196,6 +196,7 @@ struct WsDefault {
 	Layout *layout;
 };
 
+static void changews(Workspace *ws, int allowswap, int allowwarp);
 static void cmdborder(char **);
 static void cmdcycle(char **);
 static void cmdffs(char **);

@@ -24,7 +24,7 @@ logfile="$HOME/.yaxcmd.log"
 	# rename workspace(s)
 	yaxcmd set ws=1 name="workspace 1" ws=2 name="workspace 2"
 
-	# set workspace 10 to use some padding and gaps
+	# set workspace 10 to use some padding and 50px gaps
 	yaxcmd set ws=10 pad l=200 r=200 t=100 b=100
 	yaxcmd set ws=10 gap width=50
 
@@ -33,7 +33,7 @@ logfile="$HOME/.yaxcmd.log"
 	# ---------------------
 	# ignore size hints on tiled windows, focus windows when
 	# receiving activation, and enable focus-follows-mouse
-	yaxcmd set tile_hints=0 focus_urgent=1 focus_mouse=1
+	yaxcmd set tile_hints=false focus_urgent=true focus_mouse=true
 
 	# minimum width/height for resizing, and minimum allowed on-screen
 	# when moving (defines how much a window can be moved off-screen)
@@ -46,10 +46,10 @@ logfile="$HOME/.yaxcmd.log"
 	# borders and gaps
 	# ---------
 	# disable gaps in single window layouts
-	yaxcmd set gap smart=1
+	yaxcmd set gap smart=true
 
 	# set border width and disable borders in single window layouts
-	yaxcmd set border width=1 smart=1
+	yaxcmd set border width=1 smart=true
 
 	# set border colour for each window state
 	yaxcmd set border colour focus='#6699cc' unfocus='#000000' urgent='#ee5555'
@@ -61,24 +61,23 @@ logfile="$HOME/.yaxcmd.log"
 	yaxcmd rule class="^gimp$" ws=2
 
 	# open window(s) on a monitor by number or name (active workspace on monitor)
-	yaxcmd rule class="^firefox$"  mon=1
 	yaxcmd rule class="^chromium$" mon="HDMI-A-0"
 
 	# focus window and workspace on opening
-	yaxcmd rule class="^firefox$" mon=1 focus=1
+	yaxcmd rule class="^firefox$" ws=1 focus=true
 
 	# open window(s) and use a callback function (defined in config.h)
 	# eg. mpv --x11-name=albumart /path/to/media
-	yaxcmd rule class="^mpv$" instance="^albumart$" float=1 callback=albumart bw=0
+	yaxcmd rule class="^mpv$" instance="^albumart$" float=true callback=albumart bw=0
 
 	# open window(s) in a floating state
-	yaxcmd rule class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" float=1
+	yaxcmd rule class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" float=true
 
 	# open window(s) with a specific geometry and coordinates (floating only!)
-	yaxcmd rule class="^google-chrome$" title="^open files$" float=1 w=1280 h=720
+	yaxcmd rule class="^google-chrome$" title="^open files$" float=true w=1280 h=720
 
 	# open window(s) with sticky and floating enabled to view on all workspaces.
-	yaxcmd rule class="^stickyterm$" stick=1 float=1 w=1280 h=720
+	yaxcmd rule class="^stickyterm$" stick=true float=true w=1280 h=720
 
 	# update or remove an existing rule with the same match patterns
 	yaxcmd rule class="^firefox$" mon="My New Monitor"

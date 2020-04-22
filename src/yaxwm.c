@@ -189,11 +189,12 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 	return *x != c->x || *y != c->y || *w != c->w || *h != c->h || bw != c->bw;
 }
 
-void applyrule(Client *c, int *dofocus)
+void applyrule(Client *c)
 {
 	Rule *r;
 	Monitor *m;
 	int num = -1;
+	int focus = 0, focusmon = 0;
 	xcb_atom_t ws;
 	char title[NAME_MAX], class[NAME_MAX], inst[NAME_MAX];
 
@@ -215,7 +216,7 @@ void applyrule(Client *c, int *dofocus)
 			c->floating = r->floating;
 			c->sticky = r->sticky;
 			c->cb = r->cb;
-			*dofocus = r->focus;
+			focus = r->focus;
 			c->x = r->x != -1 ? r->x : c->x;
 			c->y = r->y != -1 ? r->y : c->y;
 			c->w = r->w != -1 ? r->w : c->w;
@@ -223,7 +224,7 @@ void applyrule(Client *c, int *dofocus)
 			c->bw = r->bw != -1 ? r->bw : c->bw;
 			if (c->trans)
 				break;
-			if (r->mon) {
+			if ((focusmon = r->mon != NULL)) {
 				if ((num = strtol(r->mon, NULL, 0)) > 0 && (m = itomon(num))) {
 					ws = m->ws->num;
 				} else for (m = monitors; m; m = m->next)
@@ -238,9 +239,13 @@ void applyrule(Client *c, int *dofocus)
 	if (ws + 1 > (uint32_t)globalcfg[NumWs])
 		updatenumws(ws + 1);
 	setclientws(c, ws);
-	DBG("applyrule: ws: %d, mon: %s, float: %d, stick: %d, x: %d, y: %d, w: %d,"
+	if (focus && c->ws != selws) {
+		usemoncmd = focusmon;
+		cmdview(c->ws->num);
+	}
+	DBG("applyrule: ws: %d, mon: %s, float: %d, stick: %d, focus: %d, x: %d, y: %d, w: %d,"
 			" h: %d, bw: %d, cb: %s", c->ws->num, c->ws->mon->name, c->floating,
-			c->sticky, c->x, c->y, c->w, c->h, c->bw, c->cb ? c->cb->name : "(null)");
+			c->sticky, focus, c->x, c->y, c->w, c->h, c->bw, c->cb ? c->cb->name : "(null)");
 }
 
 void attach(Client *c, int tohead)
@@ -293,9 +298,9 @@ void changews(Workspace *ws, int allowswap, int allowwarp)
 	selmon = ws->mon;
 	selws->mon->ws = ws;
 	if (!allowswap && diffmon) {
-		if (selws->stack)
-			xcb_warp_pointer(con, root, root, 0, 0, 0, 0, selws->stack->x + (selws->stack->w / 2),
-					selws->stack->y + (selws->stack->h / 2));
+		if (selws->sel)
+			xcb_warp_pointer(con, root, root, 0, 0, 0, 0, ws->sel->x + (ws->sel->w / 2),
+					ws->sel->y + (ws->sel->h / 2));
 		else
 			xcb_warp_pointer(con, root, root, 0, 0, 0, 0, ws->mon->x + (ws->mon->w / 2),
 					ws->mon->y + (ws->mon->h / 2));
@@ -519,8 +524,9 @@ void cmdkill(char **argv)
 		xcb_kill_client(con, selws->sel->win);
 		xcb_flush(con);
 		xcb_ungrab_server(con);
+	} else {
+		xcb_flush(con);
 	}
-	xcb_flush(con);
 	(void)(argv);
 }
 
@@ -778,7 +784,7 @@ void cmdrule(char **argv)
 			argv++;
 	}
 
-	if ((r.class || r.inst || r.title) && (r.cb || r.mon || r.ws != -1 || r.floating
+	if ((r.class || r.inst || r.title) && (r.cb || r.mon || r.ws != -1 || r.floating || r.focus
 				|| r.sticky || r.x != -1 || r.y != -1 || r.w != -1 || r.h != -1 || r.bw != -1))
 	{
 		FOR_EACH(wr, rules)
@@ -797,6 +803,7 @@ void cmdrule(char **argv)
 						strlcpy(wr->mon, r.mon, len);
 					} else
 						wr->mon = NULL;
+					wr->focus = r.focus;
 					wr->sticky = r.sticky;
 					wr->floating = r.floating;
 					wr->x = r.x;
@@ -1153,6 +1160,49 @@ void cmdview(int num)
 	eventignore(XCB_ENTER_NOTIFY);
 }
 
+void clientborder(Client *c, int focused)
+{
+	short w, h, b, o;
+	xcb_gcontext_t gc;
+	xcb_pixmap_t pmap;
+	uint32_t values[1];
+
+	if (!c)
+		return;
+	w = (short)c->w;
+	h = (short)c->h;
+	b = (unsigned short)c->bw;
+	o = 1;
+	xcb_rectangle_t inner[] = {
+		{ w,         0,         b - o,     h + b - o },
+		{ w + b + o, 0,         b - o,     h + b - o },
+		{ 0,         h,         w + b - o, b - o     },
+		{ 0,         h + b + o, w + b - o, b - o     },
+		{ w + b + o, b + h + o, b,         b         }
+	};
+	xcb_rectangle_t outer[] = {
+		{w + b - o, 0,         o,         h + b * 2 },
+		{w + b,     0,         o,         h + b * 2 },
+		{0,         h + b - o, w + b * 2, o         },
+		{0,         h + b,     w + b * 2, o         },
+		{1,         1,         1,         1         }
+	};
+	pmap = xcb_generate_id(con);
+	xcb_create_pixmap(con, scr->root_depth, pmap, c->win, W(c), H(c));
+	gc = xcb_generate_id(con);
+	xcb_create_gc(con, gc, pmap, 0, NULL);
+	values[0] = border[Unfocus];
+	xcb_change_gc(con, gc, XCB_GC_FOREGROUND, values);
+	xcb_poly_fill_rectangle(con, pmap, gc, 5, outer);
+	values[0] = border[focused ? Focus : (c->urgent ? Urgent : Unfocus)];
+	xcb_change_gc(con, gc, XCB_GC_FOREGROUND, values);
+	xcb_poly_fill_rectangle(con, pmap, gc, 5, inner);
+	values[0] = pmap;
+	xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXMAP, values);
+	xcb_free_pixmap(con, pmap);
+	xcb_free_gc(con, gc);
+}
+
 void clientcfgreq(Client *c, xcb_configure_request_event_t *e)
 {
 	Monitor *m;
@@ -1191,7 +1241,6 @@ void clientcfgreq(Client *c, xcb_configure_request_event_t *e)
 		if ((m = coordtomon(c->x, c->y)) && m->ws != c->ws)
 			setclientws(c, m->ws->num);
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-		xcb_flush(con);
 	} else {
 		sendconfigure(c);
 	}
@@ -1227,21 +1276,6 @@ void detachstack(Client *c)
 	*tc = c->snext;
 	if (c == c->ws->sel)
 		c->ws->sel = c->ws->stack;
-}
-
-void freewin(xcb_window_t win, int destroyed)
-{
-	Desk *d;
-	Panel *p;
-	Client *c;
-
-	if ((c = wintoclient(win)))
-		freeclient(c, destroyed);
-	else if ((p = wintopanel(win)))
-		freepanel(p, destroyed);
-	else if ((d = wintodesk(win)))
-		freedesk(d, destroyed);
-	xcb_flush(con);
 }
 
 void *ecalloc(size_t elems, size_t size)
@@ -1310,8 +1344,8 @@ void eventhandle(xcb_generic_event_t *ev)
 			wc.stack_mode = e->stack_mode;
 			wc.border_width = e->border_width;
 			xcb_configure_window(con, e->window, e->value_mask, &wc);
-			xcb_flush(con);
 		}
+		xcb_flush(con);
 		return;
 	}
 	case XCB_DESTROY_NOTIFY:
@@ -1609,49 +1643,6 @@ void floatoffset(Client *c, int d, int *x, int *y, int *w, int *h)
 		offset += (offset * -1) + rand() % 200;
 }
 
-void clientborder(Client *c, int focused)
-{
-	short w, h, b, o;
-	xcb_gcontext_t gc;
-	xcb_pixmap_t pmap;
-	uint32_t values[1];
-
-	if (!c)
-		return;
-	w = (short)c->w;
-	h = (short)c->h;
-	b = (unsigned short)c->bw;
-	o = 1;
-	xcb_rectangle_t inner[] = {
-		{ w,         0,         b - o,     h + b - o },
-		{ w + b + o, 0,         b - o,     h + b - o },
-		{ 0,         h,         w + b - o, b - o     },
-		{ 0,         h + b + o, w + b - o, b - o     },
-		{ w + b + o, b + h + o, b,         b         }
-	};
-	xcb_rectangle_t outer[] = {
-		{w + b - o, 0,         o,         h + b * 2 },
-		{w + b,     0,         o,         h + b * 2 },
-		{0,         h + b - o, w + b * 2, o         },
-		{0,         h + b,     w + b * 2, o         },
-		{1,         1,         1,         1         }
-	};
-	pmap = xcb_generate_id(con);
-	xcb_create_pixmap(con, scr->root_depth, pmap, c->win, W(c), H(c));
-	gc = xcb_generate_id(con);
-	xcb_create_gc(con, gc, pmap, 0, NULL);
-	values[0] = border[Unfocus];
-	xcb_change_gc(con, gc, XCB_GC_FOREGROUND, values);
-	xcb_poly_fill_rectangle(con, pmap, gc, 5, outer);
-	values[0] = border[focused ? Focus : (c->urgent ? Urgent : Unfocus)];
-	xcb_change_gc(con, gc, XCB_GC_FOREGROUND, values);
-	xcb_poly_fill_rectangle(con, pmap, gc, 5, inner);
-	values[0] = pmap;
-	xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXMAP, values);
-	xcb_free_pixmap(con, pmap);
-	xcb_free_gc(con, gc);
-}
-
 void focus(Client *c)
 {
 	if (!c || c->ws != c->ws->mon->ws)
@@ -1770,6 +1761,20 @@ void freerule(Rule *r)
 	free(r->title);
 	free(r->class);
 	free(r);
+}
+
+void freewin(xcb_window_t win, int destroyed)
+{
+	Desk *d;
+	Panel *p;
+	Client *c;
+
+	if ((c = wintoclient(win)))
+		freeclient(c, destroyed);
+	else if ((p = wintopanel(win)))
+		freepanel(p, destroyed);
+	else if ((d = wintodesk(win)))
+		freedesk(d, destroyed);
 }
 
 void freewm(void)
@@ -1936,7 +1941,6 @@ void initatoms(xcb_atom_t *atoms, const char **names, int num)
 void initclient(xcb_window_t win, Geometry *g)
 {
 	Client *c;
-	int dofocus = 0;
 
 	DBG("initclient: managing new window - 0x%08x", win);
 	c = ecalloc(1, sizeof(Client));
@@ -1948,7 +1952,7 @@ void initclient(xcb_window_t win, Geometry *g)
 	c->old_bw = g->border_width;
 	c->bw = border[Width];
 	c->trans = wintoclient(wintrans(c->win));
-	applyrule(c, &dofocus);
+	applyrule(c);
 	c->w = CLAMP(c->w, globalcfg[MinWH], c->ws->mon->ww);
 	c->h = CLAMP(c->h, globalcfg[MinWH], c->ws->mon->wh);
 	if (c->trans) {
@@ -1975,8 +1979,6 @@ void initclient(xcb_window_t win, Geometry *g)
 	PROP_APPEND(root, netatom[ClientList], XCB_ATOM_WINDOW, 32, 1, &c->win);
 	MOVE(c->win, c->x + 2 * scr_w, c->y);
 	setwmwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
-	if (dofocus)
-		changews(c->ws, 0, 1);
 	if (c->ws == selws)
 		unfocus(selws->sel, 0);
 	c->ws->sel = c;
@@ -2091,8 +2093,9 @@ int initrandr(void)
 		return -1;
 	updaterandr();
 	extbase = ext->first_event;
-	xcb_randr_select_input(con, root, XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE);
-	xcb_flush(con);
+	xcb_randr_select_input(con, root,
+			XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE | XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE
+			| XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE | XCB_RANDR_NOTIFY_MASK_OUTPUT_PROPERTY);
 	return extbase;
 }
 
@@ -2150,6 +2153,7 @@ void initrule(Rule *r)
 	wr->ws = r->ws;
 	wr->cb = r->cb;
 	wr->bw = r->bw;
+	wr->focus = r->focus;
 	wr->sticky = r->sticky;
 	wr->floating = r->floating;
 	if (r->mon) {
@@ -2160,10 +2164,10 @@ void initrule(Rule *r)
 	if (initrulereg(wr, r)) {
 		wr->next = rules;
 		rules = wr;
-		DBG("initrule: class: %s inst: %s title: %s mon: %s ws: %d "
-				"floating: %d sticky: %d position: %d,%d @ %d x %d",
+		DBG("initrule: class: %s, inst: %s, title: %s, mon: %s, ws: %d, "
+				"floating: %d, sticky: %d, focus: %d, position: %d,%d @ %d x %d",
 				wr->class, wr->inst, wr->title, wr->mon, wr->ws, wr->floating,
-				wr->sticky, wr->x, wr->y, wr->w, wr->h);
+				wr->sticky, wr->focus, wr->x, wr->y, wr->w, wr->h);
 	} else {
 		free(wr->mon);
 		free(wr);
@@ -2283,7 +2287,6 @@ void initwm(void)
 			| XCB_EVENT_MASK_LEAVE_WINDOW | XCB_EVENT_MASK_STRUCTURE_NOTIFY
 			| XCB_EVENT_MASK_PROPERTY_CHANGE, cursor[Normal] });
 	iferr(1, "unable to change root window event mask or cursor", xcb_request_check(con, c));
-	xcb_flush(con);
 
 	if (!(keysyms = xcb_key_symbols_alloc(con)))
 		err(1, "unable to get keysyms from X connection");
@@ -2412,7 +2415,6 @@ void mapwin(xcb_window_t win, Geometry *g, WindowAttr *wa, int check)
 			initclient(win, g);
 	} else if (!wa->override_redirect)
 		initclient(win, g);
-	xcb_flush(con);
 }
 
 int mono(Workspace *ws)
@@ -2499,7 +2501,6 @@ void mousemvr(int move)
 	ox = nx = c->x, oy = ny = c->y, ow = nw = c->w, oh = nh = c->h;
 	if (!grabpointer(cursor[move ? Move : Resize]))
 		return;
-	xcb_flush(con);
 	while (running && !released) {
 		if (!(ev = xcb_poll_for_event(con))) {
 			querypointer(&x, &y);
@@ -2661,38 +2662,34 @@ void relocate(Workspace *ws, Monitor *old)
 	float xoff, yoff;
 	float xdiv, ydiv;
 
-
 	DBG("relocate: moving clients from %s to %s", old->name, ws->mon->name);
 	if (!(m = ws->mon) || m == old)
 		return;
-
 	FOR_EACH(c, ws->clients)
 		if (FLOATING(c)) {
 			if ((xoff = c->x - old->x) && (xdiv = old->w / xoff) != 0.0) {
-				DBG("relocate: 0x%08x - x: %d -- xdiv: %f -- newx: %f", c->win, c->x, xdiv, m->x + (m->w / xdiv));
-				c->x = CLAMP(m->x + (m->w / xdiv), ws->mon->x - (W(c) - globalcfg[MinXY]), m->x + m->w - globalcfg[MinXY]);
+				if (c->x + W(c) == old->wx + old->ww) /* edge */
+					c->x = m->wx + m->ww - W(c);
+				else if (c->x + (W(c) / 2) == old->wx + (old->ww / 2)) /* center */
+					c->y = (m->wx + m->ww - W(c)) / 2;
+				else
+					c->x = CLAMP(m->wx + (m->ww / xdiv), m->wx - (W(c) - globalcfg[MinXY]),
+							m->wx + m->ww - globalcfg[MinXY]);
 			} else
-				c->x = CLAMP(c->x, ws->mon->x - (W(c) - globalcfg[MinXY]), m->x + m->w - globalcfg[MinXY]);
+				c->x = CLAMP(c->x, m->wx - (W(c) - globalcfg[MinXY]),
+						m->x + m->w - globalcfg[MinXY]);
 			if ((yoff = c->y - old->y) && (ydiv = old->h / yoff) != 0.0) {
-				DBG("relocate: 0x%08x - y: %d, -- ydiv: %f -- newy: %f", c->win, c->y, ydiv, m->y + (m->h / ydiv));
-				c->y = CLAMP(m->y + (m->h / ydiv), ws->mon->y - (H(c) - globalcfg[MinXY]), m->y + m->h - globalcfg[MinXY]);
+				if (c->y + H(c) == old->wy + old->wh) /* edge */
+					c->y = m->wy + m->wh - H(c);
+				else if (c->y + (H(c) / 2) == old->wy + (old->wh / 2)) /* center */
+					c->y = (m->wy + m->wh - H(c)) / 2;
+				else
+					c->y = CLAMP(m->wy + (m->wh / ydiv), m->wy - (H(c) - globalcfg[MinXY]),
+							m->wy + m->wh - globalcfg[MinXY]);
 			} else
-				c->y = CLAMP(c->y, ws->mon->y - (H(c) - globalcfg[MinXY]), m->y + m->h - globalcfg[MinXY]);
+				c->y = CLAMP(c->y, m->wy - (H(c) - globalcfg[MinXY]),
+						m->wy + m->wh - globalcfg[MinXY]);
 		}
-/* 	FOR_EACH(c, ws->clients) */
-/* 		if (FLOATING(c)) { */
-/* 			DBG("relocate: 0x%08x - x: %d - xoff: %d - y: %d - yoff: %d", c->win, c->x, c->x - old->x, c->y, c->y - old->y); */
-/* 			xoff = (c->x - old->x) / old->w; */
-/* 			yoff = (c->y - old->y) / old->h; */
-/* 			DBG("relocate: 0x%08x - x: %d -- xdiv: %f -- newx: %f", c->win, c->x, xoff, m->wx + (m->ww * xoff)); */
-/* 			if ((xdiv = xoff) != 0.0) */
-/* 				c->x = m->wx + (m->ww * xdiv); */
-/* 			DBG("relocate: 0x%08x - y: %d -- ydiv: %f -- newy: %f", c->win, c->y, yoff, m->wy + (m->wh * xoff)); */
-/* 			if ((ydiv = yoff) != 0.0) */
-/* 				c->y = m->wy + (m->wh * ydiv); */
-/* 			c->x = CLAMP(c->x, ws->mon->wx - (W(c) - globalcfg[MinXY]), m->wx + m->ww - globalcfg[MinXY]); */
-/* 			c->y = CLAMP(c->y, ws->mon->wy - (H(c) - globalcfg[MinXY]), m->wy + m->wh - globalcfg[MinXY]); */
-/* 		} */
 }
 
 void resize(Client *c, int x, int y, int w, int h, int bw)
@@ -2706,7 +2703,6 @@ void resize(Client *c, int x, int y, int w, int h, int bw)
 	c->w = w;
 	c->h = h;
 	MOVERESIZE(c->win, x, y, w, h, bw);
-	xcb_flush(con);
 	sendconfigure(c);
 }
 
@@ -2904,14 +2900,12 @@ void setsticky(Client *c, int sticky)
 void setstackmode(xcb_window_t win, uint32_t mode)
 {
 	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_STACK_MODE, &mode);
-	xcb_flush(con);
 }
 
 void setwmwinstate(xcb_window_t win, uint32_t state)
 {
 	uint32_t s[] = { state, XCB_ATOM_NONE };
 	PROP_REPLACE(win, wmatom[WMState], wmatom[WMState], 32, 2, s);
-	xcb_flush(con);
 }
 
 void setnetwsnames(void)
@@ -2944,14 +2938,12 @@ void seturgent(Client *c, int urg)
 			xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, &border[Urgent]);
 		else
 			xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, &border[Unfocus]);
-		xcb_flush(con);
 	}
 	if (xcb_icccm_get_wm_hints_reply(con, pc, &wmh, &e)) {
 		DBG("seturgent: received WM_HINTS reply");
 		wmh.flags = urg ? (wmh.flags | XCB_ICCCM_WM_HINT_X_URGENCY)
 			: (wmh.flags & ~XCB_ICCCM_WM_HINT_X_URGENCY);
 		xcb_icccm_set_wm_hints(con, c->win, &wmh);
-		xcb_flush(con);
 	} else {
 		iferr(0, "unable to get wm window hints", e);
 	}
@@ -3076,13 +3068,13 @@ int tileresize(Client *c, Client *p, int ww, int wh, int x, int y,
 			if (p->h + avail < globalcfg[MinWH]) {
 				ret = -1;
 				resizehint(p, p->x, p->y, p->w, globalcfg[MinWH], bw, 0, 0);
-				y = p->y + globalcfg[MinWH];
+				y = p->y + globalcfg[MinWH] + gap;
 				h = wh - (p->y + p->h);
 			} else if (h < globalcfg[MinWH]) {
 				ret = -1;
-				resizehint(p, p->x, p->y, p->w, p->h + avail - (globalcfg[MinWH] - h), bw, 0, 0);
-				y = p->y + p->h;
-				h = globalcfg[MinWH];
+				resizehint(p, p->x, p->y, p->w, p->h + avail - (globalcfg[MinWH] - h - (2 * bw)), bw, 0, 0);
+				y = p->y + p->h + (2 * bw) + gap;
+				h = globalcfg[MinWH] - (2 * bw);
 			} else {
 				resizehint(p, p->x, p->y, p->w, p->h + avail, bw, 0, 0);
 				y += avail;
@@ -3172,7 +3164,6 @@ void unfocus(Client *c, int focusroot)
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, root, XCB_CURRENT_TIME);
 		xcb_delete_property(con, root, netatom[Active]);
 	}
-	xcb_flush(con);
 }
 
 void ungrabpointer(void)

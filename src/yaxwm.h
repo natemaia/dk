@@ -10,6 +10,7 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 
+
 #include <err.h>
 #include <errno.h>
 #include <stdio.h>
@@ -20,6 +21,7 @@
 #include <limits.h>
 #include <locale.h>
 
+#include <xcb/dpms.h>
 #include <xcb/randr.h>
 #include <xcb/xproto.h>
 #include <xcb/xcb_util.h>
@@ -103,8 +105,8 @@ typedef xcb_get_geometry_reply_t Geometry;
 typedef xcb_get_window_attributes_reply_t WindowAttr;
 
 enum Cursors { Move, Normal, Resize };
-enum Borders { Width, Focus, Unfocus, Urgent };
 enum Gravity { None, Left, Right, Center, Top, Bottom };
+enum Borders { Width, Focus, Urgent, Unfocus, OWidth, OFocus, OUrgent, OUnfocus };
 enum GlobalCfg { SmartGap, SmartBorder, SizeHints, FocusMouse, FocusUrgent, NumWs, MinXY, MinWH };
 
 struct Panel {
@@ -196,7 +198,7 @@ struct WsDefault {
 	Layout *layout;
 };
 
-static void changews(Workspace *ws, int allowswap, int allowwarp);
+static void changews(Workspace *, int, int);
 static void cmdborder(char **);
 static void cmdcycle(char **);
 static void cmdffs(char **);
@@ -225,13 +227,15 @@ static void cmdwin(char **);
 static void cmdwm(char **);
 static void cmdws(char **);
 static void cmdwsdef(char **);
+static void clientborder(Client *c, int focused);
 static Monitor *coordtomon(int, int);
 static void detach(Client *, int);
 static void *ecalloc(size_t, size_t);
 static void eventignore(uint8_t);
 static void eventloop(void);
+static void eventrandr(xcb_randr_screen_change_notify_event_t *);
 static void execcfg(void);
-static void floatoffset(Client *c, int d, int *x, int *y, int *w, int *h);
+static void floatoffset(Client *, int, int *, int *, int *, int *);
 static void focus(Client *);
 static void freeclient(Client *, int);
 static void freedesk(Desk *, int);
@@ -245,6 +249,7 @@ static void gravitate(Client *, int, int, int);
 static int iferr(int, char *, xcb_generic_error_t *);
 static void initclient(xcb_window_t, Geometry *);
 static void initdesk(xcb_window_t, Geometry *);
+static void initmon(int, char *, xcb_randr_output_t, int, int, int, int);
 static void initpanel(xcb_window_t, Geometry *);
 static int initrulereg(Rule *, Rule *);
 static void initrule(Rule *);
@@ -265,6 +270,7 @@ static Client *nextt(Client *);
 static void parsecmd(char *);
 static void printerror(xcb_generic_error_t *);
 static int querypointer(int *, int *);
+static void refresh(Workspace *);
 static void relocate(Workspace *, Monitor *);
 static void resize(Client *, int, int, int, int, int);
 static void resizehint(Client *, int, int, int, int, int, int, int);
@@ -287,15 +293,16 @@ static void sizehints(Client *, int);
 static int tile(Workspace *);
 static void unfocus(Client *, int);
 static void ungrabpointer(void);
-static void updateclientlist(void);
-static void updatenumws(int);
-static int updaterandr(void);
-static void updatestruts(Panel *, int);
-static void updateviewports(void);
-static void updateworkspaces(int);
+static void updclientlist(void);
+static void updnumws(int);
+static int updrandr(void);
+static void updscreen(int, int, int, int);
+static void updstruts(Panel *, int);
+static void updviewports(void);
+static void updworkspaces(int);
 static void usenetcurdesktop(void);
 static WindowAttr *winattr(xcb_window_t);
-static int winclassprop(xcb_window_t win, char *class, char *inst, size_t csize, size_t isize);
+static int winclassprop(xcb_window_t, char *, char *, size_t, size_t);
 static Geometry *wingeom(xcb_window_t);
 static void winhints(Client *);
 static int winprop(xcb_window_t, xcb_atom_t, xcb_atom_t *);

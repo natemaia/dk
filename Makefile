@@ -12,7 +12,7 @@ DOCPREFIX ?= ${PREFIX}/share/doc
 CPPFLAGS += -DVERSION=\"${VERSION}\"
 CFLAGS   += -O2 -pedantic -Wall -Wextra
 LDFLAGS  ?=
-LDLIBS    = -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
+LDLIBS    = -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr -lxcb-dpms
 
 VPATH = src
 

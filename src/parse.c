@@ -69,6 +69,8 @@ char **parseint(char **argv, int *setting, int *rel, int allowzero)
 	int i;
 	char *end;
 
+	if (rel)
+		*rel = 0;
 	if (!argv || !*argv)
 		return argv;
 	if (((i = strtol(*argv, &end, 0)) || (allowzero && !strcmp("0", *argv)))

@@ -102,3 +102,6 @@ alt + {_,ctrl + }{equal,minus}
 alt + {_,ctrl + }shift + equal
     yaxcmd set {gap,border} width reset
 
+# alternatively for changing outer border width
+# alt + ctrl + shift + {equal,minus}
+#     yaxcmd set border outer_width {+1,-1}

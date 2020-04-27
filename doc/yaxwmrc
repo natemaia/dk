@@ -54,6 +54,11 @@ logfile="$HOME/.yaxcmd.log"
 	# set border colour for each window state
 	yaxcmd set border colour focus='#6699cc' unfocus='#000000' urgent='#ee5555'
 
+	# alternatively, set double border outer width and colour for each window state
+	# yaxcmd set border width=6 outer_width=5 smart=true
+	# yaxcmd set border colour focus='#6699cc' unfocus='#444444' urgent='#ee5555' \
+	# 	outer_focus='#222222' outer_unfocus='#222222' outer_urgent='#222222'
+
 
 	# window rules
 	# --------------

@@ -406,7 +406,7 @@ void cmdborder(char **argv)
 	if (bw != border[Width] || ow != border[OWidth]) {
 		obw = border[Width];
 		border[Width] = bw;
-		if (border[Width] - border[OWidth] < 1)
+		if (bw - ow < 1)
 			fprintf(cmdresp, "!border outer_width exceeds limit: %d - maximum: %d", ow, bw - 1);
 		else
 			border[OWidth] = ow;

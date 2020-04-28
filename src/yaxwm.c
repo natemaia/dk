@@ -1234,7 +1234,7 @@ void clientborder(Client *c, int focused)
 	};
 
 	pmap = xcb_generate_id(con);
-	xcb_create_pixmap(con, scr->root_depth, pmap, c->win, W(c), H(c));
+	xcb_create_pixmap(con, c->depth, pmap, c->win, W(c), H(c));
 	gc = xcb_generate_id(con);
 	xcb_create_gc(con, gc, pmap, 0, NULL);
 	xcb_change_gc(con, gc, XCB_GC_FOREGROUND, &border[focused ? Focus : (c->urgent ? Urgent : Unfocus)]);
@@ -2027,6 +2027,7 @@ void initclient(xcb_window_t win, Geometry *g)
 	c->y = c->old_y = g->y;
 	c->w = c->old_w = g->width;
 	c->h = c->old_h = g->height;
+	c->depth = g->depth;
 	c->old_bw = g->border_width;
 	c->bw = border[Width];
 	c->trans = wintoclient(wintrans(c->win));

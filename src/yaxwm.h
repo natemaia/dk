@@ -118,7 +118,7 @@ struct Panel {
 };
 
 struct Client {
-	int x, y, w, h, bw, hoff;
+	int x, y, w, h, bw, hoff, depth;
 	int old_x, old_y, old_w, old_h, old_bw;
 	int max_w, max_h, min_w, min_h;
 	int base_w, base_h, increment_w, increment_h;

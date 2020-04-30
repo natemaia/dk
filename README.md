@@ -74,6 +74,36 @@ For advanced configuration like layout and callback functions, copy the default
 config header `src/config.def.h` to `src/config.h` then edit it and recompile.
 This file isn't tracked by git so you can maintain configuration across updates.
 
+#### Commands
+
+###### Syntax Outline
+Included with yaxwm is a small program `yaxcmd` to communicate with the wm similar to
+bspwm. It uses a very simple parsing method to break down commands into smaller more
+usable pieces. Outlined here is a what yaxwm is *currently* capable of understanding.
+
+First the command is broken into a series of tokens, a token is delimited by one or more
+whitespace, double quote, or the equal sign. This means the following inputs are all
+equivalent.
+```
+setting=value
+setting value
+setting="value"
+setting "value"
+```
+
+Quotation exists as a way to preserve whitespace and avoid interpretation by the shell,
+otherwise we have no way of determining whether an argument is a continuation of the
+previous or the beginning of the next. Consider the following
+```
+title="^open files$"
+```
+
+Should your value *(for whatever reason)* have quotes within it they can be escaped as
+you'd expect
+```
+title="^\"preserved quotes\"$"
+```
+
 
 #### Todo
 

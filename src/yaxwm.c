@@ -1201,48 +1201,49 @@ void cmdview(int num)
 
 void clientborder(Client *c, int focused)
 {
-	int o;
+	int o, b;
 	xcb_gcontext_t gc;
 	xcb_pixmap_t pmap;
-	uint32_t values[1];
+	uint32_t frame[] = { c->bw, c->bw, c->bw, c->bw };
 
-	if (!c || !border[Width])
+	if (!c)
 		return;
 
-	/* single border */
-	if (!border[OWidth] || c->bw - border[OWidth] <= 0) {
+	PROP_REPLACE(c->win, netatom[FrameExtents], XCB_ATOM_CARDINAL, 32, 4, frame);
+
+	if (!c->bw || c->bw - border[OWidth] <= 0) {
 		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL,
 				&border[focused ? Focus : (c->urgent ? Urgent : Unfocus)]);
 		return;
 	}
-
 	/* double border */
+	b = c->bw;
 	o = border[OWidth];
 	xcb_rectangle_t inner[] = {
-		{ c->w,             0,                c->bw - o,        c->h + c->bw - o },
-		{ c->w + c->bw + o, 0,                c->bw - o,        c->h + c->bw - o },
-		{ 0,                c->h,             c->w + c->bw - o, c->bw - o        },
-		{ 0,                c->h + c->bw + o, c->w + c->bw - o, c->bw - o        },
-		{ c->w + c->bw + o, c->bw + c->h + o, c->bw,            c->bw            }
+		{ c->w,         0,            b - o,        c->h + b - o },
+		{ c->w + b + o, 0,            b - o,        c->h + b - o },
+		{ 0,            c->h,         c->w + b - o, b - o        },
+		{ 0,            c->h + b + o, c->w + b - o, b - o        },
+		{ c->w + b + o, c->h + b + o, b,            b            }
 	};
 	xcb_rectangle_t outer[] = {
-		{ c->w + c->bw - o, 0,                o,                c->h + c->bw * 2 },
-		{ c->w + c->bw,     0,                o,                c->h + c->bw * 2 },
-		{ 0,                c->h + c->bw - o, c->w + c->bw * 2, o                },
-		{ 0,                c->h + c->bw,     c->w + c->bw * 2, o                },
-		{ 1,                1,                1,                1                }
+		{ c->w + b - o, 0,            o,            c->h + b * 2 },
+		{ c->w + b,     0,            o,            c->h + b * 2 },
+		{ 0,            c->h + b - o, c->w + b * 2, o            },
+		{ 0,            c->h + b,     c->w + b * 2, o            },
+		{ 1,            1,            1,            1            }
 	};
-
 	pmap = xcb_generate_id(con);
 	xcb_create_pixmap(con, c->depth, pmap, c->win, W(c), H(c));
 	gc = xcb_generate_id(con);
 	xcb_create_gc(con, gc, pmap, 0, NULL);
-	xcb_change_gc(con, gc, XCB_GC_FOREGROUND, &border[focused ? Focus : (c->urgent ? Urgent : Unfocus)]);
+	xcb_change_gc(con, gc, XCB_GC_FOREGROUND,
+			&border[focused ? Focus : (c->urgent ? Urgent : Unfocus)]);
 	xcb_poly_fill_rectangle(con, pmap, gc, LEN(inner), inner);
-	xcb_change_gc(con, gc, XCB_GC_FOREGROUND, &border[focused ? OFocus : (c->urgent ? OUrgent : OUnfocus)]);
+	xcb_change_gc(con, gc, XCB_GC_FOREGROUND,
+			&border[focused ? OFocus : (c->urgent ? OUrgent : OUnfocus)]);
 	xcb_poly_fill_rectangle(con, pmap, gc, LEN(outer), outer);
-	values[0] = pmap;
-	xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXMAP, values);
+	xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXMAP, &pmap);
 	xcb_free_pixmap(con, pmap);
 	xcb_free_gc(con, gc);
 }
@@ -1744,7 +1745,7 @@ void freeclient(Client *c, int destroyed)
 	detachstack(c);
 	if (!destroyed) {
 		xcb_grab_server(con);
-		xcb_configure_window(con, c->win, BWMASK, &c->old_bw);
+		xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_BORDER_WIDTH, &c->old_bw);
 		xcb_ungrab_button(con, XCB_BUTTON_INDEX_ANY, c->win, XCB_MOD_MASK_ANY);
 		setwmwinstate(c->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
 		xcb_flush(con);
@@ -2038,7 +2039,7 @@ void initclient(xcb_window_t win, Geometry *g)
 		c->x = c->trans->x + ((W(c->trans) - W(c)) / 2);
 		c->y = c->trans->y + ((H(c->trans) - H(c)) / 2);
 	}
-	xcb_configure_window(con, c->win, BWMASK, &c->bw);
+	xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_BORDER_WIDTH, &c->bw);
 	sendconfigure(c);
 	wintype(c);
 	sizehints(c, 1);

@@ -50,7 +50,6 @@
 #define EVRESP              (0x7f)
 #define EVTYPE(e)           (e->response_type &  EVRESP)
 #define EVSENT(e)           (e->response_type & ~EVRESP)
-#define BWMASK              (XCB_CONFIG_WINDOW_BORDER_WIDTH)
 #define XYMASK              (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y)
 #define WHMASK              (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT)
 #define BUTTONMASK          (XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE)
@@ -81,7 +80,7 @@
 #define MOVE(win, x, y)\
 	xcb_configure_window(con, (win), XYMASK, (uint32_t []){(x), (y)})
 #define MOVERESIZE(win, x, y, w, h, bw)\
-	xcb_configure_window(con, win, XYMASK | WHMASK | BWMASK,\
+	xcb_configure_window(con, win, XYMASK | WHMASK | XCB_CONFIG_WINDOW_BORDER_WIDTH,\
 			(uint32_t []){(x), (y), (w), (h), (bw)});
 #define PROP_APPEND(win, atom, type, membsize, nmemb, value)\
 	xcb_change_property(con, XCB_PROP_MODE_APPEND, (win), (atom),\
@@ -355,6 +354,7 @@ enum NetAtoms {
 	DesktopNames,
 	Dialog,
 	Dock,
+	FrameExtents,
 	Fullscreen,
 	Name,
 	NumDesktops,
@@ -378,6 +378,7 @@ static const char *netatoms[] = {
 	[Desktop] = "_NET_WM_WINDOW_TYPE_DESKTOP",
 	[Dialog] = "_NET_WM_WINDOW_TYPE_DIALOG",
 	[Dock] = "_NET_WM_WINDOW_TYPE_DOCK",
+	[FrameExtents] = "_NET_FRAME_EXTENTS",
 	[Fullscreen] = "_NET_WM_STATE_FULLSCREEN",
 	[Name] = "_NET_WM_NAME",
 	[NumDesktops] = "_NET_NUMBER_OF_DESKTOPS",

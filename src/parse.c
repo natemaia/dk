@@ -22,7 +22,7 @@ char **parsebool(char **argv, int *setting)
 			|| (((i = strtoul(*argv, &end, 0)) > 0 || !strcmp("0", *argv)) && *end == '\0'))
 		*setting = i ? 1 : 0;
 	else
-		fprintf(cmdresp, "!invalid boolean argument, expected true/1 or false/0: %s", *argv);
+		fprintf(cmdresp, "!invalid boolean argument: %s - expected true, false, 1, 0", *argv);
 	return argv;
 }
 
@@ -40,8 +40,7 @@ char **parsecolor(char **argv, int *setting)
 	if (i >= 0x000000 && i <= 0xffffff && *end == '\0')
 		*setting = i;
 	else
-		fprintf(cmdresp,
-				"!invalid colour argument, expected (#/0x)(NUM/HEX): %s", *argv);
+		fprintf(cmdresp, "!invalid colour argument: %s - expected N/(#/0x)XXXXXX", *argv);
 	return argv;
 }
 
@@ -52,15 +51,17 @@ char **parsefloat(char **argv, float *setting, int *rel)
 
 	if (!argv || !*argv)
 		return argv;
-	if ((f = strtof(*argv, &end)) != 0.0
-			&& ((f >= 0.1 && f <= 0.9) || (f <= -0.1 && f >= -0.9))
-			&& *end == '\0')
-	{
-		if (rel) /* check if it's a relative number (has a sign) */
-			*rel = **argv == '-' || **argv == '+';
-		*setting = f;
+	if ((f = strtof(*argv, &end)) != 0.0 && *end == '\0') {
+		if (f < -0.95 || f > 0.95)
+			fprintf(cmdresp, "!float argument is out of range: %s - min: -0.95, max: 0.95", *argv);
+		else {
+			if (rel) /* check if it's a relative number (has a sign) */
+				*rel = **argv == '-' || **argv == '+';
+			*setting = f;
+		}
+
 	} else
-		fprintf(cmdresp, "!invalid or incomplete float argument: %s", *argv);
+		fprintf(cmdresp, "!invalid or incomplete float argument: %s - expected (-/+)0.N", *argv);
 	return argv;
 }
 
@@ -73,14 +74,12 @@ char **parseint(char **argv, int *setting, int *rel, int allowzero)
 		*rel = 0;
 	if (!argv || !*argv)
 		return argv;
-	if (((i = strtol(*argv, &end, 0)) || (allowzero && !strcmp("0", *argv)))
-			&& *end == '\0')
-	{
-		if (rel) /* check if it's a relative number (has a sign) */
+	if (((i = strtol(*argv, &end, 0)) || (allowzero && !strcmp("0", *argv))) && *end == '\0') {
+		if (i && rel) /* check if it's a relative number (non-zero, has a sign) */
 			*rel = **argv == '-' || **argv == '+';
 		*setting = i;
 	} else
-		fprintf(cmdresp, "!invalid integer argument, expected (-/+)NUM: %s", *argv);
+		fprintf(cmdresp, "!invalid integer argument: %s - expected (-/+)N", *argv);
 	return argv;
 }
 
@@ -93,9 +92,40 @@ char **parseintclamp(char **argv, int *setting, int *rel, int min, int max)
 	parseint(argv, &i, rel, 1);
 	if (i >= min && i <= max)
 		*setting = i;
-	else
-		fprintf(cmdresp, "!invalid integer argument, expected (-/+)NUM, >=%d and <=%d: %s",
-				min, max, *argv);
+	else if (i != min - 1)
+		fprintf(cmdresp, "!integer argument is out of range: %s - min: %d, max: %d",
+				*argv, min, max);
+	return argv;
+}
+
+char **parsegeom(char **argv, int *x, int *y, int *w, int *h,
+		int *relx, int *rely, int *relw, int *relh)
+{
+	*x = INT_MAX;
+	*y = INT_MAX;
+	*w = 0;
+	*h = 0;
+	*relx = 0;
+	*rely = 0;
+	*relw = 0;
+	*relh = 0;
+
+	while (*argv) {
+		if (!strcmp("x", *argv))
+			argv = parseint(argv + 1, x, relx, 1);
+		else if (!strcmp("y", *argv))
+			argv = parseint(argv + 1, y, rely, 1);
+		else if (!strcmp("w", *argv))
+			argv = parseint(argv + 1, w, relw, 0);
+		else if (!strcmp("h", *argv))
+			argv = parseint(argv + 1, h, relh, 0);
+		else {
+			fprintf(cmdresp, "!invalid argument for window resize command: %s", *argv);
+			break;
+		}
+		if (*argv)
+			argv++;
+	}
 	return argv;
 }
 

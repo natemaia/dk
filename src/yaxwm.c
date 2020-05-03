@@ -856,9 +856,7 @@ void cmdsend(int num)
 		return;
 	unfocus(c, 1);
 	setclientws(c, num);
-	if (c->ws == c->ws->mon->ws)
-		layoutws(c->ws);
-	refresh(selws);
+	refresh(NULL);
 }
 
 void cmdset(char **argv)
@@ -1180,8 +1178,7 @@ void cmdview(int num)
 		changews(ws, 1, 0);
 	else
 		changews(ws, 0, 1);
-	showhide(lastws->stack);
-	refresh(ws);
+	refresh(NULL);
 }
 
 void clientborder(Client *c, int focused)
@@ -1484,7 +1481,6 @@ void eventhandle(xcb_generic_event_t *ev)
 	{
 		xcb_client_message_event_t *e = (xcb_client_message_event_t *)ev;
 		uint32_t *d = e->data.data32;
-		Workspace *last;
 		usemoncmd = 0;
 
 		if (e->type == netatom[CurDesktop]) {
@@ -1500,12 +1496,8 @@ void eventhandle(xcb_generic_event_t *ev)
 					DBG("CLIENT_MESSAGE: not a valid workspace: %d", d[0]);
 					return;
 				}
-				last = c->ws;
 				setclientws(c, d[0]);
-				if (last == last->mon->ws)
-					refresh(last);
-				if (c->ws == c->ws->mon->ws)
-					refresh(c->ws);
+				refresh(NULL);
 			} else if (e->type == netatom[State] && (d[1] == netatom[Fullscreen]
 						|| d[2] == netatom[Fullscreen]))
 			{
@@ -3299,6 +3291,7 @@ void updnumws(int needed)
 	PROP_REPLACE(root, netatom[NumDesktops], XCB_ATOM_CARDINAL, 32, 1, &globalcfg[NumWs]);
 	updviewports();
 	setnetwsnames();
+	/* refresh(NULL); */
 }
 
 int updoutput(xcb_randr_output_t id, xcb_randr_get_output_info_reply_t *o,

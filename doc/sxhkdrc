@@ -47,14 +47,13 @@ alt + ctrl + shift + r
 alt + {j,k}
     yaxcmd win focus {next,prev}
 
-# close window, swap tiled window in/out of master, cycle tiled windows in
-# place, and toggle fake fullscreen; enables manipulating fullscreen window.
-alt + {q,space,Tab,F11}
-    yaxcmd win {kill,swap,cycle,fakefs}
+# close window, swap tiled window in/out of master, cycle tiled windows in place
+alt + {q,space,Tab}
+    yaxcmd win {kill,swap,cycle}
 
-# toggle true fullscreen
-F11
-	yaxcmd win full
+# toggle fullscreen and fake fullscreen (enable manipulating fullscreen window)
+{_,alt + }F11
+	yaxcmd win {full,fakefull}
 
 # toggle floating or sticky
 alt + shift + {space,s}

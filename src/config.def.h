@@ -62,15 +62,15 @@ static const Keyword setcmds[] = {
 /* "win" keyword options, used by cmdwin() to parse arguments
  * Keyword functions have the following prototype: void function(char **); */
 static const Keyword wincmds[] = {
-	{ "cycle",    cmdcycle  },
-	{ "fakefs",   cmdffs    },
-	{ "float",    cmdfloat  },
-	{ "full",     cmdfull   },
-	{ "focus",    cmdfocus  },
-	{ "kill",     cmdkill   },
-	{ "resize",   cmdresize },
-	{ "stick",    cmdstick  },
-	{ "swap",     cmdswap   },
+	{ "cycle",    cmdcycle    },
+	{ "fakefull", cmdfakefull },
+	{ "float",    cmdfloat    },
+	{ "full",     cmdfull     },
+	{ "focus",    cmdfocus    },
+	{ "kill",     cmdkill     },
+	{ "resize",   cmdresize   },
+	{ "stick",    cmdstick    },
+	{ "swap",     cmdswap     },
 };
 
 /* "ws" and "mon" commands used by cmdws() and cmdmon() to parse arguments.

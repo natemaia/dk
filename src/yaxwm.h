@@ -47,12 +47,13 @@
 #define LEN(x)              (sizeof(x) / sizeof(x[0]))
 #define CLNMOD(mod)         (mod & ~(lockmask | XCB_MOD_MASK_LOCK))
 #define FLOATING(c)         ((c)->floating || !(c)->ws->layout->fn)
-#define EVRESP              (0x7f)
-#define EVTYPE(e)           (e->response_type &  EVRESP)
-#define EVSENT(e)           (e->response_type & ~EVRESP)
+#define FULLSCREEN(c)       ((c)->fullscreen && !(c)->fakefull)
+#define EVTYPE(e)           (e->response_type &  0x7f)
+#define EVSENT(e)           (e->response_type & ~0x7f)
 #define XYMASK              (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y)
 #define WHMASK              (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT)
 #define BUTTONMASK          (XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE)
+#define ISFULL(c)           ((c)->fullscreen && (c)->w == (c)->ws->mon->w && (c)->h == (c)->ws->mon->h)
 
 #define FOR_EACH(v, list)\
 	for ((v) = (list); (v); (v) = (v)->next)
@@ -89,6 +90,7 @@
 	xcb_change_property(con, XCB_PROP_MODE_REPLACE, (win), (atom),\
 			(type), (membsize), (nmemb), (value))
 
+
 typedef struct Rule Rule;
 typedef struct Desk Desk;
 typedef struct Panel Panel;
@@ -122,7 +124,8 @@ struct Client {
 	int max_w, max_h, min_w, min_h;
 	int base_w, base_h, increment_w, increment_h;
 	float min_aspect, max_aspect;
-	int sticky, fixed, floating, fullscreen, ffs, urgent, noinput, oldstate;
+	int sticky, fixed, floating, fullscreen; /* TODO: turn toggles into bit fields */
+	int fakefull, urgent, noinput, noborder, oldstate;
 	Client *trans, *next, *snext;
 	Workspace *ws;
 	Callback *cb;
@@ -197,10 +200,11 @@ struct WsDefault {
 	Layout *layout;
 };
 
+
 static void changews(Workspace *, int, int);
 static void cmdborder(char **);
 static void cmdcycle(char **);
-static void cmdffs(char **);
+static void cmdfakefull(char **);
 static void cmdfloat(char **);
 static void cmdfocus(char **);
 static void cmdfollow(int);
@@ -278,6 +282,7 @@ static int rulecmp(Rule *, char *, char *, char *);
 static void sendconfigure(Client *);
 static void sendevent(xcb_window_t, const char *, uint32_t);
 static int sendwmproto(Client *, int);
+static void setclientgeom(Client *, int, int, int, int, int);
 static void setclientws(Client *, int);
 static void setfullscreen(Client *, int);
 static void setinputfocus(Client *);
@@ -304,6 +309,7 @@ static WindowAttr *winattr(xcb_window_t);
 static int winclassprop(xcb_window_t, char *, char *, size_t, size_t);
 static Geometry *wingeom(xcb_window_t);
 static void winhints(Client *);
+static int winmotifhints(xcb_window_t, int *);
 static int winprop(xcb_window_t, xcb_atom_t, xcb_atom_t *);
 static int wintextprop(xcb_window_t, xcb_atom_t, char *, size_t);
 static Client *wintoclient(xcb_window_t);
@@ -311,6 +317,7 @@ static Desk *wintodesk(xcb_window_t);
 static Panel *wintopanel(xcb_window_t);
 static xcb_window_t wintrans(xcb_window_t);
 static void wintype(Client *);
+
 
 enum Opts {
 	Next,
@@ -330,6 +337,7 @@ static char *opts[] = {
 
 enum WMAtoms {
 	Delete,
+	MotifHints,
 	Protocols,
 	TakeFocus,
 	Utf8Str,
@@ -337,6 +345,7 @@ enum WMAtoms {
 };
 static const char *wmatoms[] = {
 	[Delete] = "WM_DELETE_WINDOW",
+	[MotifHints] = "_MOTIF_WM_HINTS",
 	[Protocols] = "WM_PROTOCOLS",
 	[TakeFocus] = "WM_TAKE_FOCUS",
 	[Utf8Str] = "UTF8_STRING",

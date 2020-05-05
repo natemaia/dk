@@ -39,8 +39,8 @@
 #define VERSION "0.6"
 #endif
 
-#define W(x)                ((x)->w + (2 * (x)->bw))
-#define H(x)                ((x)->h + (2 * (x)->bw))
+#define W(c)                ((c)->w + (2 * (c)->bw))
+#define H(c)                ((c)->h + (2 * (c)->bw))
 #define MIN(a, b)           ((a) < (b) ? (a) : (b))
 #define MAX(a, b)           ((a) > (b) ? (a) : (b))
 #define CLAMP(x, min, max)  (MIN(MAX((x), (min)), (max)))
@@ -110,6 +110,22 @@ enum Gravity { None, Left, Right, Center, Top, Bottom };
 enum Borders { Width, Focus, Urgent, Unfocus, OWidth, OFocus, OUrgent, OUnfocus };
 enum GlobalCfg { SmartGap, SmartBorder, SizeHints, FocusMouse, FocusUrgent, NumWs, MinXY, MinWH };
 
+struct Desk {
+	int x, y, w, h;
+	Desk *next;
+	Monitor *mon;
+	xcb_window_t win;
+};
+
+struct Rule {
+	int x, y, w, h, bw;
+	int ws, floating, sticky, focus;
+	char *class, *inst, *title, *mon;
+	Callback *cb;
+	regex_t classreg, instreg, titlereg;
+	Rule *next;
+};
+
 struct Panel {
 	int x, y, w, h;
 	int strut_l, strut_r, strut_t, strut_b;
@@ -132,20 +148,9 @@ struct Client {
 	xcb_window_t win;
 };
 
-struct Desk {
-	int x, y, w, h;
-	Desk *next;
-	Monitor *mon;
-	xcb_window_t win;
-};
-
-struct Rule {
-	int x, y, w, h, bw;
-	int ws, floating, sticky, focus;
-	char *class, *inst, *title, *mon;
-	Callback *cb;
-	regex_t classreg, instreg, titlereg;
-	Rule *next;
+struct Layout {
+	char *name;
+	int (*fn)(Workspace *);
 };
 
 struct Monitor {
@@ -157,11 +162,6 @@ struct Monitor {
 	int connected;
 	Monitor *next;
 	Workspace *ws;
-};
-
-struct Layout {
-	char *name;
-	int (*fn)(Workspace *);
 };
 
 struct Keyword {
@@ -294,6 +294,7 @@ static void setwmwinstate(xcb_window_t, uint32_t);
 static void showhide(Client *);
 static void sighandle(int);
 static void sizehints(Client *, int);
+static void subscribe(xcb_window_t, uint32_t);
 static int tile(Workspace *);
 static void unfocus(Client *, int);
 static void ungrabpointer(void);

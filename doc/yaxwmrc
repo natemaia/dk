@@ -93,7 +93,7 @@ logfile="$HOME/.yaxcmd.log"
 # inform of any errors in a notification
 if grep -q 'error:' "$logfile"; then
 	hash notify-send && notify-send -t 0 -u critical "Yaxwmrc Has Errors" \
-		"$(awk '/error:/ {sub(/^error: /, ""); print}' "$logfile")"
+		"$(awk '/error:/ {sub(/^error: /, ""); gsub(/</, "\<"); print}' "$logfile")"
 	exit 1
 fi
 

@@ -941,11 +941,12 @@ void cmdstick(char **argv)
 
 void cmdswap(char **argv)
 {
-	Client *c;
+	Client *c, *head;
 
 	if (!(c = selws->sel) || FULLSCREEN(c) || FLOATING(c))
 		return;
-	if (c == nextt(selws->clients) && !(c = nextt(c->next)))
+	head = nextt(selws->clients);
+	if (c == head && !(c = nextt(c->next)))
 		return;
 	detach(c, 1);
 	refresh(c->ws);
@@ -1237,6 +1238,10 @@ void clientcfgreq(Client *c, xcb_configure_request_event_t *e)
 	c->depth = g->depth;
 	free(g);
 
+	if (e->x == W(c) * -2) {
+		DBG("clientcfgreq: ignoring CONFIGURE_REQUEST - 0x%08x is hidden", c->win);
+		return;
+	}
 	if (e->value_mask & XCB_CONFIG_WINDOW_BORDER_WIDTH)
 		c->bw = e->border_width;
 	else if (FLOATING(c)) {
@@ -1262,15 +1267,14 @@ void clientcfgreq(Client *c, xcb_configure_request_event_t *e)
 			c->old_h = c->h;
 			c->h = e->height;
 		}
-		c->x = CLAMP(c->x, m->wx - (W(c) - globalcfg[MinXY]), m->wx + m->ww - globalcfg[MinXY]);
-		c->y = CLAMP(c->y, m->wy - (H(c) - globalcfg[MinXY]), m->wy + m->wh - globalcfg[MinXY]);
+		if ((c->x + c->w) > m->wx + m->ww && c->floating)
+			c->x = m->wx + ((m->ww - W(c)) / 2);
+		if ((c->y + c->h) > m->wy + m->wh && c->floating)
+			c->y = m->wy + ((m->wh - H(c)) / 2);
 		if ((e->value_mask & XYMASK) && !(e->value_mask & WHMASK))
 			sendconfigure(c);
-		if (c->ws == m->ws || (c->sticky && m == selws->mon))
+		if (c->ws == m->ws)
 			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
-		if ((m = coordtomon(c->x, c->y)) && m->ws != c->ws)
-			setclientws(c, m->ws->num);
-		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	} else {
 		sendconfigure(c);
 	}
@@ -1481,8 +1485,8 @@ void eventhandle(xcb_generic_event_t *ev)
 	{
 		xcb_client_message_event_t *e = (xcb_client_message_event_t *)ev;
 		uint32_t *d = e->data.data32;
-		usemoncmd = 0;
 
+		usemoncmd = 0;
 		if (e->type == netatom[CurDesktop]) {
 			DBG("CLIENT_MESSAGE: %s - data: %d", netatoms[CurDesktop], d[0]);
 			cmdview(d[0]);
@@ -1512,16 +1516,9 @@ void eventhandle(xcb_generic_event_t *ev)
 					if (c->ws != selws) {
 						unfocus(selws->sel, 1);
 						cmdview(c->ws->num);
-						if (FLOATING(c)) {
-							c->x = CLAMP(c->x, c->ws->mon->wx,
-									c->ws->mon->wx + c->ws->mon->ww - W(c));
-							c->y = CLAMP(c->y, c->ws->mon->wy,
-									c->ws->mon->wy + c->ws->mon->wh - H(c));
-							resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0, 0);
-						}
 					}
 					focus(c);
-				} else if (!c->urgent)
+				} else
 					seturgent(c, e->type == netatom[Active] ? 1
 							: (d[0] == 1 || (d[0] == 2 && !c->urgent)));
 			}
@@ -1585,6 +1582,7 @@ void eventignore(uint8_t type)
 {
 	xcb_generic_event_t *ev = NULL;
 
+	xcb_flush(con);
 	while (running && (ev = xcb_poll_for_event(con))) {
 		if (EVTYPE(ev) != type)
 			eventhandle(ev);
@@ -1651,12 +1649,15 @@ void eventrandr(xcb_randr_screen_change_notify_event_t *re)
 	else if (!(info = xcb_dpms_info_reply(con, xcb_dpms_info(con), &e)))
 		iferr(0, "unable to get dpms info reply", e);
 	else {
-		DBG("eventrandr: dpms - state: %d, power_level: %d", info->state, info->power_level);
-		upd = info->state != XCB_DPMS_DPMS_MODE_STANDBY && info->state != XCB_DPMS_DPMS_MODE_SUSPEND;
+		DBG("eventrandr: dpms - state: %d, power_level: %d, MODE_STANDBY: %d, MODE_SUSPEND: %d",
+				info->state, info->power_level,
+				XCB_DPMS_DPMS_MODE_STANDBY, XCB_DPMS_DPMS_MODE_SUSPEND);
+		upd = info->state != XCB_DPMS_DPMS_MODE_STANDBY
+			&& info->state != XCB_DPMS_DPMS_MODE_SUSPEND;
 		free(info);
 	}
 	free(dpms);
-	if (upd && !updrandr())
+	if (upd && updrandr())
 		updworkspaces(globalcfg[NumWs]);
 }
 
@@ -1709,17 +1710,18 @@ void focus(Client *c)
 	if (!c || c->ws != c->ws->mon->ws)
 		c = selws->stack;
 	if (selws->sel && selws->sel != c)
-		unfocus(selws->sel, c ? 0 : 1);
+		unfocus(selws->sel, 0);
 	if (c) {
 		if (c->urgent)
 			seturgent(c, 0);
-		if (c->trans)
-			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 		detachstack(c);
 		attachstack(c);
 		grabbuttons(c, 1);
 		clientborder(c, 1);
 		setinputfocus(c);
+	} else {
+		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, root, XCB_CURRENT_TIME);
+		xcb_delete_property(con, root, netatom[Active]);
 	}
 	selws->sel = c;
 }
@@ -2035,9 +2037,8 @@ void initclient(xcb_window_t win, Geometry *g)
 	wintype(c);
 	sizehints(c, 1);
 	winhints(c);
-	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK,
-			(uint32_t []){ XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_FOCUS_CHANGE
-			| XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY });
+	subscribe(c->win, XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_FOCUS_CHANGE
+			| XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY);
 	clientborder(c, 0);
 	grabbuttons(c, 0);
 	if (FLOATING(c) || (c->floating = c->oldstate = c->trans || c->fixed)) {
@@ -2050,15 +2051,14 @@ void initclient(xcb_window_t win, Geometry *g)
 	PROP_APPEND(root, netatom[ClientList], XCB_ATOM_WINDOW, 32, 1, &c->win);
 	MOVE(c->win, c->x + 2 * scr_w, c->y);
 	setwmwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
-	if (c->ws == selws)
+	if (c->ws == c->ws->mon->ws)
 		unfocus(selws->sel, 0);
 	c->ws->sel = c;
 	if (c->cb)
 		c->cb->fn(c, 0);
 	refresh(c->ws);
 	xcb_map_window(con, win);
-	if (c->ws == selws)
-		focus(c);
+	focus(NULL);
 	DBG("initclient: mapped - 0x%08x - workspace %d - %d,%d @ %dx%d - floating: %d",
 			c->win, c->ws->num, c->x, c->y, c->w, c->h, FLOATING(c));
 }
@@ -2066,7 +2066,6 @@ void initclient(xcb_window_t win, Geometry *g)
 void initdesk(xcb_window_t win, Geometry *g)
 {
 	Desk *d;
-	uint32_t m = XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
 
 	DBG("initdesktopwin: 0x%08x - %d,%d @ %dx%d", win, g->x, g->y, g->width, g->height);
 	d = ecalloc(1, sizeof(Desk));
@@ -2075,7 +2074,7 @@ void initdesk(xcb_window_t win, Geometry *g)
 		d->mon = selws->mon;
 	d->next = desks;
 	desks = d;
-	xcb_change_window_attributes(con, d->win, XCB_CW_EVENT_MASK, &m);
+	subscribe(d->win, XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY);
 	d->x = d->mon->wx;
 	d->y = d->mon->wy;
 	d->w = d->mon->ww;
@@ -2115,7 +2114,6 @@ void initpanel(xcb_window_t win, Geometry *g)
 	xcb_generic_error_t *e;
 	xcb_get_property_cookie_t rc;
 	xcb_get_property_reply_t *r = NULL;
-	uint32_t m = XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
 
 	DBG("initpanel: 0x%08x - %d,%d @ %dx%d", win, g->x, g->y, g->width, g->height);
 	rc = xcb_get_property(con, 0, win, netatom[StrutPartial], XCB_ATOM_CARDINAL, 0, 4);
@@ -2144,7 +2142,7 @@ void initpanel(xcb_window_t win, Geometry *g)
 	free(r);
 	p->next = panels;
 	panels = p;
-	xcb_change_window_attributes(con, p->win, XCB_CW_EVENT_MASK, &m);
+	subscribe(p->win, XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY);
 	setwmwinstate(p->win, XCB_ICCCM_WM_STATE_NORMAL);
 	PROP_APPEND(root, netatom[ClientList], XCB_ATOM_WINDOW, 32, 1, &p->win);
 	refresh(p->mon->ws);
@@ -2463,7 +2461,6 @@ int layoutws(Workspace *ws)
 			ret = ret && ws == selws ? i : ret;
 		}
 	}
-	/* eventignore(XCB_ENTER_NOTIFY); */
 	return ret;
 }
 
@@ -2731,7 +2728,7 @@ void relocate(Workspace *ws, Monitor *old)
 	if (!(m = ws->mon) || m == old)
 		return;
 	FOR_EACH(c, ws->clients)
-		if (FLOATING(c)) {
+		if (FLOATING(c)) { /* TODO: simplify this mess */
 			if ((xoff = c->x - old->x) && (xdiv = old->w / xoff) != 0.0) {
 				if (c->x + W(c) == old->wx + old->ww) /* edge */
 					c->x = m->wx + m->ww - W(c);
@@ -2794,7 +2791,6 @@ void restack(Workspace *ws)
 	FOR_EACH(d, desks)
 		if (d->mon == ws->mon)
 			setstackmode(c->win, XCB_STACK_MODE_BELOW);
-	/* eventignore(XCB_ENTER_NOTIFY); */
 }
 
 int rulecmp(Rule *r, char *title, char *class, char *inst)
@@ -2829,7 +2825,7 @@ void sendconfigure(Client *c)
 {
 	xcb_configure_notify_event_t ce;
 
-	DBG("clientcfgreq: sending 0x%08x configure notify event", c->win);
+	DBG("sendconfigure: sending 0x%08x configure notify event", c->win);
 	ce.event = c->win;
 	ce.window = c->win;
 	ce.response_type = XCB_CONFIGURE_NOTIFY;
@@ -3102,6 +3098,11 @@ void sizehints(Client *c, int uss)
 		iferr(0, "unable to get wm normal hints", e);
 	}
 	c->fixed = (c->max_w && c->max_h && c->max_w == c->min_w && c->max_h == c->min_h);
+}
+
+void subscribe(xcb_window_t win, uint32_t events)
+{
+	xcb_change_window_attributes(con, win, XCB_CW_EVENT_MASK, &events);
 }
 
 int tiler(Client *c, Client *p, int ww, int wh, int x, int y,

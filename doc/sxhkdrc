@@ -1,3 +1,7 @@
+#*****************************#
+#***** application binds *****#
+#*****************************#
+
 # launcher
 alt + p
     dmenu_run
@@ -6,7 +10,7 @@ alt + p
 alt + shift + Return
     st
 
-# screenshot
+# screenshot and selection capture
 {_,alt + }@Print
     scrot {_,-s}
 
@@ -27,25 +31,25 @@ alt + shift + x
     pkill -USR1 -x sxhkd
 
 
-#********************#
-#***** wm binds *****#
-#********************#
+#*****************************#
+#********* wm binds **********#
+#*****************************#
 
 # quit yaxwm
 alt + shift + q
-    yaxcmd wm exit
+	yaxcmd wm exit
 
 # reload yaxwmrc
 alt + shift + r
-    yaxcmd wm reload
+	yaxcmd wm reload
 
 # restart yaxwm
 alt + ctrl + shift + r
-    yaxcmd wm restart
+	yaxcmd wm restart
 
 # focus next or previous window
 alt + {j,k}
-    yaxcmd win focus {next,prev}
+	yaxcmd win focus {next,prev}
 
 # close window, swap tiled window in/out of master, cycle tiled windows in place
 alt + {q,space,Tab}
@@ -57,32 +61,32 @@ alt + {q,space,Tab}
 
 # toggle floating or sticky
 alt + shift + {space,s}
-    yaxcmd win {float,stick}
+	yaxcmd win {float,stick}
 
 # move window, signed (+/-) for relative changes
 alt + shift + {h,j,k,l}
-    yaxcmd win resize {x=-10,y=+10,y=-10,x=+10}
+	yaxcmd win resize {x=-10,y=+10,y=-10,x=+10}
 
 # resize window, signed (+/-) for relative changes
 alt + ctrl + {h,j,k,l}
-    yaxcmd win resize {w=-10,h=+10,h=-10,w=+10}
+	yaxcmd win resize {w=-10,h=+10,h=-10,w=+10}
 
-# view, send, or follow to a workspace
+# view, send, or follow to a workspace (by number)
 alt + {_,shift + ,ctrl + }{1-9,0}
-    yaxcmd ws {view,send,follow} {1-9,10}
+	yaxcmd ws {view,send,follow} {1-9,10}
 
 # view, send, or follow to the next, previous, last active,
 # next non-empty, or prev non-empty workspace
 alt + {_,shift + ,ctrl + }{bracketleft,bracketright,BackSpace,Left,Right}
-    yaxcmd ws {view,send,follow} {prev,next,last,prevne,nextne}
+	yaxcmd ws {view,send,follow} {prev,next,last,prevne,nextne}
 
 # view, send, or follow to the next, previous, or last active monitor
 alt + {_,shift + ,ctrl + }{comma,period,backslash}
-    yaxcmd mon {view,send,follow} {prev,next,last}
+	yaxcmd mon {view,send,follow} {prev,next,last}
 
 # change active workspace layout
 alt + {t,m,f}
-    yaxcmd set layout {tile,mono,none}
+	yaxcmd set layout {tile,mono,none}
 
 # toggle padding on the active workspace
 alt + shift + p
@@ -91,16 +95,16 @@ alt + shift + p
 
 # change number of windows in master or first stack
 alt + {_,shift + }{i,d}
-    yaxcmd set {master,stack} {+1,-1}
+	yaxcmd set {master,stack} {+1,-1}
 
-# change gap or border width
-alt + {_,ctrl + }{equal,minus}
-    yaxcmd set {gap,border} width {+1,-1}
+# change gap width
+alt + {equal,minus,apostrophe}
+	yaxcmd set gap width {+5,-5,reset}
 
-# reset gap or border width
-alt + {_,ctrl + }shift + equal
-    yaxcmd set {gap,border} width reset
+# change border width (total)
+alt + ctrl + {equal,minus,apostrophe}
+	yaxcmd set border width {+1,-1,reset}
 
-# alternatively for changing outer border width
-# alt + ctrl + shift + {equal,minus}
-#     yaxcmd set border outer_width {+1,-1}
+# change outer border width (double border)
+alt + ctrl + shift + {equal,minus,apostrophe}
+	yaxcmd set border outer_width {+1,-1,reset}

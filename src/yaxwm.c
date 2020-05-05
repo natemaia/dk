@@ -1185,12 +1185,16 @@ void cmdview(int num)
 void clientborder(Client *c, int focused)
 {
 	int o, b;
+	uint32_t in, out;
 	xcb_gcontext_t gc;
 	xcb_pixmap_t pmap;
 	uint32_t frame[] = { c->bw, c->bw, c->bw, c->bw };
 
 	if (c->noborder || !c->bw)
 		return;
+
+	out = border[focused ? Focus : (c->urgent ? Urgent : Unfocus)] | 0xff000000;
+	in = border[focused ? OFocus : (c->urgent ? OUrgent : OUnfocus)] | 0xff000000;
 
 	b = c->bw;
 	o = border[OWidth];
@@ -1211,16 +1215,15 @@ void clientborder(Client *c, int focused)
 		{ 1,            1,            1,            1            }
 	};
 
+	
 	PROP_REPLACE(c->win, netatom[FrameExtents], XCB_ATOM_CARDINAL, 32, 4, frame);
 	pmap = xcb_generate_id(con);
 	xcb_create_pixmap(con, c->depth, pmap, c->win, W(c), H(c));
 	gc = xcb_generate_id(con);
-	xcb_create_gc(con, gc, pmap, XCB_GC_FOREGROUND,
-			&border[focused ? Focus : (c->urgent ? Urgent : Unfocus)]);
-	if (b - o > 0) { /* only do inner/outer distinction when there is enough space */
+	xcb_create_gc(con, gc, pmap, XCB_GC_FOREGROUND, &out);
+	if (b - o > 0) { /* only do inner/outer distinction when border width is thick enough */
 		xcb_poly_fill_rectangle(con, pmap, gc, LEN(inner), inner);
-		xcb_change_gc(con, gc, XCB_GC_FOREGROUND,
-				&border[focused ? OFocus : (c->urgent ? OUrgent : OUnfocus)]);
+		xcb_change_gc(con, gc, XCB_GC_FOREGROUND, &in);
 	}
 	xcb_poly_fill_rectangle(con, pmap, gc, LEN(outer), outer);
 	xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXMAP, &pmap);

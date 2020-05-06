@@ -18,7 +18,7 @@ static int restart = 0;
 static int usemoncmd = 0;
 static int randrbase = -1;
 static uint32_t lockmask = 0;
-static int dborder[LEN(border)];
+static uint32_t dborder[LEN(border)];
 
 static Desk *desks;
 static Rule *rules;
@@ -316,9 +316,9 @@ void cmdborder(char **argv)
 	Monitor *m;
 	Workspace *ws;
 	int i, obw, bw, ow, rel, outer;
-	int focus, unfocus, urgent;
-	int ofocus, ounfocus, ourgent;
-	int incol = 0, start = 0;
+	int incol = 0, start = 0, print;
+	uint32_t focus, unfocus, urgent;
+	uint32_t ofocus, ounfocus, ourgent;
 
 	bw = border[Width];
 	ow = border[OWidth];
@@ -328,15 +328,21 @@ void cmdborder(char **argv)
 	ofocus = border[OFocus];
 	ourgent = border[OUrgent];
 	ounfocus = border[OUnfocus];
-
+	if ((print = !strcmp("print", *argv)))
+		argv++;
 	while (*argv) {
 		if (!strcmp(*argv, "smart")) {
 			incol = 0;
-			argv = parsebool(argv + 1, &globalcfg[SmartBorder]);
+			if (print)
+				fprintf(cmdresp, "%d", globalcfg[SmartGap]);
+			else
+				argv = parsebool(argv + 1, &globalcfg[SmartBorder]);
 		} else if ((outer = !strcmp("outer_width", *argv)) || !strcmp(*argv, "width")) {
 			incol = 0;
 			argv++;
-			if (!*argv)
+			if (print)
+				fprintf(cmdresp, "%d", outer ? border[OWidth] : border[Width]);
+			else if (!*argv)
 				fprintf(cmdresp, "!border %s %s", *(argv - 1), enoargs);
 			else if (!strcmp(*argv, "reset")) {
 				if (outer)
@@ -355,19 +361,37 @@ void cmdborder(char **argv)
 				incol = 1;
 				argv++;
 			}
-			if (!strcmp(*argv, "focus"))
-				argv = parsecolor(argv + 1, &focus);
-			else if (!strcmp(*argv, "unfocus"))
-				argv = parsecolor(argv + 1, &unfocus);
-			else if (!strcmp(*argv, "urgent"))
-				argv = parsecolor(argv + 1, &urgent);
-			else if (!strcmp(*argv, "outer_focus"))
-				argv = parsecolor(argv + 1, &ofocus);
-			else if (!strcmp(*argv, "outer_urgent"))
-				argv = parsecolor(argv + 1, &ourgent);
-			else if (!strcmp(*argv, "outer_unfocus"))
-				argv = parsecolor(argv + 1, &ounfocus);
-			else if (!strcmp(*argv, "reset")) {
+			if (!strcmp(*argv, "focus")) {
+				if (print)
+					fprintf(cmdresp, "#%08x", border[Focus]);
+				else
+					argv = parsecolor(argv + 1, &focus);
+			} else if (!strcmp(*argv, "urgent")) {
+				if (print)
+					fprintf(cmdresp, "#%08x", border[Urgent]);
+				else
+					argv = parsecolor(argv + 1, &urgent);
+			} else if (!strcmp(*argv, "unfocus")) {
+				if (print)
+					fprintf(cmdresp, "#%08x", border[Unfocus]);
+				else
+					argv = parsecolor(argv + 1, &unfocus);
+			} else if (!strcmp(*argv, "outer_focus")) {
+				if (print)
+					fprintf(cmdresp, "#%08x", border[OFocus]);
+				else
+					argv = parsecolor(argv + 1, &ofocus);
+			} else if (!strcmp(*argv, "outer_urgent")) {
+				if (print)
+					fprintf(cmdresp, "#%08x", border[OUrgent]);
+				else
+					argv = parsecolor(argv + 1, &ourgent);
+			} else if (!strcmp(*argv, "outer_unfocus")) {
+				if (print)
+					fprintf(cmdresp, "#%08x", border[OUnfocus]);
+				else
+					argv = parsecolor(argv + 1, &ounfocus);
+			} else if (!print && !strcmp(*argv, "reset")) {
 				focus = dborder[Focus];
 				urgent = dborder[Urgent];
 				unfocus = dborder[Unfocus];
@@ -393,7 +417,7 @@ void cmdborder(char **argv)
 			argv++;
 	}
 
-	/* FIXME: do these in one loop instead of this mess */
+	/* FIXME: cleanup this mess */
 	if (focus != border[Focus] || unfocus != border[Unfocus] || urgent != border[Urgent]
 			|| ofocus != border[OFocus] || ounfocus != border[OUnfocus] || ourgent != border[OUrgent])
 	{
@@ -403,14 +427,15 @@ void cmdborder(char **argv)
 		border[OFocus] = ofocus;
 		border[OUnfocus] = ounfocus;
 		border[OUrgent] = ourgent;
-		FOR_CLIENTS(c, ws)
-			clientborder(c, c == c->ws->sel);
+		if ((uint32_t)bw == border[Width] || (uint32_t)ow == border[OWidth])
+			FOR_CLIENTS(c, ws)
+				clientborder(c, c == c->ws->sel);
 	}
-	if (bw != border[Width] || ow != border[OWidth]) {
+	if ((uint32_t)bw != border[Width] || (uint32_t)ow != border[OWidth]) {
 		obw = border[Width];
 		border[Width] = bw;
 		if (bw - ow < 1) {
-			if (ow != border[OWidth]) /* only warn about insufficient size when changing outer_width */
+			if ((uint32_t)ow != border[OWidth]) /* only warn about insufficient size when changing outer_width */
 				fprintf(cmdresp, "!border outer_width exceeds limit: %d - maximum: %d", ow, bw - 1);
 		} else
 			border[OWidth] = ow;
@@ -448,16 +473,17 @@ void cmdfakefull(char **argv)
 
 	if (!(c = selws->sel))
 		return;
-	m = c->ws->mon;
-	if ((c->fakefull = !c->fakefull) && c->fullscreen) {
+	if (argv && *argv && !strcmp("print", *argv)) {
+		fprintf(cmdresp, "%d", c->fakefull);
+	} else if ((c->fakefull = !c->fakefull) && c->fullscreen) {
 		c->bw = c->old_bw;
 		layoutws(c->ws);
 	} else if (c->fullscreen) {
 		c->bw = 0;
+		m = c->ws->mon;
 		resize(c, m->x, m->y, m->w, m->h, c->bw);
 		layoutws(c->ws);
 	}
-	(void)(argv);
 }
 
 void cmdfloat(char **argv)
@@ -466,6 +492,10 @@ void cmdfloat(char **argv)
 
 	if (!(c = selws->sel) || FULLSCREEN(c) || c->sticky || !c->ws->layout->fn)
 		return;
+	if (argv && *argv && !strcmp("print", *argv)) {
+		fprintf(cmdresp, "%d", c->floating);
+		return;
+	}
 	if ((c->floating = !c->floating || c->fixed)) {
 		c->x = c->old_x;
 		c->y = c->old_y;
@@ -478,7 +508,6 @@ void cmdfloat(char **argv)
 		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 	}
 	refresh(c->ws);
-	(void)(argv);
 }
 
 void cmdfocus(char **argv)
@@ -515,22 +544,31 @@ void cmdfull(char **argv)
 
 	if (!(c = selws->sel))
 		return;
-	setfullscreen(c, !c->fullscreen);
-	(void)(argv);
+	if (argv && *argv && !strcmp("print", *argv))
+		fprintf(cmdresp, "%d", c->fakefull);
+	else
+		setfullscreen(c, !c->fullscreen);
 }
 
 void cmdgappx(char **argv)
 {
-	int i, ng, rel;
+	int i, ng, rel, print;
 
-	i = INT_MAX;
+	if ((print = !strcmp("print", *argv)))
+		argv++;
 	while (*argv) {
+		i = INT_MAX;
 		if (!strcmp(*argv, "smart")) {
-			argv = parsebool(argv + 1, &globalcfg[SmartGap]);
+			if (print)
+				fprintf(cmdresp, "%d", globalcfg[SmartBorder]);
+			else
+				argv = parsebool(argv + 1, &globalcfg[SmartGap]);
 		} else if (!strcmp(*argv, "width")) {
 			argv++;
 			ng = setws->gappx;
-			if (!*argv)
+			if (print)
+				fprintf(cmdresp, "%d", setws->gappx);
+			else if (!*argv)
 				fprintf(cmdresp, "!gap width %s", enoargs);
 			else if (!strcmp(*argv, "reset"))
 				ng = setws->defgap;
@@ -570,7 +608,9 @@ void cmdkill(char **argv)
 
 void cmdlayout(char **argv)
 {
-	for (uint32_t i = 0; i < LEN(layouts); i++)
+	if (!strcmp("print", *argv))
+		fprintf(cmdresp, "%s", setws->layout->name);
+	else for (uint32_t i = 0; i < LEN(layouts); i++)
 		if (!strcmp(layouts[i].name, *argv)) {
 			if (&layouts[i] != setws->layout) {
 				setws->layout = &layouts[i];
@@ -620,6 +660,10 @@ void cmdresize(char **argv)
 
 	if (!(c = selws->sel) || FULLSCREEN(c))
 		return;
+	if (!strcmp("print", *argv)) {
+		fprintf(cmdresp, "%d,%d %dx%d", c->x, c->y, W(c), H(c));
+		return;
+	}
 	parsegeom(argv, &x, &y, &w, &h, &relx, &rely, &relw, &relh);
 	if (x == INT_MAX && y == INT_MAX && w == 0 && h == 0)
 		return;
@@ -669,20 +713,28 @@ void cmdnmaster(char **argv)
 {
 	int i = INT_MAX, rel = 1;
 
-	parseint(argv, &i, &rel, 1);
-	adjustsetting(i, rel, &setws->nmaster, 0, 0);
-	if (setws->clients && setws == setws->mon->ws)
-		layoutws(setws);
+	if (argv && *argv && !strcmp("print", *argv))
+		fprintf(cmdresp, "%d", setws->nmaster);
+	else {
+		parseint(argv, &i, &rel, 1);
+		adjustsetting(i, rel, &setws->nmaster, 0, 0);
+		if (setws->clients && setws == setws->mon->ws)
+			layoutws(setws);
+	}
 }
 
 void cmdnstack(char **argv)
 {
 	int i = INT_MAX, rel = 1;
 
-	parseint(argv, &i, &rel, 1);
-	adjustsetting(i, rel, &setws->nstack, 0, 0);
-	if (setws->clients && setws == setws->mon->ws)
-		layoutws(setws);
+	if (argv && *argv && !strcmp("print", *argv))
+		fprintf(cmdresp, "%d", setws->nstack);
+	else {
+		parseint(argv, &i, &rel, 1);
+		adjustsetting(i, rel, &setws->nstack, 0, 0);
+		if (setws->clients && setws == setws->mon->ws)
+			layoutws(setws);
+	}
 }
 
 void cmdpad(char **argv)
@@ -916,8 +968,12 @@ void cmdsplit(char **argv)
 	int rel = 1;
 	float f = 0.0;
 
-	parsefloat(argv, &f, &rel);
-	adjustfsetting(f, rel, &setws->split);
+	if (argv && *argv && !strcmp("print", *argv))
+		fprintf(cmdresp, "%0.2f", setws->split);
+	else {
+		parsefloat(argv, &f, &rel);
+		adjustfsetting(f, rel, &setws->split);
+	}
 }
 
 void cmdssplit(char **argv)
@@ -925,8 +981,12 @@ void cmdssplit(char **argv)
 	int rel = 1;
 	float f = 0.0;
 
-	parsefloat(argv, &f, &rel);
-	adjustfsetting(f, rel, &setws->ssplit);
+	if (argv && *argv && !strcmp("print", *argv))
+		fprintf(cmdresp, "%0.2f", setws->ssplit);
+	else {
+		parsefloat(argv, &f, &rel);
+		adjustfsetting(f, rel, &setws->ssplit);
+	}
 }
 
 void cmdstick(char **argv)
@@ -935,7 +995,10 @@ void cmdstick(char **argv)
 
 	if (!(c = selws->sel) || FULLSCREEN(c))
 		return;
-	setsticky(c, !c->sticky);
+	if (argv && *argv && !strcmp("print", *argv))
+		fprintf(cmdresp, "%d", c->sticky);
+	else
+		setsticky(c, !c->sticky);
 	(void)(argv);
 }
 
@@ -1013,6 +1076,11 @@ void cmdwin(char **argv)
 
 	if (!(s = argv[0]))
 		return;
+	if (!strcmp("print", s)) {
+		if (selws->sel)
+			fprintf(cmdresp, "0x%08x", selws->sel->win);
+		return;
+	}
 	r = argv + 1;
 	for (i = 0; i < LEN(wincmds); i++)
 		if (!strcmp(wincmds[i].name, s)) {
@@ -1188,16 +1256,14 @@ void clientborder(Client *c, int focused)
 	uint32_t in, out;
 	xcb_gcontext_t gc;
 	xcb_pixmap_t pmap;
-	uint32_t frame[] = { c->bw, c->bw, c->bw, c->bw };
 
 	if (c->noborder || !c->bw)
 		return;
-
-	out = border[focused ? Focus : (c->urgent ? Urgent : Unfocus)] | 0xff000000;
-	in = border[focused ? OFocus : (c->urgent ? OUrgent : OUnfocus)] | 0xff000000;
-
 	b = c->bw;
 	o = border[OWidth];
+	in = border[focused ? Focus : (c->urgent ? Urgent : Unfocus)];
+	out = border[focused ? OFocus : (c->urgent ? OUrgent : OUnfocus)];
+	uint32_t frame[] = { c->bw, c->bw, c->bw, c->bw };
 	xcb_rectangle_t inner[] = {
 		/* x            y             w             h           */
 		{ c->w,         0,            b - o,        c->h + b - o },
@@ -1215,15 +1281,14 @@ void clientborder(Client *c, int focused)
 		{ 1,            1,            1,            1            }
 	};
 
-	
 	PROP_REPLACE(c->win, netatom[FrameExtents], XCB_ATOM_CARDINAL, 32, 4, frame);
 	pmap = xcb_generate_id(con);
 	xcb_create_pixmap(con, c->depth, pmap, c->win, W(c), H(c));
 	gc = xcb_generate_id(con);
-	xcb_create_gc(con, gc, pmap, XCB_GC_FOREGROUND, &out);
-	if (b - o > 0) { /* only do inner/outer distinction when border width is thick enough */
+	xcb_create_gc(con, gc, pmap, XCB_GC_FOREGROUND, &in);
+	if (b - o > 0) { /* only distinguish inner/outer when border width is thick enough */
 		xcb_poly_fill_rectangle(con, pmap, gc, LEN(inner), inner);
-		xcb_change_gc(con, gc, XCB_GC_FOREGROUND, &in);
+		xcb_change_gc(con, gc, XCB_GC_FOREGROUND, &out);
 	}
 	xcb_poly_fill_rectangle(con, pmap, gc, LEN(outer), outer);
 	xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXMAP, &pmap);

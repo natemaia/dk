@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <stdint.h>
 
 extern FILE *cmdresp;
 extern const char *enoargs;
@@ -26,21 +27,25 @@ char **parsebool(char **argv, int *setting)
 	return argv;
 }
 
-char **parsecolor(char **argv, int *setting)
+char **parsecolor(char **argv, uint32_t *setting)
 {
-	int i;
 	char *end;
+	uint32_t i, len;
 
 	if (!argv || !*argv)
 		return argv;
-	if (**argv == '#' && strlen(*argv) == 7)
-		i = strtol(*argv + 1, &end, 16);
+	len = strlen(*argv);
+	if (**argv == '#' && len >= 7 && len <= 9)
+		i = strtoul(*argv + 1, &end, 16);
 	else
-		i = strtol(*argv, &end, 0);
-	if (i >= 0x000000 && i <= 0xffffff && *end == '\0')
-		*setting = i;
-	else
-		fprintf(cmdresp, "!invalid colour argument: %s - expected N/(#/0x)XXXXXX", *argv);
+		i = strtoul(*argv, &end, 0);
+	if (i <= 0xffffffff && *end == '\0') {
+		if (i > 0xffffff || len > 7)
+			*setting = i;
+		else
+			*setting = i | 0xff000000;
+	} else
+		fprintf(cmdresp, "!invalid colour argument: %s - expected N/(#/0x)(AA)RRGGBB", *argv);
 	return argv;
 }
 

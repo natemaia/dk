@@ -4,15 +4,15 @@
  * see license file for copyright and license details */
 
 
-static int border[] = {
-	[Width] = 1,           /* total border width in pixels */
-	[Focus] = 0x6699cc,    /* focused window border colour (inner) */
-	[Urgent] = 0xee5555,   /* urgent window border colour (inner) */
-	[Unfocus] = 0x000000,  /* unfocused window border colour (inner) */
-	[OWidth] = 0,          /* outer border width in pixels */
-	[OFocus] = 0x222222,   /* outer focused window border colour when using double border */
-	[OUrgent] = 0x222222,  /* outer urgent window border colour when using double border */
-	[OUnfocus] = 0x222222, /* outer unfocused window border colour when using double border */
+static uint32_t border[] = {
+	[Width] = 1,             /* total border width in pixels */
+	[Focus] = 0xFF6699cc,    /* focused window border colour (inner) */
+	[Urgent] = 0xFFee5555,   /* urgent window border colour (inner) */
+	[Unfocus] = 0xFF000000,  /* unfocused window border colour (inner) */
+	[OWidth] = 0,            /* outer border width in pixels */
+	[OFocus] = 0xFF222222,   /* outer focused window border colour when using double border */
+	[OUrgent] = 0xFF222222,  /* outer urgent window border colour when using double border */
+	[OUnfocus] = 0xFF222222, /* outer unfocused window border colour when using double border */
 };
 
 static int globalcfg[] = {

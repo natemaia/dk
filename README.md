@@ -2,26 +2,30 @@
 
 Yet another X window manager, as if we didn't have enough..
 
-After using dwm for a long time, changing it, and learning. I wanted
-to write my own window manager. I'm not afraid to say dwm is great and does
-a lot of things right when it comes to simplifying window management.
-At this point yaxwm is not solely based on dwm but more of a collection of
-features and ideas in other window managers that I liked.
+
+After using dwm for a long time, changing it, and learning from it; I wanted
+to write my own window manager. Dwm is great and it does a lot of things right
+when it comes to simplifying window management. Yaxwm is not a fork of dwm nor
+is it solely based on dwm, more of a collection of features and ideas from
+various window managers that I liked.
 
 Some ways in which yaxwm differs include:
 
-- Using xcb over xlib and randr support for multi-head, no xinerama support planned.
+- Based on xcb instead of xlib, randr extension for multi-head instead of xinerama.
 
 - Dynamic workspaces similar to xmonad, with a workspace centric model at the core.
 
-- Simple startup script for easy configuration once the window manger is running.
+- Startup script for easy configuration once the window manger is running.
 
-- Unix socket communication for controlling and configuring the wm similar to bspwm.
+- Like bspwm, yaxwm uses Unix socket communication for control and configuration.
 
-- No built in method for binding keys, you'll need an external program like sxhkd.
+- No support for binding keys, this can be done with an external program like sxhkd.
 
-- Supports more [ewmh standards](https://specifications.freedesktop.org/wm-spec/wm-spec-latest.html)
-for better interoperability with other programs and applications.
+- Supports most
+[ICCCM](https://www.x.org/releases/X11R7.6/doc/xorg-docs/specs/ICCCM/icccm.html#client_to_window_manager_communication),
+[EWMH](https://specifications.freedesktop.org/wm-spec/wm-spec-latest.html), and
+[Motif](http://www.ist.co.uk/motif/books/vol6A/ch-20.fm.html#963509) for better
+interoperability with other programs and applications.
 
 - This is still under active development so expect bugs/errors, please open an issue or contact me.
 
@@ -63,12 +67,16 @@ To start yaxwm you can add `exec yaxwm` to your xinitrc.
 
 #### Configuration
 
-There are example yaxwmrc and sxhkdrc in `doc/` or `/usr/share/doc/yaxwm` after
+There are example `yaxwmrc` and `sxhkdrc` files in `doc/` or `/usr/share/doc/yaxwm` after
 installation.
 
-Yaxwm looks for a file `$YAXWM_CONF`, `$XDG_CONFIG_HOME/yaxwm/yaxwmrc`, or
-`$HOME/.config/yaxwm/yaxwmrc` and tries to execute it. This file is just a shell
-script, it must be executable.
+Yaxwm looks for a file in the following order
+```
+$YAXWM_CONF
+$XDG_CONFIG_HOME/yaxwm/yaxwmrc
+$HOME/.config/yaxwm/yaxwmrc
+```
+and tries to execute it, **it must be executable**.
 
 For advanced configuration like layout and callback functions, copy the default
 config header `src/config.def.h` to `src/config.h` then edit it and recompile.
@@ -77,19 +85,29 @@ This file isn't tracked by git so you can maintain configuration across updates.
 #### Commands
 
 ###### Syntax Outline
-Included with yaxwm is a small program `yaxcmd` to communicate with the wm similar to
-bspwm. It uses a very simple parsing method to break down commands into smaller more
-usable pieces. Outlined here is a what yaxwm is *currently* capable of understanding.
+Included with yaxwm is a small program `yaxcmd` to communicate with the WM.
+It uses a very rudimentary parsing system to break down commands into smaller pieces *(tokens)*.
 
-First the command is broken into a series of tokens, a token is delimited by one or more
-whitespace, double quote, or the equal sign. This means the following inputs are all
-equivalent.
+A token is delimited by one or more:
+
+- whitespace *(space or tab)*
+
+- quotation mark *(`'` or `"`)*
+
+- equal sign *(`=`)*
+
+This means the following inputs are all equivalent.
 ```
 setting=value
 setting value
 setting="value"
+setting = 'value'
 setting "value"
+setting		"value"
 ```
+and result in two tokens: `setting` and `value`
+
+---
 
 Quotation exists as a way to preserve whitespace and avoid interpretation by the shell,
 otherwise we have no way of determining whether an argument is a continuation of the
@@ -98,18 +116,32 @@ previous or the beginning of the next. Consider the following
 title="^open files$"
 ```
 
-Should your value *(for whatever reason)* have quotes within it they can be escaped as
-you'd expect
+If the value being matched has quotes in it, they can be escaped or strong quoted
 ```
 title="^\"preserved quotes\"$"
+title='^"preserved quotes"$'
 ```
+
+---
+
+For various commands yaxwm will expect a certain data type or format to be given.
+
+- string: plain text, must be less than 256 characters.
+
+- boolean: must be one of `true`, `false`, `1`, or `0`
+
+- integer: number, can be given in relative *(`(+/-)1`)* or absolute *(`20`)* values
+
+- float: same rules as integer but must contain a decimal value *(`0.55`)*
+
+- colour: integer or hex, hex must be preceded by `0x` or `#` followed by 6-8 hex
+characters *(`(0x/#)RRGGBB`)*, to specify colour alpha/transparency the format is *(`(0x/#)AARRGGBB`)*
+
 
 
 #### Todo
 
 - Simplify.
-
-- Improve/finish commands.
 
 
 #### Contributing

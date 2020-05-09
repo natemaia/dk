@@ -31,6 +31,7 @@ char **parsecolor(char **argv, uint32_t *setting)
 {
 	char *end;
 	uint32_t i, len;
+	/* uint32_t alpha, colour; */
 
 	if (!argv || !*argv)
 		return argv;
@@ -40,10 +41,10 @@ char **parsecolor(char **argv, uint32_t *setting)
 	else
 		i = strtoul(*argv, &end, 0);
 	if (i <= 0xffffffff && *end == '\0') {
-		if (i > 0xffffff || len > 7)
-			*setting = i;
+		if (len > 7)
+			*setting = (i & 0x00ffffffU) | ((i & 0xff000000U) << 24);
 		else
-			*setting = i | 0xff000000;
+			*setting = (i | 0xff000000U);
 	} else
 		fprintf(cmdresp, "!invalid colour argument: %s - expected N/(#/0x)(AA)RRGGBB", *argv);
 	return argv;

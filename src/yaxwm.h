@@ -118,6 +118,7 @@ struct Desk {
 
 struct Rule {
 	int x, y, w, h, bw;
+	int xgrav, ygrav;
 	int ws, floating, sticky, focus;
 	char *class, *inst, *title, *mon;
 	Callback *cb;
@@ -229,7 +230,7 @@ static void cmdwin(char **);
 static void cmdwm(char **);
 static void cmdws(char **);
 static void cmdwsdef(char **);
-static void clientborder(Client *c, int focused);
+static void clientborder(Client *, int);
 static Monitor *coordtomon(int, int);
 static void detach(Client *, int);
 static void *ecalloc(size_t, size_t);
@@ -251,6 +252,7 @@ static void gravitate(Client *, int, int, int);
 static int iferr(int, char *, xcb_generic_error_t *);
 static void initclient(xcb_window_t, Geometry *);
 static void initdesk(xcb_window_t, Geometry *);
+static Client *prevc(Client *);
 static void initmon(int, char *, xcb_randr_output_t, int, int, int, int);
 static void initpanel(xcb_window_t, Geometry *);
 static int initrulereg(Rule *, Rule *);

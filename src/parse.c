@@ -111,29 +111,37 @@ char **parseintclamp(char **argv, int *setting, int *rel, int min, int max)
 	return argv;
 }
 
-char **parsegeom(char **argv, int *x, int *y, int *w, int *h,
-		int *relx, int *rely, int *relw, int *relh)
+char **parsegeom(char **argv, int type, int *i, int *rel, int *grav)
 {
-	*relx = 0;
-	*rely = 0;
-	*relw = 0;
-	*relh = 0;
+	enum { None, Left, Right, Center, Top, Bottom };
 
-	while (*argv) {
-		if (!strcmp("x", *argv))
-			argv = parseint(argv + 1, x, relx, 1);
-		else if (!strcmp("y", *argv))
-			argv = parseint(argv + 1, y, rely, 1);
-		else if (!strcmp("w", *argv))
-			argv = parseint(argv + 1, w, relw, 0);
-		else if (!strcmp("h", *argv))
-			argv = parseint(argv + 1, h, relh, 0);
-		else {
-			fprintf(cmdresp, "!invalid argument for window resize command: %s", *argv);
-			break;
-		}
-		if (*argv)
-			argv++;
+	if (!argv || !*argv)
+		return argv;
+	switch (type) {
+	case 'x':
+		if (grav && !strcmp("center", *argv))
+			*grav = Center;
+		else if (grav && !strcmp("left", *argv))
+			*grav = Left;
+		else if (grav && !strcmp("right", *argv))
+			*grav = Right;
+		else
+			argv = parseint(argv, i, rel, 1);
+		break;
+	case 'y':
+		if (grav && !strcmp("center", *argv))
+			*grav = Center;
+		else if (grav && !strcmp("top", *argv))
+			*grav = Top;
+		else if (grav && !strcmp("bottom", *argv))
+			*grav = Bottom;
+		else
+			argv = parseint(argv, i, rel, 1);
+		break;
+	case 'w': /* FALLTHROUGH */
+	case 'h': /* FALLTHROUGH */
+		argv = parseint(argv, i, rel, 0);
+		break;
 	}
 	return argv;
 }

@@ -188,9 +188,9 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 
 void applyrule(Client *c)
 {
-	Rule *r;
 	Monitor *m;
 	xcb_atom_t ws;
+	Rule *r = NULL;
 	int num = -1, focus = 0, focusmon = 0, decorate = 1;
 	char title[NAME_MAX], class[NAME_MAX], inst[NAME_MAX];
 
@@ -232,12 +232,10 @@ void applyrule(Client *c)
 				ws = r->ws - 1;
 			break;
 		}
-
 	if ((c->bw == 0 && border[Width]) || (winmotifhints(c->win, &decorate) && decorate == 0)) {
 		c->bw = 0;
 		c->noborder = 1;
 	}
-
 	if (ws + 1 > (unsigned int)globalcfg[NumWs])
 		updnumws(ws + 1);
 	setclientws(c, ws);
@@ -245,6 +243,8 @@ void applyrule(Client *c)
 		usemoncmd = focusmon;
 		cmdview(c->ws->num);
 	}
+	if (r)
+		gravitate(c, r->xgrav, r->ygrav, 1);
 	DBG("applyrule: ws: %d, mon: %s, float: %d, stick: %d, focus: %d, x: %d, y: %d, w: %d,"
 			" h: %d, bw: %d, cb: %s", c->ws->num, c->ws->mon->name, c->floating,
 			c->sticky, focus, c->x, c->y, c->w, c->h, c->bw, c->cb ? c->cb->name : "(null)");
@@ -657,6 +657,7 @@ void cmdresize(char **argv)
 	float f, *sf;
 	Client *c, *t;
 	int i, x, y, w, h, relx, rely, relw, relh, ohoff;
+	int xgrav = None, ygrav = None;
 
 	if (!(c = selws->sel) || FULLSCREEN(c))
 		return;
@@ -664,22 +665,36 @@ void cmdresize(char **argv)
 		fprintf(cmdresp, "%d,%d %dx%d", c->x, c->y, W(c), H(c));
 		return;
 	}
-	x = scr_w;
-	y = scr_h;
-	w = 0;
-	h = 0;
-	parsegeom(argv, &x, &y, &w, &h, &relx, &rely, &relw, &relh);
-	if (x == scr_w && y == scr_h && w == 0 && h == 0)
+	x = scr_w, y = scr_h, w = 0, h = 0;
+	relx = 0, rely = 0, relw = 0, relh = 0;
+	while (*argv) {
+		if (!strcmp("x", *argv)) {
+			argv = parsegeom(argv + 1, 'x', &x, &relx, &xgrav);
+		} else if (!strcmp("y", *argv)) {
+			argv = parsegeom(argv + 1, 'y', &y, &rely, &ygrav);
+		} else if (!strcmp("w", *argv)) {
+			argv = parsegeom(argv + 1, 'w', &w, &relw, NULL);
+		} else if (!strcmp("h", *argv)) {
+			argv = parsegeom(argv + 1, 'h', &h, &relh, NULL);
+		} else {
+			fprintf(cmdresp, "!invalid argument for window resize command: %s", *argv);
+			break;
+		}
+		if (*argv)
+			argv++;
+	}
+	if (x == scr_w && y == scr_h && w == 0 && h == 0 && xgrav == None && ygrav == None)
 		return;
 	if (FLOATING(c)) {
-		x = x == scr_w ? c->x : (relx ? c->x + x : x);
-		y = y == scr_h ? c->y : (rely ? c->y + y : y);
+		x = x == scr_w || xgrav != None ? c->x : (relx ? c->x + x : x);
+		y = y == scr_h || ygrav != None ? c->y : (rely ? c->y + y : y);
 		w = w == 0 ? c->w : (relw ? c->w + w : w);
 		h = h == 0 ? c->h : (relh ? c->h + h : h);
 		resizehint(c, x, y, w, h, c->bw, 1, 0);
+		gravitate(c, xgrav, ygrav, 1);
 	} else if (c->ws->layout->fn == tile) {
 		if (y != scr_h)
-			movestack(y > 0 ? 1 : -1);
+			movestack(y > 0 || ygrav == Bottom ? 1 : -1);
 		if (w) {
 			sf = &c->ws->ssplit;
 			for (i = 0, t = nextt(selws->clients); t; t = nextt(t->next), i++)
@@ -687,10 +702,10 @@ void cmdresize(char **argv)
 					if (c->ws->nmaster && i < c->ws->nmaster + c->ws->nstack)
 						sf = &c->ws->split;
 					f = relw ? ((c->ws->mon->ww * *sf) + w) / c->ws->mon->ww : w / c->ws->mon->ww;
-					if (f < 0.05 || f > 0.95)
+					if (f < 0.05 || f > 0.95) {
 						fprintf(cmdresp, "!window width exceeded limit: %f - f: %f",
 								c->ws->mon->ww * f, f);
-					else {
+					} else {
 						*sf = f;
 						if (!h)
 							refresh(selws);
@@ -783,22 +798,12 @@ void cmdrule(char **argv)
 	unsigned int ui;
 	int i, rem;
 	Workspace *ws;
-	Rule *wr, r;
-
-	r.focus = 0;
-	r.sticky = 0;
-	r.floating = 0;
-	r.x = -1;
-	r.y = -1;
-	r.w = -1;
-	r.h = -1;
-	r.ws = -1;
-	r.bw = -1;
-	r.cb = NULL;
-	r.mon = NULL;
-	r.inst = NULL;
-	r.class = NULL;
-	r.title = NULL;
+	Rule *wr;
+	Rule r = {
+		.x = -1, .y = -1, .w = -1, .h = -1, .ws = -1, .bw = -1,
+		.focus = 0, .sticky = 0, .floating = 0, .xgrav = None, .ygrav = None,
+		.cb = NULL, .mon = NULL, .inst = NULL, .class = NULL, .title = NULL,
+	};
 
 	if ((rem = !strcmp("remove", *argv))) {
 		argv++;
@@ -846,13 +851,13 @@ void cmdrule(char **argv)
 					break;
 				}
 		} else if (!strcmp(*argv, "x"))
-			argv = parseintclamp(argv + 1, &r.x, NULL, 0, scr_h);
+			argv = parsegeom(argv + 1, 'x', &r.x, NULL, &r.xgrav);
 		else if (!strcmp(*argv, "y"))
-			argv = parseintclamp(argv + 1, &r.y, NULL, 0, scr_w);
+			argv = parsegeom(argv + 1, 'y', &r.y, NULL, &r.ygrav);
 		else if (!strcmp(*argv, "w"))
-			argv = parseintclamp(argv + 1, &r.w, NULL, globalcfg[MinWH], scr_w);
+			argv = parsegeom(argv + 1, 'w', &r.w, NULL, NULL);
 		else if (!strcmp(*argv, "h"))
-			argv = parseintclamp(argv + 1, &r.h, NULL, globalcfg[MinWH], scr_h);
+			argv = parsegeom(argv + 1, 'h', &r.h, NULL, NULL);
 		else if (!strcmp(*argv, "bw"))
 			argv = parseintclamp(argv + 1, &r.bw, NULL, 0, scr_h / 6);
 		else if (!strcmp(*argv, "float"))
@@ -867,8 +872,9 @@ void cmdrule(char **argv)
 			argv++;
 	}
 
-	if ((r.class || r.inst || r.title) && (r.cb || r.mon || r.ws != -1 || r.floating || r.focus
-				|| r.sticky || r.x != -1 || r.y != -1 || r.w != -1 || r.h != -1 || r.bw != -1))
+	if ((r.class || r.inst || r.title) && (r.cb || r.mon || r.ws != -1 || r.floating
+				|| r.focus || r.sticky || r.x != -1 || r.y != -1 || r.w != -1 || r.h != -1
+				|| r.bw != -1 || r.xgrav != None || r.ygrav != None))
 	{
 		FOR_EACH(wr, rules)
 			if ((r.class == wr->class || (r.class && !strcmp(r.class, wr->class)))
@@ -889,6 +895,8 @@ void cmdrule(char **argv)
 					wr->focus = r.focus;
 					wr->sticky = r.sticky;
 					wr->floating = r.floating;
+					wr->xgrav = r.xgrav;
+					wr->ygrav = r.ygrav;
 					wr->x = r.x;
 					wr->y = r.y;
 					wr->w = r.w;
@@ -1008,13 +1016,32 @@ void cmdstick(char **argv)
 
 void cmdswap(char **argv)
 {
-	Client *c;
+	static Client *last = NULL;
+	Client *c, *old, *cur = NULL, *prev = NULL;
 
 	if (!(c = selws->sel) || FULLSCREEN(c) || FLOATING(c))
 		return;
-	if (c == nextt(selws->clients) && !(c = nextt(c->next)))
-		return;
+	if (c == nextt(selws->clients)) {
+		if ((cur = prevc(last)))
+			prev = nextt(cur->next);
+		if (!prev || prev != last) {
+			last = NULL;
+			if (!c || !(c = nextt(c->next)))
+				return;
+		} else
+			c = prev;
+	}
+	if (c != (old = nextt(selws->clients)) && !cur)
+		cur = prevc(c);
 	detach(c, 1);
+	if (c != old && cur) {
+		last = old;
+		if (old && cur != old) {
+			detach(old, 0);
+			old->next = cur->next;
+			cur->next = old;
+		}
+	}
 	refresh(c->ws);
 	(void)(argv);
 }
@@ -1268,7 +1295,6 @@ void clientborder(Client *c, int focused)
 	out = border[focused ? OFocus : (c->urgent ? OUrgent : OUnfocus)];
 	unsigned int frame[] = { c->bw, c->bw, c->bw, c->bw };
 	xcb_rectangle_t inner[] = {
-		/* x            y             w             h           */
 		{ c->w,         0,            b - o,        c->h + b - o },
 		{ c->w + b + o, 0,            b - o,        c->h + b - o },
 		{ 0,            c->h,         c->w + b - o, b - o        },
@@ -1276,7 +1302,6 @@ void clientborder(Client *c, int focused)
 		{ c->w + b + o, c->h + b + o, b,            b            }
 	};
 	xcb_rectangle_t outer[] = {
-		/* x            y             w             h           */
 		{ c->w + b - o, 0,            o,            c->h + b * 2 },
 		{ c->w + b,     0,            o,            c->h + b * 2 },
 		{ 0,            c->h + b - o, c->w + b * 2, o            },
@@ -2293,6 +2318,8 @@ void initrule(Rule *r)
 	wr->ws = r->ws;
 	wr->cb = r->cb;
 	wr->bw = r->bw;
+	wr->xgrav = r->xgrav;
+	wr->ygrav = r->ygrav;
 	wr->focus = r->focus;
 	wr->sticky = r->sticky;
 	wr->floating = r->floating;
@@ -2729,6 +2756,17 @@ void parsecmd(char *buf)
 	}
 	fflush(cmdresp);
 	fclose(cmdresp);
+}
+
+Client *prevc(Client *c)
+{
+	Client *tmp;
+
+	if (c == selws->clients)
+		return NULL;
+	for (tmp = selws->clients; tmp && tmp->next != c; tmp = tmp->next)
+		;
+	return tmp;
 }
 
 void printerror(xcb_generic_error_t *e)

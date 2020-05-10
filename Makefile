@@ -4,7 +4,7 @@
 VERSION = 0.6
 
 # install paths
-PREFIX    ?= /usr
+PREFIX    ?= /usr/local
 MANPREFIX ?= ${PREFIX}/share/man
 DOCPREFIX ?= ${PREFIX}/share/doc
 
@@ -44,13 +44,13 @@ install: all
 	mkdir -p ${DESTDIR}${MANPREFIX}/man1
 	sed "s/VERSION/${VERSION}/g" man/yaxwm.1 > ${DESTDIR}${MANPREFIX}/man1/yaxwm.1
 	cp -rfp man/yaxcmd.1 ${DESTDIR}${MANPREFIX}/man1/yaxcmd.1
-	chmod 644 ${DESTDIR}${MANPREFIX}/man1/yaxwm.1
+	chmod 644 ${DESTDIR}${MANPREFIX}/man1/yaxwm.1 ${DESTDIR}${MANPREFIX}/man1/yaxcmd.1
 	mkdir -p ${DESTDIR}${DOCPREFIX}/yaxwm
 	cp -rfp doc ${DESTDIR}${DOCPREFIX}/yaxwm
 
 uninstall:
-	rm -f ${DESTDIR}${PREFIX}/bin/yaxwm ${DESTDIR}${PREFIX}/bin/yaxcmd \
-		${DESTDIR}${MANPREFIX}/man1/yaxwm.1 ${DESTDIR}${MANPREFIX}/man1/yaxcmd.1 \
-		${DESTDIR}${DOCPREFIX}/yaxwm
+	rm -f ${DESTDIR}${PREFIX}/bin/yaxwm ${DESTDIR}${PREFIX}/bin/yaxcmd
+	rm -f ${DESTDIR}${MANPREFIX}/man1/yaxwm.1 ${DESTDIR}${MANPREFIX}/man1/yaxcmd.1
+	rm -rf ${DESTDIR}${DOCPREFIX}/yaxwm
 
 .PHONY: all debug nostrip clean install uninstall

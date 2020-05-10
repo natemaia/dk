@@ -10,7 +10,6 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 
-
 #include <err.h>
 #include <errno.h>
 #include <stdio.h>
@@ -79,10 +78,10 @@
 			&& nextmon((v)->next) != (cur); (v) = nextmon((v)->next))
 
 #define MOVE(win, x, y)\
-	xcb_configure_window(con, (win), XYMASK, (uint32_t []){(x), (y)})
+	xcb_configure_window(con, (win), XYMASK, (unsigned int []){(x), (y)})
 #define MOVERESIZE(win, x, y, w, h, bw)\
 	xcb_configure_window(con, win, XYMASK | WHMASK | XCB_CONFIG_WINDOW_BORDER_WIDTH,\
-			(uint32_t []){(x), (y), (w), (h), (bw)});
+			(unsigned int []){(x), (y), (w), (h), (bw)});
 #define PROP_APPEND(win, atom, type, membsize, nmemb, value)\
 	xcb_change_property(con, XCB_PROP_MODE_APPEND, (win), (atom),\
 			(type), (membsize), (nmemb), (value))
@@ -280,21 +279,21 @@ static void resizehint(Client *, int, int, int, int, int, int, int);
 static void restack(Workspace *);
 static int rulecmp(Rule *, char *, char *, char *);
 static void sendconfigure(Client *);
-static void sendevent(xcb_window_t, const char *, uint32_t);
+static void sendevent(xcb_window_t, const char *, unsigned int);
 static int sendwmproto(Client *, int);
 static void setclientgeom(Client *, int, int, int, int, int);
 static void setclientws(Client *, int);
 static void setfullscreen(Client *, int);
 static void setinputfocus(Client *);
 static void setnetwsnames(void);
-static void setstackmode(xcb_window_t, uint32_t);
+static void setstackmode(xcb_window_t, unsigned int);
 static void setsticky(Client *, int);
 static void seturgent(Client *, int);
-static void setwmwinstate(xcb_window_t, uint32_t);
+static void setwmwinstate(xcb_window_t, unsigned int);
 static void showhide(Client *);
 static void sighandle(int);
 static void sizehints(Client *, int);
-static void subscribe(xcb_window_t, uint32_t);
+static void subscribe(xcb_window_t, unsigned int);
 static int tile(Workspace *);
 static void unfocus(Client *, int);
 static void ungrabpointer(void);

@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
-#include <stdint.h>
 
 extern FILE *cmdresp;
 extern const char *enoargs;
@@ -27,26 +26,34 @@ char **parsebool(char **argv, int *setting)
 	return argv;
 }
 
-char **parsecolor(char **argv, uint32_t *setting)
+char **parsecolor(char **argv, unsigned int *setting)
 {
 	char *end;
-	uint32_t i, len;
-	/* uint32_t alpha, colour; */
+	unsigned short a, r, g, b;
+	unsigned int argb, len;
 
 	if (!argv || !*argv)
 		return argv;
-	len = strlen(*argv);
-	if (**argv == '#' && len >= 7 && len <= 9)
-		i = strtoul(*argv + 1, &end, 16);
-	else
-		i = strtoul(*argv, &end, 0);
-	if (i <= 0xffffffff && *end == '\0') {
-		if (len > 7)
-			*setting = (i & 0x00ffffffU) | ((i & 0xff000000U) << 24);
-		else
-			*setting = (i | 0xff000000U);
-	} else
-		fprintf(cmdresp, "!invalid colour argument: %s - expected N/(#/0x)(AA)RRGGBB", *argv);
+	if ((len = strlen(*argv)) >= 6 && len <= 10) {
+		if (**argv == '#' && len >= 7 && len <= 9)
+			len--;
+		else if (**argv == '0' && *(*argv + 1) == 'x')
+			len -= 2;
+		argb = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16);
+		if (argb <= 0xffffffff && *end == '\0') {
+			if (len == 6)
+				*setting = (argb | 0xff000000);
+			else if ((a = ((argb & 0xff000000) >> 24)) && a != 0xff) {
+				r = (((argb & 0xff0000) >> 16) * a) / 255;
+				g = (((argb & 0xff00) >> 8) * a) / 255;
+				b = (((argb & 0xff) >> 0) * a) / 255;
+				*setting = (a << 24 | r << 16 | g << 8 | b << 0);
+			} else
+				*setting = argb;
+			return argv;
+		}
+	}
+	fprintf(cmdresp, "!invalid colour argument: %s - expected (#/0x)(AA)RRGGBB", *argv);
 	return argv;
 }
 
@@ -107,10 +114,6 @@ char **parseintclamp(char **argv, int *setting, int *rel, int min, int max)
 char **parsegeom(char **argv, int *x, int *y, int *w, int *h,
 		int *relx, int *rely, int *relw, int *relh)
 {
-	*x = INT_MAX;
-	*y = INT_MAX;
-	*w = 0;
-	*h = 0;
 	*relx = 0;
 	*rely = 0;
 	*relw = 0;
@@ -155,3 +158,37 @@ int parseopt(char **argv, char **opts, int *argi)
 	return ret;
 }
 
+int parsetoken(char **src, char *dst, size_t size)
+{
+	size_t n = 0;
+    int q, sq = 0;
+    char *s, *head, *tail;
+
+    while (**src && (**src == ' ' || **src == '\t' || **src == '='))
+		(*src)++;
+
+    if ((q = **src == '"' || (sq = **src == '\''))) {
+        head = *src + 1;
+        if (!(tail = strchr(head, sq ? '\'' : '"')))
+			return 0;
+		if (!sq)
+			while (*(tail - 1) == '\\')
+				tail = strchr(tail + 1, '"');
+    } else {
+        head = *src;
+        tail = strpbrk(*src, " =\t\n");
+    }
+
+    s = head;
+    while (n + 1 < size && tail ? s < tail : *s)
+        if (q && !sq && *s == '\\' && *(s + 1) == '"')
+            s++;
+        else {
+            n++;
+            *dst++ = *s++;
+        }
+    *dst = '\0';
+	*src = tail ? ++tail : '\0';
+
+    return n || q;
+}

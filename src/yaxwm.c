@@ -17,8 +17,8 @@ static int running = 1;
 static int restart = 0;
 static int usemoncmd = 0;
 static int randrbase = -1;
-static uint32_t lockmask = 0;
-static uint32_t dborder[LEN(border)];
+static unsigned int lockmask = 0;
+static unsigned int dborder[LEN(border)];
 
 static Desk *desks;
 static Rule *rules;
@@ -41,7 +41,7 @@ int main(int argc, char *argv[])
 	Client *c = NULL;
 	xcb_window_t sel;
 	xcb_void_cookie_t ck;
-	uint32_t m = XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT;
+	unsigned int m = XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT;
 
 	if (argc > 1) {
 		if (!strcmp(argv[1], "-s") && argv[2]) {
@@ -151,11 +151,11 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 			*h = MIN(*h, m->wh);
 			*w = MIN(*w, m->ww);
 		}
-		*x = CLAMP(*x, (*w + (2 * c->bw) - globalcfg[MinXY]) * -1, scr_w - globalcfg[MinXY]);
-		*y = CLAMP(*y, (*h + (2 * c->bw) - globalcfg[MinXY]) * -1, scr_h - globalcfg[MinXY]);
+		*x = CLAMP(*x, (*w + (2 * bw) - globalcfg[MinXY]) * -1, scr_w - globalcfg[MinXY]);
+		*y = CLAMP(*y, (*h + (2 * bw) - globalcfg[MinXY]) * -1, scr_h - globalcfg[MinXY]);
 	} else {
-		*x = CLAMP(*x, m->wx, m->wx + m->ww - *w + (2 * c->bw));
-		*y = CLAMP(*y, m->wy, m->wy + m->wh - *h + (2 * c->bw));
+		*x = CLAMP(*x, m->wx, m->wx + m->ww - *w + (2 * bw));
+		*y = CLAMP(*y, m->wy, m->wy + m->wh - *h + (2 * bw));
 	}
 	if (FLOATING(c) || globalcfg[SizeHints]) {
 		if (!(baseismin = c->base_w == c->min_w && c->base_h == c->min_h))
@@ -238,7 +238,7 @@ void applyrule(Client *c)
 		c->noborder = 1;
 	}
 
-	if (ws + 1 > (uint32_t)globalcfg[NumWs])
+	if (ws + 1 > (unsigned int)globalcfg[NumWs])
 		updnumws(ws + 1);
 	setclientws(c, ws);
 	if (focus && c->ws != selws) {
@@ -317,8 +317,8 @@ void cmdborder(char **argv)
 	Workspace *ws;
 	int i, obw, bw, ow, rel, outer;
 	int incol = 0, start = 0, print;
-	uint32_t focus, unfocus, urgent;
-	uint32_t ofocus, ounfocus, ourgent;
+	unsigned int focus, unfocus, urgent;
+	unsigned int ofocus, ounfocus, ourgent;
 
 	bw = border[Width];
 	ow = border[OWidth];
@@ -427,15 +427,15 @@ void cmdborder(char **argv)
 		border[OFocus] = ofocus;
 		border[OUnfocus] = ounfocus;
 		border[OUrgent] = ourgent;
-		if ((uint32_t)bw == border[Width] || (uint32_t)ow == border[OWidth])
+		if ((unsigned int)bw == border[Width] || (unsigned int)ow == border[OWidth])
 			FOR_CLIENTS(c, ws)
 				clientborder(c, c == c->ws->sel);
 	}
-	if ((uint32_t)bw != border[Width] || (uint32_t)ow != border[OWidth]) {
+	if ((unsigned int)bw != border[Width] || (unsigned int)ow != border[OWidth]) {
 		obw = border[Width];
 		border[Width] = bw;
 		if (bw - ow < 1) {
-			if ((uint32_t)ow != border[OWidth]) /* only warn about insufficient size when changing outer_width */
+			if ((unsigned int)ow != border[OWidth]) /* only warn about insufficient size when changing outer_width */
 				fprintf(cmdresp, "!border outer_width exceeds limit: %d - maximum: %d", ow, bw - 1);
 		} else
 			border[OWidth] = ow;
@@ -610,7 +610,7 @@ void cmdlayout(char **argv)
 {
 	if (!strcmp("print", *argv))
 		fprintf(cmdresp, "%s", setws->layout->name);
-	else for (uint32_t i = 0; i < LEN(layouts); i++)
+	else for (unsigned int i = 0; i < LEN(layouts); i++)
 		if (!strcmp(layouts[i].name, *argv)) {
 			if (&layouts[i] != setws->layout) {
 				setws->layout = &layouts[i];
@@ -664,17 +664,21 @@ void cmdresize(char **argv)
 		fprintf(cmdresp, "%d,%d %dx%d", c->x, c->y, W(c), H(c));
 		return;
 	}
+	x = scr_w;
+	y = scr_h;
+	w = 0;
+	h = 0;
 	parsegeom(argv, &x, &y, &w, &h, &relx, &rely, &relw, &relh);
-	if (x == INT_MAX && y == INT_MAX && w == 0 && h == 0)
+	if (x == scr_w && y == scr_h && w == 0 && h == 0)
 		return;
 	if (FLOATING(c)) {
-		x = x == INT_MAX ? c->x : (relx ? c->x + x : x);
-		y = y == INT_MAX ? c->y : (rely ? c->y + y : y);
+		x = x == scr_w ? c->x : (relx ? c->x + x : x);
+		y = y == scr_h ? c->y : (rely ? c->y + y : y);
 		w = w == 0 ? c->w : (relw ? c->w + w : w);
 		h = h == 0 ? c->h : (relh ? c->h + h : h);
 		resizehint(c, x, y, w, h, c->bw, 1, 0);
 	} else if (c->ws->layout->fn == tile) {
-		if (y != INT_MAX)
+		if (y != scr_h)
 			movestack(y > 0 ? 1 : -1);
 		if (w) {
 			sf = &c->ws->ssplit;
@@ -776,7 +780,7 @@ void cmdpad(char **argv)
 
 void cmdrule(char **argv)
 {
-	uint32_t ui;
+	unsigned int ui;
 	int i, rem;
 	Workspace *ws;
 	Rule *wr, r;
@@ -914,7 +918,7 @@ void cmdsend(int num)
 void cmdset(char **argv)
 {
 	int i;
-	uint32_t j;
+	unsigned int j;
 	Workspace *ws;
 	setws = selws;
 
@@ -1018,7 +1022,7 @@ void cmdswap(char **argv)
 
 void cmdmon(char **argv)
 {
-	uint32_t i;
+	unsigned int i;
 	int opt;
 	Monitor *m = NULL;
 	void (*fn)(int) = cmdview;
@@ -1071,7 +1075,7 @@ void cmdmon(char **argv)
 
 void cmdwin(char **argv)
 {
-	uint32_t i;
+	unsigned int i;
 	char *s, **r;
 
 	if (!(s = argv[0]))
@@ -1104,7 +1108,7 @@ void cmdwm(char **argv)
 
 void cmdwsdef(char **argv)
 {
-	uint32_t ui;
+	unsigned int ui;
 	Workspace *ws;
 	static int apply = 1;
 	int inpad = 0, start = 0;
@@ -1186,7 +1190,7 @@ void cmdwsdef(char **argv)
 
 void cmdws(char **argv)
 {
-	uint32_t i;
+	unsigned int i;
 	int opt;
 	Workspace *ws = NULL, *cur, *save;
 	void (*fn)(int) = cmdview;
@@ -1253,7 +1257,7 @@ void cmdview(int num)
 void clientborder(Client *c, int focused)
 {
 	int o, b;
-	uint32_t in, out;
+	unsigned int in, out;
 	xcb_gcontext_t gc;
 	xcb_pixmap_t pmap;
 
@@ -1263,7 +1267,7 @@ void clientborder(Client *c, int focused)
 	o = border[OWidth];
 	in = border[focused ? Focus : (c->urgent ? Urgent : Unfocus)];
 	out = border[focused ? OFocus : (c->urgent ? OUrgent : OUnfocus)];
-	uint32_t frame[] = { c->bw, c->bw, c->bw, c->bw };
+	unsigned int frame[] = { c->bw, c->bw, c->bw, c->bw };
 	xcb_rectangle_t inner[] = {
 		/* x            y             w             h           */
 		{ c->w,         0,            b - o,        c->h + b - o },
@@ -1552,7 +1556,7 @@ void eventhandle(xcb_generic_event_t *ev)
 	case XCB_CLIENT_MESSAGE:
 	{
 		xcb_client_message_event_t *e = (xcb_client_message_event_t *)ev;
-		uint32_t *d = e->data.data32;
+		unsigned int *d = e->data.data32;
 
 		usemoncmd = 0;
 		if (e->type == netatom[CurDesktop]) {
@@ -1910,7 +1914,7 @@ void freewin(xcb_window_t win, int destroyed)
 
 void freewm(void)
 {
-	uint32_t i;
+	unsigned int i;
 	char fdstr[64];
 
 	while (panels)
@@ -1969,7 +1973,7 @@ void grabbuttons(Client *c, int focused)
 	xcb_keysym_t nlock = 0xff7f;
 	xcb_keycode_t *kc, *t = NULL;
 	xcb_get_modifier_mapping_reply_t *m = NULL;
-	uint32_t i, j, mods[] = { 0, XCB_MOD_MASK_LOCK, 0, XCB_MOD_MASK_LOCK };
+	unsigned int i, j, mods[] = { 0, XCB_MOD_MASK_LOCK, 0, XCB_MOD_MASK_LOCK };
 
 	lockmask = 0;
 	if ((m = xcb_get_modifier_mapping_reply(con, xcb_get_modifier_mapping(con), &e))) {
@@ -2238,7 +2242,7 @@ int initrandr(void)
 
 void initscan(void)
 {
-	uint32_t i;
+	unsigned int i;
 	Geometry **g;
 	WindowAttr **wa;
 	xcb_window_t *w;
@@ -2368,7 +2372,7 @@ error:
 
 void initwm(void)
 {
-	uint32_t i;
+	unsigned int i;
 	int x, y;
 	xcb_void_cookie_t c;
 	xcb_cursor_context_t *ctx;
@@ -2417,7 +2421,7 @@ void initwm(void)
 	usenetcurdesktop();
 	setnetwsnames();
 	c = xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK | XCB_CW_CURSOR,
-			(uint32_t []){ XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT
+			(unsigned int []){ XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT
 			| XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY | XCB_EVENT_MASK_BUTTON_PRESS
 			| XCB_EVENT_MASK_POINTER_MOTION | XCB_EVENT_MASK_ENTER_WINDOW
 			| XCB_EVENT_MASK_LEAVE_WINDOW | XCB_EVENT_MASK_STRUCTURE_NOTIFY
@@ -2702,15 +2706,15 @@ Client *nextt(Client *c)
 
 void parsecmd(char *buf)
 {
-	uint32_t i, n = 0, matched = 0;
-	char *argv[15], k[BUFSIZ], tok[BUFSIZ], args[15][BUFSIZ];
+	unsigned int i, n = 0, matched = 0;
+	char *argv[30], k[NAME_MAX], tok[NAME_MAX], args[30][NAME_MAX];
 
 	DBG("parsecmd: tokenizing input buffer: %s", buf);
-	if (strqetok(&buf, k, sizeof(k))) {
+	if (parsetoken(&buf, k, sizeof(k))) {
 		for (i = 0; i < LEN(keywords); i++)
 			if ((matched = !strcmp(keywords[i].name, k))) {
 				DBG("parsecmd: matched command keyword: %s", k);
-				while (n + 1 < LEN(args) && buf && *buf && strqetok(&buf, tok, sizeof(tok))) {
+				while (n + 1 < LEN(args) && buf && *buf && parsetoken(&buf, tok, sizeof(tok))) {
 					strlcpy(args[n], tok, sizeof(args[n]));
 					argv[n] = args[n];
 					DBG("parsecmd: parsed token: argv[%d] = %s", n, argv[n]);
@@ -2907,7 +2911,7 @@ void sendconfigure(Client *c)
 	sendevent(c->win, (char *)&ce, XCB_EVENT_MASK_STRUCTURE_NOTIFY);
 }
 
-void sendevent(xcb_window_t win, const char *ev, uint32_t mask)
+void sendevent(xcb_window_t win, const char *ev, unsigned int mask)
 {
 	xcb_void_cookie_t vc;
 
@@ -3020,7 +3024,7 @@ void setinputfocus(Client *c)
 
 void setsticky(Client *c, int sticky)
 {
-	uint32_t all = 0xffffffff;
+	unsigned int all = 0xffffffff;
 
 	if (sticky && !c->sticky) {
 		cmdfloat(NULL);
@@ -3032,20 +3036,20 @@ void setsticky(Client *c, int sticky)
 	}
 }
 
-void setstackmode(xcb_window_t win, uint32_t mode)
+void setstackmode(xcb_window_t win, unsigned int mode)
 {
 	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_STACK_MODE, &mode);
 }
 
-void setwmwinstate(xcb_window_t win, uint32_t state)
+void setwmwinstate(xcb_window_t win, unsigned int state)
 {
-	uint32_t s[] = { state, XCB_ATOM_NONE };
+	unsigned int s[] = { state, XCB_ATOM_NONE };
 	PROP_REPLACE(win, wmatom[WMState], wmatom[WMState], 32, 2, s);
 }
 
 void setnetwsnames(void)
 {
-	uint32_t i;
+	unsigned int i;
 	char *names;
 	Workspace *ws;
 	size_t len = 1;
@@ -3111,8 +3115,8 @@ void showhide(Client *c)
 void sighandle(int sig)
 {
 	switch (sig) {
-	case SIGINT: /* fallthrough */
-	case SIGTERM: /* fallthrough */
+	case SIGINT: /* FALLTHROUGH */
+	case SIGTERM: /* FALLTHROUGH */
 	case SIGHUP:
 		exit(1);
 		break;
@@ -3168,7 +3172,7 @@ void sizehints(Client *c, int uss)
 	c->fixed = (c->max_w && c->max_h && c->max_w == c->min_w && c->max_h == c->min_h);
 }
 
-void subscribe(xcb_window_t win, uint32_t events)
+void subscribe(xcb_window_t win, unsigned int events)
 {
 	xcb_change_window_attributes(con, win, XCB_CW_EVENT_MASK, &events);
 }
@@ -3365,9 +3369,9 @@ void updnumws(int needed)
 
 int updoutput(xcb_randr_output_t id, xcb_randr_get_output_info_reply_t *o,
 		xcb_timestamp_t timestamp, int changed, int *nmons,
-		uint32_t *maxw, uint32_t *maxh, uint32_t *mmaxw, uint32_t *mmaxh)
+		unsigned int *maxw, unsigned int *maxh, unsigned int *mmaxw, unsigned int *mmaxh)
 {
-	uint32_t n;
+	unsigned int n;
 	Monitor *m;
 	char name[64];
 	xcb_generic_error_t *e;
@@ -3423,7 +3427,7 @@ int updoutputs(xcb_randr_output_t *outs, int nouts, xcb_timestamp_t t)
 	int i, nmons, changed = 0;
 	xcb_randr_get_output_info_reply_t *o;
 	xcb_randr_get_output_info_cookie_t oc[nouts];
-	uint32_t maxw = 0, maxh = 0, mmaxw = 0, mmaxh = 0;
+	unsigned int maxw = 0, maxh = 0, mmaxw = 0, mmaxh = 0;
 
 	DBG("updoutputs: checking %d outputs for changes", nouts);
 	for (i = 0; i < nouts; i++)

@@ -64,6 +64,14 @@ make uninstall
 
 To start yaxwm you can add `exec yaxwm` to your xinitrc.
 
+Optionally copy the default yaxwmrc and sxhkdrc to their respective locations
+
+```
+mkdir -p ~/.config/sxhkd ~/.config/yaxwm
+cp /usr/share/doc/yaxwm/sxhkdrc ~/.config/sxhkd/
+cp /usr/share/doc/yaxwm/yaxwmrc ~/.config/yaxwm/
+chmod +x ~/.config/yaxwm/yaxwmrc
+```
 
 #### Configuration
 

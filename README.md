@@ -3,10 +3,10 @@
 Yet another X window manager, as if we didn't have enough..
 
 
-After using dwm for a long time, changing it, and learning from it; I wanted
-to write my own window manager. Dwm is great and it does a lot of things right
-when it comes to simplifying window management. Yaxwm is not a fork of dwm nor
-is it solely based on dwm, more of a collection of features and ideas from
+After using dwm for a long time, changing it, and learning from it; I wanted  
+to write my own window manager. Dwm is great and it does a lot of things right  
+when it comes to simplifying window management. Yaxwm is not a fork of dwm nor  
+is it solely based on dwm, more of a collection of features and ideas from  
 various window managers that I liked.
 
 Some ways in which yaxwm differs include:
@@ -27,7 +27,7 @@ Some ways in which yaxwm differs include:
 [Motif](http://www.ist.co.uk/motif/books/vol6A/ch-20.fm.html#963509) for better
 interoperability with other programs and applications.
 
-- This is still under active development so expect bugs/errors, please open an issue or contact me.
+- This is still under active development so expect bugs/errors, please open an issue.
 
 
 #### Installation
@@ -39,8 +39,8 @@ pacman -S xcb-proto xcb-util xcb-util-wm xcb-util-cursor xcb-util-keysyms
 ```
 Other systems should have packages with similar names.
 
-As mentioned above, yaxwm has no key binds outside of mouse movement so
-you'll need an external program like sxhkd to launch programs and control
+As mentioned above, yaxwm has no key binds outside of mouse movement so  
+you'll need an external program like sxhkd to launch programs and control  
 the window manager.
 
 
@@ -75,8 +75,8 @@ chmod +x ~/.config/yaxwm/yaxwmrc
 
 #### Configuration
 
-There are example `yaxwmrc` and `sxhkdrc` files in `doc/` or `/usr/share/doc/yaxwm` after
-installation.
+There are example `yaxwmrc` and `sxhkdrc` files in `doc/` or `/usr/share/doc/yaxwm`  
+after installation.
 
 Yaxwm looks for a file in the following order
 ```
@@ -86,15 +86,17 @@ $HOME/.config/yaxwm/yaxwmrc
 ```
 and tries to execute it, **it must be executable**.
 
-For advanced configuration like layout and callback functions, copy the default
-config header `src/config.def.h` to `src/config.h` then edit it and recompile.
-This file isn't tracked by git so you can maintain configuration across updates.
+Further configuration like new layout and callback functions can be done by
+copying he default config header `src/config.def.h` to `src/config.h`, editing  
+it and recompiling. This file isn't tracked by git so you can maintain  
+configuration across updates.  
 
 #### Commands
 
 ###### Syntax Outline
-Included with yaxwm is a small program `yaxcmd` to communicate with the WM.
-It uses a very rudimentary parsing system to break down commands into smaller pieces *(tokens)*.
+Yaxwm includes a small program `yaxcmd` to communicate with the window manager,  
+this is what you will be interacting with. The commands have a very basic syntax  
+and parsing system, commands are broken down into smaller pieces *(tokens)*.
 
 A token is delimited by one or more:
 
@@ -117,8 +119,8 @@ and result in two tokens: `setting` and `value`
 
 ---
 
-Quotation exists as a way to preserve whitespace and avoid interpretation by the shell,
-otherwise we have no way of determining whether an argument is a continuation of the
+Quotation exists as a way to preserve whitespace and avoid interpretation by the shell,  
+otherwise we have no way of determining whether an argument is a continuation of the  
 previous or the beginning of the next. Consider the following
 ```
 title="^open files$"
@@ -134,17 +136,15 @@ title='^"preserved quotes"$'
 
 For various commands yaxwm will expect a certain data type or format to be given.
 
-- string: plain text, must be less than 256 characters.
+- string: normal plain text, must be less than 256 characters.
 
-- boolean: must be one of `true`, `false`, `1`, or `0`
+- boolean: `true`, `false`, `1`, or `0`.
 
-- integer: number, can be given in relative *(`(+/-)1`)* or absolute *(`20`)* values
+- integer: `(+/-)1`, when the number is preceded by a sign it is considered relative.
 
-- float: same rules as integer but must contain a decimal value *(`0.55`)*
+- float: `(+/-)0.1`, same as integer but must contain a decimal value.
 
-- colour: integer or hex, hex must be preceded by `0x` or `#` followed by 6-8 hex
-characters *(`(0x/#)RRGGBB`)*, to specify colour alpha/transparency the format is *(`(0x/#)AARRGGBB`)*
-
+- colour: `(0x/#)(AA)RRGGBB`, when no alpha channel is given the colour will be opaque.
 
 
 #### Todo
@@ -154,10 +154,10 @@ characters *(`(0x/#)RRGGBB`)*, to specify colour alpha/transparency the format i
 
 #### Contributing
 
-I'm open to contributions or ideas so feel free. I don't use a ton of comments
-and the xcb documentation is kinda shit, but if you're familiar with other window
-managers most of it will be simple. If you're coming from xlib, most of the calls
-are easily translated to xcb with minor fiddling. There are some make flags I use
+I'm open to contributions or ideas so feel free. I don't use a ton of comments  
+and the xcb documentation is kinda shit, but if you're familiar with other window  
+managers most of it will be simple. If you're coming from xlib, most of the calls  
+are easily translated to xcb with minor fiddling. There are some make flags I use  
 often when testing.
 
 To enable internal stderr debug output

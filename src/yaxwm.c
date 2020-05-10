@@ -1008,12 +1008,11 @@ void cmdstick(char **argv)
 
 void cmdswap(char **argv)
 {
-	Client *c, *head;
+	Client *c;
 
 	if (!(c = selws->sel) || FULLSCREEN(c) || FLOATING(c))
 		return;
-	head = nextt(selws->clients);
-	if (c == head && !(c = nextt(c->next)))
+	if (c == nextt(selws->clients) && !(c = nextt(c->next)))
 		return;
 	detach(c, 1);
 	refresh(c->ws);
@@ -1611,20 +1610,20 @@ void eventhandle(xcb_generic_event_t *ev)
 					layoutws(m->ws);
 		} else if (e->state != XCB_PROPERTY_DELETE && (c = wintoclient(e->window))) {
 			switch (e->atom) {
-				case XCB_ATOM_WM_TRANSIENT_FOR:
-					DBG("eventhandle: PROPERTY_NOTIFY - WM_TRANSIENT_FOR - 0x%08x", e->window);
-					if (!c->floating && (trans = wintrans(c->win))
-							&& (c->floating = (c->trans = wintoclient(trans)) != NULL))
-						layoutws(c->ws);
-					break;
-				case XCB_ATOM_WM_NORMAL_HINTS:
-					DBG("eventhandle: PROPERTY_NOTIFY - WM_NORMAL_HINTS - 0x%08x", e->window);
-					sizehints(c, 0);
-					break;
-				case XCB_ATOM_WM_HINTS:
-					DBG("eventhandle: PROPERTY_NOTIFY - WM_HINTS - 0x%08x", e->window);
-					winhints(c);
-					break;
+			case XCB_ATOM_WM_TRANSIENT_FOR:
+				DBG("eventhandle: PROPERTY_NOTIFY - WM_TRANSIENT_FOR - 0x%08x", e->window);
+				if (!c->floating && (trans = wintrans(c->win))
+						&& (c->floating = (c->trans = wintoclient(trans)) != NULL))
+					layoutws(c->ws);
+				break;
+			case XCB_ATOM_WM_NORMAL_HINTS:
+				DBG("eventhandle: PROPERTY_NOTIFY - WM_NORMAL_HINTS - 0x%08x", e->window);
+				sizehints(c, 0);
+				break;
+			case XCB_ATOM_WM_HINTS:
+				DBG("eventhandle: PROPERTY_NOTIFY - WM_HINTS - 0x%08x", e->window);
+				winhints(c);
+				break;
 			}
 			if (e->atom == netatom[WindowType]) {
 				DBG("eventhandle: PROPERTY_NOTIFY - _NET_WM_WINDOW_TYPE - 0x%08x", e->window);
@@ -2632,55 +2631,52 @@ void mousemvr(int move)
 	xcb_timestamp_t last = 0;
 	xcb_motion_notify_event_t *e;
 	xcb_generic_event_t *ev = NULL;
-	int mx, my, ox, oy, ow, oh, nw, nh, nx, ny, x, y, released = 0;
+	int mx, my, ox, oy, ow, oh, nw, nh, nx, ny, released = 0;
 
 	if (!(c = selws->sel) || FULLSCREEN(c) || !querypointer(&mx, &my))
 		return;
-	ox = nx = c->x, oy = ny = c->y, ow = nw = c->w, oh = nh = c->h;
+	ox = nx = c->x;
+	oy = ny = c->y;
+	ow = nw = c->w;
+	oh = nh = c->h;
 	if (!grabpointer(cursor[move ? Move : Resize]))
 		return;
+	xcb_flush(con);
 	while (running && !released) {
-		if (!(ev = xcb_poll_for_event(con))) {
-			querypointer(&x, &y);
-			while (!(ev = xcb_wait_for_event(con)))
-				xcb_flush(con);
-		}
+		while (!(ev = xcb_wait_for_event(con)))
+			xcb_flush(con);
 		switch (XCB_EVENT_RESPONSE_TYPE(ev)) {
+		case XCB_MAP_REQUEST:       /* FALLTHROUGH */
+		case XCB_CONFIGURE_REQUEST: /* FALLTHROUGH */
+			eventhandle(ev);
+			break;
+		case XCB_BUTTON_RELEASE:
+			released = 1;
+			break;
 		case XCB_MOTION_NOTIFY:
 			e = (xcb_motion_notify_event_t *)ev;
-			/* FIXME: we shouldn't need to query the pointer and just use the event root_x, root_y
-			 * but for whatever reason there is some buffering happening and this forces
-			 * a flush, using xcb_flush doesn't not seem to work in this case */
-			if (!querypointer(&x, &y) || (e->time - last) < (1000 / 60))
+			if ((e->time - last) < (1000 / 60))
 				break;
 			last = e->time;
-			if (move)
-				nx = ox + (x - mx), ny = oy + (y - my);
-			else
-				nw = ow + (x - mx), nh = oh + (y - my);
-			if ((nw != c->w || nh != c->h || nx != c->x || ny != c->y) && !FLOATING(c)) {
-				c->floating = 1;
-				c->old_x = c->x;
-				c->old_y = c->y;
-				c->old_h = c->h;
-				c->old_w = c->w;
-				resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0, 1);
-				layoutws(c->ws);
+			if (move) {
+				nx = ox + (e->root_x - mx);
+				ny = oy + (e->root_y - my);
+			} else {
+				nw = ow + (e->root_x - mx);
+				nh = oh + (e->root_y - my);
 			}
-			if (FLOATING(c)) {
-				if (move && (m = coordtomon(x, y)) && m->ws != c->ws) {
+			if ((nw != c->w || nh != c->h || nx != c->x || ny != c->y)) {
+				if (!FLOATING(c)) {
+					c->floating = 1;
+					layoutws(c->ws);
+				}
+				if (move && (m = coordtomon(e->root_x, e->root_y)) && m->ws != c->ws) {
 					setclientws(c, m->ws->num);
 					changews(m->ws, 0, 0);
 					focus(c);
 				}
 				resizehint(c, nx, ny, nw, nh, c->bw, 1, 1);
 			}
-			break;
-		case XCB_BUTTON_RELEASE:
-			released = 1;
-			break;
-		default:
-			eventhandle(ev);
 			break;
 		}
 		free(ev);

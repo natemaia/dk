@@ -11,14 +11,15 @@
 extern char **environ;
 static char *argv0;
 static char *sock;
-static int sockfd = 0;
-static int scr_w, scr_h;
-static int running = 1;
-static int restart = 0;
-static int usemoncmd = 0;
 static int randrbase = -1;
-static unsigned int lockmask = 0;
+static int restart = 0;
+static int running = 1;
+static int scr_h;
+static int scr_w;
+static int sockfd = 0;
+static int usemoncmd = 0;
 static unsigned int dborder[LEN(border)];
+static unsigned int lockmask = 0;
 
 static Desk *desks;
 static Rule *rules;
@@ -269,6 +270,26 @@ void attachstack(Client *c)
 {
 	c->snext = c->ws->stack;
 	c->ws->stack = c;
+}
+
+int assignws(int needed)
+{
+	int n = 0;
+	Monitor *m;
+
+	for (n = 0, m = nextmon(monitors); m; m = nextmon(m->next), n++)
+		;
+	if (n < 1) {
+		warnx("no connected monitors");
+		return 0;
+	} else if (n > 999 || needed > 999) {
+		warnx("attempting to allocate too many workspaces: max 999");
+		return 0;
+	} else while (n > globalcfg[NumWs] || needed > globalcfg[NumWs]) {
+		initws(globalcfg[NumWs]);
+		globalcfg[NumWs]++;
+	}
+	return 1;
 }
 
 void changews(Workspace *ws, int allowswap, int allowwarp)
@@ -3370,30 +3391,19 @@ void updclientlist(void)
 
 void updnumws(int needed)
 {
-	int n = 0;
 	Workspace *ws;
 	Monitor *m = NULL;
 
-	for (n = 0, m = nextmon(monitors); m; m = nextmon(m->next), n++)
-		;
-	if (n < 1) {
-		warnx("no connected monitors to (re)assign workspaces");
+	if (!assignws(needed))
 		return;
-	} else if (n > 999 || needed > 999) {
-		warnx("attempting to allocate too many workspaces");
-		return;
-	} else while (n > globalcfg[NumWs] || needed > globalcfg[NumWs]) {
-		initws(globalcfg[NumWs]);
-		globalcfg[NumWs]++;
-	}
+	m = nextmon(monitors);
 	FOR_EACH(ws, workspaces) {
-		if (!m)
-			m = nextmon(monitors);
 		if (!m->ws)
 			m->ws = ws;
 		ws->mon = m;
 		DBG("updnumws: %d:%s -> %s - visible: %d", ws->num, ws->name, m->name, ws == m->ws);
-		m = nextmon(m->next);
+		if (!(m = nextmon(m->next)))
+			m = nextmon(monitors);
 	}
 	PROP_REPLACE(root, netatom[NumDesktops], XCB_ATOM_CARDINAL, 32, 1, &globalcfg[NumWs]);
 	updviewports();
@@ -3413,19 +3423,19 @@ int updoutput(xcb_randr_output_t id, xcb_randr_get_output_info_reply_t *o,
 	xcb_randr_get_crtc_info_reply_t *crtc;
 
 	ck = xcb_randr_get_crtc_info(con, o->crtc, timestamp);
-	if (!(crtc = xcb_randr_get_crtc_info_reply(con, ck, &e))
-			|| !xcb_randr_get_crtc_info_outputs_length(crtc))
-	{
+	crtc = xcb_randr_get_crtc_info_reply(con, ck, &e);
+	if (!crtc || !xcb_randr_get_crtc_info_outputs_length(crtc)) {
 		iferr(0, "unable to get crtc info reply", e);
 		goto out;
 	}
 	n = xcb_randr_get_output_info_name_length(o) + 1;
 	strlcpy(name, (char *)xcb_randr_get_output_info_name(o), MIN(sizeof(name), n));
-	FOR_EACH(m, monitors)
+	FOR_EACH(m, monitors) {
 		if (id != m->id && m->x == crtc->x && m->y == crtc->y) {
 			DBG("updoutput: %s is a clone of %s", name, m->name);
 			goto out;
 		}
+	}
 	if (crtc->x + crtc->width > (int)*maxw) {
 		*maxw = crtc->x + crtc->width;
 		*mmaxw += o->mm_width;

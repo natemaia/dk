@@ -177,6 +177,6 @@ See the LICENSE file for a list of authors/contributors.
 
 Others that are not included in contributors but I owe a huge thanks to:
 [dwm](https://dmw.suckless.org), [bspwm](https://github.com/baskerville/bspwm),
-[monsterwm-xcb](https://github.com/Cloudef/monsterwm-xcb),
+[evilwm](http://www.6809.org.uk/evilwm/), [monsterwm-xcb](https://github.com/Cloudef/monsterwm-xcb),
 [4wm](https://github.com/dct2012/4wm), and [frankenwm](https://github.com/sulami/FrankenWM).
 

@@ -21,7 +21,7 @@ Some ways in which yaxwm differs include:
 
 - No support for binding keys, this can be done with an external program like sxhkd.
 
-- Supports most
+- Mostly adheres to
 [ICCCM](https://www.x.org/releases/X11R7.6/doc/xorg-docs/specs/ICCCM/icccm.html#client_to_window_manager_communication),
 [EWMH](https://specifications.freedesktop.org/wm-spec/wm-spec-latest.html), and
 [Motif](http://www.ist.co.uk/motif/books/vol6A/ch-20.fm.html#963509) for better
@@ -39,9 +39,8 @@ pacman -S xcb-proto xcb-util xcb-util-wm xcb-util-cursor xcb-util-keysyms
 ```
 Other systems should have packages with similar names.
 
-As mentioned above, yaxwm has no key binds outside of mouse movement so  
-you'll need an external program like sxhkd to launch programs and control  
-the window manager.
+As mentioned above yaxwm has no key bind support, you'll need a separate  
+program like sxhkd to launch programs and control the window manager.
 
 
 To compile run
@@ -68,15 +67,15 @@ Optionally copy the default yaxwmrc and sxhkdrc to their respective locations
 
 ```
 mkdir -p ~/.config/sxhkd ~/.config/yaxwm
-cp /usr/share/doc/yaxwm/sxhkdrc ~/.config/sxhkd/
-cp /usr/share/doc/yaxwm/yaxwmrc ~/.config/yaxwm/
+cp /usr/local/share/doc/yaxwm/sxhkdrc ~/.config/sxhkd/
+cp /usr/local/share/doc/yaxwm/yaxwmrc ~/.config/yaxwm/
 chmod +x ~/.config/yaxwm/yaxwmrc
 ```
 
 #### Configuration
 
-There are example `yaxwmrc` and `sxhkdrc` files in `doc/` or `/usr/share/doc/yaxwm`  
-after installation.
+There are example `yaxwmrc` and `sxhkdrc` files in `doc/` or  
+`/usr/local/share/doc/yaxwm` after installation.
 
 Yaxwm looks for a file in the following order
 ```
@@ -86,10 +85,10 @@ $HOME/.config/yaxwm/yaxwmrc
 ```
 and tries to execute it, **it must be executable**.
 
-Further configuration like new layout and callback functions can be done by
-copying he default config header `src/config.def.h` to `src/config.h`, editing  
-it and recompiling. This file isn't tracked by git so you can maintain  
-configuration across updates.  
+Further configuration like new layout and callback functions can be done by  
+copying the default config header `src/config.def.h` to `src/config.h`,  
+editing it and recompiling. This file isn't tracked by git so you can keep  
+configuration across updates.
 
 #### Commands
 

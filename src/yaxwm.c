@@ -229,7 +229,7 @@ void applyrule(Client *c)
 						ws = m->ws->num;
 						break;
 					}
-			} else if (r->ws > 0 && r->ws < 100)
+			} else if (r->ws && r->ws <= globalcfg[NumWs])
 				ws = r->ws - 1;
 			break;
 		}
@@ -282,8 +282,8 @@ int assignws(int needed)
 	if (n < 1) {
 		warnx("no connected monitors");
 		return 0;
-	} else if (n > 999 || needed > 999) {
-		warnx("attempting to allocate too many workspaces: max 999");
+	} else if (n > 99 || needed > 99) {
+		warnx("attempting to allocate too many workspaces: max 99");
 		return 0;
 	} else while (n > globalcfg[NumWs] || needed > globalcfg[NumWs]) {
 		initws(globalcfg[NumWs]);
@@ -673,6 +673,76 @@ void cmdmouse(char **argv)
 		grabbuttons(selws->sel, 1);
 }
 
+void cmdnmaster(char **argv)
+{
+	int i = INT_MAX, rel = 1;
+
+	if (argv && *argv && !strcmp("print", *argv))
+		fprintf(cmdresp, "%d", setws->nmaster);
+	else {
+		parseint(argv, &i, &rel, 1);
+		adjustsetting(i, rel, &setws->nmaster, 0, 0);
+		if (setws->clients && setws == setws->mon->ws)
+			layoutws(setws);
+	}
+}
+
+void cmdnstack(char **argv)
+{
+	int i = INT_MAX, rel = 1;
+
+	if (argv && *argv && !strcmp("print", *argv))
+		fprintf(cmdresp, "%d", setws->nstack);
+	else {
+		parseint(argv, &i, &rel, 1);
+		adjustsetting(i, rel, &setws->nstack, 0, 0);
+		if (setws->clients && setws == setws->mon->ws)
+			layoutws(setws);
+	}
+}
+
+void cmdpad(char **argv)
+{
+	int i = -1, rel;
+
+	if (!strcmp("print", *argv)) {
+		fprintf(cmdresp, "%d %d %d %d", setws->padl, setws->padr, setws->padt, setws->padb);
+		return;
+	}
+	while (*argv) {
+		i = INT_MAX;
+		if (!strcmp("l", *argv)) {
+			argv = parseintclamp(argv + 1, &i, &rel, setws->padl * -1, setws->mon->w / 2);
+			if (i != INT_MAX)
+				setws->padl = CLAMP(rel ? setws->padl + i : i, 0, setws->mon->w / 2);
+		} else if (!strcmp("r", *argv)) {
+			argv = parseintclamp(argv + 1, &i, &rel, setws->padr * -1, setws->mon->w / 2);
+			if (i != INT_MAX)
+				setws->padr = CLAMP(rel ? setws->padr + i : i, 0, setws->mon->w / 2);
+		} else if (!strcmp("t", *argv)) {
+			argv = parseintclamp(argv + 1, &i, &rel, setws->padt * -1, setws->mon->h / 2);
+			if (i != INT_MAX)
+				setws->padt = CLAMP(rel ? setws->padt + i : i, 0, setws->mon->h / 2);
+		} else if (!strcmp("b", *argv)) {
+			argv = parseintclamp(argv + 1, &i, &rel, setws->padb * -1, setws->mon->h / 2);
+			if (i != INT_MAX)
+				setws->padb = CLAMP(rel ? setws->padb + i : i, 0, setws->mon->h / 2);
+		} else {
+			fprintf(cmdresp, "!invalid argument pad command: %s", *argv);
+			return;
+		}
+		if (*argv)
+			argv++;
+	}
+	if (setws->clients && setws == setws->mon->ws)
+		layoutws(setws);
+}
+
+void cmdprint(char **argv)
+{
+	(void)(argv);
+}
+
 void cmdresize(char **argv)
 {
 	float f, *sf;
@@ -749,84 +819,18 @@ void cmdresize(char **argv)
 	eventignore(XCB_ENTER_NOTIFY);
 }
 
-void cmdnmaster(char **argv)
-{
-	int i = INT_MAX, rel = 1;
-
-	if (argv && *argv && !strcmp("print", *argv))
-		fprintf(cmdresp, "%d", setws->nmaster);
-	else {
-		parseint(argv, &i, &rel, 1);
-		adjustsetting(i, rel, &setws->nmaster, 0, 0);
-		if (setws->clients && setws == setws->mon->ws)
-			layoutws(setws);
-	}
-}
-
-void cmdnstack(char **argv)
-{
-	int i = INT_MAX, rel = 1;
-
-	if (argv && *argv && !strcmp("print", *argv))
-		fprintf(cmdresp, "%d", setws->nstack);
-	else {
-		parseint(argv, &i, &rel, 1);
-		adjustsetting(i, rel, &setws->nstack, 0, 0);
-		if (setws->clients && setws == setws->mon->ws)
-			layoutws(setws);
-	}
-}
-
-void cmdpad(char **argv)
-{
-	int i = -1, rel;
-
-	if (!strcmp("print", *argv)) {
-		fprintf(cmdresp, "%d %d %d %d", setws->padl, setws->padr, setws->padt, setws->padb);
-		return;
-	}
-	while (*argv) {
-		i = INT_MAX;
-		if (!strcmp("l", *argv)) {
-			argv = parseintclamp(argv + 1, &i, &rel, setws->padl * -1, setws->mon->w / 2);
-			if (i != INT_MAX)
-				setws->padl = CLAMP(rel ? setws->padl + i : i, 0, setws->mon->w / 2);
-		} else if (!strcmp("r", *argv)) {
-			argv = parseintclamp(argv + 1, &i, &rel, setws->padr * -1, setws->mon->w / 2);
-			if (i != INT_MAX)
-				setws->padr = CLAMP(rel ? setws->padr + i : i, 0, setws->mon->w / 2);
-		} else if (!strcmp("t", *argv)) {
-			argv = parseintclamp(argv + 1, &i, &rel, setws->padt * -1, setws->mon->h / 2);
-			if (i != INT_MAX)
-				setws->padt = CLAMP(rel ? setws->padt + i : i, 0, setws->mon->h / 2);
-		} else if (!strcmp("b", *argv)) {
-			argv = parseintclamp(argv + 1, &i, &rel, setws->padb * -1, setws->mon->h / 2);
-			if (i != INT_MAX)
-				setws->padb = CLAMP(rel ? setws->padb + i : i, 0, setws->mon->h / 2);
-		} else {
-			fprintf(cmdresp, "!invalid argument pad command: %s", *argv);
-			return;
-		}
-		if (*argv)
-			argv++;
-	}
-	if (setws->clients && setws == setws->mon->ws)
-		layoutws(setws);
-}
-
 void cmdrule(char **argv)
 {
-	unsigned int ui;
-	int i, rem;
-	Workspace *ws;
 	Rule *wr;
+	Workspace *ws;
+	unsigned int ui, delete;
 	Rule r = {
 		.x = -1, .y = -1, .w = -1, .h = -1, .ws = -1, .bw = -1,
 		.focus = 0, .sticky = 0, .floating = 0, .xgrav = None, .ygrav = None,
 		.cb = NULL, .mon = NULL, .inst = NULL, .class = NULL, .title = NULL,
 	};
 
-	if ((rem = !strcmp("remove", *argv))) {
+	if ((delete = !strcmp("remove", *argv))) {
 		argv++;
 		if (!strcmp("all", *argv)) {
 			while (rules)
@@ -856,14 +860,14 @@ void cmdrule(char **argv)
 			argv++;
 			r.mon = *argv;
 		} else if (!strcmp(*argv, "ws")) {
-			argv++;
-			if ((i = strtol(*argv, NULL, 0)) <= globalcfg[NumWs] && i > 0)
-				r.ws = i;
-			else FOR_EACH(ws, workspaces)
-				if (!strcmp(ws->name, *argv)) {
-					r.ws = ws->num;
-					break;
-				}
+			argv = parseintclamp(argv + 1, &r.ws, NULL, 1, 99);
+			if (!r.ws && *argv) {
+				FOR_EACH(ws, workspaces)
+					if (!strcmp(ws->name, *argv)) {
+						r.ws = ws->num;
+						break;
+					}
+			}
 		} else if (!strcmp(*argv, "callback")) {
 			argv++;
 			for (ui = 0; ui < LEN(callbacks); ui++)
@@ -893,42 +897,20 @@ void cmdrule(char **argv)
 			argv++;
 	}
 
-	if ((r.class || r.inst || r.title) && (r.cb || r.mon || r.ws != -1 || r.floating
-				|| r.focus || r.sticky || r.x != -1 || r.y != -1 || r.w != -1 || r.h != -1
+	if ((r.class || r.inst || r.title) && (r.cb || r.ws || r.mon || r.focus || r.floating
+				|| r.sticky || r.x != -1 || r.y != -1 || r.w != -1 || r.h != -1
 				|| r.bw != -1 || r.xgrav != None || r.ygrav != None))
 	{
-		FOR_EACH(wr, rules)
-			if ((r.class == wr->class || (r.class && !strcmp(r.class, wr->class)))
-					&& (r.inst == wr->inst || (r.inst && !strcmp(r.inst, wr->inst)))
-					&& (r.title == wr->title || (r.title && !strcmp(r.title, wr->title))))
+		FOR_EACH(wr, rules) {
+			if ((r.class == NULL || (wr->class && !strcmp(r.class, wr->class)))
+					&& (r.inst == NULL || (wr->inst && !strcmp(r.inst, wr->inst)))
+					&& (r.title == NULL || (wr->title && !strcmp(r.title, wr->title))))
 			{
-				if (!rem) {
-					fprintf(cmdresp, "updating existing rule with same match patterns");
-					wr->ws = r.ws;
-					if (r.mon) {
-						if (wr->mon)
-							free(wr->mon);
-						size_t len = strlen(r.mon) + 1;
-						wr->mon = ecalloc(1, len);
-						strlcpy(wr->mon, r.mon, len);
-					} else
-						wr->mon = NULL;
-					wr->focus = r.focus;
-					wr->sticky = r.sticky;
-					wr->floating = r.floating;
-					wr->xgrav = r.xgrav;
-					wr->ygrav = r.ygrav;
-					wr->x = r.x;
-					wr->y = r.y;
-					wr->w = r.w;
-					wr->h = r.h;
-					wr->bw = r.bw;
-				} else {
-					freerule(wr);
-				}
+				freerule(wr);
 				break;
 			}
-		if (!rem && !wr)
+		}
+		if (!delete)
 			initrule(&r);
 	}
 }
@@ -962,7 +944,7 @@ void cmdset(char **argv)
 				return;
 			setws = ws;
 		} else if (!strcmp("numws", *argv)) {
-			argv = parseintclamp(argv + 1, &i, NULL, 1, 999);
+			argv = parseintclamp(argv + 1, &i, NULL, 1, 99);
 			if (i > globalcfg[NumWs])
 				updnumws(i);
 		} else if (!strcmp("name", *argv)) {
@@ -2285,47 +2267,6 @@ int initrandr(void)
 	return extbase;
 }
 
-void initscan(void)
-{
-	unsigned int i;
-	Geometry **g;
-	WindowAttr **wa;
-	xcb_window_t *w;
-	xcb_atom_t state;
-	xcb_generic_error_t *e;
-	xcb_query_tree_reply_t *rt;
-	uint8_t icon = XCB_ICCCM_WM_STATE_ICONIC;
-
-	if (!(rt = xcb_query_tree_reply(con, xcb_query_tree(con, root), &e))) {
-		iferr(1, "unable to query tree from root window", e);
-	} else if (rt->children_len) {
-		w = xcb_query_tree_children(rt);
-		g = ecalloc(rt->children_len, sizeof(Geometry *));
-		wa = ecalloc(rt->children_len, sizeof(WindowAttr *));
-		for (i = 0; i < rt->children_len; i++) {
-			g[i] = NULL;
-			if (!(wa[i] = winattr(w[i])) || !(g[i] = wingeom(w[i]))
-					|| !(wa[i]->map_state == XCB_MAP_STATE_VIEWABLE
-						|| (winprop(w[i], wmatom[WMState], &state) && state == icon)))
-			{
-				w[i] = XCB_WINDOW_NONE;
-			} else if (!wintrans(w[i])) {
-				mapwin(w[i], g[i], wa[i], 0);
-				w[i] = XCB_WINDOW_NONE;
-			}
-		}
-		for (i = 0; i < rt->children_len; i++) {
-			if (w[i] != XCB_WINDOW_NONE)
-				mapwin(w[i], g[i], wa[i], 0);
-			free(g[i]);
-			free(wa[i]);
-		}
-		free(g);
-		free(wa);
-	}
-	free(rt);
-}
-
 void initrule(Rule *r)
 {
 	size_t len;
@@ -2415,6 +2356,47 @@ error:
 		free(r->title);
 	}
 	return 0;
+}
+
+void initscan(void)
+{
+	unsigned int i;
+	Geometry **g;
+	WindowAttr **wa;
+	xcb_window_t *w;
+	xcb_atom_t state;
+	xcb_generic_error_t *e;
+	xcb_query_tree_reply_t *rt;
+	uint8_t icon = XCB_ICCCM_WM_STATE_ICONIC;
+
+	if (!(rt = xcb_query_tree_reply(con, xcb_query_tree(con, root), &e))) {
+		iferr(1, "unable to query tree from root window", e);
+	} else if (rt->children_len) {
+		w = xcb_query_tree_children(rt);
+		g = ecalloc(rt->children_len, sizeof(Geometry *));
+		wa = ecalloc(rt->children_len, sizeof(WindowAttr *));
+		for (i = 0; i < rt->children_len; i++) {
+			g[i] = NULL;
+			if (!(wa[i] = winattr(w[i])) || !(g[i] = wingeom(w[i]))
+					|| !(wa[i]->map_state == XCB_MAP_STATE_VIEWABLE
+						|| (winprop(w[i], wmatom[WMState], &state) && state == icon)))
+			{
+				w[i] = XCB_WINDOW_NONE;
+			} else if (!wintrans(w[i])) {
+				mapwin(w[i], g[i], wa[i], 0);
+				w[i] = XCB_WINDOW_NONE;
+			}
+		}
+		for (i = 0; i < rt->children_len; i++) {
+			if (w[i] != XCB_WINDOW_NONE)
+				mapwin(w[i], g[i], wa[i], 0);
+			free(g[i]);
+			free(wa[i]);
+		}
+		free(g);
+		free(wa);
+	}
+	free(rt);
 }
 
 void initwm(void)

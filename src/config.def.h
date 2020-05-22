@@ -37,12 +37,13 @@ static const char *cursors[] = {
 /* primary keywords and parser functions
  * Keyword functions have the following prototype: void function(char **); */
 static const Keyword keywords[] = {
-	{ "mon",   cmdmon  },
-	{ "rule",  cmdrule },
-	{ "set",   cmdset  },
-	{ "win",   cmdwin  },
-	{ "wm",    cmdwm   },
-	{ "ws",    cmdws   },
+	{ "mon",   cmdmon   },
+	{ "rule",  cmdrule  },
+	{ "set",   cmdset   },
+	{ "win",   cmdwin   },
+	{ "wm",    cmdwm    },
+	{ "ws",    cmdws    },
+	{ "print", cmdprint },
 };
 
 /* "set" keyword options, used by cmdset() to parse arguments

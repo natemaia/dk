@@ -207,6 +207,7 @@ static void cmdcycle(char **);
 static void cmdfakefull(char **);
 static void cmdfloat(char **);
 static void cmdfocus(char **);
+static void cmdprint(char **);
 static void cmdfollow(int);
 static void cmdfull(char **);
 static void cmdgappx(char **);

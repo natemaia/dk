@@ -819,8 +819,8 @@ void cmdprint(char **argv)
 		argv++;
 		if (!strcmp("win", *argv)) {
 			FOR_CLIENTS(c, w)
-				fprintf(cmdresp, "#%08x %d:%s%s", c->win, w->mon->num + 1,
-						w->mon->name, w->next ? "\n" : "");
+				fprintf(cmdresp, "#%08x %d:%d%s", c->win, w->num + 1,
+						w->mon->num + 1, w->next ? "\n" : "");
 		} else if (!strcmp("ws", *argv)) {
 			FOR_EACH(w, workspaces)
 				fprintf(cmdresp, "%d:%s %d:%s%s", w->num + 1, w->name, w->mon->num + 1,

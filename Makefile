@@ -46,7 +46,7 @@ install: all
 	cp -rfp man/yaxcmd.1 ${DESTDIR}${MANPREFIX}/man1/yaxcmd.1
 	chmod 644 ${DESTDIR}${MANPREFIX}/man1/yaxwm.1 ${DESTDIR}${MANPREFIX}/man1/yaxcmd.1
 	mkdir -p ${DESTDIR}${DOCPREFIX}/yaxwm
-	cp -rfp doc ${DESTDIR}${DOCPREFIX}/yaxwm
+	cp -rfp doc/* ${DESTDIR}${DOCPREFIX}/yaxwm
 
 uninstall:
 	rm -f ${DESTDIR}${PREFIX}/bin/yaxwm ${DESTDIR}${PREFIX}/bin/yaxcmd

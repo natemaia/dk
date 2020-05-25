@@ -32,7 +32,7 @@ interoperability with other programs and applications.
 
 #### Installation
 
-You need the xcb headers, if you're on Arch Linux you can run
+You need the xcb headers, if you're on an Arch based distro you can run
 
 ```
 pacman -S xcb-proto xcb-util xcb-util-wm xcb-util-cursor xcb-util-keysyms
@@ -40,7 +40,11 @@ pacman -S xcb-proto xcb-util xcb-util-wm xcb-util-cursor xcb-util-keysyms
 Other systems should have packages with similar names.
 
 As mentioned above yaxwm has no key bind support, you'll need a separate  
-program like sxhkd to launch programs and control the window manager.
+program like sxhkd to launch programs and control the window manager.  
+On an Arch based distro this can be installed using
+```
+pacman -S sxhkd
+```
 
 
 To compile run
@@ -63,8 +67,8 @@ make uninstall
 
 To start yaxwm you can add `exec yaxwm` to your xinitrc.
 
-Optionally copy the default yaxwmrc and sxhkdrc to their respective locations
-
+Optionally copy the example yaxwmrc and/or sxhkdrc to their  
+respective locations
 ```
 mkdir -p ~/.config/sxhkd ~/.config/yaxwm
 cp /usr/local/share/doc/yaxwm/sxhkdrc ~/.config/sxhkd/

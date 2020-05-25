@@ -636,15 +636,17 @@ void cmdmon(char **argv)
 			argv++;
 			break;
 		}
-	if (!argv || !*argv)
-		goto noargs;
-	if (fn != cmdview && (i = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0') {
+	if (fn != cmdview && *argv
+			&& (i = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0')
+	{
 		argv++;
 		if (!(cmdclient = wintoclient(i))) {
 			fprintf(cmdresp, "!invalid window id: %s", *argv);
 			return;
 		}
 	}
+	if (!*argv)
+		goto noargs;
 	if ((opt = parseopt(argv, opts)) >= 0) {
 		if (opt == Last) {
 			m = lastmon && lastmon->connected ? lastmon : selws->mon;
@@ -833,7 +835,10 @@ void cmdprint(char **argv)
 		}
 	} else if (!strcmp("win", *argv)) {
 		argv++;
-		if ((ui = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0') {
+		if (!*argv) {
+			fprintf(cmdresp, "!print win %s", enoargs);
+			return;
+		} else if ((ui = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0') {
 			argv++;
 			if (!(c = wintoclient(ui))) {
 				fprintf(cmdresp, "!invalid window id: %s", *argv);
@@ -866,7 +871,9 @@ void cmdprint(char **argv)
 		}
 	} else if (!strcmp("border", *argv)) {
 		while (*argv) {
-			if ((outer = !strcmp("outer", *argv) || !strcmp("outer_width", *argv)) || !strcmp(*argv, "width")) {
+			if ((outer = !strcmp("outer", *argv) || !strcmp("outer_width", *argv))
+					|| !strcmp(*argv, "width"))
+			{
 				incol = 0;
 				fprintf(cmdresp, "%d", outer ? border[Outer] : border[Width]);
 			} else if (incol || (start = !strcmp(*argv, "colour") || !strcmp(*argv, "color"))) {
@@ -1308,7 +1315,9 @@ void cmdws(char **argv)
 			argv++;
 			break;
 		}
-	if (fn != cmdview && (i = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0') {
+	if (fn != cmdview && *argv
+			&& (i = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0')
+	{
 		argv++;
 		if (!(cmdclient = wintoclient(i))) {
 			fprintf(cmdresp, "!invalid window id: %s", *argv);

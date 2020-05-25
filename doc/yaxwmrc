@@ -39,19 +39,16 @@ logfile="$HOME/.yaxcmd.log"
 	# when moving (defines how much a window can be moved off-screen)
 	yaxcmd set win_minwh=50 win_minxy=10
 
+	# disable gaps and borders in single window layouts
+	yaxcmd set smart_gap=true smart_border=true
+
 	# define mouse mod and move/resize buttons
 	yaxcmd set mouse mod=alt move=button1 resize=button3
 
 
-	# borders and gaps
+	# borders
 	# ---------
-	# disable gaps in single window layouts
-	yaxcmd set gap smart=true
-
-	# set border width and disable borders in single window layouts
-	yaxcmd set border width=1 smart=true
-
-	# set border colour for each window state
+	# set border width and colour for each window state
 	yaxcmd set border colour focus='#6699cc' unfocus='#000000' urgent='#ee5555'
 
 	# alternatively, set double border outer width and colour for each window state

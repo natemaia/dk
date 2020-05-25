@@ -26,7 +26,7 @@ char **parsebool(char **argv, int *setting)
 	return argv;
 }
 
-char **parsecolor(char **argv, unsigned int *setting)
+char **parsecolour(char **argv, unsigned int *setting)
 {
 	char *end;
 	unsigned short a, r, g, b;
@@ -117,86 +117,84 @@ char **parsegeom(char **argv, int type, int *i, int *rel, int *grav)
 
 	if (!argv || !*argv)
 		return argv;
-	switch (type) {
-	case 'x':
-		if (grav && !strcmp("center", *argv))
-			*grav = Center;
-		else if (grav && !strcmp("left", *argv))
-			*grav = Left;
-		else if (grav && !strcmp("right", *argv))
-			*grav = Right;
-		else
-			argv = parseint(argv, i, rel, 1);
-		break;
-	case 'y':
-		if (grav && !strcmp("center", *argv))
-			*grav = Center;
-		else if (grav && !strcmp("top", *argv))
-			*grav = Top;
-		else if (grav && !strcmp("bottom", *argv))
-			*grav = Bottom;
-		else
-			argv = parseint(argv, i, rel, 1);
-		break;
-	case 'w': /* FALLTHROUGH */
-	case 'h': /* FALLTHROUGH */
-		argv = parseint(argv, i, rel, 0);
-		break;
+	if (!grav)
+		argv = parseint(argv, i, rel, type == 'x' || type == 'y' ? 1 : 0);
+	else {
+		switch (type) {
+		case 'x':
+			if (grav && !strcmp("center", *argv))
+				*grav = Center;
+			else if (grav && !strcmp("left", *argv))
+				*grav = Left;
+			else if (grav && !strcmp("right", *argv))
+				*grav = Right;
+			else
+				argv = parseint(argv, i, rel, 1);
+			break;
+		case 'y':
+			if (grav && !strcmp("center", *argv))
+				*grav = Center;
+			else if (grav && !strcmp("top", *argv))
+				*grav = Top;
+			else if (grav && !strcmp("bottom", *argv))
+				*grav = Bottom;
+			else
+				argv = parseint(argv, i, rel, 1);
+			break;
+		case 'w': /* FALLTHROUGH */
+		case 'h':
+			argv = parseint(argv, i, rel, 0);
+			break;
+		}
 	}
 	return argv;
 }
 
-int parseopt(char **argv, char **opts, int *argi)
+int parseopt(char **argv, char **opts)
 {
-	char **s = opts;
-	int i, ret = -1;
+	int i;
+	char **s;
 
 	if (!argv || !*argv)
-		return ret;
-	if (argi)
-		*argi = INT_MAX;
-	for (s = opts, i = 0; ret < 0 && s && *s; s++, i++)
-		if (!strcmp(*s, *argv)) {
-			ret = i;
-			argv++;
-			break;
-		}
-	if (argi && argv && *argv && ((i = strtol(*argv, NULL, 0)) || !strcmp(*argv, "0")))
-		*argi = i;
-	return ret;
+		return -1;
+	for (s = opts, i = 0; s && *s; s++, i++)
+		if (!strcmp(*s, *argv))
+			return i;
+	return -1;
 }
 
 int parsetoken(char **src, char *dst, size_t size)
 {
 	size_t n = 0;
-    int q, sq = 0;
-    char *s, *head, *tail;
+	int q, sq = 0;
+	char *s, *head, *tail;
 
-    while (**src && (**src == ' ' || **src == '\t' || **src == '='))
+	while (**src && (**src == ' ' || **src == '\t' || **src == '='))
 		(*src)++;
 
-    if ((q = **src == '"' || (sq = **src == '\''))) {
-        head = *src + 1;
-        if (!(tail = strchr(head, sq ? '\'' : '"')))
+	if ((q = **src == '"' || (sq = **src == '\''))) {
+		head = *src + 1;
+		if (!(tail = strchr(head, sq ? '\'' : '"')))
 			return 0;
 		if (!sq)
 			while (*(tail - 1) == '\\')
 				tail = strchr(tail + 1, '"');
-    } else {
-        head = *src;
-        tail = strpbrk(*src, " =\t\n");
-    }
+	} else {
+		head = *src;
+		tail = strpbrk(*src, " =\t\n");
+	}
 
-    s = head;
-    while (n + 1 < size && tail ? s < tail : *s)
-        if (q && !sq && *s == '\\' && *(s + 1) == '"')
-            s++;
-        else {
-            n++;
-            *dst++ = *s++;
-        }
-    *dst = '\0';
+	s = head;
+	while (n + 1 < size && tail ? s < tail : *s) {
+		if (q && !sq && *s == '\\' && *(s + 1) == '"') {
+			s++;
+		} else {
+			n++;
+			*dst++ = *s++;
+		}
+	}
+	*dst = '\0';
 	*src = tail ? ++tail : '\0';
 
-    return n || q;
+	return n || q;
 }

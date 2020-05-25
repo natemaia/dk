@@ -61,6 +61,11 @@
 #define FIND_PREV(v, cur, list)\
 	for ((v) = (list); (v) && (v)->next && (v)->next != (cur); (v) = (v)->next)
 
+#define DETACH(v, listptr)\
+		while (*(listptr) && *(listptr) != (v))\
+			(listptr) = &(*(listptr))->next;\
+		*(listptr) = (v)->next;\
+
 #define FOR_STACK(v, list)\
 	for ((v) = (list); (v); (v) = (v)->snext)
 #define FOR_CLIENTS(c, ws)\
@@ -90,25 +95,166 @@
 			(type), (membsize), (nmemb), (value))
 
 
+
+/* file for writing command messages into */
+static FILE *cmdresp;
+static const char *ebadarg = "invalid argument for";
+static const char *enoargs = "command requires additional arguments but none were given";
+
+
+/* enums */
+enum Cursors {
+	Move,
+	Normal,
+	Resize
+};
+
+enum Gravity {
+	None,
+	Left,
+	Right,
+	Center,
+	Top,
+	Bottom
+};
+
+enum Borders {
+	Width,
+	Focus,
+	Urgent,
+	Unfocus,
+	Outer,
+	OFocus,
+	OUrgent,
+	OUnfocus
+};
+
+enum DirOpts {
+	Next,
+	Prev,
+	Last,  /* last active */
+	NextNE, /* non-empty */
+	PrevNE, /* non-empty */
+};
+
+enum WMAtoms {
+	Delete,
+	MotifHints,
+	Protocols,
+	TakeFocus,
+	Utf8Str,
+	WMState
+};
+
+enum NetAtoms {
+	Active,
+	Check,
+	ClientList,
+	Close,
+	CurDesktop,
+	DemandsAttn,
+	Desktop,
+	DesktopNames,
+	Dialog,
+	Dock,
+	FrameExtents,
+	Fullscreen,
+	Name,
+	NumDesktops,
+	Splash,
+	State,
+	Strut,
+	StrutPartial,
+	Supported,
+	Viewport,
+	WindowType,
+	WmDesktop,
+};
+
+enum GlobalCfg {
+	SmartGap,
+	SmartBorder,
+	SizeHints,
+	FocusMouse,
+	FocusUrgent,
+	NumWs,
+	MinXY,
+	MinWH
+};
+
+static char *opts[] = {
+	[Next] = "next",
+	[Prev] = "prev",
+	[Last] = "last",
+	[NextNE] = "nextne",
+	[PrevNE] = "prevne",
+	NULL
+};
+
+static const char *gravities[] = {
+	[None] = "none",
+	[Left] = "left",
+	[Right] = "right",
+	[Center] = "center",
+	[Top] = "top",
+	[Bottom] = "bottom",
+};
+
+static const char *wmatoms[] = {
+	[Delete] = "WM_DELETE_WINDOW",
+	[MotifHints] = "_MOTIF_WM_HINTS",
+	[Protocols] = "WM_PROTOCOLS",
+	[TakeFocus] = "WM_TAKE_FOCUS",
+	[Utf8Str] = "UTF8_STRING",
+	[WMState] = "WM_STATE",
+};
+
+static const char *netatoms[] = {
+	[Active] = "_NET_ACTIVE_WINDOW",
+	[Check] = "_NET_SUPPORTING_WM_CHECK",
+	[ClientList] = "_NET_CLIENT_LIST",
+	[Close] = "_NET_CLOSE_WINDOW",
+	[CurDesktop] = "_NET_CURRENT_DESKTOP",
+	[DemandsAttn] = "_NET_WM_STATE_DEMANDS_ATTENTION",
+	[DesktopNames] = "_NET_DESKTOP_NAMES",
+	[Desktop] = "_NET_WM_WINDOW_TYPE_DESKTOP",
+	[Dialog] = "_NET_WM_WINDOW_TYPE_DIALOG",
+	[Dock] = "_NET_WM_WINDOW_TYPE_DOCK",
+	[FrameExtents] = "_NET_FRAME_EXTENTS",
+	[Fullscreen] = "_NET_WM_STATE_FULLSCREEN",
+	[Name] = "_NET_WM_NAME",
+	[NumDesktops] = "_NET_NUMBER_OF_DESKTOPS",
+	[Splash] = "_NET_WM_WINDOW_TYPE_SPLASH",
+	[State] = "_NET_WM_STATE",
+	[StrutPartial] = "_NET_WM_STRUT_PARTIAL",
+	[Strut] = "_NET_WM_STRUT",
+	[Supported] = "_NET_SUPPORTED",
+	[Viewport] = "_NET_DESKTOP_VIEWPORT",
+	[WindowType] = "_NET_WM_WINDOW_TYPE",
+	[WmDesktop] = "_NET_WM_DESKTOP",
+};
+
+
+/* type definitions */
 typedef struct Rule Rule;
 typedef struct Desk Desk;
 typedef struct Panel Panel;
 typedef struct Client Client;
 typedef struct Layout Layout;
+typedef struct WinNode WinNode;
 typedef struct Monitor Monitor;
 typedef struct Keyword Keyword;
 typedef struct Command Command;
 typedef struct Callback Callback;
 typedef struct Workspace Workspace;
 typedef struct WsDefault WsDefault;
+typedef struct ClientState ClientState;
+
 typedef xcb_get_geometry_reply_t Geometry;
 typedef xcb_get_window_attributes_reply_t WindowAttr;
 
-enum Cursors { Move, Normal, Resize };
-enum Gravity { None, Left, Right, Center, Top, Bottom };
-enum Borders { Width, Focus, Urgent, Unfocus, OWidth, OFocus, OUrgent, OUnfocus };
-enum GlobalCfg { SmartGap, SmartBorder, SizeHints, FocusMouse, FocusUrgent, NumWs, MinXY, MinWH };
 
+/* structs */
 struct Desk {
 	int x, y, w, h;
 	Desk *next;
@@ -140,8 +286,12 @@ struct Client {
 	int max_w, max_h, min_w, min_h;
 	int base_w, base_h, increment_w, increment_h;
 	float min_aspect, max_aspect;
+
 	int sticky, fixed, floating, fullscreen; /* TODO: turn toggles into bit fields */
 	int fakefull, urgent, noinput, noborder, oldstate;
+
+	/* ClientState *s, *o; */
+
 	Client *trans, *next, *snext;
 	Workspace *ws;
 	Callback *cb;
@@ -151,6 +301,11 @@ struct Client {
 struct Layout {
 	char *name;
 	int (*fn)(Workspace *);
+};
+
+struct WinNode {
+	xcb_window_t win;
+	WinNode *next;
 };
 
 struct Monitor {
@@ -200,7 +355,20 @@ struct WsDefault {
 	Layout *layout;
 };
 
+struct ClientState {
+	unsigned int fakefull:1;
+	unsigned int fixed:1;
+	unsigned int floating:1;
+	unsigned int fullscreen:1;
+	unsigned int noborder:1;
+	unsigned int noinput:1;
+	unsigned int sticky:1;
+	unsigned int urgent:1;
+	unsigned int :24;
+};
 
+
+/* function prototypes */
 static void changews(Workspace *, int, int);
 static void cmdborder(char **);
 static void cmdcycle(char **);
@@ -239,7 +407,7 @@ static void eventignore(uint8_t);
 static void eventloop(void);
 static void eventrandr(xcb_randr_screen_change_notify_event_t *);
 static void execcfg(void);
-static void floatoffset(Client *, int, int *, int *, int *, int *);
+static void offsetfloat(Client *, int, int *, int *, int *, int *);
 static void focus(Client *);
 static void freeclient(Client *, int);
 static void freedesk(Desk *, int);
@@ -257,7 +425,8 @@ static Client *prevc(Client *);
 static void initmon(int, char *, xcb_randr_output_t, int, int, int, int);
 static void initpanel(xcb_window_t, Geometry *);
 static int initrulereg(Rule *, Rule *);
-static void initrule(Rule *);
+static void initneedsmap(xcb_window_t win);
+static Rule *initrule(Rule *);
 static void initscan(void);
 static void initwm(void);
 static Workspace *initws(int);
@@ -275,11 +444,12 @@ static Client *nextt(Client *);
 static void parsecmd(char *);
 static void printerror(xcb_generic_error_t *);
 static int querypointer(int *, int *);
-static void refresh(Workspace *);
 static void relocate(Workspace *, Monitor *);
 static void resize(Client *, int, int, int, int, int);
 static void resizehint(Client *, int, int, int, int, int, int, int);
 static void restack(Workspace *);
+static void freeneedsmap(WinNode *);
+static void refresh(void);
 static int rulecmp(Rule *, char *, char *, char *);
 static void sendconfigure(Client *);
 static void sendevent(xcb_window_t, const char *, unsigned int);
@@ -321,88 +491,3 @@ static Panel *wintopanel(xcb_window_t);
 static xcb_window_t wintrans(xcb_window_t);
 static void wintype(Client *);
 
-
-enum Opts {
-	Next,
-	Prev,
-	Last,  /* last active */
-	NextNE, /* non-empty */
-	PrevNE, /* non-empty */
-};
-static char *opts[] = {
-	[Next] = "next",
-	[Prev] = "prev",
-	[Last] = "last",
-	[NextNE] = "nextne",
-	[PrevNE] = "prevne",
-	NULL
-};
-
-enum WMAtoms {
-	Delete,
-	MotifHints,
-	Protocols,
-	TakeFocus,
-	Utf8Str,
-	WMState
-};
-static const char *wmatoms[] = {
-	[Delete] = "WM_DELETE_WINDOW",
-	[MotifHints] = "_MOTIF_WM_HINTS",
-	[Protocols] = "WM_PROTOCOLS",
-	[TakeFocus] = "WM_TAKE_FOCUS",
-	[Utf8Str] = "UTF8_STRING",
-	[WMState] = "WM_STATE",
-};
-
-enum NetAtoms {
-	Active,
-	Check,
-	ClientList,
-	Close,
-	CurDesktop,
-	DemandsAttn,
-	Desktop,
-	DesktopNames,
-	Dialog,
-	Dock,
-	FrameExtents,
-	Fullscreen,
-	Name,
-	NumDesktops,
-	Splash,
-	State,
-	Strut,
-	StrutPartial,
-	Supported,
-	Viewport,
-	WindowType,
-	WmDesktop,
-};
-static const char *netatoms[] = {
-	[Active] = "_NET_ACTIVE_WINDOW",
-	[Check] = "_NET_SUPPORTING_WM_CHECK",
-	[ClientList] = "_NET_CLIENT_LIST",
-	[Close] = "_NET_CLOSE_WINDOW",
-	[CurDesktop] = "_NET_CURRENT_DESKTOP",
-	[DemandsAttn] = "_NET_WM_STATE_DEMANDS_ATTENTION",
-	[DesktopNames] = "_NET_DESKTOP_NAMES",
-	[Desktop] = "_NET_WM_WINDOW_TYPE_DESKTOP",
-	[Dialog] = "_NET_WM_WINDOW_TYPE_DIALOG",
-	[Dock] = "_NET_WM_WINDOW_TYPE_DOCK",
-	[FrameExtents] = "_NET_FRAME_EXTENTS",
-	[Fullscreen] = "_NET_WM_STATE_FULLSCREEN",
-	[Name] = "_NET_WM_NAME",
-	[NumDesktops] = "_NET_NUMBER_OF_DESKTOPS",
-	[Splash] = "_NET_WM_WINDOW_TYPE_SPLASH",
-	[State] = "_NET_WM_STATE",
-	[StrutPartial] = "_NET_WM_STRUT_PARTIAL",
-	[Strut] = "_NET_WM_STRUT",
-	[Supported] = "_NET_SUPPORTED",
-	[Viewport] = "_NET_DESKTOP_VIEWPORT",
-	[WindowType] = "_NET_WM_WINDOW_TYPE",
-	[WmDesktop] = "_NET_WM_DESKTOP",
-};
-
-static FILE *cmdresp; /* file for writing command messages into */
-static const char *enoargs = "command requires additional arguments but none were given";

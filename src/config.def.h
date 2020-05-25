@@ -8,9 +8,9 @@ static unsigned int border[] = {
 	[Width] = 1,             /* total border width in pixels */
 	[Focus] = 0xFF6699cc,    /* focused window border colour (inner) */
 	[Urgent] = 0xFFee5555,   /* urgent window border colour (inner) */
-	[Unfocus] = 0xFF000000,  /* unfocused window border colour (inner) */
+	[Unfocus] = 0xFF444444,  /* unfocused window border colour (inner) */
 	/* outer border settings */
-	[OWidth] = 0,            /* outer border width in pixels */
+	[Outer] = 0,             /* outer border width in pixels */
 	[OFocus] = 0xFF222222,   /* outer focused window border colour when using double border */
 	[OUrgent] = 0xFF222222,  /* outer urgent window border colour when using double border */
 	[OUnfocus] = 0xFF222222, /* outer unfocused window border colour when using double border */
@@ -28,11 +28,54 @@ static int globalcfg[] = {
 };
 
 static const char *cursors[] = {
+	/* see: https://tronche.com/gui/x/xlib/appendix/b/ */
 	[Move] = "fleur",
 	[Normal] = "arrow",
 	[Resize] = "sizing",
 };
 
+/* default modifier and buttons for mouse move/resize */
+static xcb_mod_mask_t mousemod = XCB_MOD_MASK_4;
+static xcb_button_t mousemove = XCB_BUTTON_INDEX_1;
+static xcb_button_t mouseresize = XCB_BUTTON_INDEX_3;
+
+static void albumart(Client *c, int closed)
+{ /* example of a simple callback for album art windows */
+	if (closed)
+		c->ws->padr = 0; /* remove padding */
+	else {
+		c->ws->padr = c->w + (2 * c->ws->gappx); /* padding to the right */
+		gravitate(c, Right, Center, 1); /* right center of the screen, respect gaps */
+		focus(c->snext); /* don't take focus */
+	}
+}
+
+/* "callback" names recognized for use with rules.
+ * Callback functions have the following prototype: void function(Client *, int); */
+static Callback callbacks[] = {
+	{ "albumart", albumart },
+};
+
+/* "layout" names used by cmdlayout() to parse arguments.
+ * Layout functions have the following prototype: int function(Workspace *); */
+static Layout layouts[] = {
+	{ "tile", tile }, /* first is initial default */
+	{ "mono", mono },
+	{ "none", NULL },
+};
+
+static WsDefault wsdef = { /* settings for newly created workspaces */
+	1,           /* nmaster */
+	3,           /* nstack */
+	0,           /* gappx */
+	0,           /* padl */
+	0,           /* padr */
+	0,           /* padt */
+	0,           /* padb */
+	0.55,        /* split */
+	0.55,        /* ssplit */
+	&layouts[0]  /* layout */
+};
 
 /* primary keywords and parser functions
  * Keyword functions have the following prototype: void function(char **); */
@@ -83,45 +126,3 @@ static const Command wsmoncmds[] = {
 	{ "view",   cmdview   },
 };
 
-static void albumart(Client *c, int closed)
-{ /* example of a simple callback for album art windows */
-	if (closed)
-		c->ws->padr = 0; /* remove padding */
-	else {
-		c->ws->padr = c->w + (2 * c->ws->gappx); /* padding to the right */
-		gravitate(c, Right, Center, 1); /* right center of the screen, respect gaps */
-		focus(c->snext); /* don't take focus */
-	}
-}
-
-/* "callback" names recognized for use with rules.
- * Callback functions have the following prototype: void function(Client *, int); */
-static Callback callbacks[] = {
-	{ "albumart", albumart },
-};
-
-/* "layout" names used by cmdlayout() to parse arguments.
- * Layout functions have the following prototype: int function(Workspace *); */
-static Layout layouts[] = {
-	{ "tile", tile }, /* first is initial default */
-	{ "mono", mono },
-	{ "none", NULL },
-};
-
-static WsDefault wsdef = { /* settings for newly created workspaces */
-	1,           /* nmaster */
-	3,           /* nstack */
-	0,           /* gappx */
-	0,           /* padl */
-	0,           /* padr */
-	0,           /* padt */
-	0,           /* padb */
-	0.55,        /* split */
-	0.55,        /* ssplit */
-	&layouts[0]  /* layout */
-};
-
-/* default modifier and buttons for mouse move/resize */
-static xcb_mod_mask_t mousemod = XCB_MOD_MASK_4;
-static xcb_button_t mousemove = XCB_BUTTON_INDEX_1;
-static xcb_button_t mouseresize = XCB_BUTTON_INDEX_3;

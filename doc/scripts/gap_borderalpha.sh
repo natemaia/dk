@@ -38,10 +38,10 @@ if (( $# == 0 )); then
 fi
 
 # store the gap width before and after changing
-old=$(yaxcmd set gap print width)
+old=$(yaxcmd print gap)
 yaxcmd set gap width "$1"
 ret=$? # if we don't cross the threshold this will be our exit code
-new=$(yaxcmd set gap print width)
+new=$(yaxcmd print gap)
 
 # did we cross the threshold, if so we need to update the border colours alpha
 if (( (old >= thresh && new < thresh) || (old < thresh && new >= thresh) )); then

@@ -15,17 +15,18 @@ logfile="$HOME/.yaxcmd.log"
 {
 	# workspace settings
 	# ------------------------
-	# default values to use when allocating new workspaces
-	yaxcmd set wsdef layout=tile master=1 stack=3 gap=0 split=0.55 ssplit=0.55
-
 	# initialize 10 workspaces (1-10)
 	yaxcmd set numws=10
+
+	# default workspace values used when allocating new workspaces
+	# can be applied to all existing workspaces when passed 'apply'
+	yaxcmd set ws=default apply layout=tile master=1 stack=3 gap=0 split=0.55 ssplit=0.55
 
 	# rename workspace(s)
 	yaxcmd set ws=1 name="workspace 1" ws=2 name="workspace 2"
 
-	# set workspace 10 to use some padding and 50px gaps
-	yaxcmd set ws=10 pad l=200 r=200 t=100 b=100
+	# set workspace 10 to use some padding and gaps
+	yaxcmd set ws=10 pad left=200 right=200 top=100 bottom=100
 	yaxcmd set ws=10 gap width=50
 
 

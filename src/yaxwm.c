@@ -628,7 +628,7 @@ void cmdmon(char **argv)
 	cmdclient = selws->sel;
 	if (!monitors || !nextmon(monitors))
 		return;
-	if (!argv || !*argv)
+	if (!*argv)
 		goto noargs;
 	for (i = 0; i < LEN(wsmoncmds); i++)
 		if (wsmoncmds[i].fn && !strcmp(wsmoncmds[i].name, *argv)) {
@@ -636,7 +636,7 @@ void cmdmon(char **argv)
 			argv++;
 			break;
 		}
-	if (fn != cmdview && *argv
+	if (fn != cmdview && *argv && (*argv[0] == '#' || (*argv[0] == '0' && *argv[0] == 'x'))
 			&& (i = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0')
 	{
 		argv++;
@@ -1141,7 +1141,7 @@ void cmdset(char **argv)
 	int i, names = 0;
 
 	setws = selws;
-	if (!argv || !*argv) {
+	if (!*argv) {
 		fprintf(cmdresp, "!set %s", enoargs);
 		return;
 	}
@@ -1164,7 +1164,7 @@ void cmdset(char **argv)
 				updnumws(i);
 		} else if (!strcmp("name", *argv)) {
 			argv++;
-			if (!argv || !*argv) {
+			if (!*argv) {
 				fprintf(cmdresp, "!set ws name %s", enoargs);
 				goto finish;
 			}
@@ -1265,15 +1265,18 @@ void cmdwin(char **argv)
 
 	cmdclient = selws->sel;
 
-	if (!argv || !*argv) {
-		fprintf(cmdresp, "!win %s", enoargs);
-		return;
-	} else if ((i = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0') {
+	if (*argv && (*argv[0] == '#' || (*argv[0] == '0' && *argv[0] == 'x'))
+			&& (i = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0')
+	{
 		argv++;
 		if (!(cmdclient = wintoclient(i))) {
 			fprintf(cmdresp, "!invalid window id: %s", *argv);
 			return;
 		}
+	}
+	if (!*argv) {
+		fprintf(cmdresp, "!win %s", enoargs);
+		return;
 	}
 	for (i = 0; i < LEN(wincmds); i++)
 		if (!strcmp(wincmds[i].name, *argv)) {
@@ -1307,7 +1310,7 @@ void cmdws(char **argv)
 	cmdclient = selws->sel;
 	if (!workspaces->next)
 		return;
-	if (!argv || !*argv)
+	if (!*argv)
 		goto noargs;
 	for (i = 0; i < LEN(wsmoncmds); i++)
 		if (wsmoncmds[i].fn && !strcmp(wsmoncmds[i].name, *argv)) {
@@ -1315,7 +1318,7 @@ void cmdws(char **argv)
 			argv++;
 			break;
 		}
-	if (fn != cmdview && *argv
+	if (fn != cmdview && *argv && (*argv[0] == '#' || (*argv[0] == '0' && *argv[0] == 'x'))
 			&& (i = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0')
 	{
 		argv++;
@@ -1324,7 +1327,7 @@ void cmdws(char **argv)
 			return;
 		}
 	}
-	if (!argv || !*argv)
+	if (!*argv)
 		goto noargs;
 	if ((opt = parseopt(argv, opts)) >= 0) {
 		if (opt == Last)
@@ -3006,13 +3009,17 @@ int querypointer(int *x, int *y)
 
 void refresh(void)
 {
+	Monitor *m;
+
 	if (!needsrefresh)
 		return;
 	layoutws(NULL);
 	while (needsmap) {
-		xcb_map_window(con, needsmap->win);	
+		xcb_map_window(con, needsmap->win);
 		freeneedsmap(needsmap);
 	}
+	for (m = nextmon(monitors); m; m = nextmon(m->next))
+		restack(m->ws);
 	focus(NULL);
 	eventignore(XCB_ENTER_NOTIFY);
 	needsrefresh = 0;

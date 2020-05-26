@@ -2749,15 +2749,17 @@ void mapwin(xcb_window_t win, Geometry *g, WindowAttr *wa, int check)
 
 int mono(Workspace *ws)
 {
-	int g;
+	int g, b;
 	Client *c;
 
 	g = globalcfg[SmartGap] ? 0 : ws->gappx;
-	for (c = nextt(ws->clients); c; c = nextt(c->next))
+	for (c = nextt(ws->clients); c; c = nextt(c->next)) {
+		b = globalcfg[SmartBorder] ? 0 : c->bw;
 		resizehint(c, ws->mon->wx + ws->padl + g, ws->mon->wy + ws->padt + g,
-				ws->mon->ww - ws->padl - ws->padr - (2 * g),
-				ws->mon->wh - ws->padt - ws->padb - (2 * g),
-				globalcfg[SmartBorder] ? 0 : border[Width], 0, 0);
+				ws->mon->ww - ws->padl - ws->padr - (2 * g) - (2 * b),
+				ws->mon->wh - ws->padt - ws->padb - (2 * g) - (2 * b),
+				globalcfg[SmartBorder] ? 0 : c->bw, 0, 0);
+	}
 	return 1;
 }
 
@@ -3064,7 +3066,7 @@ void relocate(Workspace *ws, Monitor *old)
 
 void resize(Client *c, int x, int y, int w, int h, int bw)
 {
-	setclientgeom(c, x, y, w, h, bw);
+	setclientgeom(c, x, y, w, h);
 	MOVERESIZE(c->win, x, y, w, h, bw);
 	clientborder(c, c == selws->sel);
 	sendconfigure(c);
@@ -3186,9 +3188,9 @@ int sendwmproto(Client *c, int wmproto)
 	return exists;
 }
 
-void setclientgeom(Client *c, int x, int y, int w, int h, int bw)
+void setclientgeom(Client *c, int x, int y, int w, int h)
 {
-	DBG("setclientgeom: 0x%08x -> %d,%d @ %d x %d - bw: %d", c->win, x, y, w, h, bw);
+	DBG("setclientgeom: 0x%08x -> %d,%d @ %d x %d", c->win, x, y, w, h);
 	c->old_x = c->x;
 	c->old_y = c->y;
 	c->old_w = c->w;
@@ -3197,10 +3199,6 @@ void setclientgeom(Client *c, int x, int y, int w, int h, int bw)
 	c->y = y;
 	c->w = w;
 	c->h = h;
-	if (!c->noborder) {
-		c->old_bw = c->bw;
-		c->bw = bw;
-	}
 }
 
 void setclientws(Client *c, int num)
@@ -3434,17 +3432,17 @@ int tiler(Client *c, Client *p, int ww, int wh, int x, int y,
 		if (p) {
 			if (p->h + avail < globalcfg[MinWH]) {
 				ret = -1;
-				setclientgeom(p, p->x, p->y, p->w, globalcfg[MinWH], p->bw);
+				setclientgeom(p, p->x, p->y, p->w, globalcfg[MinWH]);
 				y = p->y + globalcfg[MinWH] + gap;
 				h = wh - (p->y + p->h);
 			} else if (h < globalcfg[MinWH]) {
 				ret = -1;
 				setclientgeom(p, p->x, p->y, p->w,
-						p->h + avail - (globalcfg[MinWH] - h - (2 * b)), p->bw);
+						p->h + avail - (globalcfg[MinWH] - h - (2 * b)));
 				y = p->y + p->h + (2 * b) + gap;
 				h = globalcfg[MinWH] - (2 * b);
 			} else {
-				setclientgeom(p, p->x, p->y, p->w, p->h + avail, p->bw);
+				setclientgeom(p, p->x, p->y, p->w, p->h + avail);
 				y += avail;
 			}
 		} else {
@@ -3455,7 +3453,7 @@ int tiler(Client *c, Client *p, int ww, int wh, int x, int y,
 		ret = -1;
 		h = globalcfg[MinWH];
 	}
-	setclientgeom(c, x, y, w - (2 * b), h - (2 * b), c->bw);
+	setclientgeom(c, x, y, w - (2 * b), h - (2 * b));
 	if (!c->floating)
 		*newy += h + gap;
 	return ret;

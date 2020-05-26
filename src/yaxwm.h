@@ -454,7 +454,7 @@ static int rulecmp(Rule *, char *, char *, char *);
 static void sendconfigure(Client *);
 static void sendevent(xcb_window_t, const char *, unsigned int);
 static int sendwmproto(Client *, int);
-static void setclientgeom(Client *, int, int, int, int, int);
+static void setclientgeom(Client *, int, int, int, int);
 static void setclientws(Client *, int);
 static void setfullscreen(Client *, int);
 static void setinputfocus(Client *);

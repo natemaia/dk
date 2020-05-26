@@ -639,11 +639,11 @@ void cmdmon(char **argv)
 	if (fn != cmdview && *argv && (*argv[0] == '#' || (*argv[0] == '0' && *argv[0] == 'x'))
 			&& (i = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0')
 	{
-		argv++;
 		if (!(cmdclient = wintoclient(i))) {
 			fprintf(cmdresp, "!invalid window id: %s", *argv);
 			return;
 		}
+		argv++;
 	}
 	if (!*argv)
 		goto noargs;
@@ -1268,11 +1268,11 @@ void cmdwin(char **argv)
 	if (*argv && (*argv[0] == '#' || (*argv[0] == '0' && *argv[0] == 'x'))
 			&& (i = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0')
 	{
-		argv++;
 		if (!(cmdclient = wintoclient(i))) {
 			fprintf(cmdresp, "!invalid window id: %s", *argv);
 			return;
 		}
+		argv++;
 	}
 	if (!*argv) {
 		fprintf(cmdresp, "!win %s", enoargs);
@@ -1321,11 +1321,11 @@ void cmdws(char **argv)
 	if (fn != cmdview && *argv && (*argv[0] == '#' || (*argv[0] == '0' && *argv[0] == 'x'))
 			&& (i = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0')
 	{
-		argv++;
 		if (!(cmdclient = wintoclient(i))) {
 			fprintf(cmdresp, "!invalid window id: %s", *argv);
 			return;
 		}
+		argv++;
 	}
 	if (!*argv)
 		goto noargs;

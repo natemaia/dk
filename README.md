@@ -25,7 +25,7 @@ Some ways in which yaxwm differs include:
 [ICCCM](https://www.x.org/releases/X11R7.6/doc/xorg-docs/specs/ICCCM/icccm.html#client_to_window_manager_communication),
 [EWMH](https://specifications.freedesktop.org/wm-spec/wm-spec-latest.html), and
 [Motif](http://www.ist.co.uk/motif/books/vol6A/ch-20.fm.html#963509) for better
-interoperability with other programs and applications.
+interoperability with other programs.
 
 - This is still under active development so expect bugs/errors, please open an issue.
 

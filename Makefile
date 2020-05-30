@@ -1,7 +1,7 @@
 # yaxwm - yet another x window manager
 # see license file for copyright and license details
 
-VERSION = 0.6
+VERSION = 0.7
 
 # install paths
 PREFIX    ?= /usr/local
@@ -13,8 +13,6 @@ CPPFLAGS += -DVERSION=\"${VERSION}\"
 CFLAGS   += -O2 -pedantic -Wall -Wextra
 LDFLAGS  ?=
 LDLIBS    = -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr -lxcb-dpms
-
-VPATH = src
 
 all: yaxwm yaxcmd
 
@@ -28,7 +26,7 @@ yaxwm: yaxwm.o
 yaxcmd: yaxcmd.o
 
 yaxwm.o: %.o: %.c
-	@test -f ${VPATH}/config.h || cp ${VPATH}/config.def.h ${VPATH}/config.h
+	@test -f yaxwm.h || cp yaxwm.def.h yaxwm.h
 	${CC} ${CFLAGS} ${CPPFLAGS} -c $< -o $@
 
 yaxcmd.o: %.o: %.c

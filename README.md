@@ -97,11 +97,11 @@ configuration across updates.
 #### Commands
 
 ###### Syntax Outline
-Yaxwm includes a small program `yaxcmd` to communicate with the window manager,  
-this is what you will be interacting with. The commands have a very basic syntax  
-and parsing system, commands are broken down into smaller pieces *(tokens)*.
+Yaxwm commands have a very basic syntax and parsing, commands are broken  
+down into smaller pieces *(tokens)* which are then passed to the keyword  
+function.
 
-A token is delimited by one or more:
+Tokens are delimited by one or more:
 
 - whitespace *(space or tab)*
 
@@ -143,11 +143,16 @@ For various commands yaxwm will expect a certain data type or format to be given
 
 - boolean: `true`, `false`, `1`, or `0`.
 
-- integer: `(+/-)1`, when the number is preceded by a sign it is considered relative.
+- hex: `(0x/#)XXXXXXXX`, used for window ids
+
+- integer: `(+/-)1`, if it is preceded by a sign it is considered relative.
 
 - float: `(+/-)0.1`, same as integer but must contain a decimal value.
 
-- colour: `(0x/#)(AA)RRGGBB`, when no alpha channel is given the colour will be opaque.
+- colour: `(0x/#)[AA]RRGGBB`, if no alpha channel is given the colour is opaque.
+
+---
+
 
 
 #### Todo

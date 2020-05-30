@@ -1,7 +1,7 @@
 /*	$OpenBSD: strlcpy.c,v/strlcat.c,v 1.16 2019/01/25 00:19:25 millert Exp $	*/
 
 /*
- * Copyright (c) 1998, 2015 Todd C. Miller <millert@openbsd.org>
+ * Copyright (c) 1998, 2015 Todd C. Miller <Todd.Miller@courtesan.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -18,47 +18,55 @@
 
 #include <sys/types.h>
 
-#include <ctype.h>
 #include <string.h>
 
-size_t strlcat(char *dst, const char *src, size_t size)
+size_t strlcat(char *dst, const char *src, size_t siz)
 {
-	size_t n = size, dlen;
-	const char *odst = dst;
-	const char *osrc = src;
+	char *d = dst;
+	const char *s = src;
+	size_t n = siz;
+	size_t dlen;
 
-	while (n-- != 0 && *dst != '\0')
-		dst++;
-	dlen = dst - odst;
-	n = size - dlen;
+	/* Find the end of dst and adjust bytes left but don't go past end */
+	while (n-- != 0 && *d != '\0')
+		d++;
+	dlen = d - dst;
+	n = siz - dlen;
 
-	if (n-- == 0)
-		return dlen + strlen(src);
-	while (*src != '\0') {
-		if (n != 0) {
-			*dst++ = *src;
+	if (n == 0)
+		return dlen + strlen(s);
+	while (*s != '\0') {
+		if (n != 1) {
+			*d++ = *s;
 			n--;
 		}
-		src++;
+		s++;
 	}
-	*dst = '\0';
+	*d = '\0';
 
-	return dlen + (src - osrc);
+	return dlen + (s - src);	/* count does not include NUL */
 }
 
-size_t strlcpy(char *dst, const char *src, size_t size)
+size_t strlcpy(char *dst, const char *src, size_t dsize)
 {
-	size_t n = size;
 	const char *osrc = src;
+	size_t nleft = dsize;
 
-	if (n != 0)
-		while (--n != 0)
+	/* Copy as many bytes as will fit. */
+	if (nleft != 0) {
+		while (--nleft != 0) {
 			if ((*dst++ = *src++) == '\0')
 				break;
-	if (n == 0) {
-		if (size != 0)
-			*dst = '\0';
-		while (*src++);
+		}
 	}
-	return src - osrc - 1;
+
+	/* Not enough room in dst, add NUL and traverse rest of src. */
+	if (nleft == 0) {
+		if (dsize != 0)
+			*dst = '\0';		/* NUL-terminate dst */
+		while (*src++)
+			;
+	}
+
+	return (src - osrc - 1);	/* count does not include NUL */
 }

@@ -37,74 +37,74 @@ alt + shift + x
 
 # quit yaxwm
 alt + shift + q
-	yaxcmd wm exit
+	yaxwm -c wm exit
 
 # reload yaxwmrc
 alt + shift + r
-	yaxcmd wm reload
+	yaxwm -c wm reload
 
 # restart yaxwm
 alt + ctrl + shift + r
-	yaxcmd wm restart
+	yaxwm -c wm restart
 
 # focus next or previous window
 alt + {j,k}
-	yaxcmd win focus {next,prev}
+	yaxwm -c win focus {next,prev}
 
 # close window, swap tiled window in/out of master, cycle tiled windows in place
 alt + {q,space,Tab}
-    yaxcmd win {kill,swap,cycle}
+    yaxwm -c win {kill,swap,cycle}
 
 # toggle fullscreen and fake fullscreen (enable manipulating fullscreen window)
 {_,alt + }F11
-	yaxcmd win {full,fakefull}
+	yaxwm -c win {full,fakefull}
 
 # toggle floating or sticky
 alt + shift + {space,s}
-	yaxcmd win {float,stick}
+	yaxwm -c win {float,stick}
 
 # move window, signed (+/-) for relative changes
 alt + shift + {h,j,k,l}
-	yaxcmd win resize {x=-10,y=+10,y=-10,x=+10}
+	yaxwm -c win resize {x=-10,y=+10,y=-10,x=+10}
 
 # resize window, signed (+/-) for relative changes
 alt + ctrl + {h,j,k,l}
-	yaxcmd win resize {w=-10,h=+10,h=-10,w=+10}
+	yaxwm -c win resize {w=-10,h=+10,h=-10,w=+10}
 
 # view, send, or follow to a workspace (by number)
 alt + {_,shift + ,ctrl + }{1-9,0}
-	yaxcmd ws {view,send,follow} {1-9,10}
+	yaxwm -c ws {view,send,follow} {1-9,10}
 
 # view, send, or follow to the next, previous, last active,
 # next non-empty, or prev non-empty workspace
 alt + {_,shift + ,ctrl + }{bracketleft,bracketright,BackSpace,Left,Right}
-	yaxcmd ws {view,send,follow} {prev,next,last,prevne,nextne}
+	yaxwm -c ws {view,send,follow} {prev,next,last,prevne,nextne}
 
 # view, send, or follow to the next, previous, or last active monitor
 alt + {_,shift + ,ctrl + }{comma,period,backslash}
-	yaxcmd mon {view,send,follow} {prev,next,last}
+	yaxwm -c mon {view,send,follow} {prev,next,last}
 
 # change active workspace layout
 alt + {t,m,f}
-	yaxcmd set layout {tile,mono,none}
+	yaxwm -c set layout {tile,mono,none}
 
 # toggle padding on the active workspace
 alt + shift + p
-	yaxcmd print pad | awk 'BEGIN\{ i = 0 \} \{ if ($2 != 0) i++ \} END\{ if (i) exit 1 \}' \
-		&& yaxcmd set pad l=400 r=400 t=100 b=100 || yaxcmd set pad l=0 r=0 t=0 b=0
+	yaxwm -c print pad | awk 'BEGIN\{ i = 0 \} \{ if ($2 != 0) i++ \} END\{ if (i) exit 1 \}' \
+		&& yaxwm -c set pad l=400 r=400 t=100 b=100 || yaxwm -c set pad l=0 r=0 t=0 b=0
 
 # change number of windows in master or first stack
 alt + {_,shift + }{i,d}
-	yaxcmd set {master,stack} {+1,-1}
+	yaxwm -c set {master,stack} {+1,-1}
 
 # change gap width
 alt + {equal,minus,apostrophe}
-	yaxcmd set gap width {+5,-5,reset}
+	yaxwm -c set gap width {+5,-5,reset}
 
 # change border width (total)
 alt + ctrl + {equal,minus,apostrophe}
-	yaxcmd set border width {+1,-1,reset}
+	yaxwm -c set border width {+1,-1,reset}
 
 # change outer border width (double border)
 alt + ctrl + shift + {equal,minus,apostrophe}
-	yaxcmd set border outer_width {+1,-1,reset}
+	yaxwm -c set border outer_width {+1,-1,reset}

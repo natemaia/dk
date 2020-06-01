@@ -3,18 +3,25 @@
 yaxwm \- Yet another X window manager, as if we didn't have enough.
 .SH SYNOPSIS
 .B yaxwm
-.RB [ \-v ]
+.RB [ \-vh ]
 .RB [ \-s
-.RB SOCKET_FD]
+.RB \fISOCKET_FD\fR]
+.RB [ \-c
+.RB \fICOMMAND\fR]
 .SH DESCRIPTION
 .P
-Yaxwm is a tiling window manager with inspiration from dwm, xmonad, and bspwm.
+A tiling window manager taking inspiration from dwm, bspwm, and xmonad.
 .P
 Windows are managed in tiled, monocle, or floating layouts, and are grouped by
 workspaces. Each window can be assigned to a single workspace and will have a
 small border to indicate the focus state. Windows are arranged into pre-defined
-layouts, a layout can be applied to workspaces and changes to one will
-not impact the others.
+layouts, a layout can be applied to workspaces and changes to one workspace will
+not impact others.
+.P
+Monitors can be assigned one workspace at a time, all workspaces are available
+from all monitors, floating windows will retain their relative location
+within each monitor area. If viewing an already visible workspace on another
+monitor, the two workspaces will swap monitors.
 .P
 In tiled layout windows are organized in a master and two stack areas,
 the number of masters and first stack windows can be adjusted
@@ -27,19 +34,34 @@ In floating layout windows are not organized or placed in any particular way
 and can be moved or resized freely.
 .SH OPTIONS
 .TP
+.B \-h
+Prints usage information to standard out and exits.
+.TP
 .B \-v
 Prints version information to standard out and exits.
 .TP
 .B \-s
-Use an existing socket connection file descriptor.
+Use an existing socket connection file descriptor when restarting yaxwm.
+.TP
+.B \-c
+Pass remaining arguments as a command to the running instance of yaxwm.
 .SH USAGE
 .SS COMMANDS
 TODO - Somebody yell at me!
 .SH CUSTOMIZATION
-For basic changes yaxwm can be customized by running commands through yaxcmd.
-On startup yaxwm looks for a yaxwmrc file in $HOME/.config/yaxwm and tries
-to execute it. This file is just a shell script to run commands, it must be
-executable.
+For basic changes yaxwm can be customized by running commands through the
+.B -c
+flag.
+.P
+On startup yaxwm looks for a yaxwmrc file in:
+.TP
+  - $YAXWMRC
+.TP
+  - $XDG_CONFIG_HOME/yaxwm/yaxwmrc
+.TP
+  - $HOME/.config/yaxwm/yaxwmrc
+.P
+in that order and runs the first it can, this file must be executable.
 .P
 Further configuration such as adding layouts or callbacks can be done by
 copying the default config header to config.h, editing it, and recompiling.

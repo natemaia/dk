@@ -1,4 +1,3 @@
 yaxwm
-yaxcmd
-config.h
+yaxwm.h
 *.o

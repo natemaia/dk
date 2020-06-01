@@ -14,7 +14,7 @@ CFLAGS   += -O2 -pedantic -Wall -Wextra
 LDFLAGS  ?=
 LDLIBS    = -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr -lxcb-dpms
 
-all: yaxwm yaxcmd
+all: yaxwm
 
 debug: CPPFLAGS += -DDEBUG
 debug: all
@@ -23,32 +23,26 @@ nostrip: CFLAGS += -g -O0
 nostrip: debug
 
 yaxwm: yaxwm.o
-yaxcmd: yaxcmd.o
 
 yaxwm.o: %.o: %.c
-	@test -f yaxwm.h || cp yaxwm.def.h yaxwm.h
-	${CC} ${CFLAGS} ${CPPFLAGS} -c $< -o $@
-
-yaxcmd.o: %.o: %.c
+	@test -f yaxwm.h || cp -v yaxwm.def.h yaxwm.h
 	${CC} ${CFLAGS} ${CPPFLAGS} -c $< -o $@
 
 clean:
-	rm -f yaxwm yaxcmd yaxwm.o yaxcmd.o
+	rm -f yaxwm yaxwm.o
 
 install: all
 	mkdir -p ${DESTDIR}${PREFIX}/bin
-	cp -f yaxwm yaxcmd ${DESTDIR}${PREFIX}/bin
-	chmod 755 ${DESTDIR}${PREFIX}/bin/yaxcmd ${DESTDIR}${PREFIX}/bin/yaxwm
+	install -Dm755 yaxwm ${DESTDIR}${PREFIX}/bin/
 	mkdir -p ${DESTDIR}${MANPREFIX}/man1
 	sed "s/VERSION/${VERSION}/g" man/yaxwm.1 > ${DESTDIR}${MANPREFIX}/man1/yaxwm.1
-	cp -rfp man/yaxcmd.1 ${DESTDIR}${MANPREFIX}/man1/yaxcmd.1
-	chmod 644 ${DESTDIR}${MANPREFIX}/man1/yaxwm.1 ${DESTDIR}${MANPREFIX}/man1/yaxcmd.1
+	chmod 644 ${DESTDIR}${MANPREFIX}/man1/yaxwm.1
 	mkdir -p ${DESTDIR}${DOCPREFIX}/yaxwm
 	cp -rfp doc/* ${DESTDIR}${DOCPREFIX}/yaxwm
 
 uninstall:
-	rm -f ${DESTDIR}${PREFIX}/bin/yaxwm ${DESTDIR}${PREFIX}/bin/yaxcmd
-	rm -f ${DESTDIR}${MANPREFIX}/man1/yaxwm.1 ${DESTDIR}${MANPREFIX}/man1/yaxcmd.1
+	rm -f ${DESTDIR}${PREFIX}/bin/yaxwm
+	rm -f ${DESTDIR}${MANPREFIX}/man1/yaxwm.1
 	rm -rf ${DESTDIR}${DOCPREFIX}/yaxwm
 
 .PHONY: all debug nostrip clean install uninstall

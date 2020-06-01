@@ -2,22 +2,28 @@
 
 Yet another X window manager, as if we didn't have enough..
 
+---
 
-After using dwm for a long time, changing it, and learning from it; I wanted  
-to write my own window manager. Dwm is great and it does a lot of things right  
-when it comes to simplifying window management. Yaxwm is not a fork of dwm nor  
-is it solely based on dwm, more of a collection of features and ideas from  
-various window managers that I liked.
+A from-scratch tiling window manager written in C using XCB and a collection  
+of features/ideas from various window managers I've used and liked. After  
+using dwm for a long time, changing it, and learning from it; I wanted to  
+write my own window manager. Dwm does a lot of things right when it comes  
+to simplifying window management but lacks standardization in many ways and   
+has issues with various window types.
 
-Some ways in which yaxwm differs include:
+Various feature/highlights:
+
+- Does not require editing source code to customize.
+
+- Highly script-able with the current command set.
+
+- Startup script for configuration or running programs upon starting the window manger.
 
 - Based on xcb instead of xlib, randr extension for multi-head instead of xinerama.
 
 - Dynamic workspaces similar to xmonad, with a workspace centric model at the core.
 
-- Startup script for easy configuration once the window manger is running.
-
-- Like bspwm, yaxwm uses Unix socket communication for control and configuration.
+- Uses a Unix socket and commands to communicate with and control the window manager.
 
 - No support for binding keys, this can be done with an external program like sxhkd.
 
@@ -52,7 +58,7 @@ To compile run
 make
 ```
 
-Edit `src/config.h` to your liking, then run *(as root if needed)*
+Edit `yaxwm.h` if needed, then run *(as root if needed)*
 ```
 make install
 ```
@@ -65,7 +71,10 @@ make uninstall
 
 #### Usage
 
-To start yaxwm you can add `exec yaxwm` to your xinitrc.
+To start yaxwm you can add the following to your `~/.xinitrc`
+```
+exec yaxwm
+```
 
 Optionally copy the example yaxwmrc and/or sxhkdrc to their  
 respective locations
@@ -83,18 +92,26 @@ There are example `yaxwmrc` and `sxhkdrc` files in `doc/` or
 
 Yaxwm looks for a file in the following order
 ```
-$YAXWM_CONF
+$YAXWMRC
 $XDG_CONFIG_HOME/yaxwm/yaxwmrc
 $HOME/.config/yaxwm/yaxwmrc
 ```
 and tries to execute it, **it must be executable**.
 
-Further configuration like new layout and callback functions can be done by  
-copying the default config header `src/config.def.h` to `src/config.h`,  
-editing it and recompiling. This file isn't tracked by git so you can keep  
-configuration across updates.
+Advanced changes and configuration like new layouts, callbacks, or new commands  
+can be done by copying the default config header `yaxwm.def.h` to `yaxwm.h`,  
+editing it and recompiling. This file isn't tracked by git so you can keep your  
+configuration and avoid conflicts when pulling new updates.
 
 #### Commands
+Most if not all of your interaction with the window manager will be using  
+commands in the form of
+```
+yaxwm -c ...
+```
+This will spawn a new instance of yaxwm to write our command into the socket  
+where it can then be read and parsed by the operating yaxwm process.
+
 
 ###### Syntax Outline
 Yaxwm commands have a very basic syntax and parsing, commands are broken  
@@ -157,7 +174,7 @@ For various commands yaxwm will expect a certain data type or format to be given
 
 #### Todo
 
-- Simplify.
+- Code reduction and simplification.
 
 
 #### Contributing

@@ -7,7 +7,7 @@
 # alt + {equal,minus,apostrophe}
 #	 /path/to/script {+5,-5,reset}
 
-# first runs `yaxcmd set gap width $1`, then checks to see what the current
+# first runs `yaxwm -c set gap width $1`, then checks to see what the current
 # gap setting is if it's >=threshold we add slight border transparency
 
 # does not have to be transparency were toggling, could be any setting where
@@ -38,10 +38,10 @@ if (( $# == 0 )); then
 fi
 
 # store the gap width before and after changing
-old=$(yaxcmd print gap)
-yaxcmd set gap width "$1"
+old=$(yaxwm -c print gap)
+yaxwm -c set gap width "$1"
 ret=$? # if we don't cross the threshold this will be our exit code
-new=$(yaxcmd print gap)
+new=$(yaxwm -c print gap)
 
 # did we cross the threshold, if so we need to update the border colours alpha
 if (( (old >= thresh && new < thresh) || (old < thresh && new >= thresh) )); then
@@ -50,7 +50,7 @@ if (( (old >= thresh && new < thresh) || (old < thresh && new >= thresh) )); the
 		c="${col[$i]}"
 		col[$i]="${c/\#/\#$alpha}"
 	done
-	yaxcmd set border colour \
+	yaxwm -c set border colour \
 		focus="${col[f]}" urgent="${col[u]}" unfocus="${col[uf]}" \
 		outer_focus="${col[of]}" outer_urgent="${col[ou]}" outer_unfocus="${col[ouf]}"
 else

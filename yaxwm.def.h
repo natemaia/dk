@@ -101,7 +101,6 @@ static const Keyword setcmds[] = {
 	{ "split",  cmdsplit   },
 	{ "ssplit", cmdssplit  },
 	{ "stack",  cmdnstack  },
-	{ "wsdef",  cmdwsdef   },
 };
 
 /* "win" keyword options, used by cmdwin() to parse arguments

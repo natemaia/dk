@@ -25,7 +25,7 @@ nostrip: debug
 yaxwm: yaxwm.o
 
 yaxwm.o: %.o: %.c
-	@test -f yaxwm.h || cp -v yaxwm.def.h yaxwm.h
+	test -f yaxwm.h || cp yaxwm.def.h yaxwm.h
 	${CC} ${CFLAGS} ${CPPFLAGS} -c $< -o $@
 
 clean:
@@ -38,7 +38,7 @@ install: all
 	sed "s/VERSION/${VERSION}/g" man/yaxwm.1 > ${DESTDIR}${MANPREFIX}/man1/yaxwm.1
 	chmod 644 ${DESTDIR}${MANPREFIX}/man1/yaxwm.1
 	mkdir -p ${DESTDIR}${DOCPREFIX}/yaxwm
-	cp -rfp doc/* ${DESTDIR}${DOCPREFIX}/yaxwm
+	cp -rf doc/* ${DESTDIR}${DOCPREFIX}/yaxwm
 
 uninstall:
 	rm -f ${DESTDIR}${PREFIX}/bin/yaxwm

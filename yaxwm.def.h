@@ -1,5 +1,5 @@
 /* In order to customize settings or add new commands
- * copy it to config.h and edit it
+ * copy this file to yaxwm.h and edit it
  *
  * see license file for copyright and license details */
 
@@ -72,7 +72,7 @@ static WsDefault wsdef = { /* settings for newly created workspaces */
 	0,           /* padr */
 	0,           /* padt */
 	0,           /* padb */
-	0.55,        /* split */
+	0.55,        /* msplit */
 	0.55,        /* ssplit */
 	&layouts[0]  /* layout */
 };
@@ -98,7 +98,7 @@ static const Keyword setcmds[] = {
 	{ "master", cmdnmaster },
 	{ "mouse",  cmdmouse   },
 	{ "pad",    cmdpad     },
-	{ "split",  cmdsplit   },
+	{ "msplit", cmdmsplit   },
 	{ "ssplit", cmdssplit  },
 	{ "stack",  cmdnstack  },
 };

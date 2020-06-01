@@ -20,14 +20,15 @@ logfile="$HOME/.yaxwmrc.log"
 
 	# default workspace values used when allocating new workspaces
 	# can be applied to all existing workspaces when passed 'apply'
-	yaxwm -c set ws=default apply layout=tile master=1 stack=3 gap=0 split=0.55 ssplit=0.55
+	yaxwm -c set ws=default apply layout=tile master=1 stack=4 gap=0 msplit=0.55 ssplit=0.55
 
 	# rename workspace(s)
-	yaxwm -c set ws=1 name="workspace 1" ws=2 name="workspace 2"
+	yaxwm -c set ws=1 name="term" ws=2 name="web" ws=3 name="game" 
 
-	# set workspace 10 to use some padding and gaps
-	yaxwm -c set ws=10 pad left=200 right=200 top=100 bottom=100
-	yaxwm -c set ws=10 gap width=50
+	# use some padding and gaps on the last workspace
+	last=$(yaxwm -c print numws)
+	yaxwm -c set ws="$last" pad left=200 right=200 top=100 bottom=100
+	yaxwm -c set ws="$last" gap width=50
 
 
 	# misc settings
@@ -49,25 +50,25 @@ logfile="$HOME/.yaxwmrc.log"
 
 	# borders
 	# ---------
-	# set border width and colour for each window state
-	yaxwm -c set border colour focus='#6699cc' unfocus='#000000' urgent='#ee5555'
 
-	# alternatively, set double border outer width and colour for each window state
-	# yaxwm -c set border width=6 outer_width=5 smart=true
-	# yaxwm -c set border colour focus='#6699cc' unfocus='#444444' urgent='#ee5555' \
-	# 	outer_focus='#222222' outer_unfocus='#222222' outer_urgent='#222222'
+	# set border width and colour for each window state
+	# yaxwm -c set border width=1 colour focus='#6699cc' unfocus='#000000' urgent='#ee5555'
+
+	# alternatively, enable split borders and colours
+	yaxwm -c set border width=5 outer=3 colour \
+		focus='#6699cc' unfocus='#444444' urgent='#ee5555' \
+		outer_focus='#222222' outer_unfocus='#222222' outer_urgent='#222222'
 
 
 	# window rules
 	# --------------
+	# rule class, instance, and title regexes are always case insensitive
+
 	# open window(s) on a specific workspace (assigned monitor)
 	yaxwm -c rule class="^gimp$" ws=2
 
 	# open window(s) on a monitor by number or name (active workspace on monitor)
 	yaxwm -c rule class="^chromium$" mon="HDMI-A-0"
-
-	# focus window and workspace on opening
-	yaxwm -c rule class="^firefox$" ws=1 focus=true
 
 	# open window(s) and use a callback function (defined in config.h)
 	# eg. mpv --x11-name=albumart /path/to/media
@@ -82,9 +83,15 @@ logfile="$HOME/.yaxwmrc.log"
 	# open window(s) with sticky and floating enabled to view on all workspaces.
 	yaxwm -c rule class="^stickyterm$" stick=true float=true w=1280 h=720
 
+	# focus window and workspace on opening
+	yaxwm -c rule class="^firefox$" ws=1 focus=true
+
 	# update or remove an existing rule with the same match patterns
-	yaxwm -c rule class="^firefox$" mon="My New Monitor"
+	yaxwm -c rule class="^firefox$" mon="HDMI-A-0"
 	yaxwm -c rule remove class="^firefox$"
+
+	# apply current rule set to all existing windows
+	yaxwm -c rule apply all
 
 } >> "$logfile" 2>&1 # append responses
 

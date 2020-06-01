@@ -4,20 +4,19 @@ Yet another X window manager, as if we didn't have enough..
 
 ---
 
-A from-scratch tiling window manager written in C using XCB and a collection  
-of features/ideas from various window managers I've used and liked. After  
-using dwm for a long time, changing it, and learning from it; I wanted to  
-write my own window manager. Dwm does a lot of things right when it comes  
-to simplifying window management but lacks standardization in many ways and   
-has issues with various window types.
+A from-scratch tiling window manager written in C using xcb. Features  
+ideas from myself and other users as well as other window managers we've  
+used and liked. After bouncing around various window managers for some years  
+then using and hacking on dwm for a year or so I decided to try writing my  
+own window manager.
 
 Various feature/highlights:
 
 - Does not require editing source code to customize.
 
-- Highly script-able with the current command set.
+- Intended to be hackable source and scriptable using shell commands.
 
-- Startup script for configuration or running programs upon starting the window manger.
+- Startup script for configuring the wm and running programs upon startup.
 
 - Based on xcb instead of xlib, randr extension for multi-head instead of xinerama.
 
@@ -26,6 +25,9 @@ Various feature/highlights:
 - Uses a Unix socket and commands to communicate with and control the window manager.
 
 - No support for binding keys, this can be done with an external program like sxhkd.
+
+- No built-in bar or font drawing, programs like [lemonbar](https://github.com/LemonBoy/bar),
+[polybar](https://github.com/polybar/polybar), or [tint2](https://gitlab.com/o9000/tint2) work well.
 
 - Mostly adheres to
 [ICCCM](https://www.x.org/releases/X11R7.6/doc/xorg-docs/specs/ICCCM/icccm.html#client_to_window_manager_communication),

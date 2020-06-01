@@ -335,7 +335,7 @@ struct Workspace {
 	char name[NAME_MAX];
 	int nmaster, nstack, gappx, defgap;
 	int padr, padl, padt, padb;
-	float split;
+	float msplit;
 	float ssplit;
 	Layout *layout;
 	Monitor *mon;
@@ -346,7 +346,7 @@ struct Workspace {
 struct WsDefault {
 	int nmaster, nstack, gappx;
 	int padl, padr, padt, padb;
-	float split;
+	float msplit;
 	float ssplit;
 	Layout *layout;
 };
@@ -385,7 +385,7 @@ static void cmdresize(char **);
 static void cmdrule(char **);
 static void cmdsend(int);
 static void cmdset(char **);
-static void cmdsplit(char **);
+static void cmdmsplit(char **);
 static void cmdssplit(char **);
 static void cmdstick(char **);
 static void cmdswap(char **);
@@ -787,7 +787,7 @@ void applywsdefaults(void)
 		ws->layout = wsdef.layout;
 		ws->nmaster = wsdef.nmaster;
 		ws->nstack = wsdef.nstack;
-		ws->split = wsdef.split;
+		ws->msplit = wsdef.msplit;
 		ws->ssplit = wsdef.ssplit;
 		ws->padl = wsdef.padl;
 		ws->padr = wsdef.padr;
@@ -1440,8 +1440,8 @@ void cmdprint(char **argv)
 			fprintf(cmdresp, "%d", ws->nmaster);
 		else if (!strcmp("stack", *argv))
 			fprintf(cmdresp, "%d", ws->nstack);
-		else if (!strcmp("split", *argv))
-			fprintf(cmdresp, "%0.2f", ws->split);
+		else if (!strcmp("msplit", *argv))
+			fprintf(cmdresp, "%0.2f", ws->msplit);
 		else if (!strcmp("ssplit", *argv))
 			fprintf(cmdresp, "%0.2f", ws->ssplit);
 		else if (!strcmp("layout", *argv))
@@ -1508,7 +1508,7 @@ void cmdresize(char **argv)
 			for (i = 0, t = nextt(c->ws->clients); t; t = nextt(t->next), i++)
 				if (t == c) {
 					if (c->ws->nmaster && i < c->ws->nmaster + c->ws->nstack)
-						sf = &c->ws->split;
+						sf = &c->ws->msplit;
 					f = relw ? ((c->ws->mon->ww * *sf) + w) / c->ws->mon->ww : w / c->ws->mon->ww;
 					if (f < 0.05 || f > 0.95) {
 						fprintf(cmdresp, "!window width exceeded limit: %f - f: %f",
@@ -1599,9 +1599,9 @@ void cmdrule(char **argv)
 			argv = parsegeom(argv + 1, 'x', &r.x, NULL, &r.xgrav);
 		else if (!strcmp(*argv, "y"))
 			argv = parsegeom(argv + 1, 'y', &r.y, NULL, &r.ygrav);
-		else if (!strcmp(*argv, "w"))
+		else if (!strcmp(*argv, "w") || !strcmp("width", *argv))
 			argv = parseint(argv + 1, &r.w, NULL, 0);
-		else if (!strcmp(*argv, "h"))
+		else if (!strcmp(*argv, "h") || !strcmp("height", *argv))
 			argv = parseint(argv + 1, &r.h, NULL, 0);
 		else if (!strcmp(*argv, "bw"))
 			argv = parseintclamp(argv + 1, &r.bw, NULL, 0, scr_h / 6);
@@ -1719,13 +1719,13 @@ finish:
 		setnetwsnames();
 }
 
-void cmdsplit(char **argv)
+void cmdmsplit(char **argv)
 {
 	int rel = 1;
 	float f = 0.0;
 
 	parsefloat(argv, &f, &rel);
-	adjustfsetting(f, rel, &setws->split);
+	adjustfsetting(f, rel, &setws->msplit);
 }
 
 void cmdssplit(char **argv)
@@ -1905,9 +1905,9 @@ void cmdwsdef(char **argv)
 		} else if (!strcmp(*argv, "stack")) {
 			inpad = 0;
 			argv = parseintclamp(argv + 1, &wsdef.nstack, NULL, 0, INT_MAX - 1);
-		} else if (!strcmp(*argv, "split")) {
+		} else if (!strcmp(*argv, "msplit")) {
 			inpad = 0;
-			argv = parsefloat(argv + 1, &wsdef.split, NULL);
+			argv = parsefloat(argv + 1, &wsdef.msplit, NULL);
 		} else if (!strcmp(*argv, "ssplit")) {
 			inpad = 0;
 			argv = parsefloat(argv + 1, &wsdef.ssplit, NULL);
@@ -1943,9 +1943,9 @@ void cmdwsdef(char **argv)
 		if (*argv)
 			argv++;
 	}
-	DBG("cmdwsdef: layout: %s, nmaster: %d, nstack: %d, gap: %d, split: %f,"
+	DBG("cmdwsdef: layout: %s, nmaster: %d, nstack: %d, gap: %d, msplit: %f,"
 			" ssplit: %f, padl: %d, padr: %d, padt: %d, padb: %d", wsdef.layout->name,
-			wsdef.nmaster, wsdef.nstack, wsdef.gappx, wsdef.split, wsdef.ssplit,
+			wsdef.nmaster, wsdef.nstack, wsdef.gappx, wsdef.msplit, wsdef.ssplit,
 			wsdef.padl, wsdef.padr, wsdef.padt, wsdef.padb);
 	if (apply)
 		applywsdefaults();
@@ -2380,6 +2380,8 @@ void eventloop(void)
 	confd = xcb_get_file_descriptor(con);
 	nfds = MAX(confd, sockfd) + 1;
 	while (running) {
+		if (xcb_connection_has_error(con))
+			break;
 		tv.tv_sec = 2;
 		tv.tv_usec = 0;
 		xcb_flush(con);
@@ -3131,22 +3133,18 @@ void initwm(void)
 	for (i = 0; i < LEN(sigs); i++)
 		if (sigaction(sigs[i], &sa, NULL) < 0)
 			err(1, "unable to setup handler for signal: %d", sigs[i]);
-
 	if ((randrbase = initrandr()) < 0 || !monitors)
 		initmon(0, "default", 0, 0, 0, scr_w, scr_h);
 	updnumws(globalcfg[NumWs]);
 	selws = workspaces;
 	selmon = selws->mon;
-
 	for (i = 0; i < LEN(dborder); i++)
 		dborder[i] = border[i];
-
 	if (xcb_cursor_context_new(con, scr, &ctx) < 0)
 		err(1, "unable to create cursor context");
 	for (i = 0; i < LEN(cursors); i++)
 		cursor[i] = xcb_cursor_load_cursor(ctx, cursors[i]);
 	xcb_cursor_context_free(ctx);
-
 	initatoms(wmatom, wmatoms, LEN(wmatoms));
 	initatoms(netatom, netatoms, LEN(netatoms));
 	wmcheck = xcb_generate_id(con);
@@ -3184,7 +3182,7 @@ Workspace *initws(int num)
 	ws->layout = wsdef.layout;
 	ws->nmaster = MAX(0, wsdef.nmaster);
 	ws->nstack = MAX(0, wsdef.nstack);
-	ws->split = CLAMP(wsdef.split, 0.05, 0.95);
+	ws->msplit = CLAMP(wsdef.msplit, 0.05, 0.95);
 	ws->ssplit = CLAMP(wsdef.ssplit, 0.05, 0.95);
 	ws->padl = MAX(0, wsdef.padl);
 	ws->padr = MAX(0, wsdef.padr);
@@ -4184,7 +4182,7 @@ int tiler(Client *c, Client *p, int ww, int wh, int x, int y,
 	int ret = 1;
 	int b = bw ? c->bw : bw;
 
-	DBG("tileresize: 0x%08x - %d,%d @ %dx%d - newy: %d, nrem: %d, avail; %d",
+	DBG("tiler: 0x%08x - %d,%d @ %dx%d - newy: %d, nrem: %d, avail; %d",
 			c->win, x, y, w, h, *newy, nrem, avail);
 	if (!c->hoff && h < globalcfg[MinWH]) {
 		c->floating = 1;
@@ -4249,7 +4247,7 @@ int tile(Workspace *ws)
 	if (n <= ws->nmaster)
 		mw = ww, ss = 1;
 	else if (ws->nmaster)
-		ns = 2, mw = ww * ws->split;
+		ns = 2, mw = ww * ws->msplit;
 	if (n - ws->nmaster <= ws->nstack)
 		sw = ww - mw;
 	else if (ws->nstack)

@@ -643,6 +643,7 @@ void adjustworkspace(char **argv)
 
 	fn = cmdview;
 	cws = selws;
+	cmdclient = selws->sel;
 	cm = cws->sel ? cws->sel->ws->mon : cws->mon;
 	if (*argv) {
 		for (i = 0; i < LEN(wsmoncmds); i++)
@@ -657,6 +658,8 @@ void adjustworkspace(char **argv)
 			cws = cmdclient->ws;
 			cm = cws->mon;
 			argv++;
+		} else {
+			cmdclient = selws->sel;
 		}
 	}
 	if (!*argv)

@@ -437,6 +437,7 @@ static Client *nextt(Client *);
 static void offsetfloat(Client *, int, int *, int *, int *, int *);
 static char **parsebool(char **, int *);
 static void parsecmd(char *);
+static int parseclient(char **, Client **);
 static char **parsecolour(char **, unsigned int *);
 static char **parsefloat(char **, float *, int *);
 static char **parsegeom(char **, char, int *, int *, int *);
@@ -630,6 +631,95 @@ void adjustsetting(int i, int relative, int *setting, int other, int setborderga
 		return;
 	if ((n = CLAMP(*setting + i, 0, max)) != *setting)
 		*setting = n;
+}
+
+void adjustworkspace(char **argv)
+{
+	int opt, r;
+	unsigned int i;
+	void (*fn)(int);
+	Monitor *m = NULL, *cm;
+	Workspace *ws = NULL, *cws, *save;
+
+	fn = cmdview;
+	cws = selws;
+	cm = cws->sel ? cws->sel->ws->mon : cws->mon;
+	if (*argv) {
+		for (i = 0; i < LEN(wsmoncmds); i++)
+			if (wsmoncmds[i].fn && !strcmp(wsmoncmds[i].name, *argv)) {
+				fn = wsmoncmds[i].fn;
+				argv++;
+				break;
+			}
+		if (fn != cmdview && (r = parseclient(argv, &cmdclient))) {
+			if (r == -1)
+				return;
+			cws = cmdclient->ws;
+			cm = cws->mon;
+			argv++;
+		}
+	}
+	if (!*argv)
+		goto noargs;
+	if ((opt = parseopt(argv, opts)) >= 0) {
+		if (opt == Last) {
+			if (cmdusemon)
+				ws = lastmon && lastmon->connected ? lastmon->ws : cws;
+			else
+				ws = lastws ? lastws : cws;
+		} else if (opt == Next) {
+			if (cmdusemon) {
+				if (!(m = nextmon(cm)))
+					m = nextmon(monitors);
+				ws = m->ws;
+			} else {
+				ws = cws->next ? cws->next : workspaces;
+			}
+		} else if (cmdusemon && opt == Prev) {
+			FIND_PREVMON(m, cm, monitors);
+			ws = m->ws;
+		} else if (opt == Prev) {
+			FIND_PREV(ws, cws, workspaces);
+		} else {
+			r = 0;
+			save = cws;
+			while (!ws && r < globalcfg[NumWs]) {
+				if (opt == NextNE) {
+					if (cmdusemon) {
+						if (!(m = nextmon(cm)))
+							m = nextmon(monitors);
+						ws = m->ws;
+					} else
+						ws = cws->next ? cws->next : workspaces;
+				} else if (cmdusemon) {
+					FIND_PREVMON(m, cm, monitors);
+					ws = m->ws;
+				} else {
+					FIND_PREV(ws, cws, workspaces);
+				}
+				cws = ws;
+				cm = ws->mon;
+				if (!ws->clients && ws != save)
+					ws = NULL;
+				r++;
+			}
+		}
+	} else {
+		parseintclamp(argv, &opt, NULL, 1, globalcfg[NumWs]);
+		if (!cmdusemon)
+			ws = itows(opt - 1);
+		else
+			ws = (m = itomon(opt - 1)) && m->connected ? m->ws : cws;
+	}
+
+	if (ws)
+		fn(ws->num);
+	else
+		fprintf(cmdresp, "!unable to locate %s", cmdusemon ? "monitor" : "workspace");
+	return;
+
+noargs:
+	fprintf(cmdresp, "!%s %s", cmdusemon ? "mon" : "ws", enoargs);
 }
 
 void applypanelstrut(Panel *p)
@@ -1129,59 +1219,9 @@ void cmdlayout(char **argv)
 
 void cmdmon(char **argv)
 {
-	int opt;
-	char *end;
-	unsigned int i;
-	Monitor *m = NULL;
-	void (*fn)(int) = cmdview;
-
-	cmdusemon = 1;
-	cmdclient = selws->sel;
 	if (!monitors || !nextmon(monitors))
 		return;
-	if (!*argv)
-		goto noargs;
-	for (i = 0; i < LEN(wsmoncmds); i++)
-		if (wsmoncmds[i].fn && !strcmp(wsmoncmds[i].name, *argv)) {
-			fn = wsmoncmds[i].fn;
-			argv++;
-			break;
-		}
-	if (fn != cmdview && *argv && (*argv[0] == '#' || (*argv[0] == '0' && *argv[0] == 'x'))
-			&& (i = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0')
-	{
-		if (!(cmdclient = wintoclient(i))) {
-			fprintf(cmdresp, "!invalid window id: %s", *argv);
-			return;
-		}
-		argv++;
-	}
-	if (!*argv)
-		goto noargs;
-	if ((opt = parseopt(argv, opts)) >= 0) {
-		if (opt == Last) {
-			m = lastmon && lastmon->connected ? lastmon : selws->mon;
-		} else if (opt == Next) {
-			if (!(m = nextmon(cmdclient->ws->mon->next)))
-				m = nextmon(monitors);
-		} else {
-			FIND_PREVMON(m, cmdclient->ws->mon, monitors);
-		}
-	} else {
-		parseintclamp(argv, &opt, NULL, 1, globalcfg[NumWs]);
-		FOR_EACH(m, monitors)
-			if (m->num == opt - 1)
-				break;
-	}
-
-	if (m && m->ws)
-		fn(m->ws->num);
-	else
-		fprintf(cmdresp, "!unable to locate monitor");
-	return;
-
-noargs:
-	fprintf(cmdresp, "!mon %s", enoargs);
+	adjustworkspace(argv);
 }
 
 void cmdmouse(char **argv)
@@ -1819,68 +1859,9 @@ void cmdwm(char **argv)
 
 void cmdws(char **argv)
 {
-	int opt;
-	char *end;
-	unsigned int i;
-	Workspace *ws = NULL, *cur, *save;
-	void (*fn)(int) = cmdview;
-
-	cmdusemon = 0;
-	cmdclient = selws->sel;
-	if (!workspaces->next)
+	if (!workspaces || !workspaces->next)
 		return;
-	if (!*argv)
-		goto noargs;
-	for (i = 0; i < LEN(wsmoncmds); i++)
-		if (wsmoncmds[i].fn && !strcmp(wsmoncmds[i].name, *argv)) {
-			fn = wsmoncmds[i].fn;
-			argv++;
-			break;
-		}
-	if (fn != cmdview && *argv && (*argv[0] == '#' || (*argv[0] == '0' && *argv[0] == 'x'))
-			&& (i = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0')
-	{
-		if (!(cmdclient = wintoclient(i))) {
-			fprintf(cmdresp, "!invalid window id: %s", *argv);
-			return;
-		}
-		argv++;
-	}
-	if (!*argv)
-		goto noargs;
-	if ((opt = parseopt(argv, opts)) >= 0) {
-		if (opt == Last)
-			ws = lastws ? lastws : cmdclient->ws;
-		else if (opt == Next)
-			ws = cmdclient->ws->next ? cmdclient->ws->next : workspaces;
-		else if (opt == Prev)
-			FIND_PREV(ws, cmdclient->ws, workspaces);
-		else {
-			save = cmdclient->ws;
-			cur = save;
-			while (!ws) {
-				if (opt == NextNE)
-					ws = cur->next ? cur->next : workspaces;
-				else
-					FIND_PREV(ws, cur, workspaces);
-				cur = ws;
-				if (!ws->clients && ws != save)
-					ws = NULL;
-			}
-		}
-	} else {
-		parseintclamp(argv, &opt, NULL, 1, globalcfg[NumWs]);
-		ws = itows(opt - 1);
-	}
-
-	if (ws)
-		fn(ws->num);
-	else
-		fprintf(cmdresp, "!unable to locate workspace");
-	return;
-
-noargs:
-	fprintf(cmdresp, "!ws %s", enoargs);
+	adjustworkspace(argv);
 }
 
 void cmdwsdef(char **argv)
@@ -3460,6 +3441,25 @@ char **parsebool(char **argv, int *setting)
 	return argv;
 }
 
+int parseclient(char **argv, Client **c)
+{
+	char *end;
+	unsigned int i;
+
+	if (argv && *argv) {
+		if ((*argv[0] == '#' || (*argv[0] == '0' && *argv[0] == 'x'))
+				&& (i = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0')
+		{
+			if (!(*c = wintoclient(i))) {
+				fprintf(cmdresp, "!invalid window id argument: %s", *argv);
+				return -1;
+			}
+			return 1;
+		}
+	}
+	return 0;
+}
+
 void parsecmd(char *buf)
 {
 	unsigned int i, n = 0, matched = 0;
@@ -3478,7 +3478,7 @@ void parsecmd(char *buf)
 				}
 				argv[n] = NULL;
 				if (*argv) {
-					cmdusemon = 0;
+					cmdusemon = keywords[i].fn == cmdmon;
 					keywords[i].fn(argv);
 				} else
 					fprintf(cmdresp, "!%s %s", k, enoargs);

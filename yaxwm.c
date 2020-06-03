@@ -2413,7 +2413,8 @@ void eventrandr(xcb_randr_screen_change_notify_event_t *re)
 		iferr(0, "unable to get dpms info reply", e);
 	else {
 		DBG("eventrandr: DPMS - state: %d, power_level: %d", info->state, info->power_level);
-		upd = !info->state || !info->power_level;
+		if (info->state)
+			upd = info->power_level == XCB_DPMS_DPMS_MODE_ON;
 		free(info);
 	}
 	free(dpms);
@@ -4445,9 +4446,11 @@ int updrandr(void)
 
 	rc = xcb_randr_get_screen_resources_current(con, root);
 	if ((r = xcb_randr_get_screen_resources_current_reply(con, rc, &e))) {
-		n = xcb_randr_get_screen_resources_current_outputs_length(r);
 		o = xcb_randr_get_screen_resources_current_outputs(r);
-		changed = updoutputs(o, n, r->config_timestamp);
+		if ((n = xcb_randr_get_screen_resources_current_outputs_length(r)) <= 0)
+			warnx("no monitors available");
+		else
+			changed = updoutputs(o, n, r->config_timestamp);
 		free(r);
 	} else
 		iferr(0, "unable to get screen resources", e);

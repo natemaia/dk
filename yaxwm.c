@@ -1348,10 +1348,24 @@ void cmdprint(char **argv)
 		fprintf(cmdresp, "%d", globalcfg[MinXY]);
 	else if (!strcmp("win_minwh", *argv))
 		fprintf(cmdresp, "%d", globalcfg[MinWH]);
-	else if (!strcmp("mon", *argv))
-		fprintf(cmdresp, "%d:%s %d,%d %dx%d", selws->mon->num + 1, selws->mon->name,
-				selws->mon->x, selws->mon->y, selws->mon->w, selws->mon->h);
-	else if (!strcmp("rule", *argv)) {
+	else if (!strcmp("mon", *argv)) {
+		argv++;
+		if (!strcmp("num", *argv)) {
+			fprintf(cmdresp, "%d", selws->mon->num + 1);
+			return;
+		} else if (!strcmp("name", *argv)) {
+			fprintf(cmdresp, "%s", selws->mon->name);
+			return;
+		} else if (!strcmp("geom", *argv)) {
+			fprintf(cmdresp, "%d,%d %dx%d", selws->mon->x, selws->mon->y,
+					selws->mon->w, selws->mon->h);
+			return;
+		} else if (!*argv) {
+			fprintf(cmdresp, "%d:%s %d,%d %dx%d", selws->mon->num + 1, selws->mon->name,
+					selws->mon->x, selws->mon->y, selws->mon->w, selws->mon->h);
+			return;
+		}
+	} else if (!strcmp("rule", *argv)) {
 		FOR_EACH(r, rules) {
 			fprintf(cmdresp, "class: %s, inst: %s, title: %s, ws: %d, mon: %s, "
 					"float: %d, stick: %d, focus: %d, callback: %s, "
@@ -1363,7 +1377,7 @@ void cmdprint(char **argv)
 	} else if (!strcmp("current", *argv)) {
 		argv++;
 		if (!strcmp("win", *argv))
-			fprintf(cmdresp, "#%08x", selws->sel ? selws->sel->win : 0);
+			fprintf(cmdresp, "0x%08x", selws->sel ? selws->sel->win : 0);
 		else if (!strcmp("ws", *argv))
 			fprintf(cmdresp, "%d:%s", selws->num + 1, selws->name);
 		else if (!strcmp("mon", *argv))
@@ -1377,7 +1391,7 @@ void cmdprint(char **argv)
 		argv++;
 		if (!strcmp("win", *argv)) {
 			FOR_CLIENTS(c, w)
-				fprintf(cmdresp, "#%08x %d:%d%s", c->win, w->num + 1,
+				fprintf(cmdresp, "0x%08x %d:%d%s", c->win, w->num + 1,
 						w->mon->num + 1, w->next ? "\n" : "");
 		} else if (!strcmp("ws", *argv)) {
 			FOR_EACH(w, workspaces)
@@ -1395,7 +1409,7 @@ void cmdprint(char **argv)
 		argv++;
 		if (!*argv) {
 			if (selws->sel)
-				fprintf(cmdresp, "#%08x", selws->sel->win);
+				fprintf(cmdresp, "0x%08x", selws->sel->win);
 			return;
 		} else if ((ui = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0') {
 			if (!(c = wintoclient(ui))) {
@@ -1472,6 +1486,12 @@ void cmdprint(char **argv)
 			argv++;
 			if (!*argv) {
 				fprintf(cmdresp, "%d:%s", selws->num + 1, selws->name);
+				return;
+			} else if (!strcmp("num", *argv)) {
+				fprintf(cmdresp, "%d", selws->num + 1);
+				return;
+			} else if (!strcmp("name", *argv)) {
+				fprintf(cmdresp, "%s", selws->name);
 				return;
 			} else if ((i = strtol(*argv, &end, 0)) <= 0 || *end != '\0' || !(ws = itows(i - 1))) {
 				fprintf(cmdresp, "!invalid workspace index: %s", *argv);
@@ -3796,6 +3816,14 @@ void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, i
 		resize(c, x, y, w, h, bw);
 }
 
+void restackwin(xcb_window_t win, xcb_window_t sib, uint32_t mode)
+{
+	if (sib == XCB_NONE)
+		return;
+	uint32_t v[] = { sib, mode };
+	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_SIBLING | XCB_CONFIG_WINDOW_STACK_MODE, v);
+}
+
 void restack(Workspace *ws)
 {
 	Desk *d;
@@ -3811,11 +3839,13 @@ void restack(Workspace *ws)
 			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	if (FLOATING(c))
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-	if (ws->layout->fn) {
+	if (ws->layout->fn)
 		FOR_STACK(c, ws->stack)
 			if (!c->floating && c->ws == c->ws->mon->ws)
 				setstackmode(c->win, XCB_STACK_MODE_BELOW);
-	}
+	FOR_EACH(c, ws->clients)
+		if (c->trans && FLOATING(c))
+			restackwin(c->win, c->trans->win, XCB_STACK_MODE_ABOVE);
 	FOR_EACH(d, desks)
 		if (d->mon == ws->mon)
 			setstackmode(c->win, XCB_STACK_MODE_BELOW);
@@ -3961,7 +3991,7 @@ void setfullscreen(Client *c, int fullscreen)
 		c->w = c->old_w;
 		c->h = c->old_h;
 		resize(c, c->x, c->y, c->w, c->h, c->bw);
-		layoutws(c->ws);
+		needsrefresh++;
 	}
 }
 

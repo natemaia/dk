@@ -49,14 +49,15 @@
 #define CLAMP(x, min, max)  (MIN(MAX((x), (min)), (max)))
 #define LEN(x)              (sizeof(x) / sizeof(x[0]))
 #define CLNMOD(mod)         (mod & ~(lockmask | XCB_MOD_MASK_LOCK))
-#define FLOATING(c)         ((c)->floating || !(c)->ws->layout->fn)
-#define FULLSCREEN(c)       ((c)->fullscreen && !(c)->fakefull)
 #define EVTYPE(e)           (e->response_type &  0x7f)
 #define EVSENT(e)           (e->response_type & ~0x7f)
 #define XYMASK              (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y)
 #define WHMASK              (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT)
 #define BUTTONMASK          (XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE)
-#define ISFULL(c)           ((c)->fullscreen && (c)->w == (c)->ws->mon->w && (c)->h == (c)->ws->mon->h)
+
+#define ISFULL(c)           (((c)->state & STATE_FULLSCREEN) && (c)->w == (c)->ws->mon->w && (c)->h == (c)->ws->mon->h)
+#define ISFLOATING(c)       (((c)->state & STATE_FLOATING) || !(c)->ws->layout->fn)
+#define ISFULLSCREEN(c)     (((c)->state & STATE_FULLSCREEN) && !((c)->state & STATE_FAKEFULL))
 
 #define FOR_EACH(v, list)\
 	for ((v) = (list); (v); (v) = (v)->next)
@@ -68,7 +69,7 @@
 #define DETACH(v, listptr)\
 		while (*(listptr) && *(listptr) != (v))\
 			(listptr) = &(*(listptr))->next;\
-		*(listptr) = (v)->next;\
+		*(listptr) = (v)->next
 
 #define FOR_STACK(v, list)\
 	for ((v) = (list); (v); (v) = (v)->snext)
@@ -99,6 +100,18 @@
 			(type), (membsize), (nmemb), (value))
 
 /* enums */
+enum States {
+	STATE_NONE = 0,
+	STATE_FAKEFULL = (1 << 0),
+	STATE_FIXED = (1 << 1),
+	STATE_FLOATING = (1 << 2),
+	STATE_FULLSCREEN = (1 << 3),
+	STATE_NOBORDER = (1 << 4),
+	STATE_NOINPUT = (1 << 5),
+	STATE_STICKY = (1 << 6),
+	STATE_URGENT = (1 << 7),
+};
+
 enum Cursors {
 	Move,
 	Normal,
@@ -128,7 +141,7 @@ enum Borders {
 enum DirOpts {
 	Next,
 	Prev,
-	Last,  /* last active */
+	Last,   /* last active */
 	NextNE, /* non-empty */
 	PrevNE, /* non-empty */
 };
@@ -244,7 +257,6 @@ typedef struct Command Command;
 typedef struct Callback Callback;
 typedef struct Workspace Workspace;
 typedef struct WsDefault WsDefault;
-typedef struct ClientState ClientState;
 
 typedef xcb_get_geometry_reply_t Geometry;
 typedef xcb_get_window_attributes_reply_t WindowAttr;
@@ -261,7 +273,8 @@ struct Desk {
 struct Rule {
 	int x, y, w, h, bw;
 	int xgrav, ygrav;
-	int ws, floating, sticky, focus;
+	int ws, focus;
+	int floating, sticky;
 	char *class, *inst, *title, *mon;
 	Callback *cb;
 	regex_t classreg, instreg, titlereg;
@@ -280,14 +293,9 @@ struct Client {
 	int x, y, w, h, bw, hoff, depth;
 	int old_x, old_y, old_w, old_h, old_bw;
 	int max_w, max_h, min_w, min_h;
-	int base_w, base_h, increment_w, increment_h;
+	int base_w, base_h, inc_w, inc_h;
 	float min_aspect, max_aspect;
-
-	int sticky, fixed, floating, fullscreen; /* TODO: turn toggles into bit fields */
-	int fakefull, urgent, noinput, noborder, oldstate;
-
-	/* ClientState *s, *o; */
-
+	unsigned int state, old_state;
 	Client *trans, *next, *snext;
 	Workspace *ws;
 	Callback *cb;
@@ -351,20 +359,9 @@ struct WsDefault {
 	Layout *layout;
 };
 
-struct ClientState {
-	unsigned int fakefull:1;
-	unsigned int fixed:1;
-	unsigned int floating:1;
-	unsigned int fullscreen:1;
-	unsigned int noborder:1;
-	unsigned int noinput:1;
-	unsigned int sticky:1;
-	unsigned int urgent:1;
-	unsigned int :24;
-};
-
 
 /* function prototypes */
+static void applyrule(Client *c, Rule *r, int *ws, int *focus, int *focusmon);
 static void cmdborder(char **);
 static void cmdcycle(char **);
 static void cmdfakefull(char **);
@@ -725,6 +722,57 @@ noargs:
 	fprintf(cmdresp, "!%s %s", cmdusemon ? "mon" : "ws", enoargs);
 }
 
+void applyclientrule(Client *c, Rule *wr)
+{
+	Rule *r = wr;
+	xcb_atom_t cur;
+	int ws, focus = 0, focusmon = 0, decorate = 1;
+	char title[NAME_MAX], class[NAME_MAX], inst[NAME_MAX];
+
+	DBG("applyclientrule: 0x%08x", c->win);
+	title[0] = class[0] = inst[0] = '\0';
+	if (!wintextprop(c->win, netatom[Name], title, sizeof(title))
+			&& !wintextprop(c->win, XCB_ATOM_WM_NAME, title, sizeof(title)))
+		title[0] = '\0';
+	if (!winclassprop(c->win, class, inst, sizeof(class), sizeof(inst)))
+		inst[0] = class[0] = '\0';
+
+	if (c->trans)
+		cur = c->trans->ws->num;
+	else if (!winprop(c->win, netatom[WmDesktop], &cur) || cur > 99)
+		cur = selws->num;
+	ws = cur;
+	if (title[0] != '\0' || class[0] != '\0' || inst[0] != '\0') {
+		if (r && !rulecmp(r, title, class, inst))
+			r = NULL;
+		else if (!r)
+			for (r = rules; r; r = r->next)
+				if (rulecmp(r, title, class, inst))
+					break;
+		if (r)
+			applyrule(c, r, &ws, &focus, &focusmon);
+	}
+
+	if ((c->bw == 0 && border[Width]) || (winmotifhints(c->win, &decorate) && decorate == 0)) {
+		c->bw = 0;
+		c->state |= STATE_NOBORDER;
+	}
+	if ((c->state & STATE_STICKY) || c->trans)
+		c->state |= STATE_FLOATING;
+	if (ws + 1 > globalcfg[NumWs] && ws <= 99)
+		updnumws(ws + 1);
+	setclientws(c, ws);
+	if (focus && c->ws != selws) {
+		cmdusemon = focusmon;
+		cmdview(c->ws->num);
+	}
+	if (r)
+		gravitate(c, r->xgrav, r->ygrav, 1);
+	DBG("applyclientrule: ws: %d, mon: %s, float: %d, stick: %d, focus: %d, x: %d, y: %d, w: %d,"
+			" h: %d, bw: %d, cb: %s", c->ws->num, c->ws->mon->name, (c->state & STATE_FLOATING),
+			(c->state & STATE_STICKY), focus, c->x, c->y, c->w, c->h, c->bw, c->cb ? c->cb->name : "(null)");
+}
+
 void applypanelstrut(Panel *p)
 {
 	if (p->mon->x + p->strut_l > p->mon->wx)
@@ -749,14 +797,14 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 	*h = MAX(*h, MIN(globalcfg[MinWH], c->min_h));
 	if (usermotion) {
 		if (!mouse) {
-			if (*w > c->w && c->increment_w > *w - c->w)
-				*w = c->w + c->increment_w;
-			else if (*w < c->w && c->increment_w > c->w - *w)
-				*w = c->w - c->increment_w;
-			if (*h > c->h && c->increment_h > *h - c->h)
-				*h = c->h + c->increment_h;
-			else if (*h < c->h && c->increment_h > c->h - *h)
-				*h = c->h - c->increment_h;
+			if (*w > c->w && c->inc_w > *w - c->w)
+				*w = c->w + c->inc_w;
+			else if (*w < c->w && c->inc_w > c->w - *w)
+				*w = c->w - c->inc_w;
+			if (*h > c->h && c->inc_h > *h - c->h)
+				*h = c->h + c->inc_h;
+			else if (*h < c->h && c->inc_h > c->h - *h)
+				*h = c->h - c->inc_h;
 			*h = MIN(*h, m->wh);
 			*w = MIN(*w, m->ww);
 		}
@@ -766,7 +814,7 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 		*x = CLAMP(*x, m->wx, m->wx + m->ww - *w + (2 * bw));
 		*y = CLAMP(*y, m->wy, m->wy + m->wh - *h + (2 * bw));
 	}
-	if (FLOATING(c) || globalcfg[SizeHints]) {
+	if (ISFLOATING(c) || globalcfg[SizeHints]) {
 		if (!(baseismin = c->base_w == c->min_w && c->base_h == c->min_h))
 			*w -= c->base_w, *h -= c->base_h;
 		if (c->min_aspect > 0 && c->max_aspect > 0) {
@@ -777,10 +825,10 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 		}
 		if (baseismin)
 			*w -= c->base_w, *h -= c->base_h;
-		if (c->increment_w)
-			*w -= *w % c->increment_w;
-		if (c->increment_h)
-			*h -= *h % c->increment_h;
+		if (c->inc_w)
+			*w -= *w % c->inc_w;
+		if (c->inc_h)
+			*h -= *h % c->inc_h;
 		*w += c->base_w;
 		*h += c->base_h;
 		*w = MAX(*w, c->min_w);
@@ -795,79 +843,35 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 	return *x != c->x || *y != c->y || *w != c->w || *h != c->h || bw != c->bw;
 }
 
-void applyrule(Client *c, Rule *wr)
+void applyrule(Client *c, Rule *r, int *ws, int *focus, int *focusmon)
 {
 	int num;
 	Monitor *m;
-	Rule *r = wr;
-	xcb_atom_t ws;
-	int focus = 0, focusmon = 0, decorate = 1;
-	char title[NAME_MAX], class[NAME_MAX], inst[NAME_MAX];
 
-	DBG("applyrule: 0x%08x", c->win);
-	title[0] = class[0] = inst[0] = '\0';
-	if (!wintextprop(c->win, netatom[Name], title, sizeof(title))
-			&& !wintextprop(c->win, XCB_ATOM_WM_NAME, title, sizeof(title)))
-		title[0] = '\0';
-	if (!winclassprop(c->win, class, inst, sizeof(class), sizeof(inst)))
-		inst[0] = class[0] = '\0';
-	if ((c->floating = c->trans != NULL))
-		ws = c->trans->ws->num;
-	else if (!winprop(c->win, netatom[WmDesktop], &ws) || ws > 99)
-		ws = selws->num;
-
-	if (title[0] != '\0' || class[0] != '\0' || inst[0] != '\0') {
-		if (r) {
-			if (!rulecmp(r, title, class, inst))
-				r = NULL;
-		} else for (r = rules; r; r = r->next) {
-			if (rulecmp(r, title, class, inst))
-				break;
-		}
-		if (r) {
-			DBG("applyrule: matched: %s, %s, %s", r->class, r->inst, r->title);
-			c->cb = r->cb;
-			focus = r->focus;
-			c->sticky = r->sticky;
-			c->x = r->x != -1 ? r->x : c->x;
-			c->y = r->y != -1 ? r->y : c->y;
-			c->w = r->w != -1 ? r->w : c->w;
-			c->h = r->h != -1 ? r->h : c->h;
-			c->bw = r->bw != -1 ? r->bw : c->bw;
-			if (!c->trans) {
-				c->floating = r->floating;
-				if ((focusmon = r->mon != NULL)) {
-					if ((num = strtol(r->mon, NULL, 0)) > 0 && (m = itomon(num))) {
-						ws = m->ws->num;
-					} else for (m = monitors; m; m = m->next)
-						if (!strcmp(r->mon, m->name)) {
-							ws = m->ws->num;
-							break;
-						}
-				} else if (r->ws && r->ws <= globalcfg[NumWs])
-					ws = r->ws - 1;
-			}
-		}
+	DBG("applyrule: matched: %s, %s, %s", r->class, r->inst, r->title);
+	c->cb = r->cb;
+	*focus = r->focus;
+	if (r->sticky)
+		c->state |= STATE_STICKY;
+	c->x = r->x != -1 ? r->x : c->x;
+	c->y = r->y != -1 ? r->y : c->y;
+	c->w = r->w != -1 ? r->w : c->w;
+	c->h = r->h != -1 ? r->h : c->h;
+	c->bw = r->bw != -1 ? r->bw : c->bw;
+	if (!c->trans) {
+		if (r->floating)
+			c->state |= STATE_FLOATING;
+		if ((*focusmon = r->mon != NULL)) {
+			if ((num = strtol(r->mon, NULL, 0)) > 0 && (m = itomon(num))) {
+				*ws = m->ws->num;
+			} else for (m = monitors; m; m = m->next)
+				if (!strcmp(r->mon, m->name)) {
+					*ws = m->ws->num;
+					break;
+				}
+		} else if (r->ws && r->ws <= globalcfg[NumWs])
+			*ws = r->ws - 1;
 	}
-
-	if ((c->bw == 0 && border[Width]) || (winmotifhints(c->win, &decorate) && decorate == 0)) {
-		c->bw = 0;
-		c->noborder = 1;
-	}
-	if (c->sticky && !c->floating)
-		c->floating = 1;
-	if (ws + 1 > (unsigned int)globalcfg[NumWs] && ws <= 99)
-		updnumws(ws + 1);
-	setclientws(c, ws);
-	if (focus && c->ws != selws) {
-		cmdusemon = focusmon;
-		cmdview(c->ws->num);
-	}
-	if (r)
-		gravitate(c, r->xgrav, r->ygrav, 1);
-	DBG("applyrule: ws: %d, mon: %s, float: %d, stick: %d, focus: %d, x: %d, y: %d, w: %d,"
-			" h: %d, bw: %d, cb: %s", c->ws->num, c->ws->mon->name, c->floating,
-			c->sticky, focus, c->x, c->y, c->w, c->h, c->bw, c->cb ? c->cb->name : "(null)");
 }
 
 void applywsdefaults(void)
@@ -1065,7 +1069,7 @@ void cmdborder(char **argv)
 		border[Outer] = ow;
 	}
 	FOR_CLIENTS(c, ws) {
-		if (!c->noborder) {
+		if (!(c->state & STATE_NOBORDER)) {
 			if (c->bw == old)
 				c->bw = bw;
 			drawborder(c, c == selws->sel);
@@ -1078,7 +1082,7 @@ void cmdcycle(char **argv)
 {
 	Client *c, *first;
 
-	if (!(c = cmdclient) || FLOATING(c) || FULLSCREEN(c) || !c->ws->layout->fn)
+	if (!(c = cmdclient) || ISFLOATING(c) || ISFULLSCREEN(c) || !c->ws->layout->fn)
 		return;
 	first = nextt(selws->clients);
 	if (c == first && !nextt(c->next))
@@ -1097,10 +1101,14 @@ void cmdfakefull(char **argv)
 
 	if (!(c = cmdclient))
 		return;
-	c->fakefull = !c->fakefull;
-	if (c->fullscreen) {
-		c->bw = c->fakefull ? c->old_bw : 0;
-		if (!c->fakefull)
+	if (c->state & STATE_FAKEFULL)
+		c->state &= ~STATE_FAKEFULL;
+	else
+		c->state |= STATE_FAKEFULL;
+	if (c->state & STATE_FULLSCREEN) {
+		if (c->w != c->ws->mon->w || c->h != c->ws->mon->h)
+			c->bw = c->old_bw;
+		if (!(c->state & STATE_FAKEFULL))
 			resize(c, c->ws->mon->x, c->ws->mon->y, c->ws->mon->w, c->ws->mon->h, c->bw);
 		layoutws(c->ws);
 	}
@@ -1111,18 +1119,18 @@ void cmdfloat(char **argv)
 {
 	Client *c;
 
-	if (!(c = cmdclient) || FULLSCREEN(c) || c->sticky || !c->ws->layout->fn)
+	if (!(c = cmdclient) || ISFULLSCREEN(c) || (c->state & STATE_STICKY)
+			|| (c->state & STATE_FIXED) || !c->ws->layout->fn)
 		return;
-	if ((c->floating = !c->floating || c->fixed)) {
-		c->x = c->old_x;
-		c->y = c->old_y;
-		c->w = c->old_w;
-		c->h = c->old_h;
+	if (c->state & STATE_FLOATING) {
+		c->state &= ~STATE_FLOATING;
+		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
+	} else {
+		c->state |= STATE_FLOATING;
+		c->x = c->old_x, c->y = c->old_y, c->w = c->old_w, c->h = c->old_h;
 		if (c->x + c->y <= c->ws->mon->wx)
 			offsetfloat(c, 6, &c->x, &c->y, &c->w, &c->h);
 		resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0, 1);
-	} else {
-		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 	}
 	needsrefresh++;
 	(void)(argv);
@@ -1132,7 +1140,7 @@ void cmdfocus(char **argv)
 {
 	int i = 0, opt;
 
-	if (!cmdclient || FULLSCREEN(cmdclient))
+	if (!cmdclient || ISFULLSCREEN(cmdclient))
 		return;
 	if (cmdclient != selws->sel) {
 		focus(cmdclient);
@@ -1163,7 +1171,7 @@ void cmdfull(char **argv)
 {
 	if (!cmdclient)
 		return;
-	setfullscreen(cmdclient, !cmdclient->fullscreen);
+	setfullscreen(cmdclient, !(cmdclient->state & STATE_FULLSCREEN));
 	(void)(argv);
 }
 
@@ -1423,9 +1431,9 @@ void cmdprint(char **argv)
 		}
 		while (*argv) {
 			if (!strcmp("float", *argv))
-				fprintf(cmdresp, "%d", c->floating);
+				fprintf(cmdresp, "%d", (c->state & STATE_FLOATING) != 0);
 			else if (!strcmp("stick", *argv))
-				fprintf(cmdresp, "%d", c->sticky);
+				fprintf(cmdresp, "%d", (c->state & STATE_STICKY) != 0);
 			else if (!strcmp("ws", *argv))
 				fprintf(cmdresp, "%d:%s", c->ws->num + 1, c->ws->name);
 			else if (!strcmp("mon", *argv))
@@ -1433,9 +1441,9 @@ void cmdprint(char **argv)
 			else if (!strcmp("geom", *argv))
 				fprintf(cmdresp, "%d,%d %dx%d", c->x, c->y, W(c), H(c));
 			else if (!strcmp("full", *argv))
-				fprintf(cmdresp, "%d", c->fullscreen);
+				fprintf(cmdresp, "%d", (c->state & STATE_FULLSCREEN) != 0);
 			else if (!strcmp("fakefull", *argv))
-				fprintf(cmdresp, "%d", c->fakefull);
+				fprintf(cmdresp, "%d", (c->state & STATE_FAKEFULL) != 0);
 			else {
 				fprintf(cmdresp, "!unknown window setting: %s", *argv);
 				return;
@@ -1528,7 +1536,7 @@ void cmdresize(char **argv)
 	int x = scr_w, y = scr_h, w = 0, h = 0, bw = -1;
 	int relx = 0, rely = 0, relw = 0, relh = 0, relbw = 0;
 
-	if (!(c = cmdclient) || FULLSCREEN(c))
+	if (!(c = cmdclient) || ISFULLSCREEN(c))
 		return;
 	while (*argv) {
 		if (!strcmp("x", *argv))
@@ -1550,7 +1558,7 @@ void cmdresize(char **argv)
 	}
 	if (x == scr_w && y == scr_h && w == 0 && h == 0 && xgrav == None && ygrav == None && bw == -1)
 		return;
-	if (FLOATING(c)) {
+	if (ISFLOATING(c)) {
 		x = x == scr_w || xgrav != None ? c->x : (relx ? c->x + x : x);
 		y = y == scr_h || ygrav != None ? c->y : (rely ? c->y + y : y);
 		w = w == 0 ? c->w : (relw ? c->w + w : w);
@@ -1615,7 +1623,7 @@ void cmdrule(char **argv)
 		argv++;
 		if (!strcmp("all", *argv)) {
 			FOR_CLIENTS(c, ws) {
-				applyrule(c, NULL);
+				applyclientrule(c, NULL);
 				if (c->cb)
 					c->cb->fn(c, 0);
 			}
@@ -1698,7 +1706,7 @@ void cmdrule(char **argv)
 		if (!delete) {
 			if ((nr = initrule(&r)) && apply) {
 				FOR_CLIENTS(c, ws) {
-					applyrule(c, nr);
+					applyclientrule(c, nr);
 					if (c->cb)
 						c->cb->fn(c, 0);
 				}
@@ -1802,9 +1810,9 @@ void cmdssplit(char **argv)
 
 void cmdstick(char **argv)
 {
-	if (!cmdclient || FULLSCREEN(cmdclient))
+	if (!cmdclient || ISFULLSCREEN(cmdclient))
 		return;
-	setsticky(cmdclient, !cmdclient->sticky);
+	setsticky(cmdclient, !(cmdclient->state & STATE_STICKY));
 	(void)(argv);
 }
 
@@ -1813,7 +1821,7 @@ void cmdswap(char **argv)
 	static Client *last = NULL;
 	Client *c, *old, *cur = NULL, *prev = NULL;
 
-	if (!(c = cmdclient) || FULLSCREEN(c) || FLOATING(c))
+	if (!(c = cmdclient) || ISFULL(c) || ISFLOATING(c))
 		return;
 	if (c == nextt(c->ws->clients)) {
 		if ((cur = prevc(last)))
@@ -1889,7 +1897,7 @@ void cmdws(char **argv)
 
 void cmdwsdef(char **argv)
 {
-	unsigned int ui;
+	unsigned int i;
 	int inpad = 0, start = 0, apply = 0;
 
 	while (*argv) {
@@ -1898,9 +1906,9 @@ void cmdwsdef(char **argv)
 		} else if (!strcmp(*argv, "layout")) {
 			argv++;
 			inpad = 0;
-			for (ui = 0; ui < LEN(layouts); ui++)
-				if (!strcmp(layouts[ui].name, *argv)) {
-					wsdef.layout = &layouts[ui];
+			for (i = 0; i < LEN(layouts); i++)
+				if (!strcmp(layouts[i].name, *argv)) {
+					wsdef.layout = &layouts[i];
 					break;
 				}
 		} else if (!strcmp(*argv, "master")) {
@@ -1970,18 +1978,18 @@ void cmdview(int num)
 }
 
 void drawborder(Client *c, int focused)
-{
+{ /* modified from swm/wmutils */
 	int o, b;
 	unsigned int in, out;
 	xcb_gcontext_t gc;
 	xcb_pixmap_t pmap;
 
-	if (c->noborder || !c->bw)
+	if (c->state & STATE_NOBORDER || !c->bw)
 		return;
 	b = c->bw;
 	o = border[Outer];
-	in = border[focused ? Focus : (c->urgent ? Urgent : Unfocus)];
-	out = border[focused ? OFocus : (c->urgent ? OUrgent : OUnfocus)];
+	in = border[focused ? Focus : (c->state & STATE_URGENT ? Urgent : Unfocus)];
+	out = border[focused ? OFocus : (c->state & STATE_URGENT ? OUrgent : OUnfocus)];
 	unsigned int frame[] = { c->bw, c->bw, c->bw, c->bw };
 	xcb_rectangle_t inner[] = {
 		{ c->w,         0,            b - o,        c->h + b - o },
@@ -2011,57 +2019,6 @@ void drawborder(Client *c, int focused)
 	xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXMAP, &pmap);
 	xcb_free_pixmap(con, pmap);
 	xcb_free_gc(con, gc);
-}
-
-void clientcfgreq(Client *c, xcb_configure_request_event_t *e)
-{
-	Monitor *m;
-	Geometry *g;
-
-	if (!(g = wingeom(c->win)))
-		return;
-	c->depth = g->depth;
-	free(g);
-	if (e->value_mask & XCB_CONFIG_WINDOW_BORDER_WIDTH)
-		c->bw = e->border_width;
-	else if (FLOATING(c)) {
-		if (e->x == W(c) * -2) {
-			DBG("clientcfgreq: ignoring CONFIGURE_REQUEST - 0x%08x is hidden", c->win);
-			return;
-		}
-		DBG("clientcfgreq: floating window - 0x%08x", c->win);
-		m = c->ws->mon;
-		if (e->value_mask & XCB_CONFIG_WINDOW_X) {
-			DBG("clientcfgreq: XCB_CONFIG_WINDOW_X: %d -> %d", c->x, m->x + e->x - c->bw);
-			c->old_x = c->x;
-			c->x = m->x + e->x - c->bw;
-		}
-		if (e->value_mask & XCB_CONFIG_WINDOW_Y) {
-			DBG("clientcfgreq: XCB_CONFIG_WINDOW_Y: %d -> %d", c->y, m->y + e->y - c->bw);
-			c->old_y = c->y;
-			c->y = m->y + e->y - c->bw;
-		}
-		if (e->value_mask & XCB_CONFIG_WINDOW_WIDTH) {
-			DBG("clientcfgreq: XCB_CONFIG_WINDOW_WIDTH: %d -> %d", c->w, e->width);
-			c->old_w = c->w;
-			c->w = e->width;
-		}
-		if (e->value_mask & XCB_CONFIG_WINDOW_HEIGHT) {
-			DBG("clientcfgreq: XCB_CONFIG_WINDOW_HEIGHT: %d -> %d", c->h, e->height);
-			c->old_h = c->h;
-			c->h = e->height;
-		}
-		if ((c->x + c->w) > m->wx + m->ww && c->floating)
-			c->x = m->wx + ((m->ww - W(c)) / 2);
-		if ((c->y + c->h) > m->wy + m->wh && c->floating)
-			c->y = m->wy + ((m->wh - H(c)) / 2);
-		if ((e->value_mask & XYMASK) && !(e->value_mask & WHMASK))
-			sendconfigure(c);
-		if (c->ws == m->ws)
-			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
-	} else {
-		sendconfigure(c);
-	}
 }
 
 Monitor *coordtomon(int x, int y)
@@ -2130,6 +2087,7 @@ void eventhandle(xcb_generic_event_t *ev)
 {
 	Client *c;
 	Monitor *m;
+	Geometry *g;
 	Workspace *ws;
 
 	switch (EVTYPE(ev)) {
@@ -2169,8 +2127,51 @@ void eventhandle(xcb_generic_event_t *ev)
 		xcb_configure_request_event_t *e = (xcb_configure_request_event_t *)ev;
 
 		if ((c = wintoclient(e->window))) {
-			DBG("eventhandle: CONFIGURE_REQUEST - managed - 0x%08x", e->window);
-			clientcfgreq(c, e);
+			DBG("eventhandle: CONFIGURE_REQUEST - managed %s - 0x%08x",
+					ISFLOATING(c) ? "floating" : "tiled", e->window);
+			if (!(g = wingeom(c->win)))
+				return;
+			c->depth = g->depth;
+			free(g);
+			if (e->value_mask & XCB_CONFIG_WINDOW_BORDER_WIDTH)
+				c->bw = e->border_width;
+			else if (ISFLOATING(c)) {
+				m = c->ws->mon;
+				if (e->value_mask & XCB_CONFIG_WINDOW_X) {
+					if (e->x == W(c) * -2) {
+						DBG("eventhandle: ignoring CONFIGURE_REQUEST - 0x%08x is hidden", c->win);
+						return;
+					}
+					DBG("eventhandle: XCB_CONFIG_WINDOW_X: %d -> %d", c->x, m->x + e->x - c->bw);
+					c->old_x = c->x;
+					c->x = m->x + e->x - c->bw;
+				}
+				if (e->value_mask & XCB_CONFIG_WINDOW_Y) {
+					DBG("eventhandle: XCB_CONFIG_WINDOW_Y: %d -> %d", c->y, m->y + e->y - c->bw);
+					c->old_y = c->y;
+					c->y = m->y + e->y - c->bw;
+				}
+				if (e->value_mask & XCB_CONFIG_WINDOW_WIDTH) {
+					DBG("eventhandle: XCB_CONFIG_WINDOW_WIDTH: %d -> %d", c->w, e->width);
+					c->old_w = c->w;
+					c->w = e->width;
+				}
+				if (e->value_mask & XCB_CONFIG_WINDOW_HEIGHT) {
+					DBG("eventhandle: XCB_CONFIG_WINDOW_HEIGHT: %d -> %d", c->h, e->height);
+					c->old_h = c->h;
+					c->h = e->height;
+				}
+				if ((c->x + c->w) > m->wx + m->ww)
+					c->x = m->wx + ((m->ww - W(c)) / 2);
+				if ((c->y + c->h) > m->wy + m->wh)
+					c->y = m->wy + ((m->wh - H(c)) / 2);
+				if ((e->value_mask & XYMASK) && !(e->value_mask & WHMASK))
+					sendconfigure(c);
+				if (c->ws == m->ws)
+					MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
+			} else {
+				sendconfigure(c);
+			}
 		} else {
 			DBG("eventhandle: CONFIGURE_REQUEST - unmanaged - 0x%08x", e->window);
 			xcb_params_configure_window_t wc;
@@ -2288,7 +2289,7 @@ void eventhandle(xcb_generic_event_t *ev)
 						|| d[2] == netatom[Fullscreen]))
 			{
 				DBG("CLIENT_MESSAGE %s - 0x%08x - data: %d", netatoms[Fullscreen], c->win, d[0]);
-				setfullscreen(c, (d[0] == 1 || (d[0] == 2 && !c->fullscreen)));
+				setfullscreen(c, (d[0] == 1 || (d[0] == 2 && !(c->state & STATE_FULLSCREEN))));
 			} else if (c != selws->sel && (e->type == netatom[Active]
 						|| (d[1] == netatom[DemandsAttn] || d[2] == netatom[DemandsAttn])))
 			{
@@ -2302,7 +2303,7 @@ void eventhandle(xcb_generic_event_t *ev)
 					focus(c);
 				} else
 					seturgent(c, e->type == netatom[Active] ? 1
-							: (d[0] == 1 || (d[0] == 2 && !c->urgent)));
+							: (d[0] == 1 || (d[0] == 2 && !(c->state & STATE_URGENT))));
 			}
 		}
 		return;
@@ -2310,7 +2311,7 @@ void eventhandle(xcb_generic_event_t *ev)
 	case XCB_PROPERTY_NOTIFY:
 	{
 		Panel *p;
-		xcb_window_t trans;
+		xcb_window_t t;
 		xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ev;
 
 		if (e->atom == netatom[StrutPartial] && (p = wintopanel(e->window))) {
@@ -2323,9 +2324,10 @@ void eventhandle(xcb_generic_event_t *ev)
 			switch (e->atom) {
 			case XCB_ATOM_WM_TRANSIENT_FOR:
 				DBG("eventhandle: PROPERTY_NOTIFY - WM_TRANSIENT_FOR - 0x%08x", e->window);
-				if (!c->floating && (trans = wintrans(c->win))
-						&& (c->floating = (c->trans = wintoclient(trans)) != NULL))
+				if (!ISFLOATING(c) && (t = wintrans(c->win)) && (c->trans = wintoclient(t))) {
+					c->state |= STATE_FLOATING;
 					layoutws(c->ws);
+				}
 				break;
 			case XCB_ATOM_WM_NORMAL_HINTS:
 				DBG("eventhandle: PROPERTY_NOTIFY - WM_NORMAL_HINTS - 0x%08x", e->window);
@@ -2477,7 +2479,7 @@ void focus(Client *c)
 	if (selws->sel && selws->sel != c)
 		unfocus(selws->sel, 0);
 	if (c) {
-		if (c->urgent)
+		if (c->state & STATE_URGENT)
 			seturgent(c, 0);
 		detachstack(c);
 		attachstack(c);
@@ -2718,7 +2720,7 @@ void gravitate(Client *c, int horz, int vert, int matchgap)
 	int x, y, gap;
 	int mx, my, mw, mh;
 
-	if (!c || !c->ws || !FLOATING(c))
+	if (!c || !c->ws || !ISFLOATING(c))
 		return;
 	x = c->x;
 	y = c->y;
@@ -2802,10 +2804,10 @@ void initclient(xcb_window_t win, Geometry *g)
 	c->w = c->old_w = g->width;
 	c->h = c->old_h = g->height;
 	c->depth = g->depth;
-	c->old_bw = g->border_width;
-	c->bw = border[Width];
+	c->state = c->old_state = STATE_NONE;
+	c->bw = c->old_bw = border[Width];
 	c->trans = wintoclient(wintrans(c->win));
-	applyrule(c, NULL);
+	applyclientrule(c, NULL);
 	c->w = CLAMP(c->w, globalcfg[MinWH], c->ws->mon->ww);
 	c->h = CLAMP(c->h, globalcfg[MinWH], c->ws->mon->wh);
 	if (c->trans) {
@@ -2821,7 +2823,8 @@ void initclient(xcb_window_t win, Geometry *g)
 			| XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY);
 	drawborder(c, 0);
 	grabbuttons(c, 0);
-	if (FLOATING(c) || (c->floating = c->oldstate = c->trans || c->fixed)) {
+	if (ISFLOATING(c) || c->trans) {
+		c->state |= STATE_FLOATING;
 		c->x = CLAMP(c->x, c->ws->mon->wx, c->ws->mon->wx + c->ws->mon->ww - W(c));
 		c->y = CLAMP(c->y, c->ws->mon->wy, c->ws->mon->wy + c->ws->mon->wh - H(c));
 		if (c->x + c->y <= c->ws->mon->wx)
@@ -2837,7 +2840,7 @@ void initclient(xcb_window_t win, Geometry *g)
 	if (c->cb)
 		c->cb->fn(c, 0);
 	DBG("initclient: mapped - 0x%08x - workspace %d - %d,%d @ %dx%d - floating: %d",
-			c->win, c->ws->num, c->x, c->y, c->w, c->h, FLOATING(c));
+			c->win, c->ws->num, c->x, c->y, c->w, c->h, ISFLOATING(c));
 }
 
 void initdesk(xcb_window_t win, Geometry *g)
@@ -3320,7 +3323,7 @@ void movestack(int direction)
 	int i = 0;
 	Client *c, *t;
 
-	if (!(c = cmdclient) || FLOATING(c) || !nextt(c->ws->clients->next))
+	if (!(c = cmdclient) || ISFLOATING(c) || !nextt(c->ws->clients->next))
 		return;
 	while (direction) {
 		if (direction > 0) {
@@ -3358,7 +3361,7 @@ void mousemvr(int move)
 	xcb_generic_event_t *ev = NULL;
 	int mx, my, ox, oy, ow, oh, nw, nh, nx, ny, released = 0;
 
-	if (!(c = selws->sel) || FULLSCREEN(c) || (!move && c->fixed) || !querypointer(&mx, &my))
+	if (!(c = selws->sel) || ISFULLSCREEN(c) || (!move && (c->state & STATE_FIXED)) || !querypointer(&mx, &my))
 		return;
 	ox = nx = c->x;
 	oy = ny = c->y;
@@ -3391,8 +3394,11 @@ void mousemvr(int move)
 				nh = oh + (e->root_y - my);
 			}
 			if ((nw != c->w || nh != c->h || nx != c->x || ny != c->y)) {
-				if (!FLOATING(c)) {
-					c->floating = 1;
+				if (!ISFLOATING(c) || (c->state & STATE_FULLSCREEN && c->state & STATE_FAKEFULL
+							&& !(c->old_state & STATE_FLOATING)))
+				{
+					c->state |= STATE_FLOATING;
+					c->old_state |= STATE_FLOATING;
 					if (c->max_w)
 						c->w = MIN(c->w, c->max_w);
 					if (c->max_h)
@@ -3427,7 +3433,7 @@ Monitor *nextmon(Monitor *m)
 
 Client *nextt(Client *c)
 {
-	while (c && c->floating)
+	while (c && (c->state & STATE_FLOATING))
 		c = c->next;
 	return c;
 }
@@ -3776,7 +3782,7 @@ void relocate(Workspace *ws, Monitor *old)
 	if (!(m = ws->mon) || m == old)
 		return;
 	FOR_EACH(c, ws->clients)
-		if (FLOATING(c)) { /* TODO: simplify this mess */
+		if (ISFLOATING(c)) { /* TODO: simplify this mess */
 			if ((xoff = c->x - old->x) && (xdiv = old->w / xoff) != 0.0) {
 				if (c->x + W(c) == old->wx + old->ww) /* edge */
 					c->x = m->wx + m->ww - W(c);
@@ -3837,14 +3843,14 @@ void restack(Workspace *ws)
 	FOR_EACH(p, panels)
 		if (p->mon == ws->mon)
 			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-	if (FLOATING(c))
+	if (ISFLOATING(c))
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	if (ws->layout->fn)
 		FOR_STACK(c, ws->stack)
-			if (!c->floating && c->ws == c->ws->mon->ws)
+			if (!(c->state & STATE_FLOATING) && c->ws == c->ws->mon->ws)
 				setstackmode(c->win, XCB_STACK_MODE_BELOW);
 	FOR_EACH(c, ws->clients)
-		if (c->trans && FLOATING(c))
+		if (c->trans && ISFLOATING(c))
 			restackwin(c->win, c->trans->win, XCB_STACK_MODE_ABOVE);
 	FOR_EACH(d, desks)
 		if (d->mon == ws->mon)
@@ -3953,14 +3959,11 @@ void setclientws(Client *c, int num)
 {
 	DBG("setclientws: 0x%08x -> %d", c->win, num);
 	if (c->ws) {
-		DBG("setclientws: detaching from existing workspace: %d", c->ws->num);
 		detach(c, 0);
 		detachstack(c);
 	}
-	if (!(c->ws = itows(num))) {
-		DBG("setclientws: no matching workspace: %d -- using selws: %d", num, selws->num);
+	if (!(c->ws = itows(num)))
 		c->ws = selws;
-	}
 	PROP_REPLACE(c->win, netatom[WmDesktop], XCB_ATOM_CARDINAL, 32, 1, &c->ws->num);
 	attach(c, 0);
 	attachstack(c);
@@ -3972,32 +3975,24 @@ void setfullscreen(Client *c, int fullscreen)
 
 	if (!c->ws || !(m = c->ws->mon))
 		m = selws->mon;
-	if (fullscreen && !c->fullscreen) {
+	if (fullscreen && !(c->state & STATE_FULLSCREEN)) {
 		PROP_REPLACE(c->win, netatom[State], XCB_ATOM_ATOM, 32, 1, &netatom[Fullscreen]);
-		c->oldstate = c->floating;
-		c->old_bw = c->bw;
-		c->fullscreen = 1;
-		c->floating = 1;
-		c->bw = 0;
-		resize(c, m->x, m->y, m->w, m->h, c->bw);
+		c->old_state = c->state;
+		c->state |= STATE_FULLSCREEN | STATE_FLOATING;
+		resize(c, m->x, m->y, m->w, m->h, 0);
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-	} else if (!fullscreen && c->fullscreen) {
+	} else if (!fullscreen && (c->state & STATE_FULLSCREEN)) {
 		PROP_REPLACE(c->win, netatom[State], XCB_ATOM_ATOM, 32, 0, (unsigned char *)0);
-		c->floating = c->oldstate;
-		c->fullscreen = 0;
-		c->bw = c->old_bw;
-		c->x = c->old_x;
-		c->y = c->old_y;
-		c->w = c->old_w;
-		c->h = c->old_h;
-		resize(c, c->x, c->y, c->w, c->h, c->bw);
+		c->state = c->old_state;
+		resize(c, c->old_x, c->old_y, c->old_w, c->old_h, c->bw);
 		needsrefresh++;
+		eventignore(XCB_ENTER_NOTIFY);
 	}
 }
 
 void setinputfocus(Client *c)
 {
-	if (!c->noinput) {
+	if (!(c->state & STATE_NOINPUT)) {
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, c->win, XCB_CURRENT_TIME);
 		PROP_REPLACE(root, netatom[Active], XCB_ATOM_WINDOW, 32, 1, &c->win);
 	}
@@ -4008,12 +4003,12 @@ void setsticky(Client *c, int sticky)
 {
 	unsigned int all = 0xffffffff;
 
-	if (sticky && !c->sticky) {
+	if (sticky && !(c->state & STATE_STICKY)) {
 		cmdfloat(NULL);
-		c->sticky = 1;
+		c->state |= STATE_STICKY | STATE_FLOATING;
 		PROP_REPLACE(c->win, netatom[WmDesktop], XCB_ATOM_CARDINAL, 32, 1, &all);
-	} else if (!sticky && c->sticky) {
-		c->sticky = 0;
+	} else if (!sticky && (c->state & STATE_STICKY)) {
+		c->state &= ~STATE_STICKY;
 		PROP_REPLACE(c->win, netatom[WmDesktop], XCB_ATOM_CARDINAL, 32, 1, &c->ws->num);
 	}
 }
@@ -4054,8 +4049,10 @@ void seturgent(Client *c, int urg)
 
 	DBG("seturgent: 0x%08x - urgent: %d", c->win, urg);
 	pc = xcb_icccm_get_wm_hints(con, c->win);
-	if (c != selws->sel)
+	if (c != selws->sel) {
+		c->state |= STATE_URGENT;
 		drawborder(c, 0);
+	}
 	if (xcb_icccm_get_wm_hints_reply(con, pc, &wmh, &e)) {
 		wmh.flags = urg ? (wmh.flags | XCB_ICCCM_WM_HINT_X_URGENCY)
 			: (wmh.flags & ~XCB_ICCCM_WM_HINT_X_URGENCY);
@@ -4075,7 +4072,7 @@ void showhide(Client *c)
 	m = c->ws->mon;
 	if (c->ws == m->ws) {
 		MOVE(c->win, c->x, c->y);
-		if (FLOATING(c)) {
+		if (ISFLOATING(c)) {
 			if (ISFULL(c))
 				resize(c, m->x, m->y, m->w, m->h, 0);
 			else
@@ -4084,7 +4081,7 @@ void showhide(Client *c)
 		showhide(c->snext);
 	} else {
 		showhide(c->snext);
-		if (!c->sticky)
+		if (!(c->state & STATE_STICKY))
 			MOVE(c->win, W(c) * -2, c->y);
 		else if (c->ws != selws && m == selws->mon) {
 			sel = lastws->sel == c ? c : selws->sel;
@@ -4118,8 +4115,8 @@ void sizehints(Client *c, int uss)
 
 	pc = xcb_icccm_get_wm_normal_hints(con, c->win);
 	DBG("sizehints: getting size hints - 0x%08x", c->win);
+	c->inc_w = c->inc_h = 0;
 	c->max_aspect = c->min_aspect = 0.0;
-	c->increment_w = c->increment_h = 0;
 	c->min_w = c->min_h = c->max_w = c->max_h = c->base_w = c->base_h = 0;
 	if (xcb_icccm_get_wm_normal_hints_reply(con, pc, &s, &e)) {
 		if (uss && s.flags & XCB_ICCCM_SIZE_HINT_US_SIZE) {
@@ -4139,7 +4136,7 @@ void sizehints(Client *c, int uss)
 		if (s.flags & XCB_ICCCM_SIZE_HINT_P_MAX_SIZE)
 			c->max_w = s.max_width, c->max_h = s.max_height;
 		if (s.flags & XCB_ICCCM_SIZE_HINT_P_RESIZE_INC)
-			c->increment_w = s.width_inc, c->increment_h = s.height_inc;
+			c->inc_w = s.width_inc, c->inc_h = s.height_inc;
 		if (s.flags & XCB_ICCCM_SIZE_HINT_BASE_SIZE)
 			c->base_w = s.base_width, c->base_h = s.base_height;
 		else if (s.flags & XCB_ICCCM_SIZE_HINT_P_MIN_SIZE)
@@ -4151,7 +4148,8 @@ void sizehints(Client *c, int uss)
 	} else {
 		iferr(0, "unable to get wm normal hints", e);
 	}
-	c->fixed = (c->max_w && c->max_h && c->max_w == c->min_w && c->max_h == c->min_h);
+	if (c->max_w && c->max_h && c->max_w == c->min_w && c->max_h == c->min_h)
+		c->state |= STATE_FIXED | STATE_FLOATING;
 }
 
 size_t strlcat(char *dst, const char *src, size_t siz)
@@ -4161,12 +4159,10 @@ size_t strlcat(char *dst, const char *src, size_t siz)
 	size_t n = siz;
 	size_t dlen;
 
-	/* Find the end of dst and adjust bytes left but don't go past end */
 	while (n-- != 0 && *d != '\0')
 		d++;
 	dlen = d - dst;
 	n = siz - dlen;
-
 	if (n == 0)
 		return dlen + strlen(s);
 	while (*s != '\0') {
@@ -4177,8 +4173,7 @@ size_t strlcat(char *dst, const char *src, size_t siz)
 		s++;
 	}
 	*d = '\0';
-
-	return dlen + (s - src);	/* count does not include NUL */
+	return dlen + (s - src);
 }
 
 size_t strlcpy(char *dst, const char *src, size_t dsize)
@@ -4186,23 +4181,18 @@ size_t strlcpy(char *dst, const char *src, size_t dsize)
 	const char *osrc = src;
 	size_t nleft = dsize;
 
-	/* Copy as many bytes as will fit. */
 	if (nleft != 0) {
-		while (--nleft != 0) {
+		while (--nleft != 0)
 			if ((*dst++ = *src++) == '\0')
 				break;
-		}
 	}
-
-	/* Not enough room in dst, add NUL and traverse rest of src. */
 	if (nleft == 0) {
 		if (dsize != 0)
-			*dst = '\0';		/* NUL-terminate dst */
+			*dst = '\0';
 		while (*src++)
 			;
 	}
-
-	return (src - osrc - 1);	/* count does not include NUL */
+	return (src - osrc - 1);
 }
 
 void subscribe(xcb_window_t win, unsigned int events)
@@ -4211,38 +4201,37 @@ void subscribe(xcb_window_t win, unsigned int events)
 }
 
 int tiler(Client *c, Client *p, int ww, int wh, int x, int y,
-		int w, int h, int bw, int gap, int *newy, int nrem, int avail)
+		int w, int h, int bw, int gap, int *newy, int nrem, int havail)
 {
 	int ret = 1;
 	int b = bw ? c->bw : bw;
 
-	DBG("tiler: 0x%08x - %d,%d @ %dx%d - newy: %d, nrem: %d, avail; %d",
-			c->win, x, y, w, h, *newy, nrem, avail);
+	DBG("tiler: 0x%08x - %d,%d @ %dx%d - newy: %d, nrem: %d, havail; %d",
+			c->win, x, y, w, h, *newy, nrem, havail);
 	if (!c->hoff && h < globalcfg[MinWH]) {
-		c->floating = 1;
+		c->state |= STATE_FLOATING;
 		h = MAX(wh / 6, 240);
 		w = MAX(ww / 6, 360);
 		offsetfloat(c, 4, &x, &y, &w, &h);
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-	} else if (nrem > 1 && (nrem - 1) * (globalcfg[MinWH] + gap) > avail) {
-		h += avail - ((nrem - 1) * (globalcfg[MinWH] + gap));
+	} else if (nrem > 1 && (nrem - 1) * (globalcfg[MinWH] + gap) > havail) {
+		h += havail - ((nrem - 1) * (globalcfg[MinWH] + gap));
 		ret = -1;
 	} else if (nrem == 1 && *newy + (h - gap) != wh) {
 		if (p) {
-			if (p->h + avail < globalcfg[MinWH]) {
+			if (p->h + havail < globalcfg[MinWH]) {
 				ret = -1;
 				setclientgeom(p, p->x, p->y, p->w, globalcfg[MinWH]);
 				y = p->y + globalcfg[MinWH] + gap;
 				h = wh - (p->y + p->h);
 			} else if (h < globalcfg[MinWH]) {
 				ret = -1;
-				setclientgeom(p, p->x, p->y, p->w,
-						p->h + avail - (globalcfg[MinWH] - h - (2 * b)));
+				setclientgeom(p, p->x, p->y, p->w, p->h + havail - (globalcfg[MinWH] - h - (2*b)));
 				y = p->y + p->h + (2 * b) + gap;
 				h = globalcfg[MinWH] - (2 * b);
 			} else {
-				setclientgeom(p, p->x, p->y, p->w, p->h + avail);
-				y += avail;
+				setclientgeom(p, p->x, p->y, p->w, p->h + havail);
+				y += havail;
 			}
 		} else {
 			h = wh;
@@ -4253,7 +4242,7 @@ int tiler(Client *c, Client *p, int ww, int wh, int x, int y,
 		h = globalcfg[MinWH];
 	}
 	setclientgeom(c, x, y, w - (2 * b), h - (2 * b));
-	if (!c->floating)
+	if (!(c->state & STATE_FLOATING))
 		*newy += h + gap;
 	return ret;
 }
@@ -4263,7 +4252,7 @@ int tile(Workspace *ws)
 	int ret = 1;
 	Monitor *m = ws->mon;
 	Client *c, *prev = NULL;
-	int i, n, nr, my, sy, ssy, w, h, bw, g;
+	int i, n, nr, my, sy, ssy, w, h, b, g;
 	int wx, wy, ww, wh, mw, ss, sw, ssw, ns;
 
 	for (n = 0, c = nextt(ws->clients); c; c = nextt(c->next), n++)
@@ -4277,7 +4266,7 @@ int tile(Workspace *ws)
 	wh = m->wh - ws->padt - ws->padb;
 	mw = 0, ss = 0, sw = 0, ssw = 0, ns = 1;
 	g = globalcfg[SmartGap] && n == 1 ? 0 : ws->gappx;
-	bw = globalcfg[SmartBorder] && n == 1 ? 0 : 1;
+	b = globalcfg[SmartBorder] && n == 1 ? 0 : 1;
 	if (n <= ws->nmaster)
 		mw = ww, ss = 1;
 	else if (ws->nmaster)
@@ -4289,40 +4278,41 @@ int tile(Workspace *ws)
 	if (n - ws->nmaster > ws->nstack)
 		ss = 1, ssw = ww - mw - sw;
 
-	DBG("tile: ws: %d - mon height: %d - mwidth: %d - swidth: %d - sswidth: %d",
-			ws->num, m->ww, mw, sw, ssw);
+	DBG("tile: ws: %d - h: %d - mw: %d - sw: %d - ssw: %d", ws->num, m->ww, mw, sw, ssw);
+	/* calculate sizes and update our internal values for the clients first */
 	for (i = 0, my = sy = ssy = g, c = nextt(ws->clients); c; c = nextt(c->next), ++i) {
 		if (i < ws->nmaster) {
 			nr = MIN(n, ws->nmaster) - i;
 			h = ((wh - my) / MAX(1, nr)) - g + c->hoff;
 			w = mw - g * (5 - ns) / 2;
 			if (tiler(c, prev, ww - (2 * g), wh - (2 * g), wx + g,
-						wy + my, w, h, bw, g, &my, nr, wh - (my + h + g)) < 0)
+						wy + my, w, h, b, g, &my, nr, wh - (my + h + g)) < 0)
 				ret = -1;
 		} else if (i - ws->nmaster < ws->nstack) {
 			nr = MIN(n - ws->nmaster, ws->nstack) - (i - ws->nmaster);
 			h = ((wh - sy) / MAX(1, nr)) - g + c->hoff;
 			w = sw - g * (5 - ns - ss) / 2;
 			if (tiler(c, prev, ww - (2 * g), wh - (2 * g), wx + mw + (g / ns),
-						wy + sy, w, h, bw, g, &sy, nr, wh - (sy + h + g)) < 0)
+						wy + sy, w, h, b, g, &sy, nr, wh - (sy + h + g)) < 0)
 				ret = -1;
 		} else {
 			nr = n - i;
 			h = ((wh - ssy) / MAX(1, nr)) - g + c->hoff;
 			w = ssw - g * (5 - ns) / 2;
 			if (tiler(c, prev, ww - (2 * g), wh - (2 * g), wx + mw + sw + (g / ns),
-						wy + ssy, w, h, bw, g, &ssy, nr, wh - (ssy + h + g)) < 0)
+						wy + ssy, w, h, b, g, &ssy, nr, wh - (ssy + h + g)) < 0)
 				ret = -1;
 		}
 		prev = (nr == 1 && n - i != 0) ? NULL : c;
 	}
-	/* now actually do the resizes needed to avoid flicker when resizing previous clients */
+	/* now actually do the resizing, this avoids the flicker of resizing previous
+	 * clients when accommodating height offsets on the last client in each stack */
 	for (c = nextt(ws->clients); c; c = nextt(c->next)) {
-		applysizehints(c, &c->x, &c->y, &c->w, &c->h, bw ? c->bw : 0, 0, 0);
+		applysizehints(c, &c->x, &c->y, &c->w, &c->h, b ? c->bw : 0, 0, 0);
 		if (c->x != c->old_x || c->y != c->old_y || c->w != c->old_w
-				|| c->h != c->old_h || (bw ? c->bw : 0) != c->old_bw)
+				|| c->h != c->old_h || (b ? c->bw : 0) != c->old_bw)
 		{
-			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, bw ? c->bw : 0);
+			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, b ? c->bw : 0);
 			drawborder(c, c == selws->sel);
 			sendconfigure(c);
 		}
@@ -4630,9 +4620,10 @@ void winhints(Client *c)
 		if (c == selws->sel && wmh.flags & XCB_ICCCM_WM_HINT_X_URGENCY) {
 			wmh.flags &= ~XCB_ICCCM_WM_HINT_X_URGENCY;
 			xcb_icccm_set_wm_hints(con, c->win, &wmh);
-		} else
-			c->urgent = (wmh.flags & XCB_ICCCM_WM_HINT_X_URGENCY) ? 1 : 0;
-		c->noinput = (wmh.flags & XCB_ICCCM_WM_HINT_INPUT) ? !wmh.input : 0;
+		} else if (wmh.flags & XCB_ICCCM_WM_HINT_X_URGENCY)
+			c->state |= STATE_URGENT;
+		if ((wmh.flags & XCB_ICCCM_WM_HINT_INPUT) && !wmh.input)
+			c->state |= STATE_NOINPUT;
 	} else {
 		iferr(0, "unable to get window wm hints reply", e);
 	}
@@ -4770,9 +4761,9 @@ void wintype(Client *c)
 		setfullscreen(c, 1);
 	if (winprop(c->win, netatom[WindowType], &type)) {
 		if (type == netatom[Dialog] || type == netatom[Splash])
-			c->floating = 1;
+			c->state |= STATE_FLOATING;
 	} else if (c->trans || wintrans(c->win))
-		c->floating = 1;
+		c->state |= STATE_FLOATING;
 }
 
 int writecmd(int argc, char *argv[])
@@ -4792,7 +4783,7 @@ int writecmd(int argc, char *argv[])
 	};
 	for (i = 0, j = 0, offs = 1; n + 1 < sizeof(buf) && i < argc; i++, j = 0, offs = 1) {
 		if ((sp = strchr(argv[i], ' ')) || (sp = strchr(argv[i], '\t'))) {
-			if (!(eq = strchr(argv[i], '=')) || sp < eq) /* no equal found or equal is part of the quoted string */
+			if (!(eq = strchr(argv[i], '=')) || sp < eq) /* no equal found or it is part of the quoted string */
 				buf[n++] = '"';	
 			offs++;
 		}

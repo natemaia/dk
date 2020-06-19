@@ -4692,18 +4692,24 @@ int wintomanaged(xcb_window_t win, Client **c, Panel **p, Desk **d)
 
 	if (win == XCB_WINDOW_NONE || win == root)
 		return 0;
-	if (c)
+	if (c) {
+		*c = NULL;
 		FOR_CLIENTS(*c, ws)
 			if ((*c)->win == win)
 				return 1;
-	if (p)
+	}
+	if (p) {
+		*p = NULL;
 		FOR_EACH(*p, panels)
 			if ((*p)->win == win)
 				return 1;
-	if (d)
+	}
+	if (d) {
+		*d = NULL;
 		FOR_EACH(*d, desks)
 			if ((*d)->win == win)
 				return 1;
+	}
 
 	return 0;
 }

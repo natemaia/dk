@@ -422,7 +422,7 @@ static char *itoa(int n, char *);
 static Monitor *itomon(int);
 static Workspace *itows(int);
 static int layoutws(Workspace *);
-static void mapwin(xcb_window_t, Geometry *, WindowAttr *, int);
+static void mapwin(xcb_window_t, Geometry *, WindowAttr *);
 static int mono(Workspace *);
 static void mousemvr(int);
 static void movefocus(int);
@@ -486,7 +486,9 @@ static void winhints(Client *);
 static int winmotifhints(xcb_window_t, int *);
 static int winprop(xcb_window_t, xcb_atom_t, xcb_atom_t *);
 static int wintextprop(xcb_window_t, xcb_atom_t, char *, size_t);
-static int wintomanaged(xcb_window_t win, Client **c, Panel **p, Desk **d);
+static Client *wintoclient(xcb_window_t);
+static Desk *wintodesk(xcb_window_t);
+static Panel *wintopanel(xcb_window_t);
 static xcb_window_t wintrans(xcb_window_t);
 static void wintype(Client *);
 static int writecmd(int, char *[]);
@@ -581,7 +583,7 @@ int main(int argc, char *argv[])
 	initscan();
 	execcfg();
 
-	if (winprop(root, netatom[Active], &sel) && wintomanaged(sel, &c, NULL, NULL)) {
+	if (winprop(root, netatom[Active], &sel) && (c = wintoclient(sel))) {
 		focus(c);
 		xcb_warp_pointer(con, root, root, 0, 0, 0, 0, c->x + (c->w / 2), c->y + (c->h / 2));
 	} else if (monitors->next && querypointer(&x, &y) && (p = primary)) {
@@ -1925,7 +1927,7 @@ void configrequest(xcb_configure_request_event_t *e)
 	Monitor *m;
 	Geometry *g;
 
-	if (wintomanaged(e->window, &c, NULL, NULL)) {
+	if ((c = wintoclient(e->window))) {
 		DBG("eventhandle: CONFIGURE_REQUEST - managed %s - 0x%08x",
 				ISFLOATING(c) ? "floating" : "tiled", e->window);
 		if (!(g = wingeom(c->win)))
@@ -2149,7 +2151,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			return;
 		DBG("eventhandle: ENTER_NOTIFY - 0x%08x", e->event);
 		ws = selws;
-		if (wintomanaged(e->event, &c, NULL, NULL))
+		if ((c = wintoclient(e->event)))
 			ws = c->ws;
 		else if ((m = coordtomon(e->root_x, e->root_y)))
 			ws = m->ws;
@@ -2168,7 +2170,7 @@ void eventhandle(xcb_generic_event_t *ev)
 	{
 		xcb_button_press_event_t *e = (xcb_button_press_event_t *)ev;
 
-		if (wintomanaged(e->event, &c, NULL, NULL)) {
+		if ((c = wintoclient(e->event))) {
 			DBG("eventhandle: BUTTON_PRESS - 0x%08x", e->event);
 			focus(c);
 			restack(c->ws);
@@ -2198,7 +2200,7 @@ void eventhandle(xcb_generic_event_t *ev)
 
 		if (!(g = wingeom(e->window)) || !(wa = winattr(e->window)))
 			return;
-		mapwin(e->window, g, wa, 1);
+		mapwin(e->window, g, wa);
 		free(wa);
 		free(g);
 		return;
@@ -2225,7 +2227,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			cmdview(d[0]);
 		} else if (e->type == netatom[Close]) {
 			freewin(e->window, 1);
-		} else if (wintomanaged(e->window, &c, NULL, NULL)) {
+		} else if ((c = wintoclient(e->window))) {
 			if (e->type == netatom[WmDesktop]) {
 				if (!itows(d[0]))
 					return;
@@ -2251,22 +2253,20 @@ void eventhandle(xcb_generic_event_t *ev)
 	}
 	case XCB_PROPERTY_NOTIFY:
 	{
-		c = NULL;
+		Panel *p;
 		xcb_window_t t;
-		Panel *p = NULL;
 		xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ev;
 		
 		DBG("eventhandle: PROPERTY_NOTIFY - 0x%08x", e->window);
-		wintomanaged(e->window, &c, &p, NULL);
-		if (e->atom == netatom[StrutPartial] && p) {
+		if (e->atom == netatom[StrutPartial] && (p = wintopanel(e->window))) {
 			updstruts(p, 1);
 			FOR_EACH(m, monitors)
 				if (p->mon == m && m->connected && m->ws)
 					needsrefresh++;
-		} else if (e->state != XCB_PROPERTY_DELETE && c) {
+		} else if (e->state != XCB_PROPERTY_DELETE && (c = wintoclient(e->window))) {
 			switch (e->atom) {
 			case XCB_ATOM_WM_TRANSIENT_FOR:
-				if ((t = wintrans(c->win)) && wintomanaged(t, &c->trans, NULL, NULL)) {
+				if ((t = wintrans(c->win)) && (c->trans = wintoclient(t))) {
 					if (!ISFLOATING(c)) {
 						c->state |= STATE_FLOATING;
 						needsrefresh++;
@@ -2414,7 +2414,7 @@ void focus(Client *c)
 {
 	DBG("focus: %p", (void *)c);
 
-	if (!c || c->ws != c->ws->mon->ws) {
+	if (!c || !c->ws->mon || c->ws != c->ws->mon->ws) {
 		DBG("focus: passed NULL or client not on workspace -- using selws->stack: %p", (void *)selws->stack);
 		c = selws->stack;
 	}
@@ -2539,18 +2539,16 @@ void freerule(Rule *r)
 
 void freewin(xcb_window_t win, int destroyed)
 {
-	Desk *d = NULL;
-	Panel *p = NULL;
-	Client *c = NULL;
-	
-	if (wintomanaged(win, &c, &p, &d)) {
-		if (c)
-			freeclient(c, destroyed);
-		else if (p)
-			freepanel(p, destroyed);
-		else if (d)
-			freedesk(d, destroyed);
-	}
+	Desk *d;
+	Panel *p;
+	Client *c;
+
+	if ((c = wintoclient(win)))
+		freeclient(c, destroyed);
+	else if ((p = wintopanel(win)))
+		freepanel(p, destroyed);
+	else if ((d = wintodesk(win)))
+		freedesk(d, destroyed);
 }
 
 void freemap(Map *n)
@@ -2763,7 +2761,7 @@ void initclient(xcb_window_t win, Geometry *g)
 	c->depth = g->depth;
 	c->state = c->old_state = STATE_NONE;
 	c->bw = c->old_bw = border[Width];
-	wintomanaged(wintrans(c->win), &c->trans, NULL, NULL);
+	c->trans = wintoclient(wintrans(c->win));
 	tryclientrule(c, NULL);
 	c->w = CLAMP(c->w, globalcfg[MinWH], c->ws->mon->ww);
 	c->h = CLAMP(c->h, globalcfg[MinWH], c->ws->mon->wh);
@@ -3030,13 +3028,13 @@ void initscan(void)
 			{
 				w[i] = XCB_WINDOW_NONE;
 			} else if (!wintrans(w[i])) {
-				mapwin(w[i], g[i], wa[i], 0);
+				mapwin(w[i], g[i], wa[i]);
 				w[i] = XCB_WINDOW_NONE;
 			}
 		}
 		for (i = 0; i < rt->children_len; i++) {
 			if (w[i] != XCB_WINDOW_NONE)
-				mapwin(w[i], g[i], wa[i], 0);
+				mapwin(w[i], g[i], wa[i]);
 			free(g[i]);
 			free(wa[i]);
 		}
@@ -3218,27 +3216,24 @@ int layoutws(Workspace *ws)
 	return ret;
 }
 
-void mapwin(xcb_window_t win, Geometry *g, WindowAttr *wa, int checkmanaged)
+void mapwin(xcb_window_t win, Geometry *g, WindowAttr *wa)
 {
-	Desk *d;
-	Panel *p;
-	Client *c;
 	xcb_atom_t type;
 
-	if (checkmanaged && wintomanaged(win, &c, &p, &d)) {
-		DBG("mapwin: managed window - 0x%08x - ignoring", win);
-		return;
-	}
-	DBG("mapwin: unmanaged window - 0x%08x", win);
-	if (winprop(win, netatom[WindowType], &type)) {
-		if (type == netatom[Dock])
-			initpanel(win, g);
-		else if (type == netatom[Desktop])
-			initdesk(win, g);
-		else if (type != netatom[Splash] && !wa->override_redirect)
+	if ((wintoclient(win) || wintopanel(win) || wintodesk(win))) {
+		DBG("mapwin: managed window - 0x%08x", win);
+	} else {
+		DBG("mapwin: unmanaged window - 0x%08x", win);
+		if (winprop(win, netatom[WindowType], &type)) {
+			if (type == netatom[Dock])
+				initpanel(win, g);
+			else if (type == netatom[Desktop])
+				initdesk(win, g);
+			else if (type != netatom[Splash] && !wa->override_redirect)
+				initclient(win, g);
+		} else if (!wa->override_redirect)
 			initclient(win, g);
-	} else if (!wa->override_redirect)
-		initclient(win, g);
+	}
 	initmap(win);
 }
 
@@ -3442,7 +3437,7 @@ int parseclient(char **argv, Client **c)
 	if ((*argv[0] == '#' || (*argv[0] == '0' && *argv[0] == 'x'))
 			&& (i = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0')
 	{
-		if (wintomanaged(i, c, NULL, NULL))
+		if ((*c = wintoclient(i)))
 			return 1;
 		fprintf(cmdresp, "!invalid window id argument: %s", *argv);
 		return -1;
@@ -4710,32 +4705,38 @@ int winclassprop(xcb_window_t win, char *class, char *inst, size_t csize, size_t
 	return 1;
 }
 
-int wintomanaged(xcb_window_t win, Client **c, Panel **p, Desk **d)
+Client *wintoclient(xcb_window_t win)
 {
 	Workspace *ws;
+	Client *c = NULL;
 
-	if (win == XCB_WINDOW_NONE || win == root)
-		return 0;
-	if (c) {
-		*c = NULL;
-		FOR_CLIENTS(*c, ws)
-			if ((*c)->win == win)
-				return 1;
-	}
-	if (p) {
-		*p = NULL;
-		FOR_EACH(*p, panels)
-			if ((*p)->win == win)
-				return 1;
-	}
-	if (d) {
-		*d = NULL;
-		FOR_EACH(*d, desks)
-			if ((*d)->win == win)
-				return 1;
-	}
+	if (win != XCB_WINDOW_NONE && win != root)
+		FOR_CLIENTS(c, ws)
+			if (c->win == win)
+				return c;
+	return c;
+}
 
-	return 0;
+Panel *wintopanel(xcb_window_t win)
+{
+	Panel *p = NULL;
+
+	if (win != XCB_WINDOW_NONE && win != root)
+		FOR_EACH(p, panels)
+			if (p->win == win)
+				return p;
+	return p;
+}
+
+Desk *wintodesk(xcb_window_t win)
+{
+	Desk *d = NULL;
+
+	if (win != XCB_WINDOW_NONE && win != root)
+		FOR_EACH(d, desks)
+			if (d->win == win)
+				return d;
+	return d;
 }
 
 xcb_window_t wintrans(xcb_window_t win)

@@ -2414,7 +2414,7 @@ void focus(Client *c)
 {
 	DBG("focus: %p", (void *)c);
 
-	if (!c || !c->ws->mon || c->ws != c->ws->mon->ws) {
+	if (!c || c->ws != c->ws->mon->ws) {
 		DBG("focus: passed NULL or client not on workspace -- using selws->stack: %p", (void *)selws->stack);
 		c = selws->stack;
 	}
@@ -2763,7 +2763,7 @@ void initclient(xcb_window_t win, Geometry *g)
 	c->depth = g->depth;
 	c->state = c->old_state = STATE_NONE;
 	c->bw = c->old_bw = border[Width];
-	wintomanaged(c->win, &c->trans, NULL, NULL);
+	wintomanaged(wintrans(c->win), &c->trans, NULL, NULL);
 	tryclientrule(c, NULL);
 	c->w = CLAMP(c->w, globalcfg[MinWH], c->ws->mon->ww);
 	c->h = CLAMP(c->h, globalcfg[MinWH], c->ws->mon->wh);

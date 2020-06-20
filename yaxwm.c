@@ -2153,10 +2153,15 @@ void eventhandle(xcb_generic_event_t *ev)
 			ws = c->ws;
 		else if ((m = coordtomon(e->root_x, e->root_y)))
 			ws = m->ws;
-		if (ws && ws != selws)
+		DBG("eventhandle: ENTER_NOTIFY - 0x%08x -- PASS workspace check", e->event);
+		if (ws && ws != selws) {
+			DBG("eventhandle: ENTER_NOTIFY - 0x%08x -- changing workspace: %d", e->event, ws->num);
 			changews(ws, 0, 0);
-		if (c && c != selws->sel && globalcfg[FocusMouse])
+		}
+		if (c && c != selws->sel && globalcfg[FocusMouse]) {
+			DBG("eventhandle: ENTER_NOTIFY - 0x%08x -- focusing", e->event);
 			focus(c);
+		}
 		return;
 	}
 	case XCB_BUTTON_PRESS:
@@ -2213,6 +2218,7 @@ void eventhandle(xcb_generic_event_t *ev)
 		xcb_client_message_event_t *e = (xcb_client_message_event_t *)ev;
 		unsigned int *d = e->data.data32;
 
+		DBG("eventhandle: CLIENT_MESSAGE - 0x%08x", e->window);
 		cmdusemon = 0;
 		if (e->type == netatom[CurDesktop]) {
 			unfocus(selws->sel, 1);
@@ -2250,6 +2256,7 @@ void eventhandle(xcb_generic_event_t *ev)
 		Panel *p = NULL;
 		xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ev;
 		
+		DBG("eventhandle: PROPERTY_NOTIFY - 0x%08x", e->window);
 		wintomanaged(e->window, &c, &p, NULL);
 		if (e->atom == netatom[StrutPartial] && p) {
 			updstruts(p, 1);
@@ -3320,7 +3327,7 @@ void mousemvr(int move)
 			break;
 		case XCB_MOTION_NOTIFY:
 			e = (xcb_motion_notify_event_t *)ev;
-			if ((e->time - last) < (1000 / 60))
+			if ((e->time - last) < (1000 / 120))
 				break;
 			last = e->time;
 			if (move) {

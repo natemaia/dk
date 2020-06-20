@@ -33,7 +33,7 @@
 
 
 #ifdef DEBUG
-#define DBG(fmt, ...); warnx("%d: "fmt, __LINE__, ##__VA_ARGS__);
+#define DBG(fmt, ...); warnx("%d: "fmt, __LINE__, ##__VA_ARGS__); //NOLINT
 #else
 #define DBG(fmt, ...);
 #endif
@@ -2412,19 +2412,34 @@ void execcfg(void)
 
 void focus(Client *c)
 {
-	if (!c || c->ws != c->ws->mon->ws)
+	if (!c || c->ws != c->ws->mon->ws) {
+		DBG("focus: passed NULL or client not on workspace -- using selws->stack: 0x%08x", selws->stack);
 		c = selws->stack;
-	if (selws->sel && selws->sel != c)
+	}
+
+	if (selws->sel && selws->sel != c) {
+		DBG("focus: new focus, unfocusing current: 0x%08x", selws->sel->win);
 		unfocus(selws->sel, 0);
+	}
+
 	if (c) {
-		if (c->state & STATE_URGENT)
+		DBG("focus: client is non-NULL -- focusing: 0x%08x", c->win);
+		if (c->state & STATE_URGENT) {
+			DBG("focus: client urgency: %d", c->state & STATE_URGENT);
 			seturgent(c, 0);
+		}
+		DBG("focus: detaching from stack: 0x%08x", c->win);
 		detachstack(c);
+		DBG("focus: attaching to stack: 0x%08x", c->win);
 		attachstack(c);
+		DBG("focus: grabbing mouse buttons: 0x%08x", c->win);
 		grabbuttons(c, 1);
+		DBG("focus: drawing borders: 0x%08x", c->win);
 		drawborder(c, 1);
+		DBG("focus: setting input focus: 0x%08x", c->win);
 		setinputfocus(c);
 	} else {
+		DBG("focus: client NULL -- focusing root window: 0x%08x", root);
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, root, XCB_CURRENT_TIME);
 		xcb_delete_property(con, root, netatom[Active]);
 	}

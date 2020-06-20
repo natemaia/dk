@@ -1899,10 +1899,6 @@ void cmdwsdef(char **argv)
 		if (*argv)
 			argv++;
 	}
-	DBG("cmdwsdef: layout: %s, nmaster: %d, nstack: %d, gap: %d, msplit: %f,"
-			" ssplit: %f, padl: %d, padr: %d, padt: %d, padb: %d", wsdef.layout->name,
-			wsdef.nmaster, wsdef.nstack, wsdef.gappx, wsdef.msplit, wsdef.ssplit,
-			wsdef.padl, wsdef.padr, wsdef.padt, wsdef.padb);
 	if (apply)
 		applywsdefaults();
 }
@@ -1911,7 +1907,7 @@ void cmdview(int num)
 {
 	Workspace *ws;
 
-	DBG("cmdview: workspace number %d", num);
+	DBG("cmdview: workspace %d", num);
 	if (num == selws->num || !(ws = itows(num)))
 		return;
 	if (!cmdusemon)
@@ -1928,7 +1924,7 @@ void configrequest(xcb_configure_request_event_t *e)
 	Geometry *g;
 
 	if ((c = wintoclient(e->window))) {
-		DBG("eventhandle: CONFIGURE_REQUEST - managed %s - 0x%08x",
+		DBG("eventhandle: CONFIGURE_REQUEST - managed %s window 0x%08x",
 				ISFLOATING(c) ? "floating" : "tiled", e->window);
 		if (!(g = wingeom(c->win)))
 			return;
@@ -2155,15 +2151,10 @@ void eventhandle(xcb_generic_event_t *ev)
 			ws = c->ws;
 		else if ((m = coordtomon(e->root_x, e->root_y)))
 			ws = m->ws;
-		DBG("eventhandle: ENTER_NOTIFY - 0x%08x -- PASS workspace check", e->event);
-		if (ws && ws != selws) {
-			DBG("eventhandle: ENTER_NOTIFY - 0x%08x -- changing workspace: %d", e->event, ws->num);
+		if (ws && ws != selws)
 			changews(ws, 0, 0);
-		}
-		if (c && c != selws->sel && globalcfg[FocusMouse]) {
-			DBG("eventhandle: ENTER_NOTIFY - 0x%08x -- focusing", e->event);
+		if (c && c != selws->sel && globalcfg[FocusMouse])
 			focus(c);
-		}
 		return;
 	}
 	case XCB_BUTTON_PRESS:
@@ -2412,36 +2403,19 @@ void execcfg(void)
 
 void focus(Client *c)
 {
-	DBG("focus: %p", (void *)c);
-
-	if (!c || !c->ws->mon || c->ws != c->ws->mon->ws) {
-		DBG("focus: passed NULL or client not on workspace -- using selws->stack: %p", (void *)selws->stack);
+	if (!c || c->ws != c->ws->mon->ws)
 		c = selws->stack;
-	}
-
-	if (selws->sel && selws->sel != c) {
-		DBG("focus: new focus, unfocusing current: 0x%08x", selws->sel->win);
+	if (selws->sel && selws->sel != c)
 		unfocus(selws->sel, 0);
-	}
-
 	if (c) {
-		DBG("focus: client is non-NULL -- focusing: 0x%08x", c->win);
-		if (c->state & STATE_URGENT) {
-			DBG("focus: client urgency: %d", c->state & STATE_URGENT);
+		if (c->state & STATE_URGENT)
 			seturgent(c, 0);
-		}
-		DBG("focus: detaching from stack: 0x%08x", c->win);
 		detachstack(c);
-		DBG("focus: attaching to stack: 0x%08x", c->win);
 		attachstack(c);
-		DBG("focus: grabbing mouse buttons: 0x%08x", c->win);
 		grabbuttons(c, 1);
-		DBG("focus: drawing borders: 0x%08x", c->win);
 		drawborder(c, 1);
-		DBG("focus: setting input focus: 0x%08x", c->win);
 		setinputfocus(c);
 	} else {
-		DBG("focus: client NULL -- focusing root window: 0x%08x", root);
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, root, XCB_CURRENT_TIME);
 		xcb_delete_property(con, root, netatom[Active]);
 	}
@@ -2751,7 +2725,7 @@ void initclient(xcb_window_t win, Geometry *g)
 {
 	Client *c;
 
-	DBG("initclient: managing new window - 0x%08x", win);
+	DBG("initclient: 0x%08x", win);
 	c = ecalloc(1, sizeof(Client));
 	c->win = win;
 	c->x = c->old_x = g->x;
@@ -2794,15 +2768,13 @@ void initclient(xcb_window_t win, Geometry *g)
 	c->ws->sel = c;
 	if (c->cb)
 		c->cb->fn(c, 0);
-	DBG("initclient: mapped - 0x%08x - workspace %d - %d,%d @ %dx%d - floating: %d",
-			c->win, c->ws->num, c->x, c->y, c->w, c->h, ISFLOATING(c));
 }
 
 void initdesk(xcb_window_t win, Geometry *g)
 {
 	Desk *d;
 
-	DBG("initdesktopwin: 0x%08x - %d,%d @ %dx%d", win, g->x, g->y, g->width, g->height);
+	DBG("initdesk: 0x%08x", win);
 	d = ecalloc(1, sizeof(Desk));
 	d->win = win;
 	if (!(d->mon = coordtomon(g->x, g->y)))
@@ -2860,7 +2832,7 @@ void initpanel(xcb_window_t win, Geometry *g)
 	xcb_get_property_cookie_t rc;
 	xcb_get_property_reply_t *r = NULL;
 
-	DBG("initpanel: 0x%08x - %d,%d @ %dx%d", win, g->x, g->y, g->width, g->height);
+	DBG("initpanel: 0x%08x", win);
 	rc = xcb_get_property(con, 0, win, netatom[StrutPartial], XCB_ATOM_CARDINAL, 0, 4);
 	p = ecalloc(1, sizeof(Panel));
 	p->win = win;
@@ -2890,8 +2862,6 @@ void initpanel(xcb_window_t win, Geometry *g)
 	subscribe(p->win, XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY);
 	setwmwinstate(p->win, XCB_ICCCM_WM_STATE_NORMAL);
 	PROP_APPEND(root, netatom[ClientList], XCB_ATOM_WINDOW, 32, 1, &p->win);
-	DBG("initpanel: mapped - 0x%08x - mon: %s - %d,%d @ %dx%d",
-			p->win, p->mon->name, p->x, p->y, p->w, p->h);
 }
 
 int initrandr(void)
@@ -2936,10 +2906,6 @@ Rule *initrule(Rule *r)
 	if (initrulereg(wr, r)) {
 		wr->next = rules;
 		rules = wr;
-		DBG("initrule: class: %s, inst: %s, title: %s, mon: %s, ws: %d, "
-				"floating: %d, sticky: %d, focus: %d, position: %d,%d @ %d x %d",
-				wr->class, wr->inst, wr->title, wr->mon, wr->ws, wr->state & STATE_FLOATING,
-				wr->state & STATE_STICKY, wr->focus, wr->x, wr->y, wr->w, wr->h);
 	} else {
 		free(wr->mon);
 		free(wr);
@@ -3220,10 +3186,8 @@ void mapwin(xcb_window_t win, Geometry *g, WindowAttr *wa)
 {
 	xcb_atom_t type;
 
-	if ((wintoclient(win) || wintopanel(win) || wintodesk(win))) {
-		DBG("mapwin: managed window - 0x%08x", win);
-	} else {
-		DBG("mapwin: unmanaged window - 0x%08x", win);
+	DBG("mapwin: 0x%08x - %d,%d @ %dx%d", win, g->x, g->y, g->width, g->height);
+	if (!(wintoclient(win) || wintopanel(win) || wintodesk(win))) {
 		if (winprop(win, netatom[WindowType], &type)) {
 			if (type == netatom[Dock])
 				initpanel(win, g);
@@ -3862,8 +3826,9 @@ void sendevent(xcb_window_t win, const char *ev, unsigned int mask)
 {
 	xcb_void_cookie_t vc;
 
+	DBG("sendevent: sending event to 0x%08x", win);
 	vc = xcb_send_event_checked(con, 0, win, mask, ev);
-	iferr(0, "unable to send configure notify event to window", xcb_request_check(con, vc));
+	iferr(0, "unable to send event", xcb_request_check(con, vc));
 }
 
 int sendwmproto(Client *c, int wmproto)
@@ -3899,7 +3864,6 @@ int sendwmproto(Client *c, int wmproto)
 
 void setclientgeom(Client *c, int x, int y, int w, int h)
 {
-	DBG("setclientgeom: 0x%08x -> %d,%d @ %d x %d", c->win, x, y, w, h);
 	c->old_x = c->x;
 	c->old_y = c->y;
 	c->old_w = c->w;
@@ -4002,7 +3966,7 @@ void seturgent(Client *c, int urg)
 	xcb_icccm_wm_hints_t wmh;
 	xcb_get_property_cookie_t pc;
 
-	DBG("seturgent: 0x%08x - urgent: %d", c->win, urg);
+	DBG("seturgent: 0x%08x -> %d", c->win, urg);
 	pc = xcb_icccm_get_wm_hints(con, c->win);
 	if (c != selws->sel) {
 		c->state |= STATE_URGENT;
@@ -4315,12 +4279,9 @@ void tryclientrule(Client *c, Rule *wr)
 		cmdusemon = focusmon;
 		cmdview(c->ws->num);
 	}
+
 	if (r)
 		gravitate(c, r->xgrav, r->ygrav, 1);
-	
-	DBG("tryclientrule: ws: %d, mon: %s, float: %d, stick: %d, focus: %d, x: %d, y: %d, w: %d,"
-			" h: %d, bw: %d, cb: %s", c->ws->num, c->ws->mon->name, ISFLOATING(c),
-			ISSTICKY(c), focus, c->x, c->y, c->w, c->h, c->bw, c->cb ? c->cb->name : "(null)");
 }
 
 void unfocus(Client *c, int focusroot)
@@ -4598,12 +4559,12 @@ Geometry *wingeom(xcb_window_t win)
 	xcb_generic_error_t *e;
 	xcb_get_geometry_cookie_t gc;
 
-	if (!win)
-		return g;
-	gc = xcb_get_geometry(con, win);
-	DBG("wingeom: getting window geometry - 0x%08x", win);
-	if (!(g = xcb_get_geometry_reply(con, gc, &e)))
-		iferr(0, "unable to get window geometry reply", e);
+	if (win && win != root) {
+		gc = xcb_get_geometry(con, win);
+		DBG("wingeom: getting window geometry - 0x%08x", win);
+		if (!(g = xcb_get_geometry_reply(con, gc, &e)))
+			iferr(0, "unable to get window geometry reply", e);
+	}
 	return g;
 }
 
@@ -4746,7 +4707,7 @@ xcb_window_t wintrans(xcb_window_t win)
 	xcb_window_t t = XCB_WINDOW_NONE;
 
 	pc = xcb_icccm_get_wm_transient_for(con, win);
-	DBG("wintrans: getting transient for hint - 0x%08x", win);
+	DBG("wintrans: getting wm transient for hint - 0x%08x", win);
 	if (!xcb_icccm_get_wm_transient_for_reply(con, pc, &t, &e))
 		iferr(0, "unable to get wm transient for hint", e);
 	return t;

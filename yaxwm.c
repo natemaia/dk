@@ -2414,8 +2414,8 @@ void focus(Client *c)
 {
 	DBG("focus: %p", (void *)c);
 
-	if (!c || c->ws != c->ws->mon->ws) {
-		DBG("focus: passed NULL or client not on workspace -- using selws->stack: 0x%08x", selws->stack->win);
+	if (!c || !c->ws->mon || c->ws != c->ws->mon->ws) {
+		DBG("focus: passed NULL or client not on workspace -- using selws->stack: %p", (void *)selws->stack);
 		c = selws->stack;
 	}
 

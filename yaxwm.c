@@ -2412,8 +2412,10 @@ void execcfg(void)
 
 void focus(Client *c)
 {
+	DBG("focus: %p", (void *)c);
+
 	if (!c || c->ws != c->ws->mon->ws) {
-		DBG("focus: passed NULL or client not on workspace -- using selws->stack: 0x%08x", selws->stack);
+		DBG("focus: passed NULL or client not on workspace -- using selws->stack: 0x%08x", selws->stack->win);
 		c = selws->stack;
 	}
 

@@ -59,22 +59,25 @@ static Callback callbacks[] = {
 /* "layout" names used by cmdlayout() to parse arguments.
  * Layout functions have the following prototype: int function(Workspace *); */
 static Layout layouts[] = {
-	{ "tile", tile }, /* first is initial default */
+	{ "tile", tile }, /* first is default */
 	{ "mono", mono },
 	{ "none", NULL },
 };
 
-static WsDefault wsdef = { /* settings for newly created workspaces */
+static Workspace wsdef = { /* settings for newly created workspaces */
 	1,           /* nmaster */
-	3,           /* nstack */
-	0,           /* gappx */
-	0,           /* padl */
-	0,           /* padr */
-	0,           /* padt */
-	0,           /* padb */
-	0.55,        /* msplit */
-	0.55,        /* ssplit */
-	&layouts[0]  /* layout */
+	3,           /* nstack  */
+	0,           /* gappx   */
+	0,           /* padl    */
+	0,           /* padr    */
+	0,           /* padt    */
+	0,           /* padb    */
+	0.55,        /* msplit  */
+	0.55,        /* ssplit  */
+	&layouts[0], /* layout  */
+
+	/* unused values - inherited from Workspace struct */
+	0, 0, { 0 }, NULL, NULL, NULL, NULL, NULL, NULL
 };
 
 /* primary keywords and parser functions

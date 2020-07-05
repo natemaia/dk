@@ -594,7 +594,7 @@ void adjustworkspace(char **argv)
 	fn = cmdview;
 	cws = selws;
 	cmdclient = selws->sel;
-	cm = cws->sel ? cws->sel->ws->mon : cws->mon;
+	cm = cws->mon;
 
 	if (*argv) {
 		for (i = 0; i < LEN(wsmoncmds); i++)
@@ -625,14 +625,12 @@ void adjustworkspace(char **argv)
 				ws = lastmon && lastmon->connected ? lastmon->ws : cws;
 			else
 				ws = lastws ? lastws : cws;
+		} else if (opt == Next && cmdusemon) {
+			if (!(m = nextmon(cm->next)))
+				m = nextmon(monitors);
+			ws = m->ws;
 		} else if (opt == Next) {
-			if (cmdusemon) {
-				if (!(m = nextmon(cm)))
-					m = nextmon(monitors);
-				ws = m->ws;
-			} else {
-				ws = cws->next ? cws->next : workspaces;
-			}
+			ws = cws->next ? cws->next : workspaces;
 		} else if (cmdusemon && opt == Prev) {
 			for (m = nextmon(monitors); m && nextmon(m->next) && nextmon(m->next) != cm; m = nextmon(m->next));
 			ws = m ? m->ws : selws;

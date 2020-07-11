@@ -143,12 +143,12 @@ enum NetAtoms {
 	Dock,
 	FrameExtents,
 	Fullscreen,
-	Name,
+	WMName,
 	NumDesktops,
 	Splash,
 	State,
 	Strut,
-	StrutPartial,
+	StrutP,
 	Supported,
 	Viewport,
 	WindowType,
@@ -162,6 +162,7 @@ enum GlobalCfg {
 	SizeHints,
 	FocusMouse,
 	FocusUrgent,
+	TileToHead,
 	NumWs,
 	MinXY,
 	MinWH
@@ -208,11 +209,11 @@ static const char *netatoms[] = {
 	[Dock] = "_NET_WM_WINDOW_TYPE_DOCK",
 	[FrameExtents] = "_NET_FRAME_EXTENTS",
 	[Fullscreen] = "_NET_WM_STATE_FULLSCREEN",
-	[Name] = "_NET_WM_NAME",
+	[WMName] = "_NET_WM_NAME",
 	[NumDesktops] = "_NET_NUMBER_OF_DESKTOPS",
 	[Splash] = "_NET_WM_WINDOW_TYPE_SPLASH",
 	[State] = "_NET_WM_STATE",
-	[StrutPartial] = "_NET_WM_STRUT_PARTIAL",
+	[StrutP] = "_NET_WM_STRUT_PARTIAL",
 	[Strut] = "_NET_WM_STRUT",
 	[Supported] = "_NET_SUPPORTED",
 	[Viewport] = "_NET_DESKTOP_VIEWPORT",
@@ -583,7 +584,7 @@ void adjustisetting(int i, int relative, int *setting, int other, int setborderg
 		*setting = n;
 }
 
-void adjustworkspace(char **argv)
+void adjustwsormon(char **argv)
 {
 	int opt, r;
 	unsigned int i;
@@ -1088,9 +1089,8 @@ void cmdlayout(char **argv)
 
 void cmdmon(char **argv)
 {
-	if (!monitors || !nextmon(monitors))
-		return;
-	adjustworkspace(argv);
+	if (monitors && nextmon(monitors))
+		adjustwsormon(argv);
 }
 
 void cmdmouse(char **argv)
@@ -1409,17 +1409,13 @@ void cmdrule(char **argv)
 	}
 	while (*argv) {
 		if (!r.class && !strcmp(*argv, "class")) {
-			argv++;
-			r.class = *argv;
+			r.class = *(++argv);
 		} else if (!r.inst && !strcmp(*argv, "instance")) {
-			argv++;
-			r.inst = *argv;
+			r.inst = *(++argv);
 		} else if (!r.title && !strcmp(*argv, "title")) {
-			argv++;
-			r.title = *argv;
+			r.title = *(++argv);
 		} else if (!strcmp(*argv, "mon")) {
-			argv++;
-			r.mon = *argv;
+			r.mon = *(++argv);
 		} else if (!strcmp(*argv, "ws")) {
 			argv = parseintclamp(argv + 1, &r.ws, NULL, 1, 99);
 			if (!r.ws && *argv) {
@@ -1464,10 +1460,8 @@ void cmdrule(char **argv)
 			argv++;
 	}
 
-	if ((r.class || r.inst || r.title)
-			&& (r.ws || r.mon || r.focus || r.cb || r.state & STATE_FLOATING
-				|| r.x != -1 || r.y != -1 || r.w != -1 || r.h != -1
-				|| r.bw != -1 || r.xgrav != None || r.ygrav != None))
+	if ((r.class || r.inst || r.title) && (r.ws || r.mon || r.focus || r.cb || r.state & STATE_FLOATING
+				|| r.x != -1 || r.y != -1 || r.w != -1 || r.h != -1 || r.bw != -1 || r.xgrav != None || r.ygrav != None))
 	{
 		FOR_EACH(wr, rules) {
 			if ((r.class == NULL || (wr->class && !strcmp(r.class, wr->class)))
@@ -1537,6 +1531,8 @@ void cmdset(char **argv)
 			}
 			strlcpy(setws->name, *argv, sizeof(setws->name));
 			names = 1;
+		} else if (!strcmp("tile_tohead", *argv)) {
+			argv = parsebool(argv + 1, &globalcfg[TileToHead]);
 		} else if (!strcmp("smart_border", *argv)) {
 			argv = parsebool(argv + 1, &globalcfg[SmartBorder]);
 		} else if (!strcmp("smart_gap", *argv)) {
@@ -1651,21 +1647,21 @@ void cmdwin(char **argv)
 
 void cmdwm(char **argv)
 {
-	if (!strcmp("exit", *argv))
+	if (!strcmp("exit", *argv)) {
 		running = 0;
-	else if (!strcmp("reload", *argv))
+	} else if (!strcmp("reload", *argv)) {
 		execcfg();
-	else if (!strcmp("restart", *argv))
+	} else if (!strcmp("restart", *argv)) {
 		running = 0, restart = 1;
-	else
+	} else {
 		fprintf(cmdresp, "!%s wm: %s\n", ebadarg, *argv);
+	}
 }
 
 void cmdws(char **argv)
 {
-	if (!workspaces || !workspaces->next)
-		return;
-	adjustworkspace(argv);
+	if (workspaces && workspaces->next)
+		adjustwsormon(argv);
 }
 
 void cmdwsdef(char **argv)
@@ -1732,17 +1728,11 @@ void cmdwsdef(char **argv)
 
 	if (apply) {
 		FOR_EACH(ws, workspaces) {
-			ws->gappx = wsdef.gappx;
-			ws->defgap = wsdef.gappx;
 			ws->layout = wsdef.layout;
-			ws->nmaster = wsdef.nmaster;
-			ws->nstack = wsdef.nstack;
-			ws->msplit = wsdef.msplit;
-			ws->ssplit = wsdef.ssplit;
-			ws->padl = wsdef.padl;
-			ws->padr = wsdef.padr;
-			ws->padt = wsdef.padt;
-			ws->padb = wsdef.padb;
+			ws->gappx = wsdef.gappx, ws->defgap = wsdef.gappx;
+			ws->nmaster = wsdef.nmaster, ws->nstack = wsdef.nstack;
+			ws->msplit = wsdef.msplit, ws->ssplit = wsdef.ssplit;
+			ws->padl = wsdef.padl, ws->padr = wsdef.padr, ws->padt = wsdef.padt, ws->padb = wsdef.padb;
 		}
 	}
 }
@@ -1752,28 +1742,20 @@ void cmdview(int num)
 	Workspace *ws;
 
 	DBG("cmdview: workspace %d", num);
-	if (num == selws->num || !(ws = itows(num)))
-		return;
-	if (!cmdusemon)
-		changews(ws, 1, 0);
-	else
-		changews(ws, 0, 1);
-	needsrefresh = 1;
+	if (num != selws->num && (ws = itows(num))) {
+		changews(ws, !cmdusemon, cmdusemon);
+		needsrefresh = 1;
+	}
 }
 
 void configrequest(xcb_configure_request_event_t *e)
 {
 	Client *c;
 	Monitor *m;
-	Geometry *g;
 
 	if ((c = wintoclient(e->window))) {
 		DBG("eventhandle: CONFIGURE_REQUEST - managed %s window 0x%08x",
 				ISFLOATING(c) ? "floating" : "tiled", e->window);
-		if (!(g = wingeom(c->win)))
-			return;
-		c->depth = g->depth;
-		free(g);
 		if (e->value_mask & XCB_CONFIG_WINDOW_BORDER_WIDTH)
 			c->bw = e->border_width;
 		else if (ISFLOATING(c)) {
@@ -1796,9 +1778,9 @@ void configrequest(xcb_configure_request_event_t *e)
 				c->old_h = c->h;
 				c->h = e->height;
 			}
-			if ((c->x + c->w) > m->wx + m->ww)
+			if (c->x + c->w > m->wx + m->ww)
 				c->x = m->wx + ((m->ww - W(c)) / 2);
-			if ((c->y + c->h) > m->wy + m->wh)
+			if (c->y + c->h > m->wy + m->wh)
 				c->y = m->wy + ((m->wh - H(c)) / 2);
 			if (e->value_mask & (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y)) {
 				if (!(e->value_mask & (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT)))
@@ -1818,7 +1800,7 @@ void configrequest(xcb_configure_request_event_t *e)
 		wc.stack_mode = e->stack_mode;
 		xcb_configure_window(con, e->window, e->value_mask, &wc);
 	}
-	xcb_flush(con);
+	/* xcb_flush(con); */
 }
 
 void drawborder(Client *c, int focused)
@@ -2086,15 +2068,16 @@ void eventhandle(xcb_generic_event_t *ev)
 		xcb_window_t t;
 		xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ev;
 
-		if ((e->atom == netatom[StrutPartial] || e->atom == netatom[Strut]) && (p = wintopanel(e->window))) {
-			DBG("eventhandle: PROPERTY_NOTIFY - strut update on panel window 0x%08x", e->window);
+		if ((e->atom == netatom[StrutP] || e->atom == netatom[Strut]) && (p = wintopanel(e->window))) {
+			DBG("eventhandle: PROPERTY_NOTIFY - panel strut update - 0x%08x", e->window);
 			updstruts(p, 1);
 			updnetwm();
 			needsrefresh = 1;
 		} else if (e->state != XCB_PROPERTY_DELETE && (c = wintoclient(e->window))) {
-			DBG("eventhandle: PROPERTY_NOTIFY - client window 0x%08x", e->window);
+			DBG("eventhandle: PROPERTY_NOTIFY - managed window - 0x%08x", e->window);
 			switch (e->atom) {
 			case XCB_ATOM_WM_TRANSIENT_FOR:
+				DBG("eventhandle: PROPERTY_NOTIFY -> WM_TRANSIENT_FOR window 0x%08x", e->window);
 				if ((t = wintrans(c->win)) && (c->trans = wintoclient(t))) {
 					if (!ISFLOATING(c)) {
 						c->state |= STATE_FLOATING;
@@ -2103,14 +2086,18 @@ void eventhandle(xcb_generic_event_t *ev)
 				}
 				return;
 			case XCB_ATOM_WM_NORMAL_HINTS:
+				DBG("eventhandle: PROPERTY_NOTIFY -> WM_NORMAL_HINTS -> 0x%08x", e->window);
 				sizehints(c, 0);
 				return;
 			case XCB_ATOM_WM_HINTS:
+				DBG("eventhandle: PROPERTY_NOTIFY -> WM_HINTS -> 0x%08x", e->window);
 				winhints(c);
 				return;
 			}
-			if (e->atom == netatom[WindowType])
+			if (e->atom == netatom[WindowType]) {
+				DBG("eventhandle: PROPERTY_NOTIFY -> _NET_WM_WINDOW_TYPE -> 0x%08x", e->window);
 				wintype(c);
+			}
 		}
 		return;
 	}
@@ -2646,7 +2633,7 @@ void initpanel(xcb_window_t win, Geometry *g)
 	xcb_get_property_reply_t *prop = NULL;
 
 	DBG("initpanel: 0x%08x", win);
-	rc = xcb_get_property(con, 0, win, netatom[StrutPartial], XCB_ATOM_CARDINAL, 0, 4);
+	rc = xcb_get_property(con, 0, win, netatom[StrutP], XCB_ATOM_CARDINAL, 0, 4);
 	p = ecalloc(1, sizeof(Panel));
 	p->win = win;
 	p->x = g->x, p->y = g->y, p->w = g->width, p->h = g->height;
@@ -2854,7 +2841,7 @@ void initwm(void)
 	xcb_create_window(con, XCB_COPY_FROM_PARENT, wmcheck, root, -1, -1, 1, 1, 0,
 			XCB_WINDOW_CLASS_INPUT_ONLY, scr->root_visual, 0, NULL);
 	PROP_REPLACE(wmcheck, netatom[Check], XCB_ATOM_WINDOW, 32, 1, &wmcheck);
-	PROP_REPLACE(wmcheck, netatom[Name], wmatom[Utf8Str], 8, 5, "yaxwm");
+	PROP_REPLACE(wmcheck, netatom[WMName], wmatom[Utf8Str], 8, 5, "yaxwm");
 	PROP_REPLACE(root, netatom[Check], XCB_ATOM_WINDOW, 32, 1, &wmcheck);
 	PROP_REPLACE(root, netatom[Supported], XCB_ATOM_ATOM, 32, LEN(netatom), netatom);
 	xcb_delete_property(con, root, netatom[ClientList]);
@@ -3583,7 +3570,7 @@ void setclientws(Client *c, int num)
 	if (!(c->ws = itows(num)))
 		c->ws = selws;
 	PROP_REPLACE(c->win, netatom[WmDesktop], XCB_ATOM_CARDINAL, 32, 1, &c->ws->num);
-	attach(c, 0);
+	attach(c, globalcfg[TileToHead]);
 	attachstack(c);
 }
 
@@ -3940,7 +3927,7 @@ void tryclientrule(Client *c, Rule *wr)
 
 	DBG("tryclientrule: 0x%08x", c->win);
 	title[0] = class[0] = inst[0] = '\0';
-	if (!wintextprop(c->win, netatom[Name], title, sizeof(title))
+	if (!wintextprop(c->win, netatom[WMName], title, sizeof(title))
 			&& !wintextprop(c->win, XCB_ATOM_WM_NAME, title, sizeof(title)))
 		title[0] = '\0';
 	if (!winclassprop(c->win, class, inst, sizeof(class), sizeof(inst)))

@@ -14,9 +14,10 @@ A tiling window manager taking inspiration from dwm, bspwm, and xmonad.
 .P
 Windows are managed in tiled, monocle, or floating layouts, and are grouped by
 workspaces. Each window can be assigned to a single workspace and will have a
-small border to indicate the focus state. Windows are arranged into pre-defined
-layouts, a layout can be applied to workspaces and changes to one workspace will
-not impact others.
+small border to indicate the focus state. Windows are grouped into workspaces
+and changes to one workspace will not impact others. Workspaces can be
+dynamically allocated and viewed on any monitor, by default only the bare
+minimum is allocated to populate each monitor with a single workspace.
 .P
 Monitors can be assigned one workspace at a time, all workspaces are available
 from all monitors, floating windows will retain their relative location
@@ -35,16 +36,16 @@ and can be moved or resized freely.
 .SH OPTIONS
 .TP
 .B \-h
-Prints usage information to standard out and exits.
+Prints usage information to stdout and exits.
 .TP
 .B \-v
-Prints version information to standard out and exits.
+Prints version information to stdout and exits.
 .TP
 .B \-s
 Use an existing socket connection file descriptor when restarting yaxwm.
 .TP
 .B \-c
-Pass remaining arguments as a command to the running instance of yaxwm.
+Pass all remaining arguments as a command to the running instance of yaxwm.
 .SH USAGE
 .SS COMMANDS
 TODO - Somebody yell at me!
@@ -62,11 +63,14 @@ On startup yaxwm looks for a yaxwmrc file in:
   - $HOME/.config/yaxwm/yaxwmrc
 .P
 in that order and runs the first it can, this file must be executable.
+This can be used to initialize settings, customization, and running programs
+on startup.
 .P
 Further configuration such as adding layouts or callbacks can be done by
-copying the default config header to config.h, editing it, and recompiling.
+copying yaxwm.def.h to yaxwm.h, editing it, and recompiling.
 .SH BUGS
 Please submit a bug report with as much detail as possible to
 .B https://bitbucket.org/natemaia/yaxwm/issues/new
 .SH AUTHORS/CONTRIBUTORS
-Nathaniel Maia <\fInatemaia10@gmail.com\fR>, Dmitry Belitsky <\fIdmitry.belitsky@gmail.com\fR>
+Nathaniel Maia <\fInatemaia10@gmail.com\fR>,
+Dmitry Belitsky <\fIdmitry.belitsky@gmail.com\fR>

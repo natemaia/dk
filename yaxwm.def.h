@@ -22,6 +22,7 @@ static int globalcfg[] = {
 	[SizeHints] = 0,   /* respect size hints in tiled layouts */
 	[FocusMouse] = 1,  /* enable focus follows mouse */
 	[FocusUrgent] = 1, /* enable focus urgent windows */
+	[TileToHead] = 0,  /* place new clients at the tail of the stack */
 	[NumWs] = 0,       /* number of workspaces currently allocated */
 	[MinXY] = 10,      /* minimum window area allowed inside the screen when moving */
 	[MinWH] = 50,      /* minimum window size allowed when resizing */

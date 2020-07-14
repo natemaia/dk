@@ -1,7 +1,7 @@
 # yaxwm - yet another x window manager
 # see license file for copyright and license details
 
-VERSION = 0.8
+VERSION = 0.81
 
 # install paths
 PREFIX    ?= /usr/local
@@ -12,7 +12,7 @@ DOCPREFIX ?= ${PREFIX}/share/doc
 CPPFLAGS += -DVERSION=\"${VERSION}\"
 CFLAGS   += -O2 -pedantic -Wall -Wextra
 LDFLAGS  ?=
-LDLIBS    = -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr -lxcb-dpms
+LDLIBS    = -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
 
 all: yaxwm
 

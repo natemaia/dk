@@ -443,7 +443,6 @@ static void updclientlist(void);
 static void updnetworkspaces(void);
 static void updnumws(int);
 static int updrandr(void);
-static void updscreen(int, int, int, int);
 static void updstruts(Panel *, int);
 static void updworkspaces(int);
 static void usage(int, char);
@@ -1944,33 +1943,6 @@ void detachstack(Client *c)
 	*cc = c->snext;
 	if (c == c->ws->sel)
 		c->ws->sel = c->ws->stack;
-}
-
-int disablemon(Monitor *m, xcb_randr_get_output_info_reply_t *o, int changed)
-{
-	xcb_generic_error_t *e;
-	xcb_randr_set_crtc_config_cookie_t sc;
-	xcb_randr_set_crtc_config_reply_t *sr;
-
-	/* don't disable the last monitor */
-	if (m == nextmon(monitors) && !nextmon(m->next))
-		return changed;
-
-	changed = m->connected ? 1 : changed;
-	if (m->connected) {
-		DBG("disablemon: %s inactive or disconnected - disabling", m->name);
-		/* we need to disconnect the crtc, disabling it's mode and output
-		 * otherwise we're unable to update the root screen size later */
-		sc = xcb_randr_set_crtc_config(con, o->crtc, XCB_CURRENT_TIME,
-				XCB_CURRENT_TIME, 0, 0, XCB_NONE, XCB_RANDR_ROTATION_ROTATE_0, 0, NULL);
-		if (!(sr = xcb_randr_set_crtc_config_reply(con, sc, &e))
-				|| sr->status != XCB_RANDR_SET_CONFIG_SUCCESS)
-			iferr(0, "unable to set crtc config", e);
-		m->connected = 0;
-		m->num = -1;
-		free(sr);
-	}
-	return changed;
 }
 
 void *ecalloc(size_t elems, size_t size)
@@ -3990,76 +3962,70 @@ void updnumws(int needed)
 	setnetwsnames();
 }
 
-int updoutput(xcb_randr_output_t id, xcb_randr_get_output_info_reply_t *o,
-		xcb_timestamp_t timestamp, int changed, int *nmons,
-		unsigned int *maxw, unsigned int *maxh, unsigned int *mmaxw, unsigned int *mmaxh)
-{
-	unsigned int n;
-	Monitor *m;
-	char name[64];
-	xcb_generic_error_t *e;
-	xcb_randr_get_crtc_info_cookie_t ck;
-	xcb_randr_get_crtc_info_reply_t *crtc;
-
-	ck = xcb_randr_get_crtc_info(con, o->crtc, timestamp);
-	crtc = xcb_randr_get_crtc_info_reply(con, ck, &e);
-	if (!crtc || !xcb_randr_get_crtc_info_outputs_length(crtc)) {
-		iferr(0, "unable to get crtc info reply", e);
-		goto out;
-	}
-	n = xcb_randr_get_output_info_name_length(o) + 1;
-	strlcpy(name, (char *)xcb_randr_get_output_info_name(o), MIN(sizeof(name), n));
-	FOR_EACH(m, monitors) {
-		if (id != m->id && m->x == crtc->x && m->y == crtc->y) {
-			DBG("updoutput: %s is a clone of %s", name, m->name);
-			goto out;
-		}
-	}
-	if (crtc->x + crtc->width > (int)*maxw)
-		*maxw = crtc->x + crtc->width, *mmaxw += o->mm_width;
-	if (crtc->y + crtc->height > (int)*maxh)
-		*maxh = crtc->y + crtc->height, *mmaxh += o->mm_height;
-	if ((m = outputtomon(id))) {
-		changed = changed || !m->connected || crtc->x != m->x || crtc->y != m->y
-			|| crtc->width != m->w || crtc->height != m->h;
-		m->num = *nmons++;
-		m->x = m->wx = crtc->x, m->y = m->wy = crtc->y;
-		m->w = m->ww = crtc->width, m->h = m->wh = crtc->height;
-		m->connected = 1;
-	} else {
-		initmon(*nmons++, name, id, crtc->x, crtc->y, crtc->width, crtc->height);
-		changed = 1;
-	}
-	DBG("updoutput: %s - %d,%d @ %dx%d - changed: %d", name,
-			crtc->x, crtc->y, crtc->width, crtc->height, changed);
-out:
-	free(crtc);
-	return changed;
-}
-
 int updoutputs(xcb_randr_output_t *outs, int nouts, xcb_timestamp_t t)
 {
 	Monitor *m;
-	xcb_generic_error_t *e;
+	unsigned int n;
+	char name[64];
 	int i, nmons, changed = 0;
+	xcb_generic_error_t *e;
+	xcb_randr_get_crtc_info_cookie_t ck;
+	xcb_randr_get_crtc_info_reply_t *crtc;
 	xcb_randr_get_output_info_reply_t *o;
 	xcb_randr_get_output_info_cookie_t oc[nouts];
-	unsigned int maxw = 0, maxh = 0, mmaxw = 0, mmaxh = 0;
+	xcb_randr_get_output_primary_reply_t *po = NULL;
+
 
 	DBG("updoutputs: checking %d outputs for changes", nouts);
 	for (i = 0; i < nouts; i++)
 		oc[i] = xcb_randr_get_output_info(con, outs[i], t);
 	for (i = 0, nmons = 0; i < nouts; i++) {
-		if (!(o = xcb_randr_get_output_info_reply(con, oc[i], &e)) || o->crtc == XCB_NONE)
+		if (!(o = xcb_randr_get_output_info_reply(con, oc[i], &e)) || o->crtc == XCB_NONE) {
 			iferr(0, "unable to get output info or output has no crtc", e);
-		else if (o->connection == XCB_RANDR_CONNECTION_CONNECTED)
-			changed = updoutput(outs[i], o, t, changed, &nmons, &maxw, &maxh, &mmaxw, &mmaxh);
-		else if (o->connection == XCB_RANDR_CONNECTION_DISCONNECTED && (m = outputtomon(outs[i])))
-			changed = disablemon(m, o, changed);
+		} else if (o->connection == XCB_RANDR_CONNECTION_CONNECTED) {
+			ck = xcb_randr_get_crtc_info(con, o->crtc, t);
+			crtc = xcb_randr_get_crtc_info_reply(con, ck, &e);
+			if (!crtc || !xcb_randr_get_crtc_info_outputs_length(crtc)) {
+				iferr(0, "unable to get crtc info reply", e);
+				goto out;
+			}
+			n = xcb_randr_get_output_info_name_length(o) + 1;
+			strlcpy(name, (char *)xcb_randr_get_output_info_name(o), MIN(sizeof(name), n));
+			FOR_EACH(m, monitors) {
+				if (outs[i] != m->id && m->x == crtc->x && m->y == crtc->y) {
+					DBG("updoutput: %s is a clone of %s", name, m->name);
+					goto out;
+				}
+			}
+			if ((m = outputtomon(outs[i]))) {
+				if (!m->connected || crtc->x != m->x || crtc->y != m->y
+						|| crtc->width != m->w || crtc->height != m->h)
+					changed = 1;
+				m->num = nmons++;
+				m->x = m->wx = crtc->x, m->y = m->wy = crtc->y;
+				m->w = m->ww = crtc->width, m->h = m->wh = crtc->height;
+				m->connected = 1;
+			} else {
+				initmon(nmons++, name, outs[i], crtc->x, crtc->y, crtc->width, crtc->height);
+				changed = 1;
+			}
+			DBG("updoutputs: %s - %d,%d @ %dx%d - changed: %d", name,
+					crtc->x, crtc->y, crtc->width, crtc->height, changed);
+out:
+			free(crtc);
+		} else if (o->connection == XCB_RANDR_CONNECTION_DISCONNECTED && (m = outputtomon(outs[i]))) {
+			if (m->connected)
+				changed = 1, m->connected = 0, m->num = -1;
+		}
 		free(o);
 	}
-	if (changed)
-		updscreen(maxw, maxh, mmaxw, mmaxh);
+
+	if (changed) {
+		po = xcb_randr_get_output_primary_reply(con, xcb_randr_get_output_primary(con, root), NULL);
+		if (!po || !(primary = outputtomon(po->output)))
+			primary = nextmon(monitors);
+		free(po);
+	}
 	return changed;
 }
 
@@ -4079,30 +4045,10 @@ int updrandr(void)
 		else
 			changed = updoutputs(o, n, r->config_timestamp);
 		free(r);
-	} else
+	} else {
 		iferr(0, "unable to get screen resources", e);
-	return changed;
-}
-
-void updscreen(int maxw, int maxh, int mmaxw, int mmaxh)
-{
-	xcb_void_cookie_t vc;
-	xcb_randr_get_output_primary_reply_t *po = NULL;
-
-	if (maxw != scr_w || maxh != scr_h) {
-		DBG("updscreen: size changed: %dx%d -> %dx%d", scr_w, scr_h, maxw, maxh);
-		scr_w = maxw;
-		scr_h = maxh;
-		/* we need to update the root screen size with the new size. X doesn't update
-		 * itself so we're left with void space when a monitor is disconnected, where
-		 * the cursor and windows can go but not be seen, yikes! */
-		vc = xcb_randr_set_screen_size_checked(con, root, maxw, maxh, mmaxw, mmaxh);
-		iferr(0, "unable to set new screen size", xcb_request_check(con, vc));
 	}
-	po = xcb_randr_get_output_primary_reply(con, xcb_randr_get_output_primary(con, root), NULL);
-	if (!(primary = outputtomon(po->output)))
-		primary = monitors;
-	free(po);
+	return changed;
 }
 
 void updstruts(Panel *p, int apply)

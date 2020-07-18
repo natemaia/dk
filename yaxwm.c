@@ -48,13 +48,8 @@
 #define MAX(a, b)           ((a) > (b) ? (a) : (b))
 #define CLAMP(x, min, max)  (MIN(MAX((x), (min)), (max)))
 #define CLNMOD(mod)         (mod & ~(lockmask | XCB_MOD_MASK_LOCK))
-
-#define ISFIXED(c)          ((c)->state & STATE_FIXED)
-#define ISSTICKY(c)         ((c)->state & STATE_STICKY)
-#define ISFLOATING(c)       ((c)->state & STATE_FLOATING || !(c)->ws->layout->fn)
-#define ISFULLSCREEN(c)     ((c)->state & STATE_FULLSCREEN && !((c)->state & STATE_FAKEFULL))
-#define ISFULL(c)\
-	((c)->state & STATE_FULLSCREEN && (c)->w == (c)->ws->mon->w && (c)->h == (c)->ws->mon->h)
+#define FLOATING(c)         ((c)->state & STATE_FLOATING || !(c)->ws->layout->fn)
+#define FULLSCREEN(c)       ((c)->state & STATE_FULLSCREEN && !((c)->state & STATE_FAKEFULL))
 
 #define FOR_EACH(v, list)       for ((v) = (list); (v); (v) = (v)->next)
 #define FOR_STACK(v, list)      for ((v) = (list); (v); (v) = (v)->snext)
@@ -114,9 +109,9 @@ enum Borders {
 	Urgent,
 	Unfocus,
 	Outer,
-	OFocus,
-	OUrgent,
-	OUnfocus
+	OuterFocus,
+	OuterUrgent,
+	OuterUnfocus
 };
 
 enum DirOpts {
@@ -399,7 +394,7 @@ static void movefocus(int);
 static void movestack(int);
 static Monitor *nextmon(Monitor *m);
 static Client *nexttiled(Client *);
-static void offsetfloat(Client *, int, int *, int *, int *, int *);
+static void offsetfloat(Client *, int *, int *, int *, int *);
 static char **parsebool(char **, int *);
 static int parseclient(char **, Client **);
 static void parsecmd(char *);
@@ -428,13 +423,12 @@ static void setnetwsnames(void);
 static void setstackmode(xcb_window_t, unsigned int);
 static void setsticky(Client *, int);
 static void seturgent(Client *, int);
-static void setwmwinstate(xcb_window_t, unsigned int);
+static void setwmwinstate(xcb_window_t, long);
 static void showhide(Client *);
 static void sighandle(int);
 static void sizehints(Client *, int);
 static size_t strlcat(char *, const char *, size_t);
 static size_t strlcpy(char *, const char *, size_t);
-static void subscribe(xcb_window_t, unsigned int);
 static int tile(Workspace *);
 static void tryclientrule(Client *, Rule *);
 static void unfocus(Client *, int);
@@ -762,7 +756,7 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 		*x = CLAMP(*x, m->wx, m->wx + m->ww - *w + (2 * bw));
 		*y = CLAMP(*y, m->wy, m->wy + m->wh - *h + (2 * bw));
 	}
-	if (ISFLOATING(c) || globalcfg[SizeHints]) {
+	if (FLOATING(c) || globalcfg[SizeHints]) {
 		if (!(baseismin = c->base_w == c->min_w && c->base_h == c->min_h))
 			*w -= c->base_w, *h -= c->base_h;
 		if (c->min_aspect > 0 && c->max_aspect > 0) {
@@ -891,9 +885,9 @@ void cmdborder(char **argv)
 	focus = border[Focus];
 	urgent = border[Urgent];
 	unfocus = border[Unfocus];
-	ofocus = border[OFocus];
-	ourgent = border[OUrgent];
-	ounfocus = border[OUnfocus];
+	ofocus = border[OuterFocus];
+	ourgent = border[OuterUrgent];
+	ounfocus = border[OuterUnfocus];
 	while (*argv) {
 		if ((outer = !strcmp("outer", *argv) || !strcmp("outer_width", *argv))
 				|| !strcmp(*argv, "width"))
@@ -935,9 +929,9 @@ void cmdborder(char **argv)
 				focus = dborder[Focus];
 				urgent = dborder[Urgent];
 				unfocus = dborder[Unfocus];
-				ofocus = dborder[OFocus];
-				ourgent = dborder[OUrgent];
-				ounfocus = dborder[OUnfocus];
+				ofocus = dborder[OuterFocus];
+				ourgent = dborder[OuterUrgent];
+				ounfocus = dborder[OuterUnfocus];
 				incol = 0;
 			} else if (start) {
 				fprintf(cmdresp, "!%s border colour: %s\n", ebadarg, *argv);
@@ -958,8 +952,8 @@ void cmdborder(char **argv)
 
 	if ((unsigned int)bw == border[Width] && (unsigned int)ow == border[Outer]
 			&& focus == border[Focus] && unfocus == border[Unfocus]
-			&& urgent == border[Urgent] && ofocus == border[OFocus]
-			&& ounfocus == border[OUnfocus] && ourgent == border[OUrgent])
+			&& urgent == border[Urgent] && ofocus == border[OuterFocus]
+			&& ounfocus == border[OuterUnfocus] && ourgent == border[OuterUrgent])
 		return;
 
 	old = border[Width];
@@ -973,9 +967,9 @@ void cmdborder(char **argv)
 	border[Focus] = focus;
 	border[Unfocus] = unfocus;
 	border[Urgent] = urgent;
-	border[OFocus] = ofocus;
-	border[OUnfocus] = ounfocus;
-	border[OUrgent] = ourgent;
+	border[OuterFocus] = ofocus;
+	border[OuterUnfocus] = ounfocus;
+	border[OuterUrgent] = ourgent;
 	FOR_CLIENTS(c, ws) {
 		if (!(c->state & STATE_NOBORDER)) {
 			if (c->bw == old)
@@ -990,7 +984,7 @@ void cmdcycle(char **argv)
 {
 	Client *c, *first;
 
-	if (!(c = cmdclient) || ISFLOATING(c) || ISFULLSCREEN(c))
+	if (!(c = cmdclient) || FLOATING(c) || FULLSCREEN(c))
 		return;
 	first = nexttiled(selws->clients);
 	if (c == first && !nexttiled(c->next))
@@ -1023,7 +1017,9 @@ void cmdfloat(char **argv)
 {
 	Client *c;
 
-	if (!(c = cmdclient) || ISFULLSCREEN(c) || ISSTICKY(c) || ISFIXED(c) || !c->ws->layout->fn)
+	if (!(c = cmdclient) || !c->ws->layout->fn)
+		return;
+	if (FULLSCREEN(c) || c->state & STATE_STICKY || c->state & STATE_FIXED)
 		return;
 	if ((c->state ^= STATE_FLOATING) & STATE_FLOATING) {
 		c->x = c->old_x;
@@ -1031,7 +1027,7 @@ void cmdfloat(char **argv)
 		c->w = c->old_w;
 		c->h = c->old_h;
 		if (c->x + c->y == c->ws->mon->wx + c->ws->mon->wy)
-			offsetfloat(c, 6, &c->x, &c->y, &c->w, &c->h);
+			offsetfloat(c, &c->x, &c->y, &c->w, &c->h);
 		resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0, 1);
 	} else {
 		c->old_x = c->x;
@@ -1047,7 +1043,7 @@ void cmdfocus(char **argv)
 {
 	int i = 0, opt;
 
-	if (!cmdclient || ISFULLSCREEN(cmdclient))
+	if (!cmdclient || FULLSCREEN(cmdclient))
 		return;
 	if (cmdclient != selws->sel) {
 		focus(cmdclient);
@@ -1116,8 +1112,6 @@ void cmdkill(char **argv)
 		xcb_kill_client(con, cmdclient->win);
 		xcb_flush(con);
 		xcb_ungrab_server(con);
-	} else {
-		xcb_flush(con);
 	}
 	(void)(argv);
 }
@@ -1309,8 +1303,8 @@ void cmdprint(char **argv)
 		}
 		IFARG("%d", "ws", c->ws->num + 1);
 		IFARG("%d", "mon", c->ws->mon->num + 1);
-		IFARG("%d", "stick", ISSTICKY(c) != 0);
-		IFARG("%d", "float", ISFLOATING(c) != 0);
+		IFARG("%d", "stick", (c->state & STATE_STICKY) != 0);
+		IFARG("%d", "float", FLOATING(c) != 0);
 		IFARG("%d", "full", (c->state & STATE_FULLSCREEN) != 0);
 		IFARG("%d", "fakefull", (c->state & STATE_FAKEFULL) != 0);
 	} else if (!strcmp("border", *argv)) {
@@ -1323,9 +1317,9 @@ void cmdprint(char **argv)
 			IFARG("#%08x", "focus", border[Focus]);
 			IFARG("#%08x", "urgent", border[Urgent]);
 			IFARG("#%08x", "unfocus", border[Unfocus]);
-			IFARG("#%08x", "outer_focus", border[OFocus]);
-			IFARG("#%08x", "outer_urgent", border[OUrgent]);
-			IFARG("#%08x", "outer_unfocus", border[OUnfocus]);
+			IFARG("#%08x", "outer_focus", border[OuterFocus]);
+			IFARG("#%08x", "outer_urgent", border[OuterUrgent]);
+			IFARG("#%08x", "outer_unfocus", border[OuterUnfocus]);
 			fprintf(cmdresp, "!unknown border colour setting: %s\n", *argv);
 		} else {
 			fprintf(cmdresp, "!unknown border setting: %s\n", *argv);
@@ -1367,7 +1361,7 @@ void cmdresize(char **argv)
 	int x = scr_w, y = scr_h, w = 0, h = 0, bw = -1;
 	int relx = 0, rely = 0, relw = 0, relh = 0, relbw = 0;
 
-	if (!(c = cmdclient) || ISFULLSCREEN(c))
+	if (!(c = cmdclient) || FULLSCREEN(c))
 		return;
 	while (*argv) {
 		if (!strcmp("x", *argv))
@@ -1389,7 +1383,7 @@ void cmdresize(char **argv)
 	}
 	if (x == scr_w && y == scr_h && w == 0 && h == 0 && xgrav == None && ygrav == None && bw == -1)
 		return;
-	if (ISFLOATING(c)) {
+	if (FLOATING(c)) {
 		x = x == scr_w || xgrav != None ? c->x : (relx ? c->x + x : x);
 		y = y == scr_h || ygrav != None ? c->y : (rely ? c->y + y : y);
 		w = w == 0 ? c->w : (relw ? c->w + w : w);
@@ -1649,7 +1643,7 @@ void cmdssplit(char **argv)
 
 void cmdstick(char **argv)
 {
-	if (!cmdclient || ISFULLSCREEN(cmdclient))
+	if (!cmdclient || FULLSCREEN(cmdclient))
 		return;
 	setsticky(cmdclient, !(cmdclient->state & STATE_STICKY));
 	(void)(argv);
@@ -1660,7 +1654,8 @@ void cmdswap(char **argv)
 	static Client *last = NULL;
 	Client *c, *old, *cur = NULL, *prev = NULL;
 
-	if (!(c = cmdclient) || ISFULL(c) || ISFLOATING(c))
+	if (!(c = cmdclient)|| FLOATING(c)
+			|| (c->state & STATE_FULLSCREEN && c->w == c->ws->mon->w && c->h == c->ws->mon->h))
 		return;
 	if (c == nexttiled(c->ws->clients)) {
 		if ((cur = prevclient(last)))
@@ -1821,10 +1816,10 @@ void configrequest(xcb_configure_request_event_t *e)
 
 	if ((c = wintoclient(e->window))) {
 		DBG("eventhandle: CONFIGURE_REQUEST - managed %s window 0x%08x",
-				ISFLOATING(c) ? "floating" : "tiled", e->window);
+				FLOATING(c) ? "floating" : "tiled", e->window);
 		if (e->value_mask & XCB_CONFIG_WINDOW_BORDER_WIDTH)
 			c->bw = e->border_width;
-		else if (ISFLOATING(c)) {
+		else if (FLOATING(c)) {
 			m = c->ws->mon;
 			if (e->value_mask & XCB_CONFIG_WINDOW_X) {
 				if (e->x == W(c) * -2)
@@ -1866,7 +1861,6 @@ void configrequest(xcb_configure_request_event_t *e)
 		wc.stack_mode = e->stack_mode;
 		xcb_configure_window(con, e->window, e->value_mask, &wc);
 	}
-	/* xcb_flush(con); */
 }
 
 void drawborder(Client *c, int focused)
@@ -1881,7 +1875,7 @@ void drawborder(Client *c, int focused)
 	b = c->bw;
 	o = border[Outer];
 	in = border[focused ? Focus : (c->state & STATE_URGENT ? Urgent : Unfocus)];
-	out = border[focused ? OFocus : (c->state & STATE_URGENT ? OUrgent : OUnfocus)];
+	out = border[focused ? OuterFocus : (c->state & STATE_URGENT ? OuterUrgent : OuterUnfocus)];
 	unsigned int frame[] = { c->bw, c->bw, c->bw, c->bw };
 	xcb_rectangle_t inner[] = {
 		/* x            y             width         height */
@@ -2131,7 +2125,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			case XCB_ATOM_WM_TRANSIENT_FOR:
 				DBG("eventhandle: PROPERTY_NOTIFY -> WM_TRANSIENT_FOR window 0x%08x", e->window);
 				if ((t = wintrans(c->win)) && (c->trans = wintoclient(t))) {
-					if (!ISFLOATING(c)) {
+					if (!FLOATING(c)) {
 						c->state |= STATE_FLOATING;
 						needsrefresh = 1;
 					}
@@ -2410,7 +2404,7 @@ void gravitate(Client *c, int horz, int vert, int matchgap)
 	int x, y, gap;
 	int mx, my, mw, mh;
 
-	if (!c || !c->ws || !ISFLOATING(c))
+	if (!c || !c->ws || !FLOATING(c))
 		return;
 	x = c->x;
 	y = c->y;
@@ -2475,8 +2469,11 @@ void initclient(xcb_window_t win, Geometry *g)
 	c = ecalloc(1, sizeof(Client));
 	c->win = win;
 	c->depth = g->depth;
-	c->x = c->old_x = g->x, c->y = c->old_y = g->y, c->bw = c->old_bw = border[Width];
-	c->w = c->old_w = g->width, c->h = c->old_h = g->height;
+	c->x = c->old_x = g->x;
+	c->y = c->old_y = g->y;
+	c->w = c->old_w = g->width;
+	c->h = c->old_h = g->height;
+	c->bw = c->old_bw = border[Width];
 	c->state = c->old_state = STATE_NONE;
 	c->trans = wintoclient(wintrans(c->win));
 	tryclientrule(c, NULL);
@@ -2492,15 +2489,16 @@ void initclient(xcb_window_t win, Geometry *g)
 	wintype(c);
 	sizehints(c, 1);
 	winhints(c);
-	subscribe(c->win, XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_FOCUS_CHANGE
-			| XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY);
+	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK,
+			(unsigned int []){ XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_FOCUS_CHANGE
+			| XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY});
 	drawborder(c, 0);
 	grabbuttons(c, 0);
-	if (ISFLOATING(c)) {
+	if (FLOATING(c)) {
 		c->x = CLAMP(c->x, c->ws->mon->wx, c->ws->mon->wx + c->ws->mon->ww - W(c));
 		c->y = CLAMP(c->y, c->ws->mon->wy, c->ws->mon->wy + c->ws->mon->wh - H(c));
 		if (c->x == c->ws->mon->wx && c->y == c->ws->mon->wy)
-			offsetfloat(c, 6, &c->x, &c->y, &c->w, &c->h);
+			offsetfloat(c, &c->x, &c->y, &c->w, &c->h);
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	}
 	PROP_APPEND(root, netatom[ClientList], XCB_ATOM_WINDOW, 32, 1, &c->win);
@@ -2522,10 +2520,14 @@ void initdesk(xcb_window_t win, Geometry *g)
 	d->win = win;
 	if (!(d->mon = coordtomon(g->x, g->y)))
 		d->mon = selws->mon;
-	d->x = d->mon->wx, d->y = d->mon->wy, d->w = d->mon->ww, d->h = d->mon->wh;
+	d->x = d->mon->wx;
+	d->y = d->mon->wy;
+	d->w = d->mon->ww;
+	d->h = d->mon->wh;
 	d->next = desks;
 	desks = d;
-	subscribe(d->win, XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY);
+	xcb_change_window_attributes(con, d->win, XCB_CW_EVENT_MASK,
+			(unsigned int []){ XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY});
 	MOVERESIZE(d->win, d->x, d->y, d->w, d->h, 0);
 	setwmwinstate(d->win, XCB_ICCCM_WM_STATE_NORMAL);
 	setstackmode(d->win, XCB_STACK_MODE_BELOW);
@@ -2539,8 +2541,12 @@ void initmon(int num, char *name, xcb_randr_output_t id, int x, int y, int w, in
 	DBG("initmon: %d:%s - %d,%d @ %dx%d", num, name, x, y, w, h);
 	m = ecalloc(1, sizeof(Monitor));
 	m->id = id;
-	m->num = num, m->connected = 1;
-	m->x = m->wx = x, m->y = m->wy = y, m->w = m->ww = w, m->h = m->wh = h;
+	m->num = num;
+	m->connected = 1;
+	m->x = m->wx = x;
+	m->y = m->wy = y;
+	m->w = m->ww = w;
+	m->h = m->wh = h;
 	strlcpy(m->name, name, sizeof(m->name));
 	FIND_TAIL(tail, monitors);
 	if (tail)
@@ -2561,7 +2567,10 @@ void initpanel(xcb_window_t win, Geometry *g)
 	rc = xcb_get_property(con, 0, win, netatom[StrutP], XCB_ATOM_CARDINAL, 0, 4);
 	p = ecalloc(1, sizeof(Panel));
 	p->win = win;
-	p->x = g->x, p->y = g->y, p->w = g->width, p->h = g->height;
+	p->x = g->x;
+	p->y = g->y;
+	p->w = g->width;
+	p->h = g->height;
 	if (!(p->mon = coordtomon(p->x, p->y)))
 		p->mon = selws->mon;
 	if (!(prop = xcb_get_property_reply(con, rc, &e)) || prop->type == XCB_NONE) {
@@ -2572,13 +2581,17 @@ void initpanel(xcb_window_t win, Geometry *g)
 	}
 	if (prop && prop->value_len && (s = xcb_get_property_value(prop))) {
 		DBG("initpanel: 0x%08x - struts: %d, %d, %d, %d", p->win, s[0], s[1], s[2], s[3]);
-		p->strut_l = s[0], p->strut_r = s[1], p->strut_t = s[2], p->strut_b = s[3];
+		p->strut_l = s[0];
+		p->strut_r = s[1];
+		p->strut_t = s[2];
+		p->strut_b = s[3];
 		updstruts(p, 1);
 	}
 	free(prop);
 	p->next = panels;
 	panels = p;
-	subscribe(p->win, XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY);
+	xcb_change_window_attributes(con, p->win, XCB_CW_EVENT_MASK,
+			(unsigned int []){ XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY});
 	setwmwinstate(p->win, XCB_ICCCM_WM_STATE_NORMAL);
 	PROP_APPEND(root, netatom[ClientList], XCB_ATOM_WINDOW, 32, 1, &p->win);
 	updnetworkspaces();
@@ -2620,8 +2633,15 @@ Rule *initrule(Rule *wr)
 	} while (0)
 
 	r = ecalloc(1, sizeof(Rule));
-	r->x = wr->x, r->y = wr->y, r->w = wr->w, r->h = wr->h, r->bw = wr->bw;
-	r->xgrav = wr->xgrav, r->ygrav = wr->ygrav, r->focus = wr->focus, r->state = wr->state;
+	r->x = wr->x;
+	r->y = wr->y;
+	r->w = wr->w;
+	r->h = wr->h;
+	r->bw = wr->bw;
+	r->xgrav = wr->xgrav;
+	r->ygrav = wr->ygrav;
+	r->focus = wr->focus;
+	r->state = wr->state;
 	r->ws = wr->ws,
 	r->cb = wr->cb;
 	if (wr->mon) {
@@ -2632,7 +2652,8 @@ Rule *initrule(Rule *wr)
 	if (wr->inst)  INITREG(r->inst, wr->inst, &(r->instreg));
 	if (wr->title) INITREG(r->title, wr->title, &(r->titlereg));
 	r->next = rules;
-	return (rules = r);
+	rules = r;
+	return r;
 
 error:
 	if (wr->class) { regfree(&(r->classreg)); free(r->class); }
@@ -2754,7 +2775,7 @@ void initwm(void)
 	initatoms(netatom, netatoms, LEN(netatoms));
 
 	/* initial workspaces and monitors */
-	if ((randrbase = initrandr()) < 0 || !monitors)
+	if ((randrbase = initrandr()) < 0 || !nextmon(monitors))
 		initmon(0, "default", 0, 0, 0, scr_w, scr_h);
 	updnumws(globalcfg[NumWs]);
 	selws = workspaces;
@@ -2896,7 +2917,7 @@ void movefocus(int direction)
 {
 	Client *c;
 
-	if (!selws->sel)
+	if (!selws->sel || !selws->clients->next)
 		return;
 	while (direction) {
 		if (direction > 0) {
@@ -2918,7 +2939,7 @@ void movestack(int direction)
 	int i = 0;
 	Client *c, *t;
 
-	if (!(c = cmdclient) || ISFLOATING(c) || !nexttiled(c->ws->clients->next))
+	if (!(c = cmdclient) || FLOATING(c) || !nexttiled(c->ws->clients->next))
 		return;
 	while (direction) {
 		if (direction > 0) {
@@ -2958,7 +2979,7 @@ void mousemvr(int move)
 	xcb_generic_event_t *ev = NULL;
 	int mx, my, ox, oy, ow, oh, nw, nh, nx, ny, released = 0;
 
-	if (!(c = selws->sel) || ISFULLSCREEN(c) || (!move && (c->state & STATE_FIXED))
+	if (!(c = selws->sel) || FULLSCREEN(c) || (!move && (c->state & STATE_FIXED))
 			|| !querypointer(&mx, &my) || !grabpointer(cursor[move ? Move : Resize]))
 		return;
 	ox = nx = c->x, oy = ny = c->y, ow = nw = c->w, oh = nh = c->h;
@@ -2987,7 +3008,7 @@ void mousemvr(int move)
 				nh = oh + (e->root_y - my);
 			}
 			if ((nw != c->w || nh != c->h || nx != c->x || ny != c->y)) {
-				if (!ISFLOATING(c) || (c->state & STATE_FULLSCREEN && c->state & STATE_FAKEFULL
+				if (!FLOATING(c) || (c->state & STATE_FULLSCREEN && c->state & STATE_FAKEFULL
 							&& !(c->old_state & STATE_FLOATING)))
 				{
 					c->state |= STATE_FLOATING;
@@ -3028,23 +3049,74 @@ Monitor *nextmon(Monitor *m)
 
 Client *nexttiled(Client *c)
 {
-	while (c && ISFLOATING(c))
+	while (c && FLOATING(c))
 		c = c->next;
 	return c;
 }
 
-void offsetfloat(Client *c, int d, int *x, int *y, int *w, int *h)
+void offsetfloat(Client *c, int *x, int *y, int *w, int *h)
 {
 	Monitor *m = c->ws->mon;
 	static int offset = 0;
 	static Workspace *ws = NULL;
 
+	/* Client *f; */
+	/* static Workspace *ws = NULL; */
+	/* static unsigned int base = 0; */
+	/* unsigned int i = 0; */
+	/* int thirdh = m->wh / 3; */
+	/* int thirdw = m->ww / 3; */
+	/* int areas[9][5] = { */
+	/* 	{ 1, m->wx + thirdw,       m->wy + thirdh,       Center, Center }, */
+	/* 	{ 1, m->wx,                m->wy + thirdh,       Center, Left   }, */
+	/* 	{ 1, m->wx + (thirdw * 2), m->wy + thirdh,       Center, Right  }, */
+	/* 	{ 1, m->wx + thirdw,       m->wy + (thirdh * 2), Bottom, Center }, */
+	/* 	{ 1, m->wx,                m->wy + (thirdh * 2), Bottom, Left   }, */
+	/* 	{ 1, m->wx + (thirdw * 2), m->wy + (thirdh * 2), Bottom, Right  }, */
+	/* 	{ 1, m->wx + thirdw,       m->wy,                Top,    Center }, */
+	/* 	{ 1, m->wx,                m->wy,                Top,    Left   }, */
+	/* 	{ 1, m->wx + (thirdw * 2), m->wy,                Top,    Right  }, */
+	/* }; */
+
+	
+	/* FOR_EACH(f, c->ws->clients) { /1* look for an open space to place the client *1/ */
+	/* 	if (f != c && FLOATING(f)) { */
+	/* 		for (i = 0; i < LEN(areas); i++) { */
+	/* 			if (areas[i][0] && f->x >= areas[i][1] && f->x < areas[i][1] + thirdw */
+	/* 					&& f->y >= areas[i][2] && f->y < areas[i][2] + thirdh) */
+	/* 			{ */
+	/* 				areas[i][0] = 0; */
+	/* 				break; */
+	/* 			} */
+	/* 		} */
+	/* 		if (i == LEN(areas)) */
+	/* 			break; */
+	/* 	} */
+	/* } */
+
+	/* for (i = 0; i < LEN(areas); i++) { /1* see if there was an opening *1/ */
+	/* 	if (areas[i][0]) { */
+	/* 		gravitate(c, areas[i][4], areas[i][3], 1); */
+	/* 		return; */
+	/* 	} */
+	/* } */
+
+	/* /1* handle no openings by placing windows in a zig-zag *1/ */
+	/* if (ws != c->ws) { */
+	/* 	ws = c->ws; */
+	/* 	base = 0; */
+	/* } */
+	/* gravitate(c, areas[base][4], areas[base][3], 1); */
+	/* if (++base >= LEN(areas)) */
+	/* 	base = 0; */
+
+
 	if (ws != c->ws) {
 		ws = c->ws;
 		offset = 0;
 	}
-	*x = MIN(m->wx + m->ww - (*w + (2 * c->bw)), m->wx + (m->ww / d) + offset);
-	*y = MIN(m->wy + m->wh - (*h + (2 * c->bw)), m->wy + (m->wh / d) + offset);
+	*x = MIN(m->wx + m->ww - (*w + (2 * c->bw)), m->wx + (m->ww / 8) + offset);
+	*y = MIN(m->wy + m->wh - (*h + (2 * c->bw)), m->wy + (m->wh / 8) + offset);
 	if (*x + *w + (2 * c->bw) < m->wx + m->ww && *y + *h + (2 * c->bw) < m->wy + m->wh)
 		offset += globalcfg[MinWH];
 	else
@@ -3181,23 +3253,21 @@ char **parsefloat(char **argv, float *setting, int *rel)
 
 char **parsegeom(char **argv, char type, int *i, int *rel, int *grav)
 {
-	enum { None, Left, Right, Center, Top, Bottom };
-
 	if (!argv || !*argv)
 		return argv;
-	if (!grav)
+	if (!grav) {
 		argv = parseint(argv, i, rel, type == 'x' || type == 'y' ? 1 : 0);
-	else {
+	} else if (grav && !strcmp("center", *argv)) {
+		*grav = Center;
+	} else {
 		switch (type) {
 		case 'x':
-			if (grav && !strcmp("center", *argv)) *grav = Center;
-			else if (grav && !strcmp("left", *argv)) *grav = Left;
+			if (grav && !strcmp("left", *argv)) *grav = Left;
 			else if (grav && !strcmp("right", *argv)) *grav = Right;
 			else argv = parseint(argv, i, rel, 1);
 			break;
 		case 'y':
-			if (grav && !strcmp("center", *argv)) *grav = Center;
-			else if (grav && !strcmp("top", *argv)) *grav = Top;
+			if (grav && !strcmp("top", *argv)) *grav = Top;
 			else if (grav && !strcmp("bottom", *argv)) *grav = Bottom;
 			else argv = parseint(argv, i, rel, 1);
 			break;
@@ -3351,12 +3421,12 @@ void relocate(Workspace *ws, Monitor *old)
 	if (!(m = ws->mon) || m == old)
 		return;
 	FOR_EACH(c, ws->clients)
-		if (ISFLOATING(c)) { /* TODO: simplify this mess */
+		if (FLOATING(c)) { /* TODO: simplify this mess */
 			if ((xoff = c->x - old->x) && (xdiv = old->w / xoff) != 0.0) {
 				if (c->x + W(c) == old->wx + old->ww) /* edge */
 					c->x = m->wx + m->ww - W(c);
 				else if (c->x + (W(c) / 2) == old->wx + (old->ww / 2)) /* center */
-					c->y = (m->wx + m->ww - W(c)) / 2;
+					c->x = (m->wx + m->ww - W(c)) / 2;
 				else
 					c->x = CLAMP(m->wx + (m->ww / xdiv), m->wx - (W(c) - globalcfg[MinXY]),
 							m->wx + m->ww - globalcfg[MinXY]);
@@ -3392,6 +3462,57 @@ void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, i
 		resize(c, x, y, w, h, bw);
 }
 
+int resizetiled(Client *c, Client *p, int x, int y, int w, int h, int bw, int gap,
+		int ww, int wh, int *newy, int nrem, int havail)
+{
+	int ret = 1;
+	int b = bw ? c->bw : bw;
+	int min = MAX(globalcfg[MinWH], c->min_h);
+
+	DBG("resizetiled: 0x%08x - %d,%d @ %dx%d - newy: %d, nrem: %d, havail; %d",
+			c->win, x, y, w, h, *newy, nrem, havail);
+	if (!c->hoff && h < min) {
+		c->state |= STATE_FLOATING;
+		h = MAX(wh / 4, 240);
+		w = MAX(ww / 5, 360);
+		offsetfloat(c, &x, &y, &w, &h);
+		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+		resizehint(c, x, y, w, h, c->bw, 0, 0);
+		return ret;
+	} else if (nrem > 1 && (nrem - 1) * (min + gap) > havail) {
+		h += havail - ((nrem - 1) * (min + gap));
+		ret = -1;
+	} else if (nrem == 1 && *newy + (h - gap) != wh) {
+		if (p) {
+			p->old_h = p->h;
+			if (p->h + havail < (min = MAX(globalcfg[MinWH], p->min_h))) {
+				ret = -1;
+				p->h = min;
+				y = p->y + min + gap;
+				h = wh - (p->y + p->h);
+			} else if (h < min) {
+				ret = -1;
+				p->h += havail - (min - h - (2 * b));
+				y = p->y + p->h + (2 * b) + gap;
+				h = min - (2 * b);
+			} else {
+				p->h += havail;
+				y += havail;
+			}
+		} else {
+			h = wh;
+			ret = -1;
+		}
+	} else if (h < min) {
+		ret = -1;
+		h = min;
+	}
+	c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
+	c->x = x, c->y = y, c->w = w - (2 * b), c->h = h - (2 * b);
+	*newy += h + gap;
+	return ret;
+}
+
 void restack(Workspace *ws)
 {
 	Desk *d;
@@ -3404,14 +3525,14 @@ void restack(Workspace *ws)
 	FOR_EACH(p, panels)
 		if (p->mon == ws->mon)
 			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-	if (ISFLOATING(c))
+	if (FLOATING(c))
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	FOR_STACK(c, ws->stack) {
-		if (c->trans && ISFLOATING(c)) {
+		if (c->trans && FLOATING(c)) {
 			v[0] = c->trans->win;
 			xcb_configure_window(con, c->win,
 					XCB_CONFIG_WINDOW_SIBLING | XCB_CONFIG_WINDOW_STACK_MODE, v);
-		} else if (!ISFLOATING(c) && ws == ws->mon->ws) {
+		} else if (!FLOATING(c) && ws == ws->mon->ws) {
 			setstackmode(c->win, XCB_STACK_MODE_BELOW);
 		}
 	}
@@ -3518,11 +3639,11 @@ void setsticky(Client *c, int sticky)
 {
 	unsigned int all = 0xffffffff;
 
-	if (sticky && !ISSTICKY(c)) {
+	if (sticky && !(c->state & STATE_STICKY)) {
 		cmdfloat(NULL);
 		c->state |= STATE_STICKY | STATE_FLOATING;
 		PROP_REPLACE(c->win, netatom[WmDesktop], XCB_ATOM_CARDINAL, 32, 1, &all);
-	} else if (!sticky && ISSTICKY(c)) {
+	} else if (!sticky && c->state & STATE_STICKY) {
 		c->state &= ~STATE_STICKY;
 		PROP_REPLACE(c->win, netatom[WmDesktop], XCB_ATOM_CARDINAL, 32, 1, &c->ws->num);
 	}
@@ -3533,10 +3654,10 @@ void setstackmode(xcb_window_t win, unsigned int mode)
 	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_STACK_MODE, &mode);
 }
 
-void setwmwinstate(xcb_window_t win, unsigned int state)
+void setwmwinstate(xcb_window_t win, long state)
 {
-	unsigned int s[] = { state, XCB_ATOM_NONE };
-	PROP_REPLACE(win, wmatom[WMState], wmatom[WMState], 32, 2, s);
+	long data[] = { state, None };
+	PROP_REPLACE(win, wmatom[WMState], wmatom[WMState], 32, 2, (unsigned char *)data);
 }
 
 void setnetwsnames(void)
@@ -3605,8 +3726,8 @@ void showhide(Client *c)
 	m = c->ws->mon;
 	if (c->ws == m->ws) {
 		MOVE(c->win, c->x, c->y);
-		if (ISFLOATING(c)) {
-			if (ISFULL(c))
+		if (FLOATING(c)) {
+			if (c->state & STATE_FULLSCREEN && c->w == c->ws->mon->w && c->h == c->ws->mon->h)
 				resize(c, m->x, m->y, m->w, m->h, 0);
 			else
 				resize(c, c->x, c->y, c->w, c->h, c->bw);
@@ -3614,12 +3735,12 @@ void showhide(Client *c)
 		showhide(c->snext);
 	} else {
 		showhide(c->snext);
-		if (!ISSTICKY(c)) {
-			MOVE(c->win, W(c) * -2, c->y);
-		} else if (c->ws != selws && m == selws->mon) {
+		if (c->state & STATE_STICKY) {
 			sel = lastws->sel == c ? c : selws->sel;
 			setworkspace(c, selws->num);
 			focus(sel);
+		} else if (c->ws != selws && m == selws->mon) {
+			MOVE(c->win, W(c) * -2, c->y);
 		}
 	}
 }
@@ -3722,60 +3843,6 @@ size_t strlcpy(char *dst, const char *src, size_t dsize)
 	return (src - osrc - 1);
 }
 
-void subscribe(xcb_window_t win, unsigned int events)
-{
-	xcb_change_window_attributes(con, win, XCB_CW_EVENT_MASK, &events);
-}
-
-int tileresize(Client *c, Client *p, int ww, int wh, int x, int y,
-		int w, int h, int bw, int gap, int *newy, int nrem, int havail)
-{
-	int ret = 1;
-	int b = bw ? c->bw : bw;
-
-	DBG("tiler: 0x%08x - %d,%d @ %dx%d - newy: %d, nrem: %d, havail; %d",
-			c->win, x, y, w, h, *newy, nrem, havail);
-	if (!c->hoff && h < globalcfg[MinWH]) {
-		c->state |= STATE_FLOATING;
-		h = MAX(wh / 6, 240);
-		w = MAX(ww / 6, 360);
-		offsetfloat(c, 4, &x, &y, &w, &h);
-		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-	} else if (nrem > 1 && (nrem - 1) * (globalcfg[MinWH] + gap) > havail) {
-		h += havail - ((nrem - 1) * (globalcfg[MinWH] + gap));
-		ret = -1;
-	} else if (nrem == 1 && *newy + (h - gap) != wh) {
-		if (p) {
-			p->old_h = p->h;
-			if (p->h + havail < globalcfg[MinWH]) {
-				ret = -1;
-				p->h = globalcfg[MinWH];
-				y = p->y + globalcfg[MinWH] + gap;
-				h = wh - (p->y + p->h);
-			} else if (h < globalcfg[MinWH]) {
-				ret = -1;
-				p->h += havail - (globalcfg[MinWH] - h - (2 * b));
-				y = p->y + p->h + (2 * b) + gap;
-				h = globalcfg[MinWH] - (2 * b);
-			} else {
-				p->h += havail;
-				y += havail;
-			}
-		} else {
-			h = wh;
-			ret = -1;
-		}
-	} else if (h < globalcfg[MinWH]) {
-		ret = -1;
-		h = globalcfg[MinWH];
-	}
-	c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
-	c->x = x, c->y = y, c->w = w - (2 * b), c->h = h - (2 * b);
-	if (!ISFLOATING(c))
-		*newy += h + gap;
-	return ret;
-}
-
 int tile(Workspace *ws)
 {
 	int ret = 1;
@@ -3813,22 +3880,22 @@ int tile(Workspace *ws)
 			nr = MIN(n, ws->nmaster) - i;
 			h = ((wh - my) / MAX(1, nr)) - g + c->hoff;
 			w = mw - g * (5 - ns) / 2;
-			if (tileresize(c, prev, ww - (2 * g), wh - (2 * g), wx + g,
-						wy + my, w, h, b, g, &my, nr, wh - (my + h + g)) < 0)
+			if (resizetiled(c, prev, wx + g, wy + my, w, h, b, g,
+						ww - (2 * g), wh - (2 * g), &my, nr, wh - (my + h + g)) < 0)
 				ret = -1;
 		} else if (i - ws->nmaster < ws->nstack) {
 			nr = MIN(n - ws->nmaster, ws->nstack) - (i - ws->nmaster);
 			h = ((wh - sy) / MAX(1, nr)) - g + c->hoff;
 			w = sw - g * (5 - ns - ss) / 2;
-			if (tileresize(c, prev, ww - (2 * g), wh - (2 * g), wx + mw + (g / ns),
-						wy + sy, w, h, b, g, &sy, nr, wh - (sy + h + g)) < 0)
+			if (resizetiled(c, prev, wx + mw + (g / ns), wy + sy, w, h, b, g,
+						ww - (2 * g), wh - (2 * g), &sy, nr, wh - (sy + h + g)) < 0)
 				ret = -1;
 		} else {
 			nr = n - i;
 			h = ((wh - ssy) / MAX(1, nr)) - g + c->hoff;
 			w = ssw - g * (5 - ns) / 2;
-			if (tileresize(c, prev, ww - (2 * g), wh - (2 * g), wx + mw + sw + (g / ns),
-						wy + ssy, w, h, b, g, &ssy, nr, wh - (ssy + h + g)) < 0)
+			if (resizetiled(c, prev, wx + mw + sw + (g / ns), wy + ssy, w, h, b, g,
+						ww - (2 * g), wh - (2 * g), &ssy, nr, wh - (ssy + h + g)) < 0)
 				ret = -1;
 		}
 		prev = (nr == 1 && n - i != 0) ? NULL : c;
@@ -4095,7 +4162,7 @@ void updworkspaces(int needed)
 
 	updnumws(needed);
 	FOR_CLIENTS(c, ws)
-		if (ISFULL(c))
+		if (c->state & STATE_FULLSCREEN && c->w == c->ws->mon->w && c->h == c->ws->mon->h)
 			resize(c, ws->mon->x, ws->mon->y, ws->mon->w, ws->mon->h, c->bw);
 	FOR_EACH(p, panels)
 		updstruts(p, 1);

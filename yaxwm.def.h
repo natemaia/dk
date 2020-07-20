@@ -5,33 +5,33 @@
 
 
 static unsigned int border[] = {
-	[Width] = 1,             /* total border width in pixels */
-	[Focus] = 0xFF6699cc,    /* focused window border colour (inner) */
-	[Urgent] = 0xFFee5555,   /* urgent window border colour (inner) */
-	[Unfocus] = 0xFF444444,  /* unfocused window border colour (inner) */
-	[Outer] = 0,
-	[OuterFocus] = 0xFF222222,
-	[OuterUrgent] = 0xFF222222,
-	[OuterUnfocus] = 0xFF222222,
+	[BORD_WIDTH]     = 1,          /* total border width in pixels */
+	[BORD_FOCUS]     = 0xFF6699cc, /* focused window border colour (inner) */
+	[BORD_URGENT]    = 0xFFee5555, /* urgent window border colour (inner) */
+	[BORD_UNFOCUS]   = 0xFF444444, /* unfocused window border colour (inner) */
+	[BORD_O_WIDTH]   = 0,          /* outer border width in pixels */
+	[BORD_O_FOCUS]   = 0xFF222222, /* focused window border colour (outer) */
+	[BORD_O_URGENT]  = 0xFF222222, /* urgent window border colour (outer) */
+	[BORD_O_UNFOCUS] = 0xFF222222, /* unfocused window border colour (outer) */
 };
 
 static int globalcfg[] = {
-	[SmartGap] = 1,    /* disable gaps in layouts with only one visible window */
-	[SmartBorder] = 1, /* disable borders in layouts with only one visible window */
-	[SizeHints] = 0,   /* respect size hints in tiled layouts */
-	[FocusMouse] = 1,  /* enable focus follows mouse */
-	[FocusUrgent] = 1, /* enable focus urgent windows */
-	[TileToHead] = 0,  /* place new clients at the tail of the stack */
-	[NumWs] = 0,       /* number of workspaces currently allocated */
-	[MinXY] = 10,      /* minimum window area allowed inside the screen when moving */
-	[MinWH] = 50,      /* minimum window size allowed when resizing */
+	[GLB_SMART_GAP]    = 1,  /* disable gaps in layouts with only one visible window */
+	[GLB_SMART_BORDER] = 1,  /* disable borders in layouts with only one visible window */
+	[GLB_SIZEHINT]     = 0,  /* respect size hints in tiled layouts */
+	[GLB_FOCUS_MOUSE]  = 1,  /* enable focus follows mouse */
+	[GLB_FOCUS_URGENT] = 1,  /* enable focus urgent windows */
+	[GLB_TILETOHEAD]   = 0,  /* place new clients at the tail of the stack */
+	[GLB_NUMWS]        = 0,  /* number of workspaces currently allocated */
+	[GLB_MIN_XY]       = 10, /* minimum window area allowed inside the screen when moving */
+	[GLB_MIN_WH]       = 50, /* minimum window size allowed when resizing */
 };
 
 static const char *cursors[] = {
 	/* see: https://tronche.com/gui/x/xlib/appendix/b/ */
-	[Move] = "fleur",
-	[Normal] = "arrow",
-	[Resize] = "sizing",
+	[CURS_MOVE]   = "fleur",
+	[CURS_NORMAL] = "arrow",
+	[CURS_RESIZE] = "sizing",
 };
 
 /* default modifier and buttons for mouse move/resize */
@@ -41,19 +41,20 @@ static xcb_button_t mouseresize = XCB_BUTTON_INDEX_3;
 
 static void albumart(Client *c, int closed)
 { /* example of a simple callback for album art windows */
-	if (closed)
-		c->ws->padr = 0; /* remove padding */
-	else {
-		c->ws->padr = c->w + (2 * c->ws->gappx); /* padding to the right */
-		gravitate(c, Right, Center, 1); /* right center of the screen, respect gaps */
-		focus(c->snext); /* don't take focus */
+	if (closed) {
+		c->ws->padr = 0;
+	} else {
+		c->ws->padr = c->w + (2 * c->ws->gappx);
+		gravitate(c, GRAV_RIGHT, GRAV_CENTER, 1);
+		focus(c->snext);
 	}
 }
 
 /* "callback" names recognized for use with rules.
  * Callback functions have the following prototype: void function(Client *, int); */
 static Callback callbacks[] = {
-	{ "albumart", albumart },
+	/* name passed by user,    function name*/
+	{ "albumart",                     albumart },
 };
 
 /* "layout" names used by cmdlayout() to parse arguments.

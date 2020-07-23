@@ -25,6 +25,9 @@ logfile="$HOME/.yaxwmrc.log"
 	# rename workspace(s)
 	yaxwm -c set ws=1 name="term" ws=2 name="web"
 
+	# change layout
+	yaxwm -c set ws=3 layout=grid
+
 	# use some padding and gaps on the last workspace
 	last=$(yaxwm -c print numws)
 	yaxwm -c set ws="$last" pad left=200 right=200 top=100 bottom=100

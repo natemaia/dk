@@ -30,7 +30,6 @@
 #include <xcb/xcb_cursor.h>
 #include <xcb/xcb_keysyms.h>
 
-
 #ifdef DEBUG
 #define DBG(fmt, ...); warnx("%d: "fmt, __LINE__, ##__VA_ARGS__); //NOLINT
 #else
@@ -54,11 +53,17 @@
 #define FOR_EACH(v, list)       for ((v) = (list); (v); (v) = (v)->next)
 #define FOR_STACK(v, list)      for ((v) = (list); (v); (v) = (v)->snext)
 #define FOR_CLIENTS(c, ws)      FOR_EACH((ws), workspaces) FOR_EACH((c), (ws)->clients)
-#define FIND_TAIL(v, list)      for ((v) = (list); (v) && (v)->next; (v) = (v)->next)
+
+#define FIND_TAIL(v, list)\
+	for ((v) = (list); (v) && (v)->next; (v) = (v)->next)
 #define FIND_PREV(v, cur, list)\
 	for ((v) = (list); (v) && (v)->next && (v)->next != (cur); (v) = (v)->next)
+
 #define DETACH(v, listptr)\
-	while (*(listptr) && *(listptr) != (v)) (listptr) = &(*(listptr))->next; *(listptr) = (v)->next
+	while (*(listptr) && *(listptr) != (v)) {\
+		(listptr) = &(*(listptr))->next;\
+	}\
+	*(listptr) = (v)->next
 
 #define MOVE(win, x, y)\
 	xcb_configure_window(con, (win), XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y,\
@@ -77,16 +82,16 @@
 
 
 enum States {
-	STATE_NONE = 0,
-	STATE_FAKEFULL = (1 << 0),
-	STATE_FIXED = (1 << 1),
-	STATE_FLOATING = (1 << 2),
-	STATE_FULLSCREEN = (1 << 3),
-	STATE_NOBORDER = (1 << 4),
-	STATE_NOINPUT = (1 << 5),
-	STATE_STICKY = (1 << 6),
-	STATE_URGENT = (1 << 7),
-	STATE_NEEDSMAP = (1 << 8),
+	STATE_NONE       = 0,
+	STATE_FAKEFULL   = 1 << 0,
+	STATE_FIXED      = 1 << 1,
+	STATE_FLOATING   = 1 << 2,
+	STATE_FULLSCREEN = 1 << 3,
+	STATE_NOBORDER   = 1 << 4,
+	STATE_NOINPUT    = 1 << 5,
+	STATE_STICKY     = 1 << 6,
+	STATE_URGENT     = 1 << 7,
+	STATE_NEEDSMAP   = 1 << 8,
 };
 
 enum Cursors {
@@ -354,15 +359,18 @@ static void cmdws(char **);
 static void cmdwsdef(char **);
 static void detach(Client *, int);
 static void drawborder(Client *, int);
+static int dwindle(Workspace *);
 static void eventhandle(xcb_generic_event_t *);
 static void eventignore(uint8_t);
 static void execcfg(void);
+static void fib(Workspace *, int);
 static void focus(Client *);
 static void freerule(Rule *r);
 static void freewm(void);
 static void freews(Workspace *);
 static void grabbuttons(Client *, int);
 static void gravitate(Client *, int, int, int);
+static int grid(Workspace *);
 static int iferr(int, char *, xcb_generic_error_t *);
 static void initclient(xcb_window_t, xcb_get_geometry_reply_t *);
 static void initdesk(xcb_window_t, xcb_get_geometry_reply_t *);
@@ -404,16 +412,17 @@ static void restack(Workspace *);
 static int rulecmp(Rule *, char *, char *, char *);
 static void sendconfigure(Client *);
 static int sendwmproto(Client *, int);
-static void setworkspace(Client *, int);
 static void setfullscreen(Client *, int);
 static void setinputfocus(Client *);
 static void setnetwsnames(void);
 static void setstackmode(xcb_window_t, unsigned int);
 static void seturgent(Client *, int);
 static void setwmwinstate(xcb_window_t, long);
+static void setworkspace(Client *, int);
 static void showhide(Client *);
 static void sighandle(int);
 static void sizehints(Client *, int);
+static int spiral(Workspace *);
 static size_t strlcat(char *, const char *, size_t);
 static size_t strlcpy(char *, const char *, size_t);
 static int tile(Workspace *);
@@ -487,15 +496,11 @@ int main(int argc, char *argv[])
 	xcb_generic_event_t *ev;
 	char *end, buf[PIPE_BUF];
 	int i, x, y, confd, nfds, cmdfd;
-	unsigned int m = XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT;
 
 	argv0 = argv[0];
-	sockfd = 0;
-	running = 1;
-	restart = 0;
-	cmdusemon = 0;
 	randrbase = -1;
-	needsrefresh = 1;
+	running = needsrefresh = 1;
+	sockfd = restart = cmdusemon = 0;
 
 	for (i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "-h")) {
@@ -515,6 +520,7 @@ int main(int argc, char *argv[])
 
 	if (!setlocale(LC_CTYPE, ""))
 		err(1, "no locale support");
+
 	if (xcb_connection_has_error((con = xcb_connect(NULL, NULL))))
 		err(1, "error connecting to X");
 	atexit(freewm);
@@ -525,7 +531,8 @@ int main(int argc, char *argv[])
 	scr_w = scr->width_in_pixels;
 	scr_h = scr->height_in_pixels;
 	iferr(1, "is another window manager running?", xcb_request_check(con,
-				xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK, &m)));
+				xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK,
+					(unsigned int []){ XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT })));
 
 	initwm();
 	initsock(0);
@@ -561,9 +568,9 @@ int main(int argc, char *argv[])
 					if (buf[n - 1] == '\n')
 						n--;
 					buf[n] = '\0';
-					if ((cmdresp = fdopen(cmdfd, "w")) != NULL)
+					if ((cmdresp = fdopen(cmdfd, "w")) != NULL) {
 						parsecmd(buf);
-					else {
+					} else {
 						warn("unable to open the socket as file: %s", sock);
 						close(cmdfd);
 					}
@@ -1877,6 +1884,12 @@ void detachstack(Client *c)
 		c->ws->sel = c->ws->stack;
 }
 
+int dwindle(Workspace *ws)
+{
+	fib(ws, 1);
+	return 1;
+}
+
 void *ecalloc(size_t elems, size_t size)
 {
 	void *p;
@@ -1912,16 +1925,8 @@ void eventhandle(xcb_generic_event_t *ev)
 	{
 		xcb_configure_notify_event_t *e = (xcb_configure_notify_event_t *)ev;
 
-		if (e->window == root && (scr_h != e->height || scr_w != e->width)) {
-			DBG("eventhandle: CONFIGURE_NOTIFY - size changed - %dx%d", e->width, e->height);
-			scr_w = e->width;
-			scr_h = e->height;
-			if (monitors && randrbase < 0) {
-				monitors->w = monitors->ww = scr_w;
-				monitors->h = monitors->wh = scr_h;
-				updworkspaces(globalcfg[GLB_NUMWS]);
-			}
-		}
+		if (e->window == root)
+			scr_w = e->width, scr_h = e->height;
 		return;
 	}
 	case XCB_CONFIGURE_REQUEST:
@@ -2093,40 +2098,35 @@ void eventhandle(xcb_generic_event_t *ev)
 		xcb_window_t t;
 		xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ev;
 
+#ifdef DEBUG
+		unsigned int i;
+
+		for (i = 0; i < LEN(netatom); i++)
+			if (netatom[i] == e->atom) {
+				DBG("eventhandle: PROPERTY_NOTIFY - atom: %s - 0x%08x", netatoms[i], e->window);
+			}
+		for (i = 0; i < LEN(wmatom); i++)
+			if (wmatom[i] == e->atom) {
+				DBG("eventhandle: PROPERTY_NOTIFY - atom: %s - 0x%08x", wmatoms[i], e->window);
+			}
+#endif
+
 		if ((e->atom == netatom[NET_WM_STRUTP] || e->atom == netatom[NET_WM_STRUT])
 				&& (p = wintopanel(e->window)))
 		{
-			DBG("eventhandle: PROPERTY_NOTIFY - atom: NET_WM_STRUT - 0x%08x", e->window);
 			updstruts(p, 1);
 			updnetworkspaces();
 			needsrefresh = 1;
 		} else if (e->state != XCB_PROPERTY_DELETE && (c = wintoclient(e->window))) {
 			switch (e->atom) {
+			case XCB_ATOM_WM_HINTS: winhints(c); return;
+			case XCB_ATOM_WM_NORMAL_HINTS: sizehints(c, 0); return;
 			case XCB_ATOM_WM_TRANSIENT_FOR:
-				DBG("eventhandle: PROPERTY_NOTIFY - atom: WM_TRANSIENT_FOR - 0x%08x", e->window);
 				if ((t = wintrans(c->win)) && (c->trans = wintoclient(t)) && !FLOATING(c))
 					c->state |= STATE_FLOATING, needsrefresh = 1;
 				return;
-			case XCB_ATOM_WM_NORMAL_HINTS:
-				DBG("eventhandle: PROPERTY_NOTIFY - atom: WM_NORMAL_HINTS - 0x%08x", e->window);
-				sizehints(c, 0);
-				return;
-			case XCB_ATOM_WM_HINTS:
-				DBG("eventhandle: PROPERTY_NOTIFY - atom: WM_HINTS - 0x%08x", e->window);
-				winhints(c);
-				return;
-#ifdef DEBUG
-			default:
-				for (unsigned int i = 0; i < LEN(netatom); i++)
-					if (netatom[i] == e->atom) {
-						DBG("eventhandle: unused PROPERTY_NOTIFY - atom: %s - 0x%08x", netatoms[i], e->window);
-					}
-				for (unsigned int i = 0; i < LEN(wmatom); i++)
-					if (wmatom[i] == e->atom) {
-						DBG("eventhandle: unused PROPERTY_NOTIFY - atom: %s - 0x%08x", wmatoms[i], e->window);
-					}
-#endif
 			}
+
 			if (e->atom == netatom[NET_WM_TYPE]) {
 				DBG("eventhandle: PROPERTY_NOTIFY - _NET_WM_WINDOW_TYPE - 0x%08x", e->window);
 				wintype(c);
@@ -2134,10 +2134,16 @@ void eventhandle(xcb_generic_event_t *ev)
 		}
 		return;
 	}
-	default:
+	case 0: /* error */
 	{
+		break;
+	}
+	default: /* randr */
+	{
+		xcb_randr_screen_change_notify_event_t *e = (xcb_randr_screen_change_notify_event_t *)ev;
+
 		if (ev->response_type == randrbase + XCB_RANDR_SCREEN_CHANGE_NOTIFY)
-			if (((xcb_randr_screen_change_notify_event_t *)ev)->root == root && updrandr())
+			if (e->root == root && updrandr())
 				updworkspaces(globalcfg[GLB_NUMWS]);
 	}
 	}
@@ -2183,6 +2189,54 @@ void execcfg(void)
 	}
 }
 
+void fib(Workspace *ws, int s)
+{
+	int b;
+	Client *c;
+	Monitor *m = ws->mon;
+	unsigned int i, n, nx, ny, nw, nh;
+
+	for (n = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), n++)
+		;
+	if (!n)
+		return;
+
+	nx = m->wx + ws->padl;
+	ny = m->wy + ws->padt;
+	nw = m->ww - ws->padl - ws->padr;
+	nh = m->wh - ws->padt - ws->padb;
+	/* int g; */
+	/* g = globalcfg[GLB_SMART_GAP] ? 0 : ws->gappx; */
+
+	for (i = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), i++) {
+		b = globalcfg[GLB_SMART_BORDER] && n == 1 ? 0 : c->bw;
+		if (i < n - 1) {
+			if (i % 2)
+				nh /= 2;
+			else
+				nw /= 2;
+			if (!s && (i % 4) == 2)
+				nx += nw;
+			else if (!s && (i % 4) == 3)
+				ny += nh;
+		}
+		switch (i % 4) {
+		case 0: ny += s ? nh : nh * -1; break;
+		case 1: nx += nw; break;
+		case 2: ny += nh; break;
+		case 3: nx += s ? nw : nw * -1; break;
+		}
+		if (i == 0) {
+			if (n > 1)
+				nw = (m->ww - ws->padl - ws->padr) * ws->msplit;
+			ny = m->wy - ws->padt;
+		} else if (i == 1) {
+			nw = (m->ww - ws->padl - ws->padr) - nw;
+		}
+		resizehint(c, nx, ny, nw - (2 * b), nh - (2 * b), b, 0, 0);
+	}
+}
+
 void focus(Client *c)
 {
 	if (!c || c->ws != c->ws->mon->ws)
@@ -2198,8 +2252,7 @@ void focus(Client *c)
 		drawborder(c, 1);
 		setinputfocus(c);
 	} else {
-		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, root, XCB_CURRENT_TIME);
-		xcb_delete_property(con, root, netatom[NET_ACTIVE]);
+		unfocus(c, 1);
 	}
 	selws->sel = c;
 }
@@ -2374,6 +2427,51 @@ void gravitate(Client *c, int horz, int vert, int matchgap)
 		resizehint(c, x, y, c->w, c->h, c->bw, 0, 0);
 }
 
+int grid(Workspace *ws)
+{
+	Client *c;
+	Monitor *m = ws->mon;
+	unsigned int cx, cy, cw, ch;
+	unsigned int wx, wy, ww, wh;
+	unsigned int i, n, b, g, cols, rows, col, row;
+
+	for (n = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), n++)
+		;
+	if (!n)
+		return 1;
+
+	/* grid dimensions */
+	for (cols = 0; cols <= n / 2; cols++)
+		if (cols * cols >= n)
+			break;
+
+	/* set layout against the general calculation: not 1:2:2, but 2:3 */
+	if (n == 5)
+		cols = 2;
+	rows = n / cols;
+	wx = m->wx + ws->padl;
+	wy = m->wy + ws->padt;
+	ww = m->ww - ws->padl - ws->padr;
+	wh = m->wh - ws->padt - ws->padb;
+	g = globalcfg[GLB_SMART_GAP] && n == 1 ? 0 : ws->gappx;
+
+	for (i = col = row = 0, c = nexttiled(ws->clients); c; i++, c = nexttiled(c->next)) {
+		if (i / rows + 1 > cols - n % cols)
+			rows = n / cols + 1;
+		b = globalcfg[GLB_SMART_BORDER] && n == 1 ? 0 : c->bw;
+		ch = rows ? (wh - g) / rows : wh;
+		cw = cols ? (ww - g) / cols : ww;
+		cx = (wx + g) + col * cw;
+		cy = (wy + g) + row * ch;
+		resizehint(c, cx, cy, cw - (2 * b) - g, ch - (2 * b) - g, b, 0, 0);
+		if (++row >= rows) {
+			row = 0;
+			col++;
+		}
+	}
+	return 1;
+}
+
 int iferr(int lvl, char *msg, xcb_generic_error_t *e)
 {
 	if (!e)
@@ -2543,23 +2641,6 @@ void initpanel(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	updnetworkspaces();
 }
 
-int initrandr(void)
-{
-	int base;
-	const xcb_query_extension_reply_t *ext;
-
-	if (!(ext = xcb_get_extension_data(con, &xcb_randr_id)) || !ext->present) {
-		warnx("unable to get randr extension data");
-		return -1;
-	}
-	updrandr();
-	base = ext->first_event;
-	xcb_randr_select_input(con, root,
-			XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE | XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE
-			| XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE | XCB_RANDR_NOTIFY_MASK_OUTPUT_PROPERTY);
-	return base;
-}
-
 Rule *initrule(Rule *wr)
 {
 	int i;
@@ -2693,6 +2774,7 @@ void initwm(void)
 	Workspace *ws;
 	unsigned int i;
 	xcb_cursor_context_t *ctx;
+	const xcb_query_extension_reply_t *ext;
 	struct sigaction sa;
 	int sigs[] = { SIGTERM, SIGINT, SIGHUP, SIGCHLD };
 
@@ -2720,7 +2802,14 @@ void initwm(void)
 	initatoms(netatom, netatoms, LEN(netatoms));
 
 	/* initial workspaces and monitors */
-	if ((randrbase = initrandr()) < 0 || !nextmon(monitors))
+	if ((ext = xcb_get_extension_data(con, &xcb_randr_id)) && ext->present) {
+		randrbase = ext->first_event;
+		xcb_randr_select_input(con, root, XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE);
+		updrandr();
+	} else {
+		warnx("unable to get randr extension data");
+	}
+	if (randrbase < 0 || !nextmon(monitors))
 		initmon(0, "default", 0, 0, 0, scr_w, scr_h);
 	updnumws(globalcfg[GLB_NUMWS]);
 	selws = workspaces;
@@ -3681,6 +3770,12 @@ void sizehints(Client *c, int uss)
 		c->state |= STATE_FIXED | STATE_FLOATING;
 }
 
+int spiral(Workspace *ws)
+{
+	fib(ws, 0);
+	return 1;
+}
+
 size_t strlcat(char *dst, const char *src, size_t siz)
 {
 	char *d = dst;
@@ -3737,8 +3832,10 @@ int tile(Workspace *ws)
 	if (!n)
 		return 1;
 
-	wx = m->wx + ws->padl, wy = m->wy + ws->padt;
-	ww = m->ww - ws->padl - ws->padr, wh = m->wh - ws->padt - ws->padb;
+	wx = m->wx + ws->padl;
+	wy = m->wy + ws->padt;
+	ww = m->ww - ws->padl - ws->padr;
+	wh = m->wh - ws->padt - ws->padb;
 	mw = 0, ss = 0, sw = 0, ssw = 0, ns = 1;
 	g = globalcfg[GLB_SMART_GAP] && n == 1 ? 0 : ws->gappx;
 	b = globalcfg[GLB_SMART_BORDER] && n == 1 ? 0 : 1;
@@ -3848,10 +3945,10 @@ void tryclientrule(Client *c, Rule *wr)
 
 void unfocus(Client *c, int focusroot)
 {
-	if (!c)
-		return;
-	grabbuttons(c, 0);
-	drawborder(c, 0);
+	if (c) {
+		grabbuttons(c, 0);
+		drawborder(c, 0);
+	}
 	if (focusroot) {
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, root, XCB_CURRENT_TIME);
 		xcb_delete_property(con, root, netatom[NET_ACTIVE]);
@@ -3981,8 +4078,10 @@ int updoutputs(xcb_randr_output_t *outs, int nouts, xcb_timestamp_t t)
 						|| crtc->width != m->w || crtc->height != m->h)
 					changed = 1;
 				m->num = nmons++;
-				m->x = m->wx = crtc->x, m->y = m->wy = crtc->y;
-				m->w = m->ww = crtc->width, m->h = m->wh = crtc->height;
+				m->x = m->wx = crtc->x;
+				m->y = m->wy = crtc->y;
+				m->w = m->ww = crtc->width;
+				m->h = m->wh = crtc->height;
 				m->connected = 1;
 			} else {
 				initmon(nmons++, name, outs[i], crtc->x, crtc->y, crtc->width, crtc->height);
@@ -4011,18 +4110,17 @@ out:
 int updrandr(void)
 {
 	int n, changed = 0;
-	xcb_randr_output_t *o;
 	xcb_generic_error_t *e;
-	xcb_randr_get_screen_resources_current_reply_t *r;
-	xcb_randr_get_screen_resources_current_cookie_t rc;
+	xcb_randr_get_screen_resources_reply_t *r;
+	xcb_randr_get_screen_resources_cookie_t rc;
 
-	rc = xcb_randr_get_screen_resources_current(con, root);
-	if ((r = xcb_randr_get_screen_resources_current_reply(con, rc, &e))) {
-		o = xcb_randr_get_screen_resources_current_outputs(r);
-		if ((n = xcb_randr_get_screen_resources_current_outputs_length(r)) <= 0)
+	rc = xcb_randr_get_screen_resources(con, root);
+	if ((r = xcb_randr_get_screen_resources_reply(con, rc, &e))) {
+		if ((n = xcb_randr_get_screen_resources_outputs_length(r)) <= 0) {
 			warnx("no monitors available");
-		else
-			changed = updoutputs(o, n, r->config_timestamp);
+		} else {
+			changed = updoutputs(xcb_randr_get_screen_resources_outputs(r), n, r->config_timestamp);
+		}
 		free(r);
 	} else {
 		iferr(0, "unable to get screen resources", e);

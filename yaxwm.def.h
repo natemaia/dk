@@ -41,12 +41,14 @@ static xcb_button_t mouseresize = XCB_BUTTON_INDEX_3;
 
 static void albumart(Client *c, int closed)
 { /* example of a simple callback for album art windows */
-	if (closed) {
-		c->ws->padr = 0;
-	} else {
+	switch (closed) {
+	case 0: /* opened */
 		c->ws->padr = c->w + (2 * c->ws->gappx);
 		gravitate(c, GRAV_RIGHT, GRAV_CENTER, 1);
 		focus(c->snext);
+		break;
+	case 1: /* closed */
+		c->ws->padr = 0; break;
 	}
 }
 
@@ -60,9 +62,12 @@ static Callback callbacks[] = {
 /* "layout" names used by cmdlayout() to parse arguments.
  * Layout functions have the following prototype: int function(Workspace *); */
 static Layout layouts[] = {
-	{ "tile", tile }, /* first is default */
-	{ "mono", mono },
-	{ "none", NULL },
+	{ "tile",    tile    }, /* first is default */
+	{ "mono",    mono    },
+	{ "grid",    grid    },
+	{ "spiral",  spiral  },
+	{ "dwindle", dwindle },
+	{ "none",    NULL    },
 };
 
 static Workspace wsdef = { /* settings for newly created workspaces */

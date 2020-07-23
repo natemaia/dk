@@ -85,8 +85,8 @@ alt + {_,shift + ,ctrl + }{comma,period,backslash}
 	yaxwm -c mon {view,send,follow} {prev,next,last}
 
 # change active workspace layout
-alt + {t,m,f}
-	yaxwm -c set layout {tile,mono,none}
+alt + {t,m,g,s,d,f}
+	yaxwm -c set layout {tile,mono,grid,spiral,dwindle,none}
 
 # toggle padding on the active workspace
 alt + shift + p

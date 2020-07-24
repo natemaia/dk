@@ -2050,6 +2050,7 @@ void eventhandle(xcb_generic_event_t *ev)
 	{
 		xcb_unmap_notify_event_t *e = (xcb_unmap_notify_event_t *)ev;
 
+		DBG("eventhandle: UNMAP_NOTIFY - 0x%08x", e->window);
 		if (e->response_type & ~0x7f)
 			setwmwinstate(e->window, XCB_ICCCM_WM_STATE_WITHDRAWN);
 		else
@@ -3548,13 +3549,18 @@ void sendconfigure(Client *c)
 	xcb_configure_notify_event_t ce;
 
 	DBG("sendconfigure: sending 0x%08x configure notify event", c->win);
-	ce.event = c->win, ce.window = c->win;
+	ce.event = c->win;
+	ce.window = c->win;
 	ce.response_type = XCB_CONFIGURE_NOTIFY;
-	ce.x = c->x, ce.y = c->y, ce.width = c->w, ce.height = c->h, ce.border_width = c->bw;
+	ce.x = c->x;
+	ce.y = c->y;
+	ce.width = c->w;
+	ce.height = c->h;
+	ce.border_width = c->bw;
 	ce.above_sibling = XCB_NONE;
 	ce.override_redirect = 0;
-	iferr(0, "unable to send configure notify event", xcb_request_check(con,
-				xcb_send_event_checked(con, 0, c->win, XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char *)&ce)));
+	xcb_send_event(con, 0, c->win, XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char *)&ce);
+	xcb_flush(con);
 }
 
 int sendwmproto(Client *c, int wmproto)
@@ -3565,6 +3571,7 @@ int sendwmproto(Client *c, int wmproto)
 	xcb_client_message_event_t cme;
 	xcb_icccm_get_wm_protocols_reply_t proto;
 
+	DBG("sendwmproto: checking support for %s", wmatoms[wmproto])
 	rpc = xcb_icccm_get_wm_protocols(con, c->win, wmatom[WM_PROTO]);
 	if (xcb_icccm_get_wm_protocols_reply(con, rpc, &proto, &e)) {
 		n = proto.atoms_len;
@@ -3573,6 +3580,7 @@ int sendwmproto(Client *c, int wmproto)
 		xcb_icccm_get_wm_protocols_reply_wipe(&proto);
 	} else {
 		iferr(0, "unable to get requested wm protocol", e);
+		xcb_aux_sync(con);
 	}
 	if (exists) {
 		DBG("sendwmproto: %s client message event -> 0x%08x", wmatoms[wmproto], c->win);
@@ -3957,19 +3965,30 @@ void unfocus(Client *c, int focusroot)
 
 void unmanage(xcb_window_t win, int destroyed)
 {
+	void *ptr;
 	Client *c;
 	Desk *d, **dd;
 	Panel *p, **pp;
 	Workspace *ws;
 
-	if (!destroyed)
-		xcb_grab_server(con);
-	if ((c = wintoclient(win))) {
+	if ((ptr = c = wintoclient(win))) {
 		if (c->cb && running)
 			c->cb->fn(c, 1);
 		detach(c, 0);
 		detachstack(c);
-		if (!destroyed) {
+	} else if ((ptr = p = wintopanel(win))) {
+		pp = &panels;
+		DETACH(p, pp);
+		updstruts(p, 0);
+		updnetworkspaces();
+	} else if ((ptr = d = wintodesk(win))) {
+		dd = &desks;
+		DETACH(d, dd);
+	}
+
+	if (!destroyed) {
+		xcb_grab_server(con);
+		if (c) {
 			xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_BORDER_WIDTH, &c->old_bw);
 			xcb_ungrab_button(con, XCB_BUTTON_INDEX_ANY, c->win, XCB_MOD_MASK_ANY);
 			if (running) { /* spec says these should be removed on withdraw but not on wm shutdown */
@@ -3977,25 +3996,11 @@ void unmanage(xcb_window_t win, int destroyed)
 				xcb_delete_property(con, c->win, netatom[NET_WM_DESK]);
 			}
 		}
-		free(c);
-	} else if ((p = wintopanel(win))) {
-		pp = &panels;
-		DETACH(p, pp);
-		updstruts(p, 0);
-		updnetworkspaces();
-		free(p);
-	} else if ((d = wintodesk(win))) {
-		dd = &desks;
-		DETACH(d, dd);
-		free(d);
-	}
-
-	if (!destroyed) {
 		setwmwinstate(win, XCB_ICCCM_WM_STATE_WITHDRAWN);
 		xcb_flush(con);
 		xcb_ungrab_server(con);
 	}
-	xcb_aux_sync(con);
+	free(ptr);
 
 	xcb_delete_property(con, root, netatom[NET_CLIENTS]);
 	FOR_CLIENTS(c, ws) // NOLINT
@@ -4005,7 +4010,9 @@ void unmanage(xcb_window_t win, int destroyed)
 	FOR_EACH(d, desks)
 		PROP_APPEND(root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &d->win);
 
-	needsrefresh = 1;
+	xcb_flush(con);
+	refresh();
+	needsrefresh = 0;
 }
 
 void updnumws(int needed)

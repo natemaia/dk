@@ -35,7 +35,7 @@ static const char *cursors[] = {
 };
 
 /* default modifier and buttons for mouse move/resize */
-static xcb_mod_mask_t mousemod = XCB_MOD_MASK_4;
+static xcb_mod_mask_t mousemod = XCB_MOD_MASK_1;
 static xcb_button_t mousemove = XCB_BUTTON_INDEX_1;
 static xcb_button_t mouseresize = XCB_BUTTON_INDEX_3;
 
@@ -52,25 +52,74 @@ static void albumart(Client *c, int closed)
 	}
 }
 
+/* primary keywords and parser functions
+ * .keyword functions have the following prototype: void fn(char **); */
+static const Set keywords[] = {
+	{ "mon",   {.keyword = cmdmon  } },
+	{ "rule",  {.keyword = cmdrule } },
+	{ "set",   {.keyword = cmdset  } },
+	{ "win",   {.keyword = cmdwin  } },
+	{ "wm",    {.keyword = cmdwm   } },
+	{ "ws",    {.keyword = cmdws   } },
+	{ "print", {.keyword = cmdprint} },
+};
+
 /* "callback" names recognized for use with rules.
- * Callback functions have the following prototype: void function(Client *, int); */
-static Callback callbacks[] = {
-	/* name passed by user,    function name*/
-	{ "albumart",                     albumart },
+ * .callback functions have the following prototype: void fn(Client *, int); */
+static Set callbacks[] = {
+	/* name,                     fn type    fn name */
+	{ "albumart",              {.callback = albumart} },
+};
+
+/* "set" keyword options, used by cmdset() to parse arguments
+ * .keyword functions have the following prototype: void fn(char **); */
+static const Set setcmds[] = {
+	{ "border", {.keyword = cmdborder } },
+	{ "gap",    {.keyword = cmdgappx  } },
+	{ "layout", {.keyword = cmdlayout } },
+	{ "master", {.keyword = cmdnmaster} },
+	{ "mouse",  {.keyword = cmdmouse  } },
+	{ "pad",    {.keyword = cmdpad    } },
+	{ "msplit", {.keyword = cmdmsplit } },
+	{ "ssplit", {.keyword = cmdssplit } },
+	{ "stack",  {.keyword = cmdnstack } },
 };
 
 /* "layout" names used by cmdlayout() to parse arguments.
- * Layout functions have the following prototype: int function(Workspace *); */
-static Layout layouts[] = {
-	{ "tile",    tile    }, /* first is default */
-	{ "mono",    mono    },
-	{ "grid",    grid    },
-	{ "spiral",  spiral  },
-	{ "dwindle", dwindle },
-	{ "none",    NULL    },
+ * .layout functions have the following prototype: int fn(Workspace *); */
+static Set layouts[] = {
+	{ "tile",    {.layout = tile   } }, /* first is default */
+	{ "mono",    {.layout = mono   } },
+	{ "grid",    {.layout = grid   } },
+	{ "spiral",  {.layout = spiral } },
+	{ "dwindle", {.layout = dwindle} },
+	{ "none",    {.layout = NULL   } },
 };
 
-static Workspace wsdef = { /* settings for newly created workspaces */
+/* "win" keyword options, used by cmdwin() to parse arguments
+ * .keyword functions have the following prototype: void fn(char **); */
+static const Set wincmds[] = {
+	{ "cycle",    {.keyword = cmdcycle   } },
+	{ "fakefull", {.keyword = cmdfakefull} },
+	{ "float",    {.keyword = cmdfloat   } },
+	{ "full",     {.keyword = cmdfull    } },
+	{ "focus",    {.keyword = cmdfocus   } },
+	{ "kill",     {.keyword = cmdkill    } },
+	{ "resize",   {.keyword = cmdresize  } },
+	{ "stick",    {.keyword = cmdstick   } },
+	{ "swap",     {.keyword = cmdswap    } },
+};
+
+/* "ws" and "mon" commands used by cmdws() and cmdmon() to parse arguments.
+ * .command functions have the following prototype: void fn(int); */
+static const Set wsmoncmds[] = {
+	{ "follow", {.command = cmdfollow} },
+	{ "send",   {.command = cmdsend  } },
+	{ "view",   {.command = cmdview  } },
+};
+
+static Workspace wsdef = { /* settings for newly created workspaces
+ because were using the Workspace struct we have a bunch of unused fields */
 	1,           /* nmaster */
 	3,           /* nstack  */
 	0,           /* gappx   */
@@ -84,53 +133,5 @@ static Workspace wsdef = { /* settings for newly created workspaces */
 
 	/* unused values - inherited from Workspace struct */
 	0, 0, { 0 }, NULL, NULL, NULL, NULL, NULL, NULL
-};
-
-/* primary keywords and parser functions
- * Keyword functions have the following prototype: void function(char **); */
-static const Keyword keywords[] = {
-	{ "mon",   cmdmon   },
-	{ "rule",  cmdrule  },
-	{ "set",   cmdset   },
-	{ "win",   cmdwin   },
-	{ "wm",    cmdwm    },
-	{ "ws",    cmdws    },
-	{ "print", cmdprint },
-};
-
-/* "set" keyword options, used by cmdset() to parse arguments
- * Keyword functions have the following prototype: void function(char **); */
-static const Keyword setcmds[] = {
-	{ "border", cmdborder  },
-	{ "gap",    cmdgappx   },
-	{ "layout", cmdlayout  },
-	{ "master", cmdnmaster },
-	{ "mouse",  cmdmouse   },
-	{ "pad",    cmdpad     },
-	{ "msplit", cmdmsplit   },
-	{ "ssplit", cmdssplit  },
-	{ "stack",  cmdnstack  },
-};
-
-/* "win" keyword options, used by cmdwin() to parse arguments
- * Keyword functions have the following prototype: void function(char **); */
-static const Keyword wincmds[] = {
-	{ "cycle",    cmdcycle    },
-	{ "fakefull", cmdfakefull },
-	{ "float",    cmdfloat    },
-	{ "full",     cmdfull     },
-	{ "focus",    cmdfocus    },
-	{ "kill",     cmdkill     },
-	{ "resize",   cmdresize   },
-	{ "stick",    cmdstick    },
-	{ "swap",     cmdswap     },
-};
-
-/* "ws" and "mon" commands used by cmdws() and cmdmon() to parse arguments.
- * Command functions have the following prototype: void function(int); */
-static const Command wsmoncmds[] = {
-	{ "follow", cmdfollow },
-	{ "send",   cmdsend   },
-	{ "view",   cmdview   },
 };
 

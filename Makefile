@@ -19,6 +19,10 @@ all: yaxwm
 debug: CPPFLAGS += -DDEBUG
 debug: all
 
+coverage: CFLAGS += --coverage
+coverage: LDLIBS += -lgcov
+coverage: all
+
 nostrip: CFLAGS += -g -O0
 nostrip: debug
 

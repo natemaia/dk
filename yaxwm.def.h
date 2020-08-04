@@ -66,7 +66,7 @@ static const Set keywords[] = {
 
 /* "callback" names recognized for use with rules.
  * .callback functions have the following prototype: void fn(Client *, int); */
-static Set callbacks[] = {
+static const Set callbacks[] = {
 	/* name,                     fn type    fn name */
 	{ "albumart",              {.callback = albumart} },
 };
@@ -87,7 +87,7 @@ static const Set setcmds[] = {
 
 /* "layout" names used by cmdlayout() to parse arguments.
  * .layout functions have the following prototype: int fn(Workspace *); */
-static Set layouts[] = {
+static const Set layouts[] = {
 	{ "tile",    {.layout = tile   } }, /* first is default */
 	{ "mono",    {.layout = mono   } },
 	{ "grid",    {.layout = grid   } },

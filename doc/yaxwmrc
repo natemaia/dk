@@ -29,7 +29,7 @@ logfile="$HOME/.yaxwmrc.log"
 	yaxwm -c set ws=3 layout=grid
 
 	# use some padding and gaps on the last workspace
-	last=$(yaxwm -c print numws)
+	last=$(awk '/^numws:/ {print $2}' "$YAXWM_STATUS")
 	yaxwm -c set ws="$last" pad left=200 right=200 top=100 bottom=100
 	yaxwm -c set ws="$last" gap width=50
 

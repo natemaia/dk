@@ -37,11 +37,29 @@ if (( $# == 0 )); then
 	exit 2
 fi
 
+currentwsgap()
+{
+	awk '{
+		if (!s && $1 == "workspaces:") {
+			for (i = 1; i <= NF; i++) {
+				if ($i ~ "*") {
+					sub(/\*/, "");
+					gsub(/:[a-z]* /, " ");
+					s = $i;
+				}
+			}
+		} else if (s && $1 == s) {
+			print $7;
+			exit;
+		}
+	}' "$YAXWM_STATUS"
+}
+
 # store the gap width before and after changing
-old=$(yaxwm -c print gap)
+old=$(currentwsgap)
 yaxwm -c set gap width "$1"
 ret=$? # if we don't cross the threshold this will be our exit code
-new=$(yaxwm -c print gap)
+new=$(currentwsgap)
 
 # did we cross the threshold, if so we need to update the border colours alpha
 if (( (old >= thresh && new < thresh) || (old < thresh && new >= thresh) )); then

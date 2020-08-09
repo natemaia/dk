@@ -61,7 +61,6 @@ static const Set keywords[] = {
 	{ "win",   {.keyword = cmdwin  } },
 	{ "wm",    {.keyword = cmdwm   } },
 	{ "ws",    {.keyword = cmdws   } },
-	{ "print", {.keyword = cmdprint} },
 };
 
 /* "callback" names recognized for use with rules.
@@ -132,6 +131,6 @@ static Workspace wsdef = { /* settings for newly created workspaces
 	&layouts[0], /* layout  */
 
 	/* unused values - inherited from Workspace struct */
-	0, 0, { 0 }, NULL, NULL, NULL, NULL, NULL, NULL
+	0, { '\0' }, NULL, NULL, NULL, NULL, NULL, NULL
 };
 

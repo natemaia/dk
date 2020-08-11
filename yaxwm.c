@@ -282,7 +282,7 @@ struct Client {
 };
 
 struct Monitor {
-	char name[NAME_MAX];
+	char name[64];
 	int num, connected;
 	int x, y, w, h;
 	int wx, wy, ww, wh;
@@ -820,6 +820,7 @@ void clienthints(Client *c, xcb_timestamp_t t)
 		lastc = c;
 	else if (t - lastt < 1000)
 		return;
+	lastt = t;
 
 	pc = xcb_icccm_get_wm_hints(con, c->win);
 	DBG("clienthints: getting window wm hints - 0x%08x", c->win)

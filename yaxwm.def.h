@@ -16,15 +16,16 @@ static unsigned int border[] = {
 };
 
 static int globalcfg[] = {
-	[GLB_SMART_GAP]    = 1,  /* disable gaps in layouts with only one visible window */
-	[GLB_SMART_BORDER] = 1,  /* disable borders in layouts with only one visible window */
-	[GLB_SIZEHINT]     = 0,  /* respect size hints in tiled layouts */
 	[GLB_FOCUS_MOUSE]  = 1,  /* enable focus follows mouse */
+	[GLB_FOCUS_OPEN]   = 1,  /* enable focus on open */
 	[GLB_FOCUS_URGENT] = 1,  /* enable focus urgent windows */
-	[GLB_TILETOHEAD]   = 0,  /* place new clients at the tail of the stack */
-	[GLB_NUMWS]        = 0,  /* number of workspaces currently allocated */
-	[GLB_MIN_XY]       = 10, /* minimum window area allowed inside the screen when moving */
 	[GLB_MIN_WH]       = 50, /* minimum window size allowed when resizing */
+	[GLB_MIN_XY]       = 10, /* minimum window area allowed inside the screen when moving */
+	[GLB_NUMWS]        = 0,  /* number of workspaces currently allocated */
+	[GLB_SIZEHINT]     = 0,  /* respect size hints in tiled layouts */
+	[GLB_SMART_BORDER] = 1,  /* disable borders in layouts with only one visible window */
+	[GLB_SMART_GAP]    = 1,  /* disable gaps in layouts with only one visible window */
+	[GLB_TILETOHEAD]   = 0,  /* place new clients at the tail of the stack */
 };
 
 static const char *cursors[] = {

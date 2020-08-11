@@ -97,83 +97,84 @@ enum States {
 };
 
 enum Cursors {
-	CURS_MOVE,
-	CURS_NORMAL,
-	CURS_RESIZE
+	CURS_MOVE   = 0,
+	CURS_NORMAL = 1,
+	CURS_RESIZE = 2,
 };
 
 enum Gravity {
-	GRAV_NONE,
-	GRAV_LEFT,
-	GRAV_RIGHT,
-	GRAV_CENTER,
-	GRAV_TOP,
-	GRAV_BOTTOM
+	GRAV_NONE   = 0,
+	GRAV_LEFT   = 1,
+	GRAV_RIGHT  = 2,
+	GRAV_CENTER = 3,
+	GRAV_TOP    = 4,
+	GRAV_BOTTOM = 5,
 };
 
 enum Borders {
-	BORD_WIDTH,
-	BORD_FOCUS,
-	BORD_URGENT,
-	BORD_UNFOCUS,
-	BORD_O_WIDTH,
-	BORD_O_FOCUS,
-	BORD_O_URGENT,
-	BORD_O_UNFOCUS
+	BORD_WIDTH     = 0,
+	BORD_FOCUS     = 1,
+	BORD_URGENT    = 2,
+	BORD_UNFOCUS   = 3,
+	BORD_O_WIDTH   = 4,
+	BORD_O_FOCUS   = 5,
+	BORD_O_URGENT  = 6,
+	BORD_O_UNFOCUS = 7,
 };
 
 enum DirOpts {
-	DIR_NEXT,
-	DIR_PREV,
-	DIR_LAST,   /* last active */
-	DIR_NEXT_NE, /* non-empty */
-	DIR_PREV_NE, /* non-empty */
+	DIR_NEXT    = 0,
+	DIR_PREV    = 1,
+	DIR_LAST    = 2,
+	DIR_NEXT_NE = 3, /* non-empty */
+	DIR_PREV_NE = 4, /* non-empty */
 };
 
 enum WMAtoms {
-	WM_DELETE,
-	WM_FOCUS,
-	WM_MOTIF,
-	WM_PROTO,
-	WM_STATE,
-	WM_UTF8STR,
+	WM_DELETE  = 0,
+	WM_FOCUS   = 1,
+	WM_MOTIF   = 2,
+	WM_PROTO   = 3,
+	WM_STATE   = 4,
+	WM_UTF8STR = 5,
 };
 
 enum NetAtoms {
-	NET_ACTIVE,
-	NET_CLIENTS,
-	NET_CLOSE,
-	NET_DESK_CUR,
-	NET_DESK_GEOM,
-	NET_DESK_NAMES,
-	NET_DESK_NUM,
-	NET_DESK_VP,
-	NET_DESK_WA,
-	NET_STATE_FULL,
-	NET_SUPPORTED,
-	NET_TYPE_DESK,
-	NET_TYPE_DIALOG,
-	NET_TYPE_DOCK,
-	NET_TYPE_SPLASH,
-	NET_WM_CHECK,
-	NET_WM_DESK,
-	NET_WM_NAME,
-	NET_WM_STATE,
-	NET_WM_STRUT,
-	NET_WM_STRUTP,
-	NET_WM_TYPE,
+	NET_ACTIVE      = 0,
+	NET_CLIENTS     = 1,
+	NET_CLOSE       = 2,
+	NET_DESK_CUR    = 3,
+	NET_DESK_GEOM   = 4,
+	NET_DESK_NAMES  = 5,
+	NET_DESK_NUM    = 6,
+	NET_DESK_VP     = 7,
+	NET_DESK_WA     = 8,
+	NET_STATE_FULL  = 9,
+	NET_SUPPORTED   = 10,
+	NET_TYPE_DESK   = 11,
+	NET_TYPE_DIALOG = 12,
+	NET_TYPE_DOCK   = 13,
+	NET_TYPE_SPLASH = 14,
+	NET_WM_CHECK    = 15,
+	NET_WM_DESK     = 16,
+	NET_WM_NAME     = 17,
+	NET_WM_STATE    = 18,
+	NET_WM_STRUT    = 19,
+	NET_WM_STRUTP   = 20,
+	NET_WM_TYPE     = 21,
 };
 
 enum GlobalCfg {
-	GLB_SMART_GAP,
-	GLB_SMART_BORDER,
-	GLB_SIZEHINT,
-	GLB_FOCUS_MOUSE,
-	GLB_FOCUS_URGENT,
-	GLB_TILETOHEAD,
-	GLB_NUMWS,
-	GLB_MIN_XY,
-	GLB_MIN_WH
+	GLB_FOCUS_MOUSE  = 0,
+	GLB_FOCUS_OPEN   = 1,
+	GLB_FOCUS_URGENT = 2,
+	GLB_MIN_WH       = 3,
+	GLB_MIN_XY       = 4,
+	GLB_NUMWS        = 5,
+	GLB_SIZEHINT     = 6,
+	GLB_SMART_BORDER = 7,
+	GLB_SMART_GAP    = 8,
+	GLB_TILETOHEAD   = 9,
 };
 
 
@@ -267,7 +268,7 @@ struct Panel {
 };
 
 struct Client {
-	char title[NAME_MAX], class[NAME_MAX], inst[NAME_MAX];
+	char title[NAME_MAX], class[64], inst[64];
 	int x, y, w, h, bw, hoff, depth;
 	int old_x, old_y, old_w, old_h, old_bw;
 	int max_w, max_h, min_w, min_h;
@@ -282,11 +283,10 @@ struct Client {
 
 struct Monitor {
 	char name[NAME_MAX];
-	int num;
-	xcb_randr_output_t id;
+	int num, connected;
 	int x, y, w, h;
 	int wx, wy, ww, wh;
-	int connected;
+	xcb_randr_output_t id;
 	Monitor *next;
 	Workspace *ws;
 };
@@ -294,18 +294,17 @@ struct Monitor {
 struct Workspace {
 	int nmaster, nstack, gappx;
 	int padr, padl, padt, padb;
-	float msplit;
-	float ssplit;
+	float msplit, ssplit;
 	const Set *layout;
 	int num;
-	char name[NAME_MAX];
+	char name[64];
 	Monitor *mon;
 	Workspace *next;
 	Client *sel, *stack, *clients, *hidden;
 };
 
 
-static void clienthints(Client *);
+static void clienthints(Client *, xcb_timestamp_t);
 static int clientname(Client *);
 static void clientrule(Client *, Rule *);
 static void clienttype(Client *);
@@ -808,11 +807,19 @@ void changews(Workspace *ws, int allowswap, int allowwarp)
 	PROP_REPLACE(root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1, &ws->num);
 }
 
-void clienthints(Client *c)
+void clienthints(Client *c, xcb_timestamp_t t)
 {
+	static Client *lastc = NULL;
+	static xcb_timestamp_t lastt = 0;
+
 	xcb_generic_error_t *e;
 	xcb_icccm_wm_hints_t wmh;
 	xcb_get_property_cookie_t pc;
+
+	if (lastc != c)
+		lastc = c;
+	else if (t - lastt < 1000)
+		return;
 
 	pc = xcb_icccm_get_wm_hints(con, c->win);
 	DBG("clienthints: getting window wm hints - 0x%08x", c->win)
@@ -1820,25 +1827,24 @@ void eventhandle(xcb_generic_event_t *ev)
 		xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ev;
 
 #ifdef DEBUG
-		for (unsigned int i = 0; i < LEN(netatom); i++)
-			if (netatom[i] == e->atom) {
-				DBG("eventhandle: PROPERTY_NOTIFY - atom: %s - 0x%08x", netatoms[i], e->window)
-			}
-		for (unsigned int i = 0; i < LEN(wmatom); i++)
-			if (wmatom[i] == e->atom) {
-				DBG("eventhandle: PROPERTY_NOTIFY - atom: %s - 0x%08x", wmatoms[i], e->window)
-			}
+		if (e->window != root) {
+			for (unsigned int i = 0; i < LEN(netatom); i++)
+				if (netatom[i] == e->atom) {
+					DBG("eventhandle: PROPERTY_NOTIFY - atom: %s - 0x%08x", netatoms[i], e->window)
+				}
+			for (unsigned int i = 0; i < LEN(wmatom); i++)
+				if (wmatom[i] == e->atom) {
+					DBG("eventhandle: PROPERTY_NOTIFY - atom: %s - 0x%08x", wmatoms[i], e->window)
+				}
+		}
 #endif
 
-		if ((e->atom == netatom[NET_WM_STRUTP] || e->atom == netatom[NET_WM_STRUT])
-				&& (p = wintopanel(e->window)))
-		{
-			updstruts(p, 1);
-			needsrefresh = 1;
-		} else if (e->state != XCB_PROPERTY_DELETE && (c = wintoclient(e->window))) {
+		if (e->state == XCB_PROPERTY_DELETE) {
+			return;
+		} else if ((c = wintoclient(e->window))) {
 			switch (e->atom) {
 			case XCB_ATOM_WM_HINTS:
-				clienthints(c); return;
+				clienthints(c, e->time); return;
 			case XCB_ATOM_WM_NORMAL_HINTS:
 				sizehints(c, 0); return;
 			case XCB_ATOM_WM_TRANSIENT_FOR:
@@ -1846,12 +1852,17 @@ void eventhandle(xcb_generic_event_t *ev)
 					c->state |= STATE_FLOATING, needsrefresh = 1;
 				return;
 			default:
-				if (e->atom == netatom[NET_WM_NAME] && clientname(c))
+				if ((e->atom == XCB_ATOM_WM_NAME || e->atom == netatom[NET_WM_NAME]) && clientname(c))
 					pushstatus();
 				else if (e->atom == netatom[NET_WM_TYPE])
 					clienttype(c);
 				return;
 			}
+		} else if ((e->atom == netatom[NET_WM_STRUTP] || e->atom == netatom[NET_WM_STRUT])
+				&& (p = wintopanel(e->window)))
+		{
+			updstruts(p, 1);
+			needsrefresh = 1;
 		}
 		return;
 	}
@@ -2557,7 +2568,7 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	sendconfigure(c);
 	clienttype(c);
 	sizehints(c, 1);
-	clienthints(c);
+	clienthints(c, XCB_CURRENT_TIME);
 	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK,
 			(unsigned int[]){XCB_EVENT_MASK_ENTER_WINDOW
 							| XCB_EVENT_MASK_FOCUS_CHANGE
@@ -4037,6 +4048,8 @@ void unmanage(xcb_window_t win, int destroyed)
 		FOR_EACH(d, desks)
 			PROP_APPEND(root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &d->win);
 		needsrefresh = 1;
+	} else {
+		focus(NULL);
 	}
 }
 

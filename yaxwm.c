@@ -304,7 +304,7 @@ struct Workspace {
 };
 
 
-static void clienthints(Client *, xcb_timestamp_t);
+static void clienthints(Client *);
 static int clientname(Client *);
 static void clientrule(Client *, Rule *);
 static void clienttype(Client *);
@@ -772,7 +772,6 @@ void attachstack(Client *c)
 
 void changews(Workspace *ws, int allowswap, int allowwarp)
 {
-	int x, y;
 	Monitor *m, *oldmon;
 	int diffmon = allowwarp && selws->mon != ws->mon;
 
@@ -800,27 +799,18 @@ void changews(Workspace *ws, int allowswap, int allowwarp)
 	selmon = ws->mon;
 	selws->mon->ws = ws;
 	if (!allowswap && diffmon) {
-		x = selws->sel ? ws->sel->x + (ws->sel->w / 2) : ws->mon->x + (ws->mon->w / 2);
-		y = selws->sel ? ws->sel->y + (ws->sel->h / 2) : ws->mon->y + (ws->mon->h / 2);
-		xcb_warp_pointer(con, root, root, 0, 0, 0, 0, x, y);
+		xcb_warp_pointer(con, root, root, 0, 0, 0, 0,
+				selws->sel ? ws->sel->x + (ws->sel->w / 2) : ws->mon->x + (ws->mon->w / 2),
+				selws->sel ? ws->sel->y + (ws->sel->h / 2) : ws->mon->y + (ws->mon->h / 2));
 	}
 	PROP_REPLACE(root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1, &ws->num);
 }
 
-void clienthints(Client *c, xcb_timestamp_t t)
+void clienthints(Client *c)
 {
-	static Client *lastc = NULL;
-	static xcb_timestamp_t lastt = 0;
-
 	xcb_generic_error_t *e;
 	xcb_icccm_wm_hints_t wmh;
 	xcb_get_property_cookie_t pc;
-
-	if (lastc != c)
-		lastc = c;
-	else if (t - lastt < 1000)
-		return;
-	lastt = t;
 
 	pc = xcb_icccm_get_wm_hints(con, c->win);
 	DBG("clienthints: getting window wm hints - 0x%08x", c->win)
@@ -1826,6 +1816,8 @@ void eventhandle(xcb_generic_event_t *ev)
 	{
 		Panel *p;
 		xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ev;
+		static Client *lastc = NULL;
+		static xcb_timestamp_t lastt = 0;
 
 #ifdef DEBUG
 		if (e->window != root) {
@@ -1839,13 +1831,18 @@ void eventhandle(xcb_generic_event_t *ev)
 				}
 		}
 #endif
-
 		if (e->state == XCB_PROPERTY_DELETE) {
 			return;
 		} else if ((c = wintoclient(e->window))) {
+			if (lastc != c)
+				lastc = c;
+			else if (e->time - lastt < 1000)
+				return;
+			lastt = e->time;
+
 			switch (e->atom) {
 			case XCB_ATOM_WM_HINTS:
-				clienthints(c, e->time); return;
+				clienthints(c); return;
 			case XCB_ATOM_WM_NORMAL_HINTS:
 				sizehints(c, 0); return;
 			case XCB_ATOM_WM_TRANSIENT_FOR:
@@ -2569,7 +2566,7 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	sendconfigure(c);
 	clienttype(c);
 	sizehints(c, 1);
-	clienthints(c, XCB_CURRENT_TIME);
+	clienthints(c);
 	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK,
 			(unsigned int[]){XCB_EVENT_MASK_ENTER_WINDOW
 							| XCB_EVENT_MASK_FOCUS_CHANGE

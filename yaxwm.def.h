@@ -132,6 +132,6 @@ static Workspace wsdef = { /* settings for newly created workspaces
 	&layouts[0], /* layout  */
 
 	/* unused values - inherited from Workspace struct */
-	0, { '\0' }, NULL, NULL, NULL, NULL, NULL, NULL
+	0, { '\0' }, NULL, NULL, NULL, NULL, NULL
 };
 

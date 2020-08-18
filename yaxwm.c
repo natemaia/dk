@@ -3,7 +3,9 @@
 * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
 */
 
-#define _XOPEN_SOURCE 700
+#ifndef _D_BSD_SOURCE
+#define _D_BSD_SOURCE
+#endif
 
 #include <sys/un.h>
 #include <sys/wait.h>
@@ -300,7 +302,7 @@ struct Workspace {
 	char name[64];
 	Monitor *mon;
 	Workspace *next;
-	Client *sel, *stack, *clients, *hidden;
+	Client *sel, *stack, *clients;
 };
 
 
@@ -382,7 +384,6 @@ static char **parseint(char **, int *, int *, int);
 static char **parseintclamp(char **, int *, int *, int, int);
 static int parseopt(char **, char **);
 static char *parsetoken(char **);
-static Client *prevclient(Client *);
 static void pushstatus(void);
 static int querypointer(int *, int *);
 static void refresh(void);
@@ -664,7 +665,7 @@ void adjustwsormon(char **argv)
 				r++;
 			}
 		}
-	} else { /* index (1-numws) */
+	} else { /* index (1 - numws) */
 		parseintclamp(argv, &opt, NULL, 1, globalcfg[GLB_NUMWS]);
 		if (!cmdusemon)
 			ws = itows(opt - 1);
@@ -672,9 +673,9 @@ void adjustwsormon(char **argv)
 			ws = (m = itomon(opt - 1)) && m->connected ? m->ws : cws;
 	}
 
-	if (ws) {
+	if (ws)
 		fn(ws->num);
-	} else
+	else
 		fprintf(cmdresp, "!unable to locate %s\n", cmdusemon ? "monitor" : "workspace");
 	return;
 }
@@ -1555,23 +1556,25 @@ void cmdswap(char **argv)
 	static Client *last = NULL;
 	Client *c, *old, *cur = NULL, *prev = NULL;
 
-	if (!(c = cmdclient)|| FLOATING(c)
+	if (!(c = cmdclient) || FLOATING(c)
 			|| (c->state & STATE_FULLSCREEN && c->w == c->ws->mon->w && c->h == c->ws->mon->h))
 		return;
 	if (c == nexttiled(c->ws->clients)) {
-		if ((cur = prevclient(last)))
+		FIND_PREV(cur, last, c->ws->clients);
+		if (cur != c->ws->clients)
 			prev = nexttiled(cur->next);
 		if (!prev || prev != last) {
 			last = NULL;
 			if (!c || !(c = nexttiled(c->next)))
 				return;
-		} else
+		} else {
 			c = prev;
+		}
 	}
 	if (c != (old = nexttiled(c->ws->clients)) && !cur)
-		cur = prevclient(c);
+		FIND_PREV(cur, c, c->ws->clients);
 	detach(c, 1);
-	if (c != old && cur) {
+	if (c != old && cur && cur != c->ws->clients) {
 		last = old;
 		if (old && cur != old) {
 			detach(old, 0);
@@ -1812,8 +1815,13 @@ void eventhandle(xcb_generic_event_t *ev)
 	Workspace *ws;
 
 	switch (ev->response_type & 0x7f) {
-	case XCB_PROPERTY_NOTIFY:
-	{
+	case XCB_BUTTON_PRESS:   /* FALLTHROUGH */
+	case XCB_BUTTON_RELEASE: /* FALLTHROUGH */
+	case XCB_MOTION_NOTIFY: {
+		eventmouse(ev);
+		return;
+	}
+	case XCB_PROPERTY_NOTIFY: {
 		Panel *p;
 		xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ev;
 		static Client *lastc = NULL;
@@ -1864,8 +1872,7 @@ void eventhandle(xcb_generic_event_t *ev)
 		}
 		return;
 	}
-	case XCB_CONFIGURE_REQUEST:
-	{
+	case XCB_CONFIGURE_REQUEST: {
 		xcb_configure_request_event_t *e = (xcb_configure_request_event_t *)ev;
 
 		if ((c = wintoclient(e->window))) {
@@ -1920,8 +1927,7 @@ void eventhandle(xcb_generic_event_t *ev)
 		xcb_aux_sync(con);
 		return;
 	}
-	case XCB_ENTER_NOTIFY:
-	{
+	case XCB_ENTER_NOTIFY: {
 		xcb_enter_notify_event_t *e = (xcb_enter_notify_event_t *)ev;
 
 		if (e->event != root && (e->mode != XCB_NOTIFY_MODE_NORMAL
@@ -1939,8 +1945,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			focus(c);
 		return;
 	}
-	case XCB_FOCUS_IN:
-	{
+	case XCB_FOCUS_IN: {
 		xcb_focus_in_event_t *e = (xcb_focus_in_event_t *)ev;
 
 		if (e->mode == XCB_NOTIFY_MODE_GRAB
@@ -1954,28 +1959,18 @@ void eventhandle(xcb_generic_event_t *ev)
 			setinputfocus(selws->sel);
 		return;
 	}
-	case XCB_BUTTON_PRESS:   /* FALLTHROUGH */
-	case XCB_BUTTON_RELEASE: /* FALLTHROUGH */
-	case XCB_MOTION_NOTIFY:
-	{
-		eventmouse(ev);
-		return;
-	}
-	case XCB_CONFIGURE_NOTIFY:
-	{
+	case XCB_CONFIGURE_NOTIFY: {
 		xcb_configure_notify_event_t *e = (xcb_configure_notify_event_t *)ev;
 
 		if (e->window == root)
 			scr_w = e->width, scr_h = e->height;
 		return;
 	}
-	case XCB_DESTROY_NOTIFY:
-	{
+	case XCB_DESTROY_NOTIFY: {
 		unmanage(((xcb_destroy_notify_event_t *)ev)->window, 1);
 		return;
 	}
-	case XCB_MAP_REQUEST:
-	{
+	case XCB_MAP_REQUEST: {
 		xcb_get_geometry_reply_t *g;
 		xcb_get_window_attributes_reply_t *wa;
 		xcb_map_request_event_t *e = (xcb_map_request_event_t *)ev;
@@ -1987,8 +1982,7 @@ void eventhandle(xcb_generic_event_t *ev)
 		free(g);
 		return;
 	}
-	case XCB_UNMAP_NOTIFY:
-	{
+	case XCB_UNMAP_NOTIFY: {
 		xcb_unmap_notify_event_t *e = (xcb_unmap_notify_event_t *)ev;
 
 		DBG("eventhandle: UNMAP_NOTIFY - 0x%08x", e->window)
@@ -1998,8 +1992,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			unmanage(e->window, 0);
 		return;
 	}
-	case XCB_CLIENT_MESSAGE:
-	{
+	case XCB_CLIENT_MESSAGE: {
 		xcb_client_message_event_t *e = (xcb_client_message_event_t *)ev;
 		unsigned int *d = e->data.data32;
 
@@ -2036,16 +2029,12 @@ void eventhandle(xcb_generic_event_t *ev)
 		}
 		return;
 	}
-	case 0: /* error */
-	{
+	case 0: { /* ERROR */
 		break;
 	}
-	default: /* randr */
-	{
-		xcb_randr_screen_change_notify_event_t *e = (xcb_randr_screen_change_notify_event_t *)ev;
-
+	default: { /* RANDR */
 		if (ev->response_type == randrbase + XCB_RANDR_SCREEN_CHANGE_NOTIFY)
-			if (e->root == root && updrandr())
+			if (((xcb_randr_screen_change_notify_event_t *)ev)->root == root && updrandr())
 				updworkspaces(globalcfg[GLB_NUMWS]);
 	}
 	}
@@ -3431,17 +3420,6 @@ char *parsetoken(char **src)
 	*src = tail ? ++tail : '\0';
 
 	return head;
-}
-
-Client *prevclient(Client *c)
-{
-	Client *tmp;
-
-	if (c == selws->clients)
-		return NULL;
-	for (tmp = selws->clients; tmp && tmp->next != c; tmp = tmp->next)
-		;
-	return tmp;
 }
 
 int querypointer(int *x, int *y)

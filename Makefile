@@ -1,7 +1,7 @@
 # yaxwm - yet another x window manager
 # see license file for copyright and license details
 
-VERSION = 0.81
+VERSION = 0.82
 
 # install paths
 PREFIX    ?= /usr/local
@@ -9,8 +9,8 @@ MANPREFIX ?= ${PREFIX}/share/man
 DOCPREFIX ?= ${PREFIX}/share/doc
 
 # compiler and linker flags
-CPPFLAGS += -DVERSION=\"${VERSION}\"
-CFLAGS   += -O2 -pedantic -Wall -Wextra
+CPPFLAGS += -D_DEFAULT_SOURCE -D_BSD_SOURCE -DVERSION=\"${VERSION}\"
+CFLAGS   += -std=c11 -O2 -static -pedantic -Wall -Wextra
 LDFLAGS  ?=
 LDLIBS    = -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
 

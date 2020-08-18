@@ -3,9 +3,7 @@
 * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
 */
 
-#ifndef _D_BSD_SOURCE
-#define _D_BSD_SOURCE
-#endif
+#define _XOPEN_SOURCE 700
 
 #include <sys/un.h>
 #include <sys/wait.h>
@@ -39,7 +37,7 @@
 #endif
 
 #ifndef VERSION
-#define VERSION "0.6"
+#define VERSION "0.82"
 #endif
 
 #define W(c) ((c)->w + (2 * (c)->bw))

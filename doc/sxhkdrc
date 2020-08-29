@@ -85,7 +85,7 @@ alt + {_,shift + ,ctrl + }{comma,period,backslash}
 	yaxwm -c mon {view,send,follow} {prev,next,last}
 
 # change active workspace layout
-alt + {t,m,g,s,d,f}
+alt + {t,m,g,s,w,f}
 	yaxwm -c set layout {tile,mono,grid,spiral,dwindle,none}
 
 # change number of windows in master or first stack

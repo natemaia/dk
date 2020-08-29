@@ -84,16 +84,17 @@
 
 
 enum States {
-	STATE_NONE       = 0,
-	STATE_FAKEFULL   = 1 << 0,
-	STATE_FIXED      = 1 << 1,
-	STATE_FLOATING   = 1 << 2,
-	STATE_FULLSCREEN = 1 << 3,
-	STATE_NOBORDER   = 1 << 4,
-	STATE_NOINPUT    = 1 << 5,
-	STATE_STICKY     = 1 << 6,
-	STATE_URGENT     = 1 << 7,
-	STATE_NEEDSMAP   = 1 << 8,
+	STATE_NONE         = 0,
+	STATE_FAKEFULL     = 1 << 0,
+	STATE_FIXED        = 1 << 1,
+	STATE_FLOATING     = 1 << 2,
+	STATE_FULLSCREEN   = 1 << 3,
+	STATE_NOBORDER     = 1 << 4,
+	STATE_NOINPUT      = 1 << 5,
+	STATE_STICKY       = 1 << 6,
+	STATE_URGENT       = 1 << 7,
+	STATE_NEEDSMAP     = 1 << 8,
+	STATE_NEEDSRESIZE  = 1 << 9,
 };
 
 enum Cursors {
@@ -761,12 +762,6 @@ void attach(Client *c, int tohead)
 		c->next = c->ws->clients;
 		c->ws->clients = c;
 	}
-}
-
-void attachstack(Client *c)
-{
-	c->snext = c->ws->stack;
-	c->ws->stack = c;
 }
 
 void changews(Workspace *ws, int allowswap, int allowwarp)
@@ -1903,13 +1898,15 @@ void eventhandle(xcb_generic_event_t *ev)
 				if (c->y + c->h > m->wy + m->wh)
 					c->y = m->wy + ((m->wh - H(c)) / 2);
 				if (e->value_mask & (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y)
-						&& !(e->value_mask & (XCB_CONFIG_WINDOW_WIDTH
-								| XCB_CONFIG_WINDOW_HEIGHT)))
+						&& !(e->value_mask & (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT)))
 				{
 					sendconfigure(c);
 				}
-				if (c->ws == m->ws)
+				if (c->ws == m->ws) {
 					MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
+				} else {
+					c->state |= STATE_NEEDSRESIZE;
+				}
 			} else {
 				sendconfigure(c);
 			}
@@ -2200,34 +2197,36 @@ void execcfg(void)
 
 void fib(Workspace *ws, int s)
 {
-	int b;
 	Client *c;
 	Monitor *m = ws->mon;
-	unsigned int i, n, nx, ny, nw, nh;
+	unsigned int i, n, nx, ny;
+	int x, y, w, h, b, g, nw, nh, ox, f = 0;
 
 	for (n = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), n++)
 		;
 	if (!n)
 		return;
 
+	g = globalcfg[GLB_SMART_GAP] && n == 1 ? 0 : ws->gappx;
 	nx = m->wx + ws->padl;
 	ny = m->wy + ws->padt;
-	nw = m->ww - ws->padl - ws->padr;
-	nh = m->wh - ws->padt - ws->padb;
-	/* int g; */
-	/* g = globalcfg[GLB_SMART_GAP] ? 0 : ws->gappx; */
+	nw = m->ww - ws->padl - ws->padr - g;
+	nh = m->wh - ws->padt - ws->padb - g;
 
 	for (i = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), i++) {
+		ox = nx;
 		b = globalcfg[GLB_SMART_BORDER] && n == 1 ? 0 : c->bw;
 		if (i < n - 1) {
 			if (i % 2)
 				nh /= 2;
 			else
 				nw /= 2;
-			if (!s && (i % 4) == 2)
-				nx += nw;
-			else if (!s && (i % 4) == 3)
-				ny += nh;
+			if (!s) {
+				if (i % 4 == 2)
+					nx += nw;
+				else if (i % 4 == 3)
+					ny += nh;
+			}
 		}
 		switch (i % 4) {
 		case 0: ny += s ? nh : nh * -1; break;
@@ -2237,12 +2236,34 @@ void fib(Workspace *ws, int s)
 		}
 		if (i == 0) {
 			if (n > 1)
-				nw = (m->ww - ws->padl - ws->padr) * ws->msplit;
+				nw = ((m->ww - ws->padl - ws->padr) * ws->msplit) - g;
 			ny = m->wy - ws->padt;
 		} else if (i == 1) {
-			nw = (m->ww - ws->padl - ws->padr) - nw;
+			nw = (m->ww - ws->padl - ws->padr) - nw - g;
 		}
-		resizehint(c, nx, ny, nw - (2 * b), nh - (2 * b), b, 0, 0);
+		if (f || (nw - (2 * b) - (n > 1 ? g : (2 * g)) < globalcfg[GLB_MIN_WH]
+					|| nh - (2 * b) - (n > 1 ? g : (2 * g)) < globalcfg[GLB_MIN_WH]))
+		{
+			if (i % 2) {
+				nh *= 2;
+			} else {
+				nx = ox, nw *= 2;
+			}
+			if (f) {
+				c->state |= STATE_FLOATING;
+				h = MAX(c->ws->mon->wh / 4, 240);
+				w = MAX(c->ws->mon->ww / 5, 360);
+				offsetfloat(c, &x, &y, &w, &h);
+				setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+				resizehint(c, x, y, w, h, c->bw, 0, 0);
+				continue;
+			}
+			f = 1;
+		}
+		resizehint(c, nx + g, ny + g,
+				nw - (2 * b) - (n > 1 ? g : (2 * g)),
+				nh - (2 * b) - (n > 1 ? g : (2 * g)),
+				b, 0, 0);
 	}
 }
 
@@ -2256,7 +2277,8 @@ void focus(Client *c)
 		if (c->state & STATE_URGENT)
 			seturgent(c, 0);
 		detachstack(c);
-		attachstack(c);
+		c->snext = c->ws->stack;
+		c->ws->stack = c;
 		grabbuttons(c, 1);
 		drawborder(c, 1);
 		setinputfocus(c);
@@ -2571,9 +2593,13 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	PROP_APPEND(root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &c->win);
 	MOVE(c->win, c->x + 2 * scr_w, c->y);
 	setwmwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
-	if (c->ws == c->ws->mon->ws)
-		unfocus(selws->sel, 0);
-	c->ws->sel = c;
+	if (globalcfg[GLB_FOCUS_OPEN]) {
+		if (c->ws == c->ws->mon->ws)
+			unfocus(selws->sel, 0);
+		c->ws->sel = c;
+	} else if (c->ws == c->ws->mon->ws) {
+		focus(c->ws->sel);
+	}
 	if (c->cb)
 		c->cb->fn.callback(c, 0);
 }
@@ -3729,7 +3755,8 @@ void setworkspace(Client *c, int num)
 		c->ws = selws;
 	PROP_REPLACE(c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL, 32, 1, &c->ws->num);
 	attach(c, globalcfg[GLB_TILETOHEAD]);
-	attachstack(c);
+	c->snext = c->ws->stack;
+	c->ws->stack = c;
 }
 
 void seturgent(Client *c, int urg)
@@ -3763,7 +3790,12 @@ void showhide(Client *c)
 		return;
 	m = c->ws->mon;
 	if (c->ws == m->ws) {
-		MOVE(c->win, c->x, c->y);
+		if (c->state & STATE_NEEDSRESIZE) {
+			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
+			c->state &= ~STATE_NEEDSRESIZE;
+		} else {
+			MOVE(c->win, c->x, c->y);
+		}
 		if (FLOATING(c)) {
 			if (c->state & STATE_FULLSCREEN && c->w == c->ws->mon->w && c->h == c->ws->mon->h)
 				resize(c, m->x, m->y, m->w, m->h, 0);

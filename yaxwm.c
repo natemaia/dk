@@ -383,6 +383,7 @@ static char **parseint(char **, int *, int *, int);
 static char **parseintclamp(char **, int *, int *, int, int);
 static int parseopt(char **, char **);
 static char *parsetoken(char **);
+static void popfloat(Client *c);
 static void pushstatus(void);
 static int querypointer(int *, int *);
 static void refresh(void);
@@ -2195,12 +2196,12 @@ void execcfg(void)
 	}
 }
 
-void fib(Workspace *ws, int s)
+void fib(Workspace *ws, int dwindle)
 {
 	Client *c;
 	Monitor *m = ws->mon;
-	unsigned int i, n, nx, ny;
-	int x, y, w, h, b, g, nw, nh, ox, f = 0;
+	unsigned int i, n, x, y;
+	int w, h, b, g, ox, f = 0;
 
 	for (n = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), n++)
 		;
@@ -2208,61 +2209,57 @@ void fib(Workspace *ws, int s)
 		return;
 
 	g = globalcfg[GLB_SMART_GAP] && n == 1 ? 0 : ws->gappx;
-	nx = m->wx + ws->padl;
-	ny = m->wy + ws->padt;
-	nw = m->ww - ws->padl - ws->padr - g;
-	nh = m->wh - ws->padt - ws->padb - g;
+	x = m->wx + ws->padl;
+	y = m->wy + ws->padt;
+	w = m->ww - ws->padl - ws->padr;
+	h = m->wh - ws->padt - ws->padb;
 
 	for (i = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), i++) {
-		ox = nx;
+		ox = x;
 		b = globalcfg[GLB_SMART_BORDER] && n == 1 ? 0 : c->bw;
 		if (i < n - 1) {
 			if (i % 2)
-				nh /= 2;
+				h /= 2;
 			else
-				nw /= 2;
-			if (!s) {
+				w /= 2;
+			if (!dwindle) {
 				if (i % 4 == 2)
-					nx += nw;
+					x += w;
 				else if (i % 4 == 3)
-					ny += nh;
+					y += h;
 			}
 		}
 		switch (i % 4) {
-		case 0: ny += s ? nh : nh * -1; break;
-		case 1: nx += nw; break;
-		case 2: ny += nh; break;
-		case 3: nx += s ? nw : nw * -1; break;
+		case 0: y += dwindle ? h : h * -1; break;
+		case 1: x += w; break;
+		case 2: y += h; break;
+		case 3: x += dwindle ? w : w * -1; break;
 		}
-		if (i == 0) {
+		if (!i) {
 			if (n > 1)
-				nw = ((m->ww - ws->padl - ws->padr) * ws->msplit) - g;
-			ny = m->wy - ws->padt;
+				w = ((m->ww - ws->padl - ws->padr) * ws->msplit) - g;
+			y = m->wy - ws->padt;
 		} else if (i == 1) {
-			nw = (m->ww - ws->padl - ws->padr) - nw - g;
+			w = m->ww - ws->padl - ws->padr - w - g;
 		}
-		if (f || (nw - (2 * b) - (n > 1 ? g : (2 * g)) < globalcfg[GLB_MIN_WH]
-					|| nh - (2 * b) - (n > 1 ? g : (2 * g)) < globalcfg[GLB_MIN_WH]))
+		if (f || (w - (2 * b) - (n > 1 ? g : (2 * g)) < globalcfg[GLB_MIN_WH]
+					|| h - (2 * b) - (n > 1 ? g : (2 * g)) < globalcfg[GLB_MIN_WH]))
 		{
 			if (i % 2) {
-				nh *= 2;
+				h *= 2;
 			} else {
-				nx = ox, nw *= 2;
+				x = ox;
+				w *= 2;
 			}
 			if (f) {
-				c->state |= STATE_FLOATING;
-				h = MAX(c->ws->mon->wh / 4, 240);
-				w = MAX(c->ws->mon->ww / 5, 360);
-				offsetfloat(c, &x, &y, &w, &h);
-				setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-				resizehint(c, x, y, w, h, c->bw, 0, 0);
+				popfloat(c);
 				continue;
 			}
 			f = 1;
 		}
-		resizehint(c, nx + g, ny + g,
-				nw - (2 * b) - (n > 1 ? g : (2 * g)),
-				nh - (2 * b) - (n > 1 ? g : (2 * g)),
+		resizehint(c, x + g, y + g,
+				w - (2 * b) - (n > 1 ? g : (2 * g)),
+				h - (2 * b) - (n > 1 ? g : (2 * g)),
 				b, 0, 0);
 	}
 }
@@ -2936,7 +2933,6 @@ void initwm(void)
 	struct sigaction sa;
 	int sigs[] = { SIGTERM, SIGINT, SIGHUP, SIGCHLD };
 
-	/* signal handlers */
 	sa.sa_handler = sighandle;
 	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = SA_RESTART;
@@ -2944,18 +2940,15 @@ void initwm(void)
 		if (sigaction(sigs[i], &sa, NULL) < 0)
 			err(1, "unable to setup handler for signal: %d", sigs[i]);
 
-	/* mouse cursors */
 	if (xcb_cursor_context_new(con, scr, &ctx) < 0)
 		err(1, "unable to create cursor context");
 	for (i = 0; i < LEN(cursors); i++)
 		cursor[i] = xcb_cursor_load_cursor(ctx, cursors[i]);
 	xcb_cursor_context_free(ctx);
 
-	/* init atoms first so we can use them in updworkspaces */
 	initatoms(wmatom, wmatoms, LEN(wmatoms));
 	initatoms(netatom, netatoms, LEN(netatoms));
 
-	/* init RANDR and monitors */
 	if ((ext = xcb_get_extension_data(con, &xcb_randr_id)) && ext->present) {
 		randrbase = ext->first_event;
 		xcb_randr_select_input(con, root, XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE);
@@ -2966,14 +2959,12 @@ void initwm(void)
 	if (randrbase < 0 || !nextmon(monitors))
 		initmon(0, "default", 0, 0, 0, scr_w, scr_h);
 
-	/* init workspaces */
 	cws = winprop(root, netatom[NET_DESK_CUR], &r) && r < 100 ? r : 0;
 	updworkspaces(MAX(cws + 1, globalcfg[GLB_NUMWS]));
 	selws = workspaces;
 	selmon = selws->mon;
 	changews((ws = itows(cws)) ? ws : workspaces, 1, 0);
 
-	/* init root window atoms */
 	wmcheck = xcb_generate_id(con);
 	xcb_create_window(con, XCB_COPY_FROM_PARENT, wmcheck, root, -1, -1, 1, 1, 0,
 			XCB_WINDOW_CLASS_INPUT_ONLY, scr->root_visual, 0, NULL);
@@ -2983,7 +2974,6 @@ void initwm(void)
 	PROP_REPLACE(root, netatom[NET_SUPPORTED], XCB_ATOM_ATOM, 32, LEN(netatom), netatom);
 	xcb_delete_property(con, root, netatom[NET_CLIENTS]);
 
-	/* root window event mask and default mouse cursor */
 	iferr(1, "unable to change root window event mask or cursor",
 			xcb_request_check(con,
 				xcb_change_window_attributes_checked(
@@ -2998,7 +2988,6 @@ void initwm(void)
 									| XCB_EVENT_MASK_PROPERTY_CHANGE,
 									cursor[CURS_NORMAL]})));
 
-	/* still need this due to mouse binds */
 	if (!(keysyms = xcb_key_symbols_alloc(con)))
 		err(1, "unable to get keysyms from X connection");
 }
@@ -3323,7 +3312,7 @@ char **parsefloat(char **argv, float *setting, int *rel)
 		if (f < -0.95 || f > 0.95) {
 			fprintf(cmdresp, "!float argument out of range: %s - min: -0.95, max: 0.95\n", *argv);
 		} else {
-			if (rel) /* check if it's a relative number (has a sign) */
+			if (rel)
 				*rel = **argv == '-' || **argv == '+';
 			*setting = f;
 		}
@@ -3372,7 +3361,7 @@ char **parseint(char **argv, int *setting, int *rel, int allowzero)
 	if (!argv || !*argv)
 		return argv;
 	if (((i = strtol(*argv, &end, 0)) || (allowzero && !strcmp("0", *argv))) && *end == '\0') {
-		if (i && rel) /* check if it's a relative number (non-zero, has a sign) */
+		if (i && rel)
 			*rel = **argv == '-' || **argv == '+';
 		*setting = i;
 	} else {
@@ -3446,6 +3435,20 @@ char *parsetoken(char **src)
 	return head;
 }
 
+void popfloat(Client *c)
+{
+	int x, y, w, h;
+
+	c->state |= STATE_FLOATING;
+	x = c->x;
+	y = c->y;
+	w = CLAMP(c->w, c->ws->mon->ww / 8, c->ws->mon->ww / 3);
+	h = CLAMP(c->h, c->ws->mon->wh / 8, c->ws->mon->wh / 3);
+	offsetfloat(c, &x, &y, &w, &h);
+	setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+	resizehint(c, x, y, w, h, c->bw, 0, 0);
+}
+
 int querypointer(int *x, int *y)
 {
 	xcb_generic_error_t *e;
@@ -3503,11 +3506,12 @@ void relocate(Workspace *ws, Monitor *old)
 	if (!(m = ws->mon) || m == old)
 		return;
 	FOR_EACH(c, ws->clients)
-		if (FLOATING(c)) { /* TODO: simplify this mess */
+		if (FLOATING(c)) {
+			/* TODO: simplify this mess */
 			if ((xoff = c->x - old->x) && (xdiv = old->w / xoff) != 0.0) {
-				if (c->x + W(c) == old->wx + old->ww) /* edge */
+				if (c->x + W(c) == old->wx + old->ww)
 					c->x = m->wx + m->ww - W(c);
-				else if (c->x + (W(c) / 2) == old->wx + (old->ww / 2)) /* center */
+				else if (c->x + (W(c) / 2) == old->wx + (old->ww / 2))
 					c->x = (m->wx + m->ww - W(c)) / 2;
 				else
 					c->x = CLAMP(m->wx + (m->ww / xdiv), m->wx - (W(c) - globalcfg[GLB_MIN_XY]),
@@ -3516,9 +3520,9 @@ void relocate(Workspace *ws, Monitor *old)
 				c->x = CLAMP(c->x, m->wx - (W(c) - globalcfg[GLB_MIN_XY]),
 						m->x + m->w - globalcfg[GLB_MIN_XY]);
 			if ((yoff = c->y - old->y) && (ydiv = old->h / yoff) != 0.0) {
-				if (c->y + H(c) == old->wy + old->wh) /* edge */
+				if (c->y + H(c) == old->wy + old->wh)
 					c->y = m->wy + m->wh - H(c);
-				else if (c->y + (H(c) / 2) == old->wy + (old->wh / 2)) /* center */
+				else if (c->y + (H(c) / 2) == old->wy + (old->wh / 2))
 					c->y = (m->wy + m->wh - H(c)) / 2;
 				else
 					c->y = CLAMP(m->wy + (m->wh / ydiv), m->wy - (H(c) - globalcfg[GLB_MIN_XY]),
@@ -3545,7 +3549,7 @@ void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, i
 }
 
 int resizetiled(Client *c, Client *p, int x, int y, int w, int h, int bw, int gap,
-		int ww, int wh, int *newy, int nrem, int havail)
+		int wh, int *newy, int nrem, int havail)
 {
 	int ret = 1;
 	int b = bw ? c->bw : bw;
@@ -3554,12 +3558,7 @@ int resizetiled(Client *c, Client *p, int x, int y, int w, int h, int bw, int ga
 	DBG("resizetiled: 0x%08x - %d,%d @ %dx%d - newy: %d, nrem: %d, havail; %d",
 			c->win, x, y, w, h, *newy, nrem, havail)
 	if (!c->hoff && h < min) {
-		c->state |= STATE_FLOATING;
-		h = MAX(wh / 4, 240);
-		w = MAX(ww / 5, 360);
-		offsetfloat(c, &x, &y, &w, &h);
-		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-		resizehint(c, x, y, w, h, c->bw, 0, 0);
+		popfloat(c);
 		return ret;
 	} else if (nrem > 1 && (nrem - 1) * (min + gap) > havail) {
 		h += havail - ((nrem - 1) * (min + gap));
@@ -3953,35 +3952,31 @@ int tile(Workspace *ws)
 
 	DBG("tile: ws: %d - h: %d - mw: %d - sw: %d - ssw: %d", ws->num, m->ww, mw, sw, ssw)
 
-	/* calculate sizes and update our internal values for the clients first */
 	for (i = 0, my = sy = ssy = g, c = nexttiled(ws->clients); c; c = nexttiled(c->next), ++i) {
 		if (i < ws->nmaster) {
 			nr = MIN(n, ws->nmaster) - i;
 			h = ((wh - my) / MAX(1, nr)) - g + c->hoff;
 			w = mw - g * (5 - ns) / 2;
 			if (resizetiled(c, prev, wx + g, wy + my, w, h, b, g,
-						ww - (2 * g), wh - (2 * g), &my, nr, wh - (my + h + g)) < 0)
+						wh - (2 * g), &my, nr, wh - (my + h + g)) < 0)
 				ret = -1;
 		} else if (i - ws->nmaster < ws->nstack) {
 			nr = MIN(n - ws->nmaster, ws->nstack) - (i - ws->nmaster);
 			h = ((wh - sy) / MAX(1, nr)) - g + c->hoff;
 			w = sw - g * (5 - ns - ss) / 2;
 			if (resizetiled(c, prev, wx + mw + (g / ns), wy + sy, w, h, b, g,
-						ww - (2 * g), wh - (2 * g), &sy, nr, wh - (sy + h + g)) < 0)
+						wh - (2 * g), &sy, nr, wh - (sy + h + g)) < 0)
 				ret = -1;
 		} else {
 			nr = n - i;
 			h = ((wh - ssy) / MAX(1, nr)) - g + c->hoff;
 			w = ssw - g * (5 - ns) / 2;
 			if (resizetiled(c, prev, wx + mw + sw + (g / ns), wy + ssy, w, h, b, g,
-						ww - (2 * g), wh - (2 * g), &ssy, nr, wh - (ssy + h + g)) < 0)
+						wh - (2 * g), &ssy, nr, wh - (ssy + h + g)) < 0)
 				ret = -1;
 		}
 		prev = (nr == 1 && n - i != 0) ? NULL : c;
 	}
-
-	/* now do the resizing, this reduces the flicker of resizing previous
-	 * clients when accommodating height offsets on the last client in each stack */
 	for (c = nexttiled(ws->clients); c; c = nexttiled(c->next))
 		if (applysizehints(c, &c->x, &c->y, &c->w, &c->h, b ? c->bw : 0, 0, 0)
 				|| c->x != c->old_x || c->y != c->old_y || c->w != c->old_w
@@ -4034,7 +4029,6 @@ void unmanage(xcb_window_t win, int destroyed)
 			xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_BORDER_WIDTH, &c->old_bw);
 			xcb_ungrab_button(con, XCB_BUTTON_INDEX_ANY, c->win, XCB_MOD_MASK_ANY);
 			if (running) {
-				/* spec says these should be removed on withdraw but not on wm shutdown */
 				xcb_delete_property(con, c->win, netatom[NET_WM_STATE]);
 				xcb_delete_property(con, c->win, netatom[NET_WM_DESK]);
 			}
@@ -4197,7 +4191,6 @@ void updworkspaces(int needed)
 	Monitor *m;
 	Workspace *ws;
 
-	/* allocate the needed workspaces for monitors or user specified */
 	for (n = 0, m = nextmon(monitors); m; m = nextmon(m->next), n++)
 		;
 	if (n < 1 || n > 99 || needed > 99) {
@@ -4208,7 +4201,6 @@ void updworkspaces(int needed)
 		globalcfg[GLB_NUMWS]++;
 	}
 
-	/* attach at least one workspace to each monitor, round robin style */
 	m = nextmon(monitors);
 	FOR_EACH(ws, workspaces) {
 		m->ws = m->ws ? m->ws : ws;
@@ -4218,7 +4210,6 @@ void updworkspaces(int needed)
 			m = nextmon(monitors);
 	}
 
-	/* relocate and refresh */
 	FOR_CLIENTS(c, ws)
 		if (c->state & STATE_FULLSCREEN && c->w == c->ws->mon->w && c->h == c->ws->mon->h)
 			resize(c, ws->mon->x, ws->mon->y, ws->mon->w, ws->mon->h, c->bw);
@@ -4358,7 +4349,6 @@ int writecmd(int argc, char *argv[])
 		{ STDOUT_FILENO, POLLHUP, 0 },
 	};
 
-	/* wrap arguments containing whitespace or other parser delimiters in double quotes */
 	for (i = 0, j = 0, offs = 1; n + 1 < sizeof(buf) && i < argc; i++, j = 0, offs = 1) {
 		if ((sp = strchr(argv[i], ' ')) || (sp = strchr(argv[i], '\t'))) {
 			if (!(eq = strchr(argv[i], '=')) || sp < eq)

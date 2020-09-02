@@ -343,7 +343,6 @@ static int dwindle(Workspace *);
 static void *ecalloc(size_t, size_t);
 static void eventhandle(xcb_generic_event_t *);
 static void eventignore(uint8_t);
-static void eventmouse(xcb_generic_event_t *);
 static void execcfg(void);
 static void fib(Workspace *, int);
 static void focus(Client *);
@@ -1807,65 +1806,12 @@ void eventhandle(xcb_generic_event_t *ev)
 	Client *c;
 	Monitor *m;
 	Workspace *ws;
+	static Client *grab = NULL;
+	static xcb_timestamp_t last = 0;
+	static int grabbing = 0, grabmove = 0;
+	static int mx, my, ox, oy, ow, oh, nw, nh, nx, ny;
 
 	switch (ev->response_type & 0x7f) {
-	case XCB_BUTTON_PRESS:   /* FALLTHROUGH */
-	case XCB_BUTTON_RELEASE: /* FALLTHROUGH */
-	case XCB_MOTION_NOTIFY: {
-		eventmouse(ev);
-		return;
-	}
-	case XCB_PROPERTY_NOTIFY: {
-		Panel *p;
-		xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ev;
-		static Client *lastc = NULL;
-		static xcb_timestamp_t lastt = 0;
-
-#ifdef DEBUG
-		if (e->window != root) {
-			for (unsigned int i = 0; i < LEN(netatom); i++)
-				if (netatom[i] == e->atom) {
-					DBG("eventhandle: PROPERTY_NOTIFY - atom: %s - 0x%08x", netatoms[i], e->window)
-				}
-			for (unsigned int i = 0; i < LEN(wmatom); i++)
-				if (wmatom[i] == e->atom) {
-					DBG("eventhandle: PROPERTY_NOTIFY - atom: %s - 0x%08x", wmatoms[i], e->window)
-				}
-		}
-#endif
-		if (e->state == XCB_PROPERTY_DELETE) {
-			return;
-		} else if ((c = wintoclient(e->window))) {
-			if (lastc != c)
-				lastc = c;
-			else if (e->time - lastt < 1000)
-				return;
-			lastt = e->time;
-
-			switch (e->atom) {
-			case XCB_ATOM_WM_HINTS:
-				clienthints(c); return;
-			case XCB_ATOM_WM_NORMAL_HINTS:
-				sizehints(c, 0); return;
-			case XCB_ATOM_WM_TRANSIENT_FOR:
-				if ((c->trans = wintoclient(wintrans(c->win))) && !FLOATING(c))
-					c->state |= STATE_FLOATING, needsrefresh = 1;
-				return;
-			default:
-				if ((e->atom == XCB_ATOM_WM_NAME || e->atom == netatom[NET_WM_NAME]) && clientname(c))
-					pushstatus();
-				else if (e->atom == netatom[NET_WM_TYPE])
-					clienttype(c);
-				return;
-			}
-		} else if ((e->atom == netatom[NET_WM_STRUTP] || e->atom == netatom[NET_WM_STRUT])
-				&& (p = wintopanel(e->window)))
-		{
-			updstruts(p, 1);
-			needsrefresh = 1;
-		}
-		return;
-	}
 	case XCB_CONFIGURE_REQUEST: {
 		xcb_configure_request_event_t *e = (xcb_configure_request_event_t *)ev;
 
@@ -2025,29 +1971,7 @@ void eventhandle(xcb_generic_event_t *ev)
 		}
 		return;
 	}
-	case 0: { /* ERROR */
-		break;
-	}
-	default: { /* RANDR */
-		if (ev->response_type == randrbase + XCB_RANDR_SCREEN_CHANGE_NOTIFY)
-			if (((xcb_randr_screen_change_notify_event_t *)ev)->root == root && updrandr())
-				updworkspaces(globalcfg[GLB_NUMWS]);
-	}
-	}
-}
-
-void eventmouse(xcb_generic_event_t *ev)
-{
-	Client *c;
-	Monitor *m;
-	static Client *grab = NULL;
-	static xcb_timestamp_t last = 0;
-	static int grabbing = 0, grabmove = 0;
-	static int mx, my, ox, oy, ow, oh, nw, nh, nx, ny;
-
-	switch (ev->response_type & 0x7f) {
-	case XCB_BUTTON_PRESS:
-	{
+	case XCB_BUTTON_PRESS: {
 		xcb_generic_error_t *err;
 		xcb_grab_pointer_cookie_t pc;
 		xcb_grab_pointer_reply_t *ptr = NULL;
@@ -2089,8 +2013,7 @@ void eventmouse(xcb_generic_event_t *ev)
 		}
 		return;
 	}
-	case XCB_BUTTON_RELEASE:
-	{
+	case XCB_BUTTON_RELEASE: {
 		if (grabbing) {
 			DBG("eventhandle: BUTTON_RELEASE - ungrabbing pointer - 0x%08x", grab->win)
 			iferr(1, "failed to ungrab pointer",
@@ -2102,8 +2025,8 @@ void eventmouse(xcb_generic_event_t *ev)
 		}
 		break;
 	}
-	case XCB_MOTION_NOTIFY:
-	{
+	case XCB_MOTION_NOTIFY: {
+		int i;
 		xcb_motion_notify_event_t *e = (xcb_motion_notify_event_t *)ev;
 
 		if (grabbing) {
@@ -2112,39 +2035,52 @@ void eventmouse(xcb_generic_event_t *ev)
 			last = e->time;
 			DBG("eventhandle: MOTION_NOTIFY - pointer grabbed - 0x%08x - grabmove: %d",
 					grab->win, grabmove)
-			if (grabmove) {
-				nx = ox + (e->root_x - mx);
-				ny = oy + (e->root_y - my);
+			if (!grabmove && !FLOATING(grab) && selws->layout->fn.layout == tile) {
+				for (i = 0, c = nexttiled(selws->clients); c && c != grab; c = nexttiled(c->next), i++);
+				if (i >= selws->nstack) {
+					selws->ssplit = (double)(ox + (e->root_x - mx) - (selws->mon->ww * selws->msplit))
+						/ (double)(selws->mon->ww - (selws->mon->ww * selws->msplit));
+				} else if (i >= selws->nmaster) {
+					selws->msplit = (double)(ox + (e->root_x - mx)) / (double)selws->mon->ww;
+				} else {
+					selws->msplit = (double)((ox + ow) + (e->root_x - mx)) / (double)selws->mon->ww;
+				}
+				selws->layout->fn.layout(grab->ws);
 			} else {
-				nw = ow + (e->root_x - mx);
-				nh = oh + (e->root_y - my);
-			}
-			if ((nw != grab->w || nh != grab->h || nx != grab->x || ny != grab->y)) {
-				if (!FLOATING(grab) || (grab->state & STATE_FULLSCREEN
-							&& grab->state & STATE_FAKEFULL
-							&& !(grab->old_state & STATE_FLOATING)))
-				{
-					grab->state |= STATE_FLOATING;
-					grab->old_state |= STATE_FLOATING;
-					if (grab->max_w)
-						grab->w = MIN(grab->w, grab->max_w);
-					if (grab->max_h)
-						grab->h = MIN(grab->h, grab->max_h);
-					grab->x = CLAMP(grab->x, grab->ws->mon->wx,
-							grab->ws->mon->wx + grab->ws->mon->ww - W(grab));
-					grab->y = CLAMP(grab->y, grab->ws->mon->wy,
-							grab->ws->mon->wy + grab->ws->mon->wh - H(grab));
-					resizehint(grab, grab->x, grab->y, grab->w, grab->h, grab->bw, 1, 1);
-					if (grab->ws->layout->fn.layout)
-						grab->ws->layout->fn.layout(grab->ws);
-					restack(grab->ws);
+				if (grabmove) {
+					nx = ox + (e->root_x - mx);
+					ny = oy + (e->root_y - my);
+				} else {
+					nw = ow + (e->root_x - mx);
+					nh = oh + (e->root_y - my);
 				}
-				if (grabmove && (m = coordtomon(e->root_x, e->root_y)) && m->ws != grab->ws) {
-					setworkspace(grab, m->ws->num);
-					changews(m->ws, 0, 0);
-					focus(grab);
+				if ((nw != grab->w || nh != grab->h || nx != grab->x || ny != grab->y)) {
+					if (!FLOATING(grab) || (grab->state & STATE_FULLSCREEN
+								&& grab->state & STATE_FAKEFULL
+								&& !(grab->old_state & STATE_FLOATING)))
+					{
+						grab->state |= STATE_FLOATING;
+						grab->old_state |= STATE_FLOATING;
+						if (grab->max_w)
+							grab->w = MIN(grab->w, grab->max_w);
+						if (grab->max_h)
+							grab->h = MIN(grab->h, grab->max_h);
+						grab->x = CLAMP(grab->x, selws->mon->wx,
+								selws->mon->wx + selws->mon->ww - W(grab));
+						grab->y = CLAMP(grab->y, selws->mon->wy,
+								selws->mon->wy + selws->mon->wh - H(grab));
+						resizehint(grab, grab->x, grab->y, grab->w, grab->h, grab->bw, 1, 1);
+						if (selws->layout->fn.layout)
+							selws->layout->fn.layout(selws);
+						restack(selws);
+					}
+					if (grabmove && (m = coordtomon(e->root_x, e->root_y)) && m->ws != grab->ws) {
+						setworkspace(grab, m->ws->num);
+						changews(m->ws, 0, 0);
+						focus(grab);
+					}
+					resizehint(grab, nx, ny, nw, nh, grab->bw, 1, 1);
 				}
-				resizehint(grab, nx, ny, nw, nh, grab->bw, 1, 1);
 			}
 		} else if (e->event == root && (m = coordtomon(e->root_x, e->root_y)) && m->ws != selws) {
 			DBG("eventhandle: MOTION_NOTIFY - updating active monitor - 0x%08x", e->event)
@@ -2152,6 +2088,65 @@ void eventmouse(xcb_generic_event_t *ev)
 			focus(NULL);
 		}
 		return;
+	}
+	case XCB_PROPERTY_NOTIFY: {
+		Panel *p;
+		xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ev;
+		static Client *lastc = NULL;
+		static xcb_timestamp_t lastt = 0;
+
+#ifdef DEBUG
+		if (e->window != root) {
+			for (unsigned int i = 0; i < LEN(netatom); i++)
+				if (netatom[i] == e->atom) {
+					DBG("eventhandle: PROPERTY_NOTIFY - atom: %s - 0x%08x", netatoms[i], e->window)
+				}
+			for (unsigned int i = 0; i < LEN(wmatom); i++)
+				if (wmatom[i] == e->atom) {
+					DBG("eventhandle: PROPERTY_NOTIFY - atom: %s - 0x%08x", wmatoms[i], e->window)
+				}
+		}
+#endif
+		if (e->state == XCB_PROPERTY_DELETE) {
+			return;
+		} else if ((c = wintoclient(e->window))) {
+			if (lastc != c)
+				lastc = c;
+			else if (e->time - lastt < 1000)
+				return;
+			lastt = e->time;
+
+			switch (e->atom) {
+			case XCB_ATOM_WM_HINTS:
+				clienthints(c); return;
+			case XCB_ATOM_WM_NORMAL_HINTS:
+				sizehints(c, 0); return;
+			case XCB_ATOM_WM_TRANSIENT_FOR:
+				if ((c->trans = wintoclient(wintrans(c->win))) && !FLOATING(c))
+					c->state |= STATE_FLOATING, needsrefresh = 1;
+				return;
+			default:
+				if ((e->atom == XCB_ATOM_WM_NAME || e->atom == netatom[NET_WM_NAME]) && clientname(c))
+					pushstatus();
+				else if (e->atom == netatom[NET_WM_TYPE])
+					clienttype(c);
+				return;
+			}
+		} else if ((e->atom == netatom[NET_WM_STRUTP] || e->atom == netatom[NET_WM_STRUT])
+				&& (p = wintopanel(e->window)))
+		{
+			updstruts(p, 1);
+			needsrefresh = 1;
+		}
+		return;
+	}
+	case 0: { /* ERROR */
+		break;
+	}
+	default: { /* RANDR */
+		if (ev->response_type == randrbase + XCB_RANDR_SCREEN_CHANGE_NOTIFY)
+			if (((xcb_randr_screen_change_notify_event_t *)ev)->root == root && updrandr())
+				updworkspaces(globalcfg[GLB_NUMWS]);
 	}
 	}
 }

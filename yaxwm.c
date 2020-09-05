@@ -2245,6 +2245,7 @@ void fib(Workspace *ws, int dwindle)
 		} else if (i == 1) {
 			w = m->ww - ws->padl - ws->padr - w - g;
 		}
+		/* will the next window fit */
 		if (f || (w - (2 * b) - (n > 1 ? g : (2 * g)) < globalcfg[GLB_MIN_WH]
 					|| h - (2 * b) - (n > 1 ? g : (2 * g)) < globalcfg[GLB_MIN_WH]))
 		{
@@ -2270,35 +2271,21 @@ void fib(Workspace *ws, int dwindle)
 void floatquad(Client *c, int *x, int *y, int *w, int *h)
 {
 	Client *t;
-	unsigned int i = 0;
-	int wx = c->ws->mon->wx;
-	int wy = c->ws->mon->wy;
-	int ww = c->ws->mon->ww;
-	int wh = c->ws->mon->wh;
-	int thirdw = ww / 3;
-	int thirdh = wh / 3;
-	int hoff = (*h - thirdh) * -1;
-	int woff = (*w - thirdw) * -1;
 	static int index = 0;  /* index used when all are occupied */
 	static Workspace *ws = NULL;
-	int quadrants[9][3] = {
-		/* a workspace area */
-		/*  +---+---+---+   */
-		/*  | 5 | 3 | 4 |   */
-		/*  +---+---+---+   */
-		/*  | 2 | 0 | 1 |   */
-		/*  +---+---+---+   */
-		/*  | 8 | 6 | 7 |   */
-		/*  +---+---+---+   */
-		{ 1, wx + thirdw,       wy + thirdh       }, /* center center */
-		{ 1, wx + (thirdw * 2), wy + thirdh       }, /* center right */
-		{ 1, wx,                wy + thirdh       }, /* center left */
-		{ 1, wx + thirdw,       wy,               }, /* top center */
-		{ 1, wx + (thirdw * 2), wy,               }, /* top right */
-		{ 1, wx,                wy,               }, /* top left */
-		{ 1, wx + thirdw,       wy + (2 * thirdh) }, /* bottom center */
-		{ 1, wx + (thirdw * 2), wy + (2 * thirdh) }, /* bottom right */
-		{ 1, wx,                wy + (2 * thirdh) }, /* bottom left */
+	unsigned int i = 0;
+	int thirdw = c->ws->mon->ww / 3;
+	int thirdh = c->ws->mon->wh / 3;
+	int quadrants[9][3] = { /* 3x3 grid */
+		{ 1, c->ws->mon->wx + thirdw,       c->ws->mon->wy + thirdh       }, /* center center */
+		{ 1, c->ws->mon->wx + (thirdw * 2), c->ws->mon->wy + thirdh       }, /* center right */
+		{ 1, c->ws->mon->wx,                c->ws->mon->wy + thirdh       }, /* center left */
+		{ 1, c->ws->mon->wx + thirdw,       c->ws->mon->wy,               }, /* top center */
+		{ 1, c->ws->mon->wx + (thirdw * 2), c->ws->mon->wy,               }, /* top right */
+		{ 1, c->ws->mon->wx,                c->ws->mon->wy,               }, /* top left */
+		{ 1, c->ws->mon->wx + thirdw,       c->ws->mon->wy + (2 * thirdh) }, /* bottom center */
+		{ 1, c->ws->mon->wx + (thirdw * 2), c->ws->mon->wy + (2 * thirdh) }, /* bottom right */
+		{ 1, c->ws->mon->wx,                c->ws->mon->wy + (2 * thirdh) }, /* bottom left */
 	};
 
 	if (ws != c->ws) {
@@ -2306,32 +2293,23 @@ void floatquad(Client *c, int *x, int *y, int *w, int *h)
 		index = 0;
 	}
 	FOR_EACH(t, c->ws->clients)
-		if (FLOATING(t) && t != c) {
-			for (i = 0; i < LEN(quadrants); i++) {
-				DBG("floatquad: testing quad %d: %d %d - win: %d %d",
-						i, quadrants[i][1], quadrants[i][2], t->x, t->y)
+		if (FLOATING(t) && t != c)
+			for (i = 0; i < LEN(quadrants); i++)
 				if (quadrants[i][0] && (t->x >= quadrants[i][1] && t->y >= quadrants[i][2]
 							&& t->x < quadrants[i][1] + thirdw && t->y < quadrants[i][2] + thirdh))
 				{
-					DBG("floatquad: quad %d: IN-USE - win: 0x%08x - %d %d", i, t->win, t->x, t->y)
 					quadrants[i][0] = 0;
 					break;
 				}
-			}
-		}
 	for (i = 0; i < LEN(quadrants); i++)
-		if (quadrants[i][0]) {
-			DBG("floatquad: using quad: %d", i)
+		if (quadrants[i][0])
 			break;
-		}
 	if (i == LEN(quadrants)) {
 		i = index;
 		index += index + 1 == LEN(quadrants) ? index * -1 : 1;
-		DBG("floatquad: resorting to default quad: %d", i)
 	}
-	DBG("floatquad: done: %d %d -> %d %d", *x, *y, quadrants[i][1] + woff, quadrants[i][2] + hoff)
-	*x = quadrants[i][1] + (woff / 2);
-	*y = quadrants[i][2] + (hoff / 2);
+	*x = quadrants[i][1] + (((*w - thirdw) * -1) / 2);
+	*y = quadrants[i][2] + (((*h - thirdh) * -1) / 2);
 }
 
 void focus(Client *c)
@@ -2524,13 +2502,9 @@ int grid(Workspace *ws)
 		;
 	if (!n)
 		return 1;
-
-	/* grid dimensions */
 	for (cols = 0; cols <= n / 2; cols++)
 		if (cols * cols >= n)
 			break;
-
-	/* set layout against the general calculation: not 1:2:2, but 2:3 */
 	if (n == 5)
 		cols = 2;
 	rows = n / cols;
@@ -3132,7 +3106,7 @@ void manage(xcb_window_t win, xcb_get_geometry_reply_t *g, xcb_get_window_attrib
 	xcb_atom_t type;
 
 	DBG("manage: 0x%08x - %d,%d @ %dx%d", win, g->x, g->y, g->width, g->height)
-	if (!(wintoclient(win) || wintopanel(win) || wintodesk(win))) {
+	if (!wintoclient(win) && !wintopanel(win) && !wintodesk(win)) {
 		if (winprop(win, netatom[NET_WM_TYPE], &type)) {
 			if (type == netatom[NET_TYPE_DOCK])
 				initpanel(win, g);

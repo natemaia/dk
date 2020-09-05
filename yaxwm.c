@@ -345,6 +345,7 @@ static void eventhandle(xcb_generic_event_t *);
 static void eventignore(uint8_t);
 static void execcfg(void);
 static void fib(Workspace *, int);
+static void floatquad(Client *, int *, int *, int *, int *);
 static void focus(Client *);
 static void freerule(Rule *r);
 static void freewm(void);
@@ -371,7 +372,6 @@ static void movefocus(int);
 static void movestack(int);
 static Monitor *nextmon(Monitor *m);
 static Client *nexttiled(Client *);
-static void offsetfloat(Client *, int *, int *, int *, int *);
 static char **parsebool(char **, int *);
 static int parseclient(char **, Client **);
 static void parsecmd(char *);
@@ -1049,7 +1049,7 @@ void cmdfloat(char **argv)
 		c->w = c->old_w;
 		c->h = c->old_h;
 		if (c->x + c->y == c->ws->mon->wx + c->ws->mon->wy)
-			offsetfloat(c, &c->x, &c->y, &c->w, &c->h);
+			floatquad(c, &c->x, &c->y, &c->w, &c->h);
 		resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0, 1);
 	} else {
 		c->old_x = c->x;
@@ -1806,7 +1806,6 @@ void eventhandle(xcb_generic_event_t *ev)
 	Client *c;
 	Monitor *m;
 	Workspace *ws;
-	static Client *grab = NULL;
 	static xcb_timestamp_t last = 0;
 	static int grabbing = 0, grabmove = 0;
 	static int mx, my, ox, oy, ow, oh, nw, nh, nx, ny;
@@ -1988,8 +1987,8 @@ void eventhandle(xcb_generic_event_t *ev)
 		{
 			DBG("eventhandle: BUTTON_PRESS - grabbing pointer - 0x%08x", e->event)
 			grabmove = e->detail == mousemove;
-			if (!(grab = selws->sel) || FULLSCREEN(c)
-					|| ((grab->state & STATE_FIXED) && !grabmove))
+			if (!(c = selws->sel) || FULLSCREEN(c)
+					|| ((c->state & STATE_FIXED) && !grabmove))
 				return;
 			if (!querypointer(&mx, &my))
 				return;
@@ -2002,10 +2001,10 @@ void eventhandle(xcb_generic_event_t *ev)
 			{
 				last = 0;
 				grabbing = 1;
-				ox = nx = grab->x;
-				oy = ny = grab->y;
-				ow = nw = grab->w;
-				oh = nh = grab->h;
+				ox = nx = c->x;
+				oy = ny = c->y;
+				ow = nw = c->w;
+				oh = nh = c->h;
 			} else {
 				iferr(0, "unable to grab pointer", err);
 			}
@@ -2015,37 +2014,45 @@ void eventhandle(xcb_generic_event_t *ev)
 	}
 	case XCB_BUTTON_RELEASE: {
 		if (grabbing) {
-			DBG("eventhandle: BUTTON_RELEASE - ungrabbing pointer - 0x%08x", grab->win)
+			DBG("eventhandle: BUTTON_RELEASE - ungrabbing pointer - 0x%08x", selws->sel->win)
 			iferr(1, "failed to ungrab pointer",
 					xcb_request_check(con, xcb_ungrab_pointer_checked(con, XCB_CURRENT_TIME)));
 			if (!grabmove)
 				eventignore(XCB_ENTER_NOTIFY);
-			grab = NULL;
 			grabbing = 0;
 		}
 		break;
 	}
 	case XCB_MOTION_NOTIFY: {
-		int i;
+		int i, ohoff;
+		Client *p;
 		xcb_motion_notify_event_t *e = (xcb_motion_notify_event_t *)ev;
 
-		if (grabbing) {
+		if (grabbing && (c = selws->sel)) {
 			if ((e->time - last) < (1000 / 120))
 				return;
 			last = e->time;
 			DBG("eventhandle: MOTION_NOTIFY - pointer grabbed - 0x%08x - grabmove: %d",
-					grab->win, grabmove)
-			if (!grabmove && !FLOATING(grab) && selws->layout->fn.layout == tile) {
-				for (i = 0, c = nexttiled(selws->clients); c && c != grab; c = nexttiled(c->next), i++);
-				if (i >= selws->nstack) {
-					selws->ssplit = (double)(ox + (e->root_x - mx) - (selws->mon->ww * selws->msplit))
+					c->win, grabmove)
+			if (!grabmove && !FLOATING(c) && selws->layout->fn.layout == tile) {
+				for (i = 0, p = nexttiled(selws->clients); p && p != c; p = nexttiled(p->next), i++)
+					;
+				if (i >= selws->nstack + selws->nmaster)
+					selws->ssplit =
+						(double)(ox + (e->root_x - mx) - (selws->mon->ww * selws->msplit))
 						/ (double)(selws->mon->ww - (selws->mon->ww * selws->msplit));
-				} else if (i >= selws->nmaster) {
+				else if (i >= selws->nmaster)
 					selws->msplit = (double)(ox + (e->root_x - mx)) / (double)selws->mon->ww;
-				} else {
+				else
 					selws->msplit = (double)((ox + ow) + (e->root_x - mx)) / (double)selws->mon->ww;
-				}
-				selws->layout->fn.layout(grab->ws);
+				ohoff = c->hoff;
+				if (i + 1 == selws->nmaster || i + 1 == selws->nmaster + selws->nstack
+						|| !nexttiled(c->next))
+					c->hoff = (e->root_y - my) * -1;
+				else
+					c->hoff = e->root_y - my;
+				if (selws->layout->fn.layout(selws) < 0)
+					c->hoff = ohoff;
 			} else {
 				if (grabmove) {
 					nx = ox + (e->root_x - mx);
@@ -2054,32 +2061,32 @@ void eventhandle(xcb_generic_event_t *ev)
 					nw = ow + (e->root_x - mx);
 					nh = oh + (e->root_y - my);
 				}
-				if ((nw != grab->w || nh != grab->h || nx != grab->x || ny != grab->y)) {
-					if (!FLOATING(grab) || (grab->state & STATE_FULLSCREEN
-								&& grab->state & STATE_FAKEFULL
-								&& !(grab->old_state & STATE_FLOATING)))
+				if ((nw != c->w || nh != c->h || nx != c->x || ny != c->y)) {
+					if (!FLOATING(c) || (c->state & STATE_FULLSCREEN
+								&& c->state & STATE_FAKEFULL
+								&& !(c->old_state & STATE_FLOATING)))
 					{
-						grab->state |= STATE_FLOATING;
-						grab->old_state |= STATE_FLOATING;
-						if (grab->max_w)
-							grab->w = MIN(grab->w, grab->max_w);
-						if (grab->max_h)
-							grab->h = MIN(grab->h, grab->max_h);
-						grab->x = CLAMP(grab->x, selws->mon->wx,
-								selws->mon->wx + selws->mon->ww - W(grab));
-						grab->y = CLAMP(grab->y, selws->mon->wy,
-								selws->mon->wy + selws->mon->wh - H(grab));
-						resizehint(grab, grab->x, grab->y, grab->w, grab->h, grab->bw, 1, 1);
+						c->state |= STATE_FLOATING;
+						c->old_state |= STATE_FLOATING;
+						if (c->max_w)
+							c->w = MIN(c->w, c->max_w);
+						if (c->max_h)
+							c->h = MIN(c->h, c->max_h);
+						c->x = CLAMP(c->x, selws->mon->wx,
+								selws->mon->wx + selws->mon->ww - W(c));
+						c->y = CLAMP(c->y, selws->mon->wy,
+								selws->mon->wy + selws->mon->wh - H(c));
+						resizehint(c, c->x, c->y, c->w, c->h, c->bw, 1, 1);
 						if (selws->layout->fn.layout)
 							selws->layout->fn.layout(selws);
 						restack(selws);
 					}
-					if (grabmove && (m = coordtomon(e->root_x, e->root_y)) && m->ws != grab->ws) {
-						setworkspace(grab, m->ws->num);
+					if (grabmove && (m = coordtomon(e->root_x, e->root_y)) && m->ws != c->ws) {
+						setworkspace(c, m->ws->num);
 						changews(m->ws, 0, 0);
-						focus(grab);
+						focus(c);
 					}
-					resizehint(grab, nx, ny, nw, nh, grab->bw, 1, 1);
+					resizehint(c, nx, ny, nw, nh, c->bw, 1, 1);
 				}
 			}
 		} else if (e->event == root && (m = coordtomon(e->root_x, e->root_y)) && m->ws != selws) {
@@ -2126,7 +2133,8 @@ void eventhandle(xcb_generic_event_t *ev)
 					c->state |= STATE_FLOATING, needsrefresh = 1;
 				return;
 			default:
-				if ((e->atom == XCB_ATOM_WM_NAME || e->atom == netatom[NET_WM_NAME]) && clientname(c))
+				if ((e->atom == XCB_ATOM_WM_NAME || e->atom == netatom[NET_WM_NAME])
+						&& clientname(c))
 					pushstatus();
 				else if (e->atom == netatom[NET_WM_TYPE])
 					clienttype(c);
@@ -2257,6 +2265,73 @@ void fib(Workspace *ws, int dwindle)
 				h - (2 * b) - (n > 1 ? g : (2 * g)),
 				b, 0, 0);
 	}
+}
+
+void floatquad(Client *c, int *x, int *y, int *w, int *h)
+{
+	Client *t;
+	unsigned int i = 0;
+	int wx = c->ws->mon->wx;
+	int wy = c->ws->mon->wy;
+	int ww = c->ws->mon->ww;
+	int wh = c->ws->mon->wh;
+	int thirdw = ww / 3;
+	int thirdh = wh / 3;
+	int hoff = (*h - thirdh) * -1;
+	int woff = (*w - thirdw) * -1;
+	static int index = 0;  /* index used when all are occupied */
+	static Workspace *ws = NULL;
+	int quadrants[9][3] = {
+		/* a workspace area */
+		/*  +---+---+---+   */
+		/*  | 5 | 3 | 4 |   */
+		/*  +---+---+---+   */
+		/*  | 2 | 0 | 1 |   */
+		/*  +---+---+---+   */
+		/*  | 8 | 6 | 7 |   */
+		/*  +---+---+---+   */
+		{ 1, wx + thirdw,       wy + thirdh       }, /* center center */
+		{ 1, wx + (thirdw * 2), wy + thirdh       }, /* center right */
+		{ 1, wx,                wy + thirdh       }, /* center left */
+		{ 1, wx + thirdw,       wy,               }, /* top center */
+		{ 1, wx + (thirdw * 2), wy,               }, /* top right */
+		{ 1, wx,                wy,               }, /* top left */
+		{ 1, wx + thirdw,       wy + (2 * thirdh) }, /* bottom center */
+		{ 1, wx + (thirdw * 2), wy + (2 * thirdh) }, /* bottom right */
+		{ 1, wx,                wy + (2 * thirdh) }, /* bottom left */
+	};
+
+	if (ws != c->ws) {
+		ws = c->ws;
+		index = 0;
+	}
+	FOR_EACH(t, c->ws->clients)
+		if (FLOATING(t) && t != c) {
+			for (i = 0; i < LEN(quadrants); i++) {
+				DBG("floatquad: testing quad %d: %d %d - win: %d %d",
+						i, quadrants[i][1], quadrants[i][2], t->x, t->y)
+				if (quadrants[i][0] && (t->x >= quadrants[i][1] && t->y >= quadrants[i][2]
+							&& t->x < quadrants[i][1] + thirdw && t->y < quadrants[i][2] + thirdh))
+				{
+					DBG("floatquad: quad %d: IN-USE - win: 0x%08x - %d %d", i, t->win, t->x, t->y)
+					quadrants[i][0] = 0;
+					break;
+				}
+			}
+		}
+	for (i = 0; i < LEN(quadrants); i++)
+		if (quadrants[i][0]) {
+			DBG("floatquad: using quad: %d", i)
+			break;
+		}
+	if (i == LEN(quadrants)) {
+		i = index;
+		index += index + 1 == LEN(quadrants) ? index * -1 : 1;
+		DBG("floatquad: resorting to default quad: %d", i)
+	}
+	DBG("floatquad: done: %d %d -> %d %d", *x, *y, quadrants[i][1] + woff, quadrants[i][2] + hoff)
+	*x = quadrants[i][1] + (woff / 2);
+	*y = quadrants[i][2] + (hoff / 2);
 }
 
 void focus(Client *c)
@@ -2579,7 +2654,7 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		c->x = CLAMP(c->x, c->ws->mon->wx, c->ws->mon->wx + c->ws->mon->ww - W(c));
 		c->y = CLAMP(c->y, c->ws->mon->wy, c->ws->mon->wy + c->ws->mon->wh - H(c));
 		if (c->x == c->ws->mon->wx && c->y == c->ws->mon->wy)
-			offsetfloat(c, &c->x, &c->y, &c->w, &c->h);
+			floatquad(c, &c->x, &c->y, &c->w, &c->h);
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	}
 	PROP_APPEND(root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &c->win);
@@ -3159,23 +3234,6 @@ Client *nexttiled(Client *c)
 	return c;
 }
 
-void offsetfloat(Client *c, int *x, int *y, int *w, int *h)
-{
-	Monitor *m = c->ws->mon;
-	static int offset = 0;
-	static Workspace *ws = NULL;
-	if (ws != c->ws) {
-		ws = c->ws;
-		offset = 0;
-	}
-	*x = MIN(m->wx + m->ww - (*w + (2 * c->bw)), m->wx + (m->ww / 8) + offset);
-	*y = MIN(m->wy + m->wh - (*h + (2 * c->bw)), m->wy + (m->wh / 8) + offset);
-	if (*x + *w + (2 * c->bw) < m->wx + m->ww && *y + *h + (2 * c->bw) < m->wy + m->wh)
-		offset += globalcfg[GLB_MIN_WH];
-	else
-		offset += (offset * -1) + rand() % 200;
-}
-
 Monitor *outputtomon(xcb_randr_output_t id)
 {
 	Monitor *m;
@@ -3439,7 +3497,7 @@ void popfloat(Client *c)
 	y = c->y;
 	w = CLAMP(c->w, c->ws->mon->ww / 8, c->ws->mon->ww / 3);
 	h = CLAMP(c->h, c->ws->mon->wh / 8, c->ws->mon->wh / 3);
-	offsetfloat(c, &x, &y, &w, &h);
+	floatquad(c, &x, &y, &w, &h);
 	setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	resizehint(c, x, y, w, h, c->bw, 0, 0);
 }

@@ -49,7 +49,8 @@ static void albumart(Client *c, int closed)
 		focus(c->snext);
 		break;
 	case 1: /* closed */
-		c->ws->padr = 0; break;
+		c->ws->padr = 0;
+		break;
 	}
 }
 

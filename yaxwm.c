@@ -95,6 +95,7 @@ enum States {
 	STATE_URGENT       = 1 << 7,
 	STATE_NEEDSMAP     = 1 << 8,
 	STATE_NEEDSRESIZE  = 1 << 9,
+	STATE_WASFLOATING  = 1 << 10,
 };
 
 enum Cursors {
@@ -1041,6 +1042,19 @@ void cmdfloat(char **argv)
 
 	if (!(c = cmdclient) || !c->ws->layout->fn.layout)
 		return;
+	if (argv && *argv && !strcmp(*argv, "all")) {
+		FOR_EACH(c, cmdclient->ws->clients) {
+			cmdclient = c;
+			if (FLOATING(c) || c->state & STATE_WASFLOATING) {
+				if (FLOATING(c))
+					c->state |= STATE_WASFLOATING;
+				else
+					c->state &= ~STATE_WASFLOATING;
+				cmdfloat(NULL);
+			}
+		}
+		return;
+	}
 	if (FULLSCREEN(c) || c->state & (STATE_STICKY | STATE_FIXED))
 		return;
 	if ((c->state ^= STATE_FLOATING) & STATE_FLOATING) {
@@ -1058,7 +1072,6 @@ void cmdfloat(char **argv)
 		c->old_h = c->h;
 	}
 	needsrefresh = 1;
-	(void)(argv);
 }
 
 void cmdfocus(char **argv)

@@ -1,41 +1,21 @@
 ### yaxwm
 
-Yet another X window manager, as if we didn't have enough..
+Yet another X window manager.
 
 ---
 
-A from-scratch tiling window manager written in C using xcb. Features  
-ideas from myself and other users as well as other window managers we've  
-used and liked. After bouncing around various window managers for some years  
-then using and hacking on dwm for a year or so I decided to try writing my  
-own window manager.
+A tiling window manager taking inspiration from dwm, bspwm, and xmonad.
 
-Various feature/highlights:
+Some features:
 
-- Does not require editing source code to customize.
-
-- Intended to be hackable source and scriptable using shell commands.
-
-- Startup script for configuring the wm and running programs upon startup.
-
-- Based on xcb instead of xlib, randr extension for multi-head instead of xinerama.
-
-- Dynamic workspaces similar to xmonad, with a workspace centric model at the core.
-
-- Uses a Unix socket and commands to communicate with and control the window manager.
-
-- No support for binding keys, this can be done with an external program like sxhkd.
-
-- No built-in bar or font drawing, programs like [lemonbar](https://github.com/LemonBoy/bar),
-[polybar](https://github.com/polybar/polybar), or [tint2](https://gitlab.com/o9000/tint2) work well.
-
-- Mostly adheres to
-[ICCCM](https://www.x.org/releases/X11R7.6/doc/xorg-docs/specs/ICCCM/icccm.html#client_to_window_manager_communication),
-[EWMH](https://specifications.freedesktop.org/wm-spec/wm-spec-latest.html), and
-[Motif](http://www.ist.co.uk/motif/books/vol6A/ch-20.fm.html#963509) for better
-interoperability with other programs.
-
-- This is still under active development so expect bugs/errors, please open an issue.
+- Based on xcb with randr support for multi-head.
+- Startup script for config and running programs.
+- Unix socket and commands for the window manager.
+- No built-in bar, font drawing, or binding keys.
+- Sane support for
+[icccm](https://www.x.org/releases/X11R7.6/doc/xorg-docs/specs/ICCCM/icccm.html#client_to_window_manager_communication),
+[ewmh](https://specifications.freedesktop.org/wm-spec/wm-spec-latest.html), and
+[motif](http://www.ist.co.uk/motif/books/vol6A/ch-20.fm.html#963509).
 
 
 #### Installation
@@ -47,8 +27,8 @@ pacman -S xcb-proto xcb-util xcb-util-wm xcb-util-cursor xcb-util-keysyms
 ```
 Other systems should have packages with similar names.
 
-As mentioned above yaxwm has no key bind support, you'll need a separate  
-program like sxhkd to launch programs and control the window manager.  
+As mentioned above yaxwm has no keybind support so you'll need a separate  
+program like sxhkd to launch programs and control the window manager.
 On an Arch based distro this can be installed using
 ```
 pacman -S sxhkd
@@ -168,7 +148,7 @@ For various commands yaxwm will expect a certain data type or format to be given
 
 - float: `(+/-)0.1`, same as integer but must contain a decimal value.
 
-- colour: `(0x/#)[AA]RRGGBB`, if no alpha channel is given the colour is opaque.
+- colour: `(0x/#)[AA]RRGGBB`, hex value, if no alpha channel is given the colour is opaque.
 
 ---
 
@@ -202,7 +182,7 @@ make nostrip
 
 See the LICENSE file for a list of authors/contributors.
 
-Others that are not included in contributors but I owe a huge thanks to:
+Non contributors that I owe a huge thanks to:
 [dwm](https://dmw.suckless.org), [bspwm](https://github.com/baskerville/bspwm),
 [evilwm](http://www.6809.org.uk/evilwm/), [monsterwm-xcb](https://github.com/Cloudef/monsterwm-xcb),
 [4wm](https://github.com/dct2012/4wm), and [frankenwm](https://github.com/sulami/FrankenWM).

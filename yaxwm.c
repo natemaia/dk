@@ -47,39 +47,48 @@
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define CLAMP(x, min, max) (MIN(MAX((x), (min)), (max)))
 #define CLNMOD(mod) (mod & ~(lockmask | XCB_MOD_MASK_LOCK))
-#define FLOATING(c) ((c)->state & STATE_FLOATING || !(c)->ws->layout->fn.layout)
-#define FULLSCREEN(c)                                                          \
+
+#define FLOATING(c) \
+	((c)->state & STATE_FLOATING || !(c)->ws->layout->fn.layout)
+#define FULLSCREEN(c) \
 	((c)->state & STATE_FULLSCREEN && !((c)->state & STATE_FAKEFULL))
 
 #define FOR_EACH(v, list) for ((v) = (list); (v); (v) = (v)->next)
 #define FOR_STACK(v, list) for ((v) = (list); (v); (v) = (v)->snext)
-#define FOR_CLIENTS(c, ws)                                                     \
-	FOR_EACH((ws), workspaces) FOR_EACH((c), (ws)->clients)
+#define FOR_CLIENTS(c, ws) FOR_EACH((ws), workspaces) FOR_EACH((c), (ws)->clients)
 
-#define FIND_TAIL(v, list) for ((v) = (list); (v) && (v)->next; (v) = (v)->next)
-#define FIND_PREV(v, cur, list)                                                \
+#define FIND_TAIL(v, list) \
+	for ((v) = (list); (v) && (v)->next; (v) = (v)->next)
+#define FIND_PREV(v, cur, list) \
 	for ((v) = (list); (v) && (v)->next && (v)->next != (cur); (v) = (v)->next)
 
-#define DETACH(v, listptr)                                                     \
-	while (*(listptr) && *(listptr) != (v))                                    \
-		(listptr) = &(*(listptr))->next;                                       \
-	*(listptr) = (v)->next
+#define ATTACH(v, list) \
+	do { v->next = list; list = v; } while (0)
+#define DETACH(v, listptr)                      \
+	do {                                        \
+		while (*(listptr) && *(listptr) != (v)) \
+			(listptr) = &(*(listptr))->next;    \
+		*(listptr) = (v)->next;                 \
+	} while (0)
+
 
 #define MOVE(win, x, y)                                                        \
 	xcb_configure_window(con, (win), XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y,\
 			(unsigned int[]){(x), (y)})
-#define MOVERESIZE(win, x, y, w, h, bw)                                        \
-	xcb_configure_window(                                                      \
-			con, win,                                                          \
-			XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y                          \
-			| XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT               \
-			| XCB_CONFIG_WINDOW_BORDER_WIDTH,                                  \
-			(unsigned int[]){(x), (y), (w), (h), (bw)});
-#define PROP_APPEND(win, atom, type, membsize, nmemb, value)                   \
-	xcb_change_property(con, XCB_PROP_MODE_APPEND, (win), (atom), (type),      \
+
+#define MOVERESIZE(win, x, y, w, h, bw)                          \
+	xcb_configure_window(con, (win),                             \
+			XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y            \
+			| XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT \
+			| XCB_CONFIG_WINDOW_BORDER_WIDTH,                    \
+			(unsigned int[]){(x), (y), (w), (h), (bw)})
+
+#define PROP_APPEND(win, atom, type, membsize, nmemb, value)              \
+	xcb_change_property(con, XCB_PROP_MODE_APPEND, (win), (atom), (type), \
 			(membsize), (nmemb), (value))
-#define PROP_REPLACE(win, atom, type, membsize, nmemb, value)                  \
-	xcb_change_property(con, XCB_PROP_MODE_REPLACE, (win), (atom), (type),     \
+
+#define PROP_REPLACE(win, atom, type, membsize, nmemb, value)              \
+	xcb_change_property(con, XCB_PROP_MODE_REPLACE, (win), (atom), (type), \
 			(membsize), (nmemb), (value))
 
 
@@ -364,7 +373,7 @@ static void initscan(void);
 static void initsock(int);
 static void initwm(void);
 static Workspace *initws(int);
-static char *itoa(int n, char *);
+static char *itoa(int, char *);
 static Monitor *itomon(int);
 static Workspace *itows(int);
 static void manage(xcb_window_t, xcb_get_geometry_reply_t *, xcb_get_window_attributes_reply_t *);
@@ -381,7 +390,7 @@ static char **parsefloat(char **, float *, int *);
 static char **parsegeom(char **, char, int *, int *, int *);
 static char **parseint(char **, int *, int *, int);
 static char **parseintclamp(char **, int *, int *, int, int);
-static int parseopt(char **, char **);
+static int parseopt(char **);
 static char *parsetoken(char **);
 static void popfloat(Client *c);
 static void pushstatus(void);
@@ -620,7 +629,7 @@ void adjustwsormon(char **argv)
 		return;
 	}
 
-	if ((opt = parseopt(argv, opts)) >= 0) { /* word option (next, prev, nextne, etc.) */
+	if ((opt = parseopt(argv)) >= 0) { /* word option (next, prev, nextne, etc.) */
 		if (opt == DIR_LAST) {
 			if (cmdusemon)
 				ws = lastmon && lastmon->connected ? lastmon->ws : cws;
@@ -700,8 +709,8 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 	int baseismin;
 	Monitor *m = c->ws->mon;
 
-	*w = MAX(*w, MIN(globalcfg[GLB_MIN_WH], c->min_w));
-	*h = MAX(*h, MIN(globalcfg[GLB_MIN_WH], c->min_h));
+	*w = MAX(*w, MAX(globalcfg[GLB_MIN_WH], c->min_w));
+	*h = MAX(*h, MAX(globalcfg[GLB_MIN_WH], c->min_h));
 	if (usermotion) {
 		if (!mouse) {
 			if (*w > c->w && c->inc_w > *w - c->w)
@@ -752,17 +761,14 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 
 void attach(Client *c, int tohead)
 {
-	Client *t = NULL;
+	Client *tail = NULL;
 
 	if (!tohead)
-		FIND_TAIL(t, c->ws->clients);
-	if (t) {
-		c->next = t->next;
-		t->next = c;
-	} else {
-		c->next = c->ws->clients;
-		c->ws->clients = c;
-	}
+		FIND_TAIL(tail, c->ws->clients);
+	if (tail)
+		ATTACH(c, tail->next);
+	else
+		ATTACH(c, c->ws->clients);
 }
 
 void changews(Workspace *ws, int allowswap, int allowwarp)
@@ -931,6 +937,7 @@ void cmdborder(char **argv)
 	ofocus = border[BORD_O_FOCUS];
 	ourgent = border[BORD_O_URGENT];
 	ounfocus = border[BORD_O_UNFOCUS];
+
 	while (*argv) {
 		if ((outer = !strcmp("outer", *argv) || !strcmp("outer_width", *argv))
 				|| !strcmp(*argv, "width"))
@@ -1084,7 +1091,7 @@ void cmdfocus(char **argv)
 		focus(cmdclient);
 		return;
 	}
-	if ((opt = parseopt(argv, opts)) < 0) {
+	if ((opt = parseopt(argv)) < 0) {
 		parseint(argv, &i, NULL, 0);
 		if (!i)
 			fprintf(cmdresp, "!%s focus: %s\n", ebadarg, *argv);
@@ -1150,8 +1157,9 @@ void cmdlayout(char **argv)
 {
 	for (unsigned int i = 0; i < LEN(layouts); i++)
 		if (!strcmp(layouts[i].name, *argv)) {
-			if (&layouts[i] != setws->layout)
+			if (&layouts[i] != setws->layout) {
 				setws->layout = &layouts[i];
+			}
 			return;
 		}
 	fprintf(cmdresp, "!invalid layout name: %s\n", *argv);
@@ -1247,6 +1255,7 @@ void cmdpad(char **argv)
 		if (*argv)
 			argv++;
 	}
+
 #undef ASSIGN
 }
 
@@ -1256,11 +1265,12 @@ void cmdresize(char **argv)
 	int i, ohoff;
 	float f, *sf;
 	int xgrav = GRAV_NONE, ygrav = GRAV_NONE;
-	int x = scr_w, y = scr_h, w = 0, h = 0, bw = -1;
+	int x = INT_MAX, y = INT_MAX, w = 0, h = 0, bw = -1;
 	int relx = 0, rely = 0, relw = 0, relh = 0, relbw = 0;
 
 	if (!(c = cmdclient) || FULLSCREEN(c))
 		return;
+
 	while (*argv) {
 		if (!strcmp("x", *argv))
 			argv = parsegeom(argv + 1, 'x', &x, &relx, &xgrav);
@@ -1279,12 +1289,10 @@ void cmdresize(char **argv)
 		if (*argv)
 			argv++;
 	}
-	if (x == scr_w && y == scr_h && w == 0 && h == 0
-			&& xgrav == GRAV_NONE && ygrav == GRAV_NONE && bw == -1)
-		return;
+
 	if (FLOATING(c)) {
-		x = x == scr_w || xgrav != GRAV_NONE ? c->x : (relx ? c->x + x : x);
-		y = y == scr_h || ygrav != GRAV_NONE ? c->y : (rely ? c->y + y : y);
+		x = x == INT_MAX || xgrav != GRAV_NONE ? c->x : (relx ? c->x + x : x);
+		y = y == INT_MAX || ygrav != GRAV_NONE ? c->y : (rely ? c->y + y : y);
 		w = w == 0 ? c->w : (relw ? c->w + w : w);
 		h = h == 0 ? c->h : (relh ? c->h + h : h);
 		bw = bw == -1 ? c->bw : (relbw ? c->bw + bw : bw);
@@ -1293,10 +1301,11 @@ void cmdresize(char **argv)
 	} else if (c->ws->layout->fn.layout == tile) {
 		if (bw != -1) {
 			c->bw = relbw ? c->bw + bw : bw;
-			if (y == scr_h && !w && !h)
+			if (y == INT_MAX && !w && !h)
 				drawborder(c, c == selws->sel);
 		}
-		if (y != scr_h)
+		/* x changes on tiled windows is ignored for now */
+		if (y != INT_MAX)
 			movestack(y > 0 || ygrav == GRAV_BOTTOM ? 1 : -1);
 		if (w) {
 			sf = &c->ws->ssplit;
@@ -1306,8 +1315,7 @@ void cmdresize(char **argv)
 						sf = &c->ws->msplit;
 					f = relw ? ((c->ws->mon->ww * *sf) + w) / c->ws->mon->ww : w / c->ws->mon->ww;
 					if (f < 0.05 || f > 0.95) {
-						fprintf(cmdresp, "!window width exceeded limit: %f - f: %f\n",
-								c->ws->mon->ww * f, f);
+						fprintf(cmdresp, "!width exceeded limit: %f\n", c->ws->mon->ww * f);
 					} else {
 						*sf = f;
 						if (!h)
@@ -1319,8 +1327,8 @@ void cmdresize(char **argv)
 		if (h) {
 			ohoff = c->hoff;
 			c->hoff = relh ? c->hoff + h : h;
-			if (tile(c->ws) == -1) {
-				fprintf(cmdresp, "!height adjustment for window exceeded limit: %d\n", c->hoff);
+			if (c->ws->layout->fn.layout(c->ws) == -1) {
+				fprintf(cmdresp, "!height exceeded limit: %d\n", c->hoff);
 				c->hoff = ohoff;
 				needsrefresh = 1;
 			}
@@ -1584,8 +1592,7 @@ void cmdswap(char **argv)
 		last = old;
 		if (old && cur != old) {
 			detach(old, 0);
-			old->next = cur->next;
-			cur->next = old;
+			ATTACH(old, cur->next);
 		}
 	}
 	needsrefresh = 1;
@@ -1785,7 +1792,7 @@ void detach(Client *c, int reattach)
 
 	DETACH(c, cc);
 	if (reattach)
-		attach(c, 1);
+		ATTACH(c, c->ws->clients);
 }
 
 void detachstack(Client *c)
@@ -1835,7 +1842,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			else if (FLOATING(c)) {
 				m = c->ws->mon;
 				if (e->value_mask & XCB_CONFIG_WINDOW_X) {
-					if (e->x == W(c) * -2)
+					if (e->x == W(c) * -2) /* hidden window request */
 						return;
 					c->old_x = c->x;
 					c->x = m->x + e->x - c->bw;
@@ -1858,14 +1865,11 @@ void eventhandle(xcb_generic_event_t *ev)
 					c->y = m->wy + ((m->wh - H(c)) / 2);
 				if (e->value_mask & (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y)
 						&& !(e->value_mask & (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT)))
-				{
 					sendconfigure(c);
-				}
-				if (c->ws == m->ws) {
+				if (c->ws == m->ws)
 					MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
-				} else {
+				else
 					c->state |= STATE_NEEDSRESIZE;
-				}
 			} else {
 				sendconfigure(c);
 			}
@@ -2284,21 +2288,22 @@ void fib(Workspace *ws, int dwindle)
 void floatquad(Client *c, int *x, int *y, int *w, int *h)
 {
 	Client *t;
-	static int index = 0;  /* index used when all are occupied */
+	Monitor *m = c->ws->mon;
+	static int index = 0;
 	static Workspace *ws = NULL;
 	unsigned int i = 0;
-	int thirdw = c->ws->mon->ww / 3;
-	int thirdh = c->ws->mon->wh / 3;
-	int quadrants[9][3] = { /* 3x3 grid */
-		{ 1, c->ws->mon->wx + thirdw,       c->ws->mon->wy + thirdh       }, /* center center */
-		{ 1, c->ws->mon->wx + (thirdw * 2), c->ws->mon->wy + thirdh       }, /* center right */
-		{ 1, c->ws->mon->wx,                c->ws->mon->wy + thirdh       }, /* center left */
-		{ 1, c->ws->mon->wx + thirdw,       c->ws->mon->wy,               }, /* top center */
-		{ 1, c->ws->mon->wx + (thirdw * 2), c->ws->mon->wy,               }, /* top right */
-		{ 1, c->ws->mon->wx,                c->ws->mon->wy,               }, /* top left */
-		{ 1, c->ws->mon->wx + thirdw,       c->ws->mon->wy + (2 * thirdh) }, /* bottom center */
-		{ 1, c->ws->mon->wx + (thirdw * 2), c->ws->mon->wy + (2 * thirdh) }, /* bottom right */
-		{ 1, c->ws->mon->wx,                c->ws->mon->wy + (2 * thirdh) }, /* bottom left */
+	int thirdw = m->ww / 3;
+	int thirdh = m->wh / 3;
+	int quadrants[][3] = {                                 /* 3 x 3 grid */
+		{ 1, m->wx + thirdw,       m->wy + thirdh       }, /* center center */
+		{ 1, m->wx + (thirdw * 2), m->wy + thirdh       }, /* center right */
+		{ 1, m->wx,                m->wy + thirdh       }, /* center left */
+		{ 1, m->wx + thirdw,       m->wy,               }, /* top center */
+		{ 1, m->wx + (thirdw * 2), m->wy,               }, /* top right */
+		{ 1, m->wx,                m->wy,               }, /* top left */
+		{ 1, m->wx + thirdw,       m->wy + (2 * thirdh) }, /* bottom center */
+		{ 1, m->wx + (thirdw * 2), m->wy + (2 * thirdh) }, /* bottom right */
+		{ 1, m->wx,                m->wy + (2 * thirdh) }, /* bottom left */
 	};
 
 	if (ws != c->ws) {
@@ -2319,7 +2324,7 @@ void floatquad(Client *c, int *x, int *y, int *w, int *h)
 			break;
 	if (i == LEN(quadrants)) {
 		i = index;
-		index += index + 1 == LEN(quadrants) ? index * -1 : 1;
+		index = (index + 1) % LEN(quadrants);
 	}
 	*x = quadrants[i][1] + (((*w - thirdw) * -1) / 2);
 	*y = quadrants[i][2] + (((*h - thirdh) * -1) / 2);
@@ -2354,8 +2359,7 @@ void freemon(Monitor *m)
 		monitors = monitors->next;
 	} else {
 		FIND_PREV(mon, m, monitors);
-		if (mon)
-			mon->next = m->next;
+		if (mon) mon->next = m->next;
 	}
 	free(m);
 }
@@ -2422,8 +2426,7 @@ void freews(Workspace *ws)
 		workspaces = workspaces->next;
 	} else {
 		FIND_PREV(sel, ws, workspaces);
-		if (sel)
-			sel->next = ws->next;
+		if (sel) sel->next = ws->next;
 	}
 	free(ws);
 }
@@ -2751,8 +2754,7 @@ void initdesk(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	d->w = d->mon->ww;
 	d->h = d->mon->wh;
 	d->state |= STATE_NEEDSMAP;
-	d->next = desks;
-	desks = d;
+	ATTACH(d, desks);
 	xcb_change_window_attributes(con, d->win, XCB_CW_EVENT_MASK,
 			(unsigned int[]){XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY});
 	MOVERESIZE(d->win, d->x, d->y, d->w, d->h, 0);
@@ -2816,8 +2818,7 @@ void initpanel(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		updstruts(p, 1);
 	}
 	free(prop);
-	p->next = panels;
-	panels = p;
+	ATTACH(p, panels);
 	xcb_change_window_attributes(con, p->win, XCB_CW_EVENT_MASK,
 			(unsigned int[]){XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY});
 	setwmwinstate(p->win, XCB_ICCCM_WM_STATE_NORMAL);
@@ -2866,8 +2867,7 @@ Rule *initrule(Rule *wr)
 	INITREG(r->title, wr->title, &(r->titlereg))
 	INITREG(r->class, wr->class, &(r->classreg))
 	INITREG(r->inst, wr->inst, &(r->instreg))
-	r->next = rules;
-	rules = r;
+	ATTACH(r, rules);
 	return r;
 
 error:
@@ -2929,11 +2929,8 @@ void initsock(int send)
 	int display = 0, screen = 0;
 	static struct sockaddr_un sockaddr;
 
-	if (sockfd > 0) {
-		if (!send)
-			goto status_setup;
-		return;
-	}
+	if (sockfd > 0)
+		goto status_setup;
 	if (!(s = getenv("YAXWM_SOCK"))) {
 		if ((r = xcb_parse_display(NULL, &hostname, &display, &screen)))
 			snprintf(sock, sizeof(sock), "/tmp/yaxwm_%s_%i_%i.socket", // NOLINT
@@ -2964,16 +2961,18 @@ void initsock(int send)
 			err(1, "unable to listen to socket: %s", sock);
 
 status_setup:
-		if (!(s = getenv("YAXWM_STATUS"))) {
-			if (r || xcb_parse_display(NULL, &hostname, &display, &screen))
-				snprintf(status, sizeof(status), "/tmp/yaxwm_%s_%i_%i.status", // NOLINT
-						hostname, display, screen);
-			else
-				strlcpy(status, "/tmp/yaxwm.status", sizeof(status));
-			if (setenv("YAXWM_STATUS", status, 0) < 0)
-				warn("unable to export status file path to environment");
-		} else {
-			strlcpy(status, s, sizeof(status));
+		if (!send) {
+			if (!(s = getenv("YAXWM_STATUS"))) {
+				if (r || xcb_parse_display(NULL, &hostname, &display, &screen))
+					snprintf(status, sizeof(status), "/tmp/yaxwm_%s_%i_%i.status", // NOLINT
+							hostname, display, screen);
+				else
+					strlcpy(status, "/tmp/yaxwm.status", sizeof(status));
+				if (setenv("YAXWM_STATUS", status, 0) < 0)
+					warn("unable to export status file path to environment");
+			} else {
+				strlcpy(status, s, sizeof(status));
+			}
 		}
 	}
 	free(hostname);
@@ -3181,10 +3180,8 @@ void movestack(int direction)
 	while (direction) {
 		if (direction > 0) {
 			detach(c, (t = nexttiled(c->next)) ? 0 : 1);
-			if (t) {
-				c->next = t->next;
-				t->next = c;
-			}
+			if (t)
+				ATTACH(c, t->next);
 			direction--;
 		} else {
 			if (c == nexttiled(c->ws->clients)) {
@@ -3236,13 +3233,13 @@ char **parsebool(char **argv, int *setting)
 	int i;
 	char *end;
 
-	if (!argv || !*argv)
-		return argv;
-	if (((i = !strcmp("true", *argv)) || !strcmp("false", *argv))
-			|| (((i = strtoul(*argv, &end, 0)) > 0 || !strcmp("0", *argv)) && *end == '\0'))
-		*setting = i ? 1 : 0;
-	else
-		fprintf(cmdresp, "!invalid boolean argument: %s - expected true, false, 1, 0\n", *argv);
+	if (argv && *argv) {
+		if (((i = !strcmp("true", *argv)) || !strcmp("false", *argv))
+				|| (((i = strtoul(*argv, &end, 0)) > 0 || !strcmp("0", *argv)) && *end == '\0'))
+			*setting = i ? 1 : 0;
+		else
+			fprintf(cmdresp, "!invalid boolean: %s - expected true, false, 1, 0\n", *argv);
+	}
 	return argv;
 }
 
@@ -3251,29 +3248,31 @@ int parseclient(char **argv, Client **c)
 	char *end;
 	unsigned int i;
 
-	if (!argv || !*argv)
-		return 0;
-	if ((*argv[0] == '#' || (*argv[0] == '0' && *argv[0] == 'x'))
-			&& (i = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0')
-	{
-		if ((*c = wintoclient(i)))
-			return 1;
-		fprintf(cmdresp, "!invalid window id argument: %s\n", *argv);
-		return -1;
+	if (argv && *argv) {
+		if ((*argv[0] == '#' || (*argv[0] == '0' && *argv[0] == 'x'))
+				&& (i = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0')
+		{
+			if ((*c = wintoclient(i)))
+				return 1;
+			fprintf(cmdresp, "!invalid window id: %s\n", *argv);
+			return -1;
+		}
 	}
 	return 0;
 }
 
 void parsecmd(char *buf)
 {
-	int n = 0, max = 32;
+	unsigned int i;
+	int n = 0, max = 32, fail = 1;
 	char **argv, **new, **save, *tok, *key;
 
 	DBG("parsecmd: tokenizing buffer: %s", buf)
 	if (!(key = parsetoken(&buf)))
 		return;
-	for (unsigned int i = 0; i < LEN(keywords); i++) {
+	for (i = 0; i < LEN(keywords); i++) {
 		if (!strcmp(keywords[i].name, key)) {
+			fail = 0;
 			argv = ecalloc(max, sizeof(char *));
 			while ((tok = parsetoken(&buf))) {
 				if (n + 1 >= max) {
@@ -3299,12 +3298,12 @@ void parsecmd(char *buf)
 				fprintf(cmdresp, "!%s %s\n", key, enoargs);
 			}
 			free(save);
-			goto finish;
+			break;
 		}
 	}
-	fprintf(cmdresp, "!invalid or unknown command: %s\n", key);
+	if (fail)
+		fprintf(cmdresp, "!invalid or unknown command: %s\n", key);
 
-finish:
 	fflush(cmdresp);
 	fclose(cmdresp);
 }
@@ -3315,29 +3314,29 @@ char **parsecolour(char **argv, unsigned int *setting)
 	unsigned short a, r, g, b;
 	unsigned int argb, len;
 
-	if (!argv || !*argv)
-		return argv;
-	if ((len = strlen(*argv)) >= 6 && len <= 10) {
-		if (**argv == '#' && len >= 7 && len <= 9)
-			len--;
-		else if (**argv == '0' && *(*argv + 1) == 'x')
-			len -= 2;
-		argb = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16);
-		if (argb <= 0xffffffff && *end == '\0') {
-			if (len == 6) {
-				*setting = (argb | 0xff000000);
-			} else if ((a = ((argb & 0xff000000) >> 24)) && a != 0xff) {
-				r = (((argb & 0xff0000) >> 16) * a) / 255;
-				g = (((argb & 0xff00) >> 8) * a) / 255;
-				b = (((argb & 0xff) >> 0) * a) / 255;
-				*setting = (a << 24 | r << 16 | g << 8 | b);
-			} else {
-				*setting = argb;
+	if (argv && *argv) {
+		if ((len = strlen(*argv)) >= 6 && len <= 10) {
+			if (**argv == '#' && len >= 7 && len <= 9)
+				len--;
+			else if (**argv == '0' && *(*argv + 1) == 'x')
+				len -= 2;
+			argb = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16);
+			if (argb <= 0xffffffff && *end == '\0') {
+				if (len == 6) {
+					*setting = (argb | 0xff000000);
+				} else if ((a = ((argb & 0xff000000) >> 24)) && a != 0xff) {
+					r = (((argb & 0xff0000) >> 16) * a) / 255;
+					g = (((argb & 0xff00) >> 8) * a) / 255;
+					b = (((argb & 0xff) >> 0) * a) / 255;
+					*setting = (a << 24 | r << 16 | g << 8 | b);
+				} else {
+					*setting = argb;
+				}
 			}
-			return argv;
+		} else {
+			fprintf(cmdresp, "!invalid colour: %s - expected (#/0x)(AA)RRGGBB\n", *argv);
 		}
 	}
-	fprintf(cmdresp, "!invalid colour argument: %s - expected (#/0x)(AA)RRGGBB\n", *argv);
 	return argv;
 }
 
@@ -3346,46 +3345,46 @@ char **parsefloat(char **argv, float *setting, int *rel)
 	float f;
 	char *end;
 
-	if (!argv || !*argv)
-		return argv;
-	if ((f = strtof(*argv, &end)) != 0.0 && *end == '\0') {
-		if (f < -0.95 || f > 0.95) {
-			fprintf(cmdresp, "!float argument out of range: %s - min: -0.95, max: 0.95\n", *argv);
+	if (argv && *argv) {
+		if ((f = strtof(*argv, &end)) != 0.0 && *end == '\0') {
+			if (f < -0.95 || f > 0.95) {
+				fprintf(cmdresp, "!float out of range: %s - min: -0.95, max: 0.95\n", *argv);
+			} else {
+				if (rel)
+					*rel = **argv == '-' || **argv == '+';
+				*setting = f;
+			}
 		} else {
-			if (rel)
-				*rel = **argv == '-' || **argv == '+';
-			*setting = f;
+			fprintf(cmdresp, "!invalid float argument: %s - expected (-/+)0.N\n", *argv);
 		}
-		return argv;
 	}
-	fprintf(cmdresp, "!invalid or incomplete float argument: %s - expected (-/+)0.N\n", *argv);
 	return argv;
 }
 
 char **parsegeom(char **argv, char type, int *i, int *rel, int *grav)
 {
-	if (!argv || !*argv)
-		return argv;
-	if (!grav) {
-		argv = parseint(argv, i, rel, type == 'x' || type == 'y' ? 1 : 0);
-	} else if (grav && !strcmp("center", *argv)) {
-		*grav = GRAV_CENTER;
-	} else {
-		switch (type) {
-		case 'x':
-			if (grav && !strcmp("left", *argv)) *grav = GRAV_LEFT;
-			else if (grav && !strcmp("right", *argv)) *grav = GRAV_RIGHT;
-			else argv = parseint(argv, i, rel, 1);
-			break;
-		case 'y':
-			if (grav && !strcmp("top", *argv)) *grav = GRAV_TOP;
-			else if (grav && !strcmp("bottom", *argv)) *grav = GRAV_BOTTOM;
-			else argv = parseint(argv, i, rel, 1);
-			break;
-		case 'w': /* FALLTHROUGH */
-		case 'h':
-			argv = parseint(argv, i, rel, 0);
-			break;
+	if (argv && *argv) {
+		if (!grav) {
+			argv = parseint(argv, i, rel, type == 'x' || type == 'y' ? 1 : 0);
+		} else if (grav && !strcmp("center", *argv)) {
+			*grav = GRAV_CENTER;
+		} else {
+			switch (type) {
+			case 'x':
+				if (grav && !strcmp("left", *argv)) *grav = GRAV_LEFT;
+				else if (grav && !strcmp("right", *argv)) *grav = GRAV_RIGHT;
+				else argv = parseint(argv, i, rel, 1);
+				break;
+			case 'y':
+				if (grav && !strcmp("top", *argv)) *grav = GRAV_TOP;
+				else if (grav && !strcmp("bottom", *argv)) *grav = GRAV_BOTTOM;
+				else argv = parseint(argv, i, rel, 1);
+				break;
+			case 'w': /* FALLTHROUGH */
+			case 'h':
+				argv = parseint(argv, i, rel, 0);
+				break;
+			}
 		}
 	}
 	return argv;
@@ -3396,16 +3395,16 @@ char **parseint(char **argv, int *setting, int *rel, int allowzero)
 	int i;
 	char *end;
 
-	if (rel)
-		*rel = 0;
-	if (!argv || !*argv)
-		return argv;
-	if (((i = strtol(*argv, &end, 0)) || (allowzero && !strcmp("0", *argv))) && *end == '\0') {
-		if (i && rel)
-			*rel = **argv == '-' || **argv == '+';
-		*setting = i;
-	} else {
-		fprintf(cmdresp, "!invalid integer argument: %s - expected (-/+)N\n", *argv);
+	if (argv && *argv) {
+		if (rel)
+			*rel = 0;
+		if (((i = strtol(*argv, &end, 0)) || (allowzero && !strcmp("0", *argv))) && *end == '\0') {
+			if (i && rel)
+				*rel = **argv == '-' || **argv == '+';
+			*setting = i;
+		} else {
+			fprintf(cmdresp, "!invalid integer argument: %s - expected (-/+)N\n", *argv);
+		}
 	}
 	return argv;
 }
@@ -3414,26 +3413,25 @@ char **parseintclamp(char **argv, int *setting, int *rel, int min, int max)
 {
 	int i = min - 1;
 
-	if (!argv || !*argv)
-		return argv;
-	parseint(argv, &i, rel, 1);
-	if (i >= min && i <= max)
-		*setting = i;
-	else if (i != min - 1)
-		fprintf(cmdresp, "!int argument out of range: %s - min: %d, max: %d\n", *argv, min, max);
+	if (argv && *argv) {
+		parseint(argv, &i, rel, 1);
+		if (i >= min && i <= max)
+			*setting = i;
+		else if (i != min - 1)
+			fprintf(cmdresp, "!int out of range: %s - min: %d, max: %d\n", *argv, min, max);
+	}
 	return argv;
 }
 
-int parseopt(char **argv, char **opts)
+int parseopt(char **argv)
 {
 	int i;
 	char **s;
 
-	if (!argv || !*argv)
-		return -1;
-	for (s = opts, i = 0; s && *s; s++, i++)
-		if (!strcmp(*s, *argv))
-			return i;
+	if (argv && *argv)
+		for (s = opts, i = 0; s && *s; s++, i++)
+			if (!strcmp(*s, *argv))
+				return i;
 	return -1;
 }
 
@@ -3511,13 +3509,13 @@ void refresh(void)
 	Client *c;
 	Workspace *ws;
 
-#define DOMAPS(v, list)                                                        \
-	do {                                                                       \
-		FOR_EACH((v), (list))                                                  \
-			if ((v)->state & STATE_NEEDSMAP) {                                 \
-				(v)->state &= ~STATE_NEEDSMAP;                                 \
-				xcb_map_window(con, (v)->win);                                 \
-			}                                                                  \
+#define DOMAPS(v, list)                        \
+	do {                                       \
+		FOR_EACH((v), (list))                  \
+			if ((v)->state & STATE_NEEDSMAP) { \
+				(v)->state &= ~STATE_NEEDSMAP; \
+				xcb_map_window(con, (v)->win); \
+			}                                  \
 	} while (0)
 
 	DOMAPS(p, panels);
@@ -3537,46 +3535,54 @@ void refresh(void)
 
 void relocate(Workspace *ws, Monitor *old)
 {
+	float f;
 	Client *c;
 	Monitor *m;
-	float xoff, yoff;
-	float xdiv, ydiv;
 
-	DBG("relocate: moving clients from %s to %s", old->name, ws->mon->name)
+#define RELOC(val, opposed, offset, min, max, wmin, wmax, oldmin, oldmax, oldwmin, oldwmax) \
+		if (val - oldwmin > 0 && (offset = oldwmax / (val - oldwmin)) != 0.0) {             \
+			if (val + opposed == oldmin + oldmax) {                                         \
+				val = min + max - opposed;                                                  \
+			} else if (val + (opposed / 2) == oldmin + (oldmax / 2)) {                      \
+				val = (min + max - opposed) / 2;                                            \
+			} else {                                                                        \
+				val = CLAMP(min + (max / offset), min - (opposed - globalcfg[GLB_MIN_XY]),  \
+						min + max - globalcfg[GLB_MIN_XY]);                                 \
+			}                                                                               \
+		} else {                                                                            \
+			val = CLAMP(val, min - (opposed - globalcfg[GLB_MIN_XY]),                       \
+					wmin + wmax - globalcfg[GLB_MIN_XY]);                                   \
+		}
+
+	DBG("relocate: %s -> %s", old->name, ws->mon->name)
 	if (!(m = ws->mon) || m == old)
 		return;
-	FOR_EACH(c, ws->clients)
+	FOR_EACH(c, ws->clients) {
 		if (FLOATING(c)) {
-			/* TODO: simplify this mess */
-			if ((xoff = c->x - old->x) && (xdiv = old->w / xoff) != 0.0) {
-				if (c->x + W(c) == old->wx + old->ww)
-					c->x = m->wx + m->ww - W(c);
-				else if (c->x + (W(c) / 2) == old->wx + (old->ww / 2))
-					c->x = (m->wx + m->ww - W(c)) / 2;
-				else
-					c->x = CLAMP(m->wx + (m->ww / xdiv), m->wx - (W(c) - globalcfg[GLB_MIN_XY]),
-							m->wx + m->ww - globalcfg[GLB_MIN_XY]);
-			} else
-				c->x = CLAMP(c->x, m->wx - (W(c) - globalcfg[GLB_MIN_XY]),
-						m->x + m->w - globalcfg[GLB_MIN_XY]);
-			if ((yoff = c->y - old->y) && (ydiv = old->h / yoff) != 0.0) {
-				if (c->y + H(c) == old->wy + old->wh)
-					c->y = m->wy + m->wh - H(c);
-				else if (c->y + (H(c) / 2) == old->wy + (old->wh / 2))
-					c->y = (m->wy + m->wh - H(c)) / 2;
-				else
-					c->y = CLAMP(m->wy + (m->wh / ydiv), m->wy - (H(c) - globalcfg[GLB_MIN_XY]),
-							m->wy + m->wh - globalcfg[GLB_MIN_XY]);
-			} else
-				c->y = CLAMP(c->y, m->wy - (H(c) - globalcfg[GLB_MIN_XY]),
-						m->wy + m->wh - globalcfg[GLB_MIN_XY]);
+			DBG("relocate: 0x%08x - current geom: %d,%d %dx%d", c->win, c->x, c->y, c->w, c->h)
+			if (c->state & STATE_FULLSCREEN && c->w == old->w && c->h == old->h) {
+				c->x = m->x, c->y = m->y, c->w = m->w, c->h = m->h;
+			} else {
+				RELOC(c->x, W(c), f, m->wx, m->ww, m->x, m->w, old->wx, old->ww, old->x, old->w)
+				RELOC(c->y, H(c), f, m->wy, m->wh, m->y, m->h, old->wy, old->wh, old->y, old->h)
+			}
+			DBG("relocate: 0x%08x - new geom: %d,%d %dx%d", c->win, c->x, c->y, c->w, c->h)
 		}
+	}
+
+#undef TRANS
 }
 
 void resize(Client *c, int x, int y, int w, int h, int bw)
 {
-	c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
-	c->x = x, c->y = y, c->w = w, c->h = h;
+	c->old_x = c->x;
+	c->old_y = c->y;
+	c->old_w = c->w;
+	c->old_h = c->h;
+	c->x = x;
+	c->y = y;
+	c->w = w;
+	c->h = h;
 	MOVERESIZE(c->win, x, y, w, h, bw);
 	drawborder(c, c == selws->sel);
 	sendconfigure(c);
@@ -3830,16 +3836,21 @@ void showhide(Client *c)
 	m = c->ws->mon;
 	if (c->ws == m->ws) {
 		if (c->state & STATE_NEEDSRESIZE) {
-			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
+			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, FULLSCREEN(c) ? 0 : c->bw);
 			c->state &= ~STATE_NEEDSRESIZE;
 		} else {
 			MOVE(c->win, c->x, c->y);
 		}
 		if (FLOATING(c)) {
-			if (c->state & STATE_FULLSCREEN && c->w == c->ws->mon->w && c->h == c->ws->mon->h)
+			if (c->state & STATE_FULLSCREEN && c->w == m->w && c->h == m->h) {
+				DBG("showhide: moving fullscreen client - %d,%d %dx%d -> %d,%d %dx%d",
+						c->x, c->y, c->w, c->h, m->x, m->y, m->w, m->h)
 				resize(c, m->x, m->y, m->w, m->h, 0);
-			else
-				resize(c, c->x, c->y, c->w, c->h, c->bw);
+			} else {
+				DBG("showhide: moving floating client - %d,%d %dx%d",
+						c->x, c->y, c->w, c->h)
+				resize(c, c->x, c->y, c->w, c->h, FULLSCREEN(c) ? 0 : c->bw);
+			}
 		}
 		showhide(c->snext);
 	} else {
@@ -4382,8 +4393,8 @@ int writecmd(int argc, char *argv[])
 
 	if (!argc)
 		errx(1, "%s", enoargs);
-
 	initsock(1);
+
 	struct pollfd fds[] = {
 		{ sockfd,        POLLIN,  0 },
 		{ STDOUT_FILENO, POLLHUP, 0 },

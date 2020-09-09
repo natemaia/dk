@@ -3509,7 +3509,7 @@ void refresh(void)
 	Client *c;
 	Workspace *ws;
 
-#define DOMAPS(v, list)                        \
+#define MAP(v, list)                           \
 	do {                                       \
 		FOR_EACH((v), (list))                  \
 			if ((v)->state & STATE_NEEDSMAP) { \
@@ -3518,19 +3518,21 @@ void refresh(void)
 			}                                  \
 	} while (0)
 
-	DOMAPS(p, panels);
-	DOMAPS(d, desks);
+	MAP(p, panels);
+	MAP(d, desks);
 	FOR_EACH(ws, workspaces) {
 		showhide(ws->stack);
 		if (ws == ws->mon->ws && ws->layout->fn.layout)
 			ws->layout->fn.layout(ws);
-		DOMAPS(c, ws->clients);
+		MAP(c, ws->clients);
 		restack(ws);
 	}
 	focus(NULL);
 	eventignore(XCB_ENTER_NOTIFY);
 	pushstatus();
-#undef DOMAPS
+	xcb_aux_sync(con);
+
+#undef MAP
 }
 
 void relocate(Workspace *ws, Monitor *old)

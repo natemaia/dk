@@ -754,8 +754,6 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 		if (c->max_h)
 			*h = MIN(*h, c->max_h);
 	}
-	DBG("applysizehints: 0x%08x - %d,%d @ %dx%d -> %d,%d @ %dx%d - usermotion: %d, mouse: %d",
-			c->win, c->x, c->y, c->w, c->h, *x, *y, *w, *h, usermotion, mouse)
 	return *x != c->x || *y != c->y || *w != c->w || *h != c->h || bw != c->bw;
 }
 
@@ -778,7 +776,7 @@ void changews(Workspace *ws, int allowswap, int allowwarp)
 
 	if (!ws || !nextmon(monitors))
 		return;
-	DBG("changews: %d:%s -> %d:%s - allowswap: %d - warp: %d", selws->num,
+	DBG("changews: %d:%s -> %d:%s - allowswap: %d - allowwarp: %d", selws->num,
 			selws->mon->name, ws->num, ws->mon->name, allowswap, diffmon)
 	lastws = selws;
 	lastmon = selmon;
@@ -2049,19 +2047,17 @@ void eventhandle(xcb_generic_event_t *ev)
 			if ((e->time - last) < (1000 / 120))
 				return;
 			last = e->time;
-			DBG("eventhandle: MOTION_NOTIFY - pointer grabbed - 0x%08x - grabmove: %d",
-					c->win, grabmove)
 			if (!grabmove && !FLOATING(c) && selws->layout->fn.layout == tile) {
 				for (i = 0, p = nexttiled(selws->clients); p && p != c; p = nexttiled(p->next), i++)
 					;
 				if (i >= selws->nstack + selws->nmaster)
 					selws->ssplit =
-						(double)(ox + (e->root_x - mx) - (selws->mon->ww * selws->msplit))
+						(double)(ox - selws->mon->x + (e->root_x - mx) - (selws->mon->ww * selws->msplit))
 						/ (double)(selws->mon->ww - (selws->mon->ww * selws->msplit));
 				else if (i >= selws->nmaster)
-					selws->msplit = (double)(ox + (e->root_x - mx)) / (double)selws->mon->ww;
+					selws->msplit = (double)(ox - selws->mon->x + (e->root_x - mx)) / (double)selws->mon->ww;
 				else
-					selws->msplit = (double)((ox + ow) + (e->root_x - mx)) / (double)selws->mon->ww;
+					selws->msplit = (double)((ox - selws->mon->x + ow) + (e->root_x - mx)) / (double)selws->mon->ww;
 				ohoff = c->hoff;
 				if (i + 1 == selws->nmaster || i + 1 == selws->nmaster + selws->nstack
 						|| !nexttiled(c->next))
@@ -3530,7 +3526,6 @@ void refresh(void)
 	focus(NULL);
 	eventignore(XCB_ENTER_NOTIFY);
 	pushstatus();
-	xcb_aux_sync(con);
 
 #undef MAP
 }
@@ -3564,13 +3559,16 @@ void relocate(Workspace *ws, Monitor *old)
 			DBG("relocate: 0x%08x - current geom: %d,%d %dx%d", c->win, c->x, c->y, c->w, c->h)
 			if (c->state & STATE_FULLSCREEN && c->w == old->w && c->h == old->h) {
 				c->x = m->x, c->y = m->y, c->w = m->w, c->h = m->h;
+				MOVERESIZE(c->win, c->x, c->y, c->w, c->h, 0);
 			} else {
 				RELOC(c->x, W(c), f, m->wx, m->ww, m->x, m->w, old->wx, old->ww, old->x, old->w)
 				RELOC(c->y, H(c), f, m->wy, m->wh, m->y, m->h, old->wy, old->wh, old->y, old->h)
+				MOVE(c->win, c->x, c->y);
 			}
 			DBG("relocate: 0x%08x - new geom: %d,%d %dx%d", c->win, c->x, c->y, c->w, c->h)
 		}
 	}
+	/* xcb_flush(con); */
 
 #undef TRANS
 }

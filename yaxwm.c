@@ -54,7 +54,6 @@
 	((c)->state & STATE_FULLSCREEN && !((c)->state & STATE_FAKEFULL))
 
 #define FOR_EACH(v, list) for ((v) = (list); (v); (v) = (v)->next)
-#define FOR_STACK(v, list) for ((v) = (list); (v); (v) = (v)->snext)
 #define FOR_CLIENTS(c, ws) FOR_EACH((ws), workspaces) FOR_EACH((c), (ws)->clients)
 
 #define FIND_TAIL(v, list) \
@@ -769,21 +768,23 @@ void attach(Client *c, int tohead)
 		ATTACH(c, c->ws->clients);
 }
 
-void changews(Workspace *ws, int allowswap, int allowwarp)
+void changews(Workspace *ws, int swap, int warp)
 {
 	Monitor *m, *oldmon;
-	int diffmon = allowwarp && selws->mon != ws->mon;
+	int difmon = warp && selws->mon != ws->mon;
 
 	if (!ws || !nextmon(monitors))
 		return;
-	DBG("changews: %d:%s -> %d:%s - allowswap: %d - allowwarp: %d", selws->num,
-			selws->mon->name, ws->num, ws->mon->name, allowswap, diffmon)
+
+	DBG("changews: %d:%s -> %d:%s - allowswap: %d - allowwarp: %d",
+			selws->num, selws->mon->name, ws->num, ws->mon->name, swap, difmon)
+
 	lastws = selws;
 	lastmon = selmon;
 	m = selws->mon;
 	if (selws->sel)
 		unfocus(selws->sel, 1);
-	if (allowswap && m != ws->mon) {
+	if (swap && m != ws->mon) {
 		oldmon = ws->mon;
 		selws->mon = ws->mon;
 		if (ws->mon->ws == ws)
@@ -795,14 +796,16 @@ void changews(Workspace *ws, int allowswap, int allowwarp)
 		relocate(lastws, selmon);
 	}
 	selws = ws;
-	selmon = ws->mon;
-	selws->mon->ws = ws;
-	if (!allowswap && diffmon) {
+	selmon = selws->mon;
+	selmon->ws = selws;
+	if (!swap && difmon) {
 		xcb_warp_pointer(con, root, root, 0, 0, 0, 0,
 				selws->sel ? ws->sel->x + (ws->sel->w / 2) : ws->mon->x + (ws->mon->w / 2),
 				selws->sel ? ws->sel->y + (ws->sel->h / 2) : ws->mon->y + (ws->mon->h / 2));
 	}
 	PROP_REPLACE(root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1, &ws->num);
+	DBG("changews: selws: %d:%s - selmon: %s:%d",
+			selws->num, selws->mon->name, selmon->name, selmon->ws->num)
 }
 
 void clienthints(Client *c)
@@ -889,8 +892,9 @@ void clientrule(Client *c, Rule *wr)
 						ws = m->ws->num;
 						break;
 					}
-			} else if (r->ws > 0 && r->ws <= globalcfg[GLB_NUMWS])
+			} else if (r->ws > 0 && r->ws <= globalcfg[GLB_NUMWS]) {
 				ws = r->ws - 1;
+			}
 		}
 	}
 
@@ -2112,8 +2116,6 @@ void eventhandle(xcb_generic_event_t *ev)
 	case XCB_PROPERTY_NOTIFY: {
 		Panel *p;
 		xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ev;
-		static Client *lastc = NULL;
-		static xcb_timestamp_t lastt = 0;
 
 #ifdef DEBUG
 		if (e->window != root) {
@@ -2127,15 +2129,9 @@ void eventhandle(xcb_generic_event_t *ev)
 				}
 		}
 #endif
-		if (e->state == XCB_PROPERTY_DELETE) {
+		if (e->state == XCB_PROPERTY_DELETE)
 			return;
-		} else if ((c = wintoclient(e->window))) {
-			if (lastc != c)
-				lastc = c;
-			else if (e->time - lastt < 1000)
-				return;
-			lastt = e->time;
-
+		if ((c = wintoclient(e->window))) {
 			switch (e->atom) {
 			case XCB_ATOM_WM_HINTS:
 				clienthints(c); return;
@@ -3526,6 +3522,7 @@ void refresh(void)
 	focus(NULL);
 	eventignore(XCB_ENTER_NOTIFY);
 	pushstatus();
+	xcb_aux_sync(con);
 
 #undef MAP
 }
@@ -3559,16 +3556,13 @@ void relocate(Workspace *ws, Monitor *old)
 			DBG("relocate: 0x%08x - current geom: %d,%d %dx%d", c->win, c->x, c->y, c->w, c->h)
 			if (c->state & STATE_FULLSCREEN && c->w == old->w && c->h == old->h) {
 				c->x = m->x, c->y = m->y, c->w = m->w, c->h = m->h;
-				MOVERESIZE(c->win, c->x, c->y, c->w, c->h, 0);
 			} else {
 				RELOC(c->x, W(c), f, m->wx, m->ww, m->x, m->w, old->wx, old->ww, old->x, old->w)
 				RELOC(c->y, H(c), f, m->wy, m->wh, m->y, m->h, old->wy, old->wh, old->y, old->h)
-				MOVE(c->win, c->x, c->y);
 			}
 			DBG("relocate: 0x%08x - new geom: %d,%d %dx%d", c->win, c->x, c->y, c->w, c->h)
 		}
 	}
-	/* xcb_flush(con); */
 
 #undef TRANS
 }
@@ -3654,7 +3648,7 @@ void restack(Workspace *ws)
 			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	if (FLOATING(c))
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-	FOR_STACK(c, ws->stack) {
+	for (c = ws->stack; c; c = c->snext) {
 		if (c->trans && FLOATING(c)) {
 			v[0] = c->trans->win;
 			xcb_configure_window(con, c->win,
@@ -3665,7 +3659,7 @@ void restack(Workspace *ws)
 	}
 	FOR_EACH(d, desks)
 		if (d->mon == ws->mon)
-			setstackmode(c->win, XCB_STACK_MODE_BELOW);
+			setstackmode(d->win, XCB_STACK_MODE_BELOW);
 }
 
 int rulecmp(Rule *r, char *title, char *class, char *inst)
@@ -3702,8 +3696,8 @@ int sendwmproto(Client *c, int wmproto)
 	xcb_client_message_event_t cme;
 	xcb_icccm_get_wm_protocols_reply_t proto;
 
-	DBG("sendwmproto: checking support for %s", wmatoms[wmproto])
-		rpc = xcb_icccm_get_wm_protocols(con, c->win, wmatom[WM_PROTO]);
+	DBG("sendwmproto: checking support for %s - 0x%08x", wmatoms[wmproto], c->win)
+	rpc = xcb_icccm_get_wm_protocols(con, c->win, wmatom[WM_PROTO]);
 	if (xcb_icccm_get_wm_protocols_reply(con, rpc, &proto, &e)) {
 		n = proto.atoms_len;
 		while (!exists && n--)

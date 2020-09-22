@@ -1,7 +1,7 @@
 # yaxwm - yet another x window manager
 # see license file for copyright and license details
 
-VERSION = 0.82
+VERSION = 0.83
 
 # install paths
 PREFIX    ?= /usr/local

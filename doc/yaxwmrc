@@ -1,18 +1,21 @@
 #!/bin/sh
 
-# (re)load sxhkd for keybinds
-pkill sxhkd; sxhkd &
-
+# example yaxwmrc to show some basic concepts like error reporting
 
 # determine where to place the log file
 logfile="$HOME/.yaxwmrc.log"
 [ -d "$HOME/.local/share/xorg" ] && logfile="$HOME/.local/share/xorg/yaxwmrc.log"
 : > "$logfile"
 
-# Window manager configuration run as a compound command to
-# redirect all output to a file instead of redirecting each command.
-# Not needed but it's nice to be able to tell when there are errors.
-{
+
+# (re)load sxhkd for keybinds
+if hash sxhkd >/dev/null 2>&1; then
+	pkill sxhkd
+	sxhkd &
+fi
+
+{ # compound command to redirect all output
+
 	# workspace settings
 	# ------------------------
 	# initialize 10 workspaces (1-10)
@@ -29,7 +32,11 @@ logfile="$HOME/.yaxwmrc.log"
 	yaxwm -c set ws=3 layout=grid
 
 	# use some padding and gaps on the last workspace
-	last=$(awk '/^numws:/ {print $2}' "$YAXWM_STATUS")
+	if yaxwm -c print numws 2>&1 | grep -q 'error:'; then
+		last=$(awk '/^numws:/ {print $2}' "$YAXWM_STATUS")
+	else
+		last=$(yaxwm -c print numws)
+	fi
 	yaxwm -c set ws="$last" pad left=200 right=200 top=100 bottom=100
 	yaxwm -c set ws="$last" gap width=50
 

@@ -1,6 +1,5 @@
-#*****************************#
-#***** application binds *****#
-#*****************************#
+# example sxhkdrc for use with yaxwm
+#########################################################
 
 # launcher
 alt + p
@@ -31,9 +30,6 @@ alt + shift + x
     pkill -USR1 -x sxhkd
 
 
-#*****************************#
-#********* wm binds **********#
-#*****************************#
 
 # quit yaxwm
 alt + shift + q
@@ -96,10 +92,6 @@ alt + {_,shift + }{i,d}
 alt + {equal,minus}
 	yaxwm -c set gap width {+5,-5}
 
-# change border width (total)
-alt + ctrl + {equal,minus}
-	yaxwm -c set border width {+1,-1}
-
-# change outer border width (double border)
-alt + ctrl + shift + {equal,minus}
-	yaxwm -c set border outer_width {+1,-1}
+# change border widths
+alt + ctrl + {_,shift + }{equal,minus}
+	yaxwm -c set border {width,outer_width} {+1,-1}

@@ -454,7 +454,6 @@ static xcb_key_symbols_t *keysyms;
 static xcb_cursor_t cursor[LEN(cursors)];
 static xcb_atom_t wmatom[LEN(wmatoms)], netatom[LEN(netatoms)];
 
-
 int main(int argc, char *argv[])
 {
 	ssize_t n;
@@ -608,8 +607,7 @@ void adjustwsormon(char **argv)
 				break;
 			}
 		if (fn != cmdview && (r = parseclient(argv, &cmdclient))) {
-			if (r == -1)
-				return;
+			if (r == -1) return;
 			cws = cmdclient->ws;
 			cm = cws->mon;
 			argv++;
@@ -796,6 +794,12 @@ void changews(Workspace *ws, int swap, int warp)
 				selws->sel ? ws->sel->y + (ws->sel->h / 2) : ws->mon->y + (ws->mon->h / 2));
 	}
 	PROP_REPLACE(root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1, &ws->num);
+}
+
+void check(int i, char *msg)
+{
+	if (i < 0)
+		err(1, "%s", msg);
 }
 
 void clienthints(Client *c)
@@ -1603,8 +1607,7 @@ void cmdwin(char **argv)
 	cmdclient = selws->sel;
 
 	if ((i = parseclient(argv, &cmdclient))) {
-		if (i == -1)
-			return;
+		if (i == -1) return;
 		argv++;
 	}
 	if (!*argv) {
@@ -1834,9 +1837,9 @@ void eventhandle(xcb_generic_event_t *ev)
 		if ((c = wintoclient(e->window))) {
 			DBG("eventhandle: CONFIGURE_REQUEST - managed %s window 0x%08x",
 					FLOATING(c) ? "floating" : "tiled", e->window)
-			if (e->value_mask & XCB_CONFIG_WINDOW_BORDER_WIDTH)
+			if (e->value_mask & XCB_CONFIG_WINDOW_BORDER_WIDTH) {
 				c->bw = e->border_width;
-			else if (FLOATING(c)) {
+			} else if (FLOATING(c)) {
 				m = c->ws->mon;
 				if (e->value_mask & XCB_CONFIG_WINDOW_X) {
 					if (e->x == W(c) * -2) /* hidden window request */
@@ -1867,6 +1870,7 @@ void eventhandle(xcb_generic_event_t *ev)
 					MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
 				else
 					c->state |= STATE_NEEDSRESIZE;
+				drawborder(c, c == selws->sel);
 			} else {
 				sendconfigure(c);
 			}
@@ -1879,7 +1883,6 @@ void eventhandle(xcb_generic_event_t *ev)
 			wc.stack_mode = e->stack_mode;
 			xcb_configure_window(con, e->window, e->value_mask, &wc);
 		}
-		xcb_flush(con);
 		return;
 	}
 	case XCB_ENTER_NOTIFY: {
@@ -2101,7 +2104,7 @@ void eventhandle(xcb_generic_event_t *ev)
 					resizehint(c, nx, ny, nw, nh, c->bw, 1, 1);
 				}
 			}
-		} else if (e->event == root && (m = coordtomon(e->root_x, e->root_y))) {
+		} else if (e->event == root && (m = coordtomon(e->root_x, e->root_y)) && m->ws != selws) {
 			DBG("eventhandle: MOTION_NOTIFY - updating active monitor - 0x%08x", e->event)
 			changews(m->ws, 0, 0);
 			focus(NULL);
@@ -2809,30 +2812,23 @@ void initsock(int send)
 		}                                                                         \
 	} while (0)
 
-	if (sockfd > 0)
-		goto status_setup;
-	ENVPATH("YAXWM_SOCK", sock, "/tmp/yaxwm_%s_%i_%i.socket", "/tmp/yaxwm.socket"); // NOLINT
-	sockaddr.sun_family = AF_UNIX;
-	strlcpy(sockaddr.sun_path, sock, sizeof(sockaddr.sun_path));
-	if (sockaddr.sun_path[0] == '\0')
-		err(1, "unable to write socket path: %s", sock);
-	if ((sockfd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
-		err(1, "unable to create socket: %s", sock);
-
-	if (send) {
-		if (connect(sockfd, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) < 0)
-			err(1, "unable to connect to socket: %s", sock);
-	} else {
-		unlink(sock);
-		if (bind(sockfd, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) < 0)
-			err(1, "unable to bind socket: %s", sock);
-		if (listen(sockfd, SOMAXCONN) < 0)
-			err(1, "unable to listen to socket: %s", sock);
-
-status_setup:
-		if (!send)
-			ENVPATH("YAXWM_STATUS", status, "/tmp/yaxwm_%s_%i_%i.status", "/tmp/yaxwm.status"); // NOLINT
+	if (sockfd <= 0) {
+		ENVPATH("YAXWM_SOCK", sock, "/tmp/yaxwm_%s_%i_%i.socket", "/tmp/yaxwm.socket"); // NOLINT
+		sockaddr.sun_family = AF_UNIX;
+		strlcpy(sockaddr.sun_path, sock, sizeof(sockaddr.sun_path));
+		check((sockfd = socket(AF_UNIX, SOCK_STREAM, 0)), "unable to create socket");
+		if (send) {
+			check(connect(sockfd, (struct sockaddr *)&sockaddr, sizeof(sockaddr)),
+					"unable to connect socket");
+		} else {
+			unlink(sock);
+			check(bind(sockfd, (struct sockaddr *)&sockaddr, sizeof(sockaddr)),
+					"unable to bind socket");
+			check(listen(sockfd, SOMAXCONN), "unable to listen on socket");
+		}
 	}
+	if (!send)
+		ENVPATH("YAXWM_STATUS", status, "/tmp/yaxwm_%s_%i_%i.status", "/tmp/yaxwm.status"); // NOLINT
 	free(hostname);
 
 #undef ENVPATH
@@ -2853,11 +2849,9 @@ void initwm(void)
 	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = SA_RESTART;
 	for (i = 0; i < LEN(sigs); i++)
-		if (sigaction(sigs[i], &sa, NULL) < 0)
-			err(1, "unable to setup handler for signal: %d", sigs[i]);
+		check(sigaction(sigs[i], &sa, NULL), "unable to setup signal handler");
 
-	if (xcb_cursor_context_new(con, scr, &ctx) < 0)
-		err(1, "unable to create cursor context");
+	check(xcb_cursor_context_new(con, scr, &ctx), "unable to create cursor context");
 	for (i = 0; i < LEN(cursors); i++)
 		cursor[i] = xcb_cursor_load_cursor(ctx, cursors[i]);
 	xcb_cursor_context_free(ctx);
@@ -4398,8 +4392,8 @@ int writecmd(int argc, char *argv[])
 		buf[n++] = ' ';
 	}
 	buf[n - 1] = '\0';
-	if (send(sockfd, buf, n, 0) < 0)
-		err(1, "unable to send the command");
+	check(send(sockfd, buf, n, 0), "unable to send command");
+
 	while (poll(fds, 2, 1000) > 0) {
 		if (fds[1].revents & (POLLERR | POLLHUP))
 			break;

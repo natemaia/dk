@@ -1883,6 +1883,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			wc.stack_mode = e->stack_mode;
 			xcb_configure_window(con, e->window, e->value_mask, &wc);
 		}
+		xcb_flush(con);
 		return;
 	}
 	case XCB_ENTER_NOTIFY: {

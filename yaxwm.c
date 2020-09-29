@@ -693,20 +693,15 @@ void applypanelstrut(Panel *p)
 			p->mon->wx, p->mon->wy, p->mon->ww, p->mon->wh)
 }
 
-int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse)
+int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int motion, int mouse)
 {
 	int baseismin;
 	Monitor *m = c->ws->mon;
 
-	if (globalcfg[GLB_SIZEHINT]) {
-		*w = MAX(*w, MAX(globalcfg[GLB_MIN_WH], c->min_w));
-		*h = MAX(*h, MAX(globalcfg[GLB_MIN_WH], c->min_h));
-	} else {
-		*w = MAX(1, *w);
-		*h = MAX(1, *h);
-	}
+	*w = MAX(1, *w);
+	*h = MAX(1, *h);
 
-	if (usermotion) {
+	if (motion) {
 		if (!mouse) {
 			if (*w > c->w && c->inc_w > *w - c->w)
 				*w = c->w + c->inc_w;
@@ -788,7 +783,8 @@ void changews(Workspace *ws, int swap, int warp)
 		m->ws = ws;
 		updnetworkspaces();
 		relocatews(ws, oldmon);
-		relocatews(lastws, selmon);
+		if (lastws->mon->ws == lastws)
+			relocatews(lastws, selmon);
 	}
 	selws = ws;
 	selmon = selws->mon;
@@ -1459,7 +1455,7 @@ void cmdsend(int num)
 	old = cmdclient->ws->mon;
 	unfocus(cmdclient, 1);
 	setworkspace(cmdclient, num);
-	if (cmdclient->ws->mon != old)
+	if (cmdclient->ws->mon != old && cmdclient->ws->mon->ws == cmdclient->ws)
 		relocate(cmdclient, cmdclient->ws->mon, old);
 	needsrefresh = 1;
 }
@@ -2585,16 +2581,14 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		c->x = c->trans->x + ((W(c->trans) - W(c)) / 2);
 		c->y = c->trans->y + ((H(c->trans) - H(c)) / 2);
 	}
-	xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_BORDER_WIDTH, &c->bw);
-	sendconfigure(c);
 	clienttype(c);
 	sizehints(c, 1);
 	clienthints(c);
 	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK,
-			(unsigned int[]){XCB_EVENT_MASK_ENTER_WINDOW
+			(unsigned int[]){ XCB_EVENT_MASK_ENTER_WINDOW
 							| XCB_EVENT_MASK_FOCUS_CHANGE
 							| XCB_EVENT_MASK_PROPERTY_CHANGE
-							| XCB_EVENT_MASK_STRUCTURE_NOTIFY});
+							| XCB_EVENT_MASK_STRUCTURE_NOTIFY });
 	drawborder(c, 0);
 	grabbuttons(c, 0);
 	if (FLOATING(c)) {
@@ -2632,7 +2626,8 @@ void initdesk(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	d->state |= STATE_NEEDSMAP;
 	ATTACH(d, desks);
 	xcb_change_window_attributes(con, d->win, XCB_CW_EVENT_MASK,
-			(unsigned int[]){XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY});
+			(unsigned int[]){ XCB_EVENT_MASK_PROPERTY_CHANGE
+							| XCB_EVENT_MASK_STRUCTURE_NOTIFY });
 	MOVERESIZE(d->win, d->x, d->y, d->w, d->h, 0);
 	setstackmode(d->win, XCB_STACK_MODE_BELOW);
 }
@@ -2694,7 +2689,8 @@ void initpanel(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	free(prop);
 	ATTACH(p, panels);
 	xcb_change_window_attributes(con, p->win, XCB_CW_EVENT_MASK,
-			(unsigned int[]){XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY});
+			(unsigned int[]){ XCB_EVENT_MASK_PROPERTY_CHANGE
+							| XCB_EVENT_MASK_STRUCTURE_NOTIFY });
 }
 
 Rule *initrule(Rule *wr)
@@ -3552,52 +3548,55 @@ void resize(Client *c, int x, int y, int w, int h, int bw)
 	sendconfigure(c);
 }
 
-void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, int mouse)
+void resizehint(Client *c, int x, int y, int w, int h, int bw, int motion, int mouse)
 {
-	if (applysizehints(c, &x, &y, &w, &h, bw, usermotion, mouse))
+	if (applysizehints(c, &x, &y, &w, &h, bw, motion, mouse))
 		resize(c, x, y, w, h, bw);
 }
 
-int resizetiled(Client *c, Client *p, int x, int y, int w, int h, int bw, int gap,
-		int wh, int *newy, int nrem, int havail)
+int resizetiled(Client *c, Client *prev, int x, int y, int w, int h, int bw, int gap,
+		int wh, int *newy, int nrem, int availh)
 {
 	int ret = 1;
 	int b = bw ? c->bw : bw;
-	int min = MAX(globalcfg[GLB_MIN_WH], c->min_h);
+	int minh = MAX(globalcfg[GLB_MIN_WH], c->min_h);
 
-	DBG("resizetiled: 0x%08x - %d,%d @ %dx%d - newy: %d, nrem: %d, havail; %d",
-			c->win, x, y, w, h, *newy, nrem, havail)
-	if (!c->hoff && h < min) {
+	DBG("resizetiled: 0x%08x - %d,%d @ %dx%d - newy: %d, nrem: %d, availh; %d",
+			c->win, x, y, w, h, *newy, nrem, availh)
+
+	if (!c->hoff && h < minh) {
 		popfloat(c);
 		return ret;
-	} else if (nrem > 1 && (nrem - 1) * (min + gap) > havail) {
-		h += havail - ((nrem - 1) * (min + gap));
+	} else if (nrem > 1 && (nrem - 1) * (minh + gap) > availh) {
+		h += availh - ((nrem - 1) * (minh + gap));
 		ret = -1;
 	} else if (nrem == 1 && *newy + (h - gap) != wh) {
-		if (p) {
-			p->old_h = p->h;
-			if (p->h + havail < (min = MAX(globalcfg[GLB_MIN_WH], p->min_h))) {
+		if (prev) {
+			prev->old_h = prev->h;
+			minh = MAX(globalcfg[GLB_MIN_WH], prev->min_h);
+			if (prev->h + availh < minh) {
 				ret = -1;
-				p->h = min;
-				y = p->y + min + gap;
-				h = wh - (p->y + p->h);
-			} else if (h < min) {
+				prev->h = minh;
+				y = prev->y + minh + gap;
+				h = wh - (prev->y + prev->h);
+			} else if (h < minh) {
 				ret = -1;
-				p->h += havail - (min - h - (2 * b));
-				y = p->y + p->h + (2 * b) + gap;
-				h = min - (2 * b);
+				prev->h += availh - (minh - h - (2 * b));
+				y = prev->y + prev->h + (2 * b) + gap;
+				h = minh - (2 * b);
 			} else {
-				p->h += havail;
-				y += havail;
+				prev->h += availh;
+				y += availh;
 			}
 		} else {
 			h = wh;
 			ret = -1;
 		}
-	} else if (h < min) {
+	} else if (h < minh) {
 		ret = -1;
-		h = min;
+		h = minh;
 	}
+
 	c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 	c->x = x, c->y = y, c->w = w - (2 * b), c->h = h - (2 * b);
 	*newy += h + gap;

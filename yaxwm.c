@@ -79,7 +79,10 @@
 			| XCB_CONFIG_WINDOW_BORDER_WIDTH,                           \
 			(unsigned int[]){(x), (y), MAX((w), globalcfg[GLB_MIN_WH]), \
 			MAX((h), globalcfg[GLB_MIN_WH]), (bw)})
-
+#define CMOVERESIZE(c, x, y, w, h, bw)            \
+	MOVERESIZE(c->win, (x), (y), (w), (h), (bw)); \
+	drawborder(c, c == selws->sel);               \
+	sendconfigure(c)
 
 enum States {
 	STATE_NONE         = 0,
@@ -3503,13 +3506,8 @@ void relocatews(Workspace *ws, Monitor *old)
 void resize(Client *c, int x, int y, int w, int h, int bw)
 {
 	SAVEOLD(c);
-	c->x = x;
-	c->y = y;
-	c->w = w;
-	c->h = h;
-	MOVERESIZE(c->win, x, y, w, h, bw);
-	drawborder(c, c == selws->sel);
-	sendconfigure(c);
+	c->x = x, c->y = y, c->w = w, c->h = h;
+	CMOVERESIZE(c, x, y, w, h, bw);
 }
 
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int confine, int mouse)
@@ -3945,6 +3943,7 @@ int tile(Workspace *ws)
 					prev->h += available;
 					c->y += available;
 				}
+				CMOVERESIZE(prev, prev->x, prev->y, prev->w, prev->h, prev->bw);
 			} else {
 				c->h = wh - (2 * g);
 				ret = -1;
@@ -3956,17 +3955,9 @@ int tile(Workspace *ws)
 		*y += c->h + g;
 		c->w -= 2 * bw;
 		c->h -= 2 * bw;
+		CMOVERESIZE(c, c->x, c->y, c->w, c->h, b ? c->bw : 0);
 		prev = (remaining == 1 && n - i != 0) ? NULL : c;
 	}
-
-	for (c = nexttiled(ws->clients); c; c = nexttiled(c->next))
-		if (applysizehints(c, &c->x, &c->y, &c->w, &c->h, b ? c->bw : 0, 1, 0)
-				|| c->x != c->old_x || c->y != c->old_y || c->w != c->old_w || c->h != c->old_h)
-		{
-			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, b ? c->bw : 0);
-			drawborder(c, c == selws->sel);
-			sendconfigure(c);
-		}
 	return ret;
 }
 

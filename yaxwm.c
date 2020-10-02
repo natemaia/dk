@@ -37,7 +37,7 @@
 #endif
 
 #ifndef VERSION
-#define VERSION "0.82"
+#define VERSION "0.84"
 #endif
 
 #define W(c) (c->w + (2 * c->bw))

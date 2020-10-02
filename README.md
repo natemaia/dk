@@ -4,14 +4,19 @@ Yet another X window manager.
 
 ---
 
-A tiling window manager taking inspiration from dwm, bspwm, and xmonad.
+A tiling window manager taking inspiration from dwm, bspwm, xmonad, and more.  
+Designed to be lightweight and simple while offering more features and  
+more approachable for non-native coders than the likes of dwm, xmonad, and others.
 
-Some features:
+Some basics:
 
-- Based on xcb with randr support for multi-head.
-- Startup script for config and running programs.
-- Unix socket and commands for the window manager.
-- No built-in bar, font drawing, or binding keys.
+- Fully scriptable.
+- Dynamic workspaces.
+- More dynamic tile layout.
+- Gaps, fancy borders, extra layouts and more.
+- Better support for mouse and floating windows.
+- Startup script for configuration and running programs.
+- No built-in extras *(bar, font drawing, or key bindings)*.
 - Sane support for
 [icccm](https://www.x.org/releases/X11R7.6/doc/xorg-docs/specs/ICCCM/icccm.html#client_to_window_manager_communication),
 [ewmh](https://specifications.freedesktop.org/wm-spec/wm-spec-latest.html), and
@@ -28,7 +33,7 @@ pacman -S xcb-proto xcb-util xcb-util-wm xcb-util-cursor xcb-util-keysyms
 Other systems should have packages with similar names.
 
 As mentioned above yaxwm has no keybind support so you'll need a separate  
-program like sxhkd to launch programs and control the window manager.
+program like `sxhkd` to launch programs and control the window manager.
 On an Arch based distro this can be installed using
 ```
 pacman -S sxhkd
@@ -74,11 +79,11 @@ There are example `yaxwmrc` and `sxhkdrc` files in `doc/` or
 
 Yaxwm looks for a file in the following order
 ```
-$YAXWMRC
-$XDG_CONFIG_HOME/yaxwm/yaxwmrc
-$HOME/.config/yaxwm/yaxwmrc
+$YAXWMRC                        # user specified location, otherwise defined by the WM
+$XDG_CONFIG_HOME/yaxwm/yaxwmrc  # expected location on systems with xdg
+$HOME/.config/yaxwm/yaxwmrc     # fallback location when all else is lost
 ```
-and tries to execute it, **it must be executable**.
+and to runs it, **it must be executable in order for this to happen**.
 
 Advanced changes and configuration like new layouts, callbacks, or new commands  
 can be done by copying the default config header `yaxwm.def.h` to `yaxwm.h`,  
@@ -89,16 +94,16 @@ configuration and avoid conflicts when pulling new updates.
 Most if not all of your interaction with the window manager will be using  
 commands in the form of
 ```
-yaxwm -c ...
+yaxwm -c <command>
 ```
 This will spawn a new instance of yaxwm to write our command into the socket  
 where it can then be read and parsed by the operating yaxwm process.
 
 
 ###### Syntax Outline
-Yaxwm commands have a very basic syntax and parsing, commands are broken  
-down into smaller pieces *(tokens)* which are then passed to the keyword  
-function.
+The commands have a very basic syntax and parsing, the input is broken  
+down into smaller pieces *(tokens)* which are then passed to the matching  
+keyword function, otherwise an error is returned.
 
 Tokens are delimited by one or more:
 
@@ -156,23 +161,20 @@ For various commands yaxwm will expect a certain data type or format to be given
 
 #### Todo
 
-- Code reduction and simplification.
+- Simplification.
 
 
 #### Contributing
 
-I'm open to contributions or ideas so feel free. I don't use a ton of comments  
-and the xcb documentation is kinda shit, but if you're familiar with other window  
-managers most of it will be simple. If you're coming from xlib, most of the calls  
-are easily translated to xcb with minor fiddling. There are some make flags I use  
-often when testing.
+I'm very open to contributions or ideas.
+
 
 To enable internal stderr debug output
 ```
 make debug
 ```
 
-To leave debug symbols in *(for debuggers: gdb, valgrind, etc.)*.
+To leave debug symbols in *(for gdb, valgrind, etc.)*.
 ```
 make nostrip
 ```

@@ -1130,7 +1130,6 @@ void cmdkill(char **argv)
 	} else {
 		xcb_flush(con);
 	}
-	needsrefresh = 1;
 	(void)(argv);
 }
 

@@ -385,7 +385,7 @@ static void relocatews(Workspace *, Monitor *);
 static void resize(Client *, int, int, int, int, int);
 static void resizehint(Client *, int, int, int, int, int, int, int);
 static void restack(Workspace *);
-static int rulecmp(Rule *, char *, char *, char *);
+static int rulecmp(Client *, Rule *);
 static void sendconfigure(Client *);
 static int sendwmproto(Client *, int);
 static void setfullscreen(Client *, int);
@@ -852,11 +852,11 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 		cur = selws->num;
 	ws = cur;
 
-	if (r && !rulecmp(r, c->title, c->class, c->inst)) {
+	if (r && !rulecmp(c, r)) {
 		r = NULL;
 	} else if (!r) {
 		for (r = rules; r; r = r->next)
-			if (rulecmp(r, c->title, c->class, c->inst))
+			if (rulecmp(c, r))
 				break;
 	}
 	if (r) {
@@ -3543,12 +3543,12 @@ void restack(Workspace *ws)
 			setstackmode(d->win, XCB_STACK_MODE_BELOW);
 }
 
-int rulecmp(Rule *r, char *title, char *class, char *inst)
+int rulecmp(Client *c, Rule *r)
 {
-	DBG("rulecmp: %s - %s, %s - %s, %s - %s", r->class, class, r->inst, inst, r->title, title)
-	return !((r->class && regexec(&(r->classreg), class, 0, NULL, 0))
-			|| (r->inst && regexec(&(r->instreg), inst, 0, NULL, 0))
-			|| (r->title && regexec(&(r->titlereg), title, 0, NULL, 0)));
+	DBG("rulecmp: %s - %s, %s - %s, %s - %s", r->class, c->class, r->inst, c->inst, r->title, c->title)
+	return !((r->class && regexec(&(r->classreg), c->class, 0, NULL, 0))
+			|| (r->inst && regexec(&(r->instreg), c->inst, 0, NULL, 0))
+			|| (r->title && regexec(&(r->titlereg), c->title, 0, NULL, 0)));
 }
 
 void sendconfigure(Client *c)

@@ -785,6 +785,7 @@ void changews(Workspace *ws, int swap, int warp)
 				ws->sel ? ws->sel->y + (ws->sel->h / 2) : ws->mon->y + (ws->mon->h / 2));
 	}
 	PROP(REPLACE, root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1, &ws->num);
+	needsrefresh = 1;
 }
 
 void check(int i, char *msg)

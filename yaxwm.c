@@ -13,11 +13,9 @@
 
 #include <err.h>
 #include <poll.h>
-#include <errno.h>
 #include <stdio.h>
 #include <regex.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <unistd.h>
 #include <limits.h>
 #include <locale.h>
@@ -477,7 +475,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (!setlocale(LC_CTYPE, ""))
+	if (!setlocale(LC_ALL, ""))
 		err(1, "no locale support");
 
 	if (xcb_connection_has_error((con = xcb_connect(NULL, NULL))))

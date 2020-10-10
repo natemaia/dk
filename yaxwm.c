@@ -1871,9 +1871,9 @@ void eventhandle(xcb_generic_event_t *ev)
 			ws = c->ws;
 		else if ((m = coordtomon(e->root_x, e->root_y)))
 			ws = m->ws;
-		if (ws)
+		if (ws && ws != selws)
 			changews(ws, 0, 0);
-		if (c && c != selws->sel && globalcfg[GLB_FOCUS_MOUSE])
+		if (c && globalcfg[GLB_FOCUS_MOUSE])
 			focus(c);
 		return;
 	}

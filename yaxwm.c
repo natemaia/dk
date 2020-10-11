@@ -176,6 +176,7 @@ enum GlobalCfg {
 	GLB_SMART_BORDER = 7,
 	GLB_SMART_GAP    = 8,
 	GLB_TILETOHEAD   = 9,
+	GLB_STATICWS     = 10,
 };
 
 
@@ -298,124 +299,117 @@ struct Workspace {
 	Client *sel, *stack, *clients;
 };
 
-static void clienthints(Client *);
-static int clientname(Client *);
-static void clientrule(Client *, Rule *, int);
-static void clienttype(Client *);
-static void cmdborder(char **);
-static void cmdcycle(char **);
-static void cmdfakefull(char **);
-static void cmdfloat(char **);
-static void cmdfocus(char **);
-static void cmdfollow(int);
-static void cmdfull(char **);
-static void cmdgappx(char **);
-static void cmdkill(char **);
-static void cmdlayout(char **);
-static void cmdmon(char **);
-static void cmdmouse(char **);
-static void cmdmsplit(char **);
-static void cmdnmaster(char **);
-static void cmdnstack(char **);
-static void cmdpad(char **);
-static void cmdresize(char **);
-static void cmdrule(char **);
-static void cmdsend(int);
-static void cmdset(char **);
-static void cmdssplit(char **);
-static void cmdstick(char **);
-static void cmdswap(char **);
-static void cmdview(int);
-static void cmdwin(char **);
-static void cmdwm(char **);
-static void cmdws(char **);
-static void cmdwsdef(char **);
-static void detach(Client *, int);
-static void drawborder(Client *, int);
-static int dwindle(Workspace *);
-static void *ecalloc(size_t, size_t);
-static void eventhandle(xcb_generic_event_t *);
-static void eventignore(uint8_t);
+static void cmdborder(char **argv);
+static void cmdcycle(char **argv);
+static void cmdfakefull(char **argv);
+static void cmdfloat(char **argv);
+static void cmdfocus(char **argv);
+static void cmdfollow(int num);
+static void cmdfull(char **argv);
+static void cmdgappx(char **argv);
+static void cmdkill(char **argv);
+static void cmdlayout(char **argv);
+static void cmdmon(char **argv);
+static void cmdmouse(char **argv);
+static void cmdmsplit(char **argv);
+static void cmdnmaster(char **argv);
+static void cmdnstack(char **argv);
+static void cmdpad(char **argv);
+static void cmdresize(char **argv);
+static void cmdrule(char **argv);
+static void cmdsend(int num);
+static void cmdset(char **argv);
+static void cmdssplit(char **argv);
+static void cmdstick(char **argv);
+static void cmdswap(char **argv);
+static void cmdview(int num);
+static void cmdwin(char **argv);
+static void cmdwm(char **argv);
+static void cmdws(char **argv);
+static void cmdwsdef(char **argv);
+static void detach(Client *c, int reattach);
+static void drawborder(Client *c, int focused);
+static int dwindle(Workspace *ws);
+static void eventhandle(xcb_generic_event_t *ev);
+static void eventignore(uint8_t type);
 static void execcfg(void);
-static void fib(Workspace *, int);
-static void quadrant(Client *, int *, int *, int *, int *);
-static void focus(Client *);
+static void fib(Workspace *ws, int dwindle);
+static void focus(Client *c);
+static void freemon(Monitor *m);
 static void freerule(Rule *r);
 static void freewm(void);
-static void freews(Workspace *);
-static void grabbuttons(Client *, int);
-static void gravitate(Client *, int, int, int);
-static int grid(Workspace *);
-static int iferr(int, char *, xcb_generic_error_t *);
-static void initclient(xcb_window_t, xcb_get_geometry_reply_t *);
-static void initdesk(xcb_window_t, xcb_get_geometry_reply_t *);
-static void initmon(int, char *, xcb_randr_output_t, int, int, int, int);
-static void initpanel(xcb_window_t, xcb_get_geometry_reply_t *);
-static Rule *initrule(Rule *);
+static void freews(Workspace *ws);
+static void grabbuttons(Client *c, int focused);
+static void gravitate(Client *c, int horz, int vert, int matchgap);
+static int grid(Workspace *ws);
+static int iferr(int lvl, char *msg, xcb_generic_error_t *e);
+static Rule *initrule(Rule *wr);
 static void initscan(void);
-static void initsock(int);
+static void initsock(int send);
 static void initwm(void);
-static Workspace *initws(int);
-static char *itoa(int, char *);
-static Monitor *itomon(int);
-static Workspace *itows(int);
-static void manage(xcb_window_t, xcb_get_geometry_reply_t *, xcb_get_window_attributes_reply_t *);
-static int mono(Workspace *);
-static void movefocus(int);
-static void movestack(int);
+static char *itoa(int n, char *s);
+static Monitor *itomon(int num);
+static Workspace *itows(int num);
+static void manage(xcb_window_t win, xcb_get_geometry_reply_t *g, xcb_get_window_attributes_reply_t *wa);
+static int mono(Workspace *ws);
+static void movefocus(int direction);
+static void movestack(int direction);
 static Monitor *nextmon(Monitor *m);
-static Client *nexttiled(Client *);
-static char **parsebool(char **, int *);
-static int parseclient(char **, Client **);
-static void parsecmd(char *);
-static char **parsecolour(char **, unsigned int *);
-static char **parsefloat(char **, float *, int *);
-static char **parsegeom(char **, char, int *, int *, int *);
-static char **parseint(char **, int *, int *, int);
-static char **parseintclamp(char **, int *, int *, int, int);
-static int parseopt(char **);
-static char *parsetoken(char **);
+static Client *nexttiled(Client *c);
+static Monitor *outputtomon(xcb_randr_output_t id);
+static char **parsebool(char **argv, int *setting);
+static int parseclient(char **argv, Client **c);
+static void parsecmd(char *buf);
+static char **parsecolour(char **argv, unsigned int *setting);
+static char **parsefloat(char **argv, float *setting, int *rel);
+static char **parsegeom(char **argv, char type, int *i, int *rel, int *grav);
+static char **parseint(char **argv, int *setting, int *rel, int allowzero);
+static char **parseintclamp(char **argv, int *setting, int *rel, int min, int max);
+static int parseopt(char **argv);
+static char *parsetoken(char **src);
+static Workspace *parsewsormon(char **argv, int mon);
 static void popfloat(Client *c);
 static void pushstatus(void);
+static void quadrant(Client *c, int *x, int *y, int *w, int *h);
 static void refresh(void);
-static void relocate(Client *, Monitor *, Monitor *);
-static void relocatews(Workspace *, Monitor *);
-static void resize(Client *, int, int, int, int, int);
-static void resizehint(Client *, int, int, int, int, int, int, int);
-static void restack(Workspace *);
-static int rulecmp(Client *, Rule *);
-static void sendconfigure(Client *);
-static int sendwmproto(Client *, int);
-static void setfullscreen(Client *, int);
-static void setinputfocus(Client *);
+static void relocate(Client *c, Monitor *new, Monitor *old);
+static void relocatews(Workspace *ws, Monitor *old);
+static void resize(Client *c, int x, int y, int w, int h, int bw);
+static void resizehint(Client *c, int x, int y, int w, int h, int bw, int confine, int mouse);
+static void restack(Workspace *ws);
+static int rulecmp(Client *c, Rule *r);
+static void sendconfigure(Client *c);
+static int sendwmproto(Client *c, int wmproto);
+static void setfullscreen(Client *c, int fullscreen);
+static void setinputfocus(Client *c);
 static void setnetwsnames(void);
-static void setstackmode(xcb_window_t, unsigned int);
-static void seturgent(Client *, int);
-static void setwmwinstate(xcb_window_t, long);
-static void setworkspace(Client *, int, int);
-static void showhide(Client *);
-static void sighandle(int);
-static void sizehints(Client *, int);
-static int spiral(Workspace *);
-static size_t strlcat(char *, const char *, size_t);
-static size_t strlcpy(char *, const char *, size_t);
-static int tile(Workspace *);
-static void unfocus(Client *, int);
-static void unmanage(xcb_window_t, int);
+static void setstackmode(xcb_window_t win, unsigned int mode);
+static void seturgent(Client *c, int urg);
+static void setwmwinstate(xcb_window_t win, long state);
+static void setworkspace(Client *c, int num, int stacktail);
+static void showhide(Client *c);
+static void sighandle(int sig);
+static void sizehints(Client *c, int uss);
+static int spiral(Workspace *ws);
+static size_t strlcat(char *dst, const char *src, size_t siz);
+static size_t strlcpy(char *dst, const char *src, size_t dsize);
+static int tile(Workspace *ws);
+static void unfocus(Client *c, int focusroot);
+static void unmanage(xcb_window_t win, int destroyed);
 static void updnetworkspaces(void);
+static int updoutputs(xcb_randr_output_t *outs, int nouts, xcb_timestamp_t t);
 static int updrandr(void);
-static void updstruts(Panel *, int);
-static void updworkspaces(int);
-static int usage(int, char);
-static xcb_get_window_attributes_reply_t *winattr(xcb_window_t);
-static xcb_get_geometry_reply_t *wingeom(xcb_window_t);
-static int winprop(xcb_window_t, xcb_atom_t, xcb_atom_t *);
-static Client *wintoclient(xcb_window_t);
-static Desk *wintodesk(xcb_window_t);
-static Panel *wintopanel(xcb_window_t);
-static xcb_window_t wintrans(xcb_window_t);
-static int writecmd(int, char *[]);
-
+static void updstruts(Panel *p, int apply);
+static void updworkspaces(int needed);
+static int usage(int e, char flag);
+static xcb_get_window_attributes_reply_t *winattr(xcb_window_t win);
+static xcb_get_geometry_reply_t *wingeom(xcb_window_t win);
+static int winprop(xcb_window_t win, xcb_atom_t prop, xcb_atom_t *ret);
+static Client *wintoclient(xcb_window_t win);
+static Desk *wintodesk(xcb_window_t win);
+static Panel *wintopanel(xcb_window_t win);
+static xcb_window_t wintrans(xcb_window_t win);
+static int writecmd(int argc, char *argv[]);
 
 /* config header needs the functions to be defined */
 #include "yaxwm.h"
@@ -596,7 +590,8 @@ void adjustwsormon(char **argv)
 				break;
 			}
 		if (fn != cmdview && (r = parseclient(argv, &cmdclient))) {
-			if (r == -1) return;
+			if (r == -1)
+				return;
 			cws = cmdclient->ws;
 			cm = cws->mon;
 			argv++;
@@ -654,19 +649,14 @@ void adjustwsormon(char **argv)
 				r++;
 			}
 		}
-	} else { /* index (1 - numws) */
-		parseintclamp(argv, &opt, NULL, 1, globalcfg[GLB_NUMWS]);
-		if (!cmdusemon)
-			ws = itows(opt - 1);
-		else
-			ws = (m = itomon(opt - 1)) && m->connected ? m->ws : cws;
+	} else { /* index (1-numws or 1-nummon) */
+		ws = parsewsormon(argv, cmdusemon);
 	}
 
 	if (ws)
 		fn(ws->num);
 	else
 		fprintf(cmdresp, "!unable to locate %s\n", cmdusemon ? "monitor" : "workspace");
-	return;
 }
 
 void applypanelstrut(Panel *p)
@@ -748,6 +738,39 @@ void attach(Client *c, int tohead)
 		ATTACH(c, tail->next);
 	else
 		ATTACH(c, c->ws->clients);
+}
+
+int assignws(Workspace *ws, Monitor *new)
+{
+	int n;
+	Monitor *old;
+	Workspace *ows;
+
+	if (ws->mon == new)
+		return 1;
+	DBG("assignws: ws: %d -> new mon: %s", ws->num, new->name)
+	for (n = 0, ows = workspaces; ows; ows = ows->next) {
+		if (ows->mon == ws->mon) {
+			n++;
+			if (ows != ws) {
+				n++;
+				break;
+			}
+		}
+	}
+	if (n > 1 && ows) {
+		DBG("assignws: old mon: %s has available workspace: %d", ws->mon->name, ows->num)
+		if (ws == ws->mon->ws)
+			ws->mon->ws = ows;
+		old = ws->mon;
+		ws->mon = new;
+		relocatews(ws, old);
+		needsrefresh = 1;
+	} else {
+		fprintf(cmdresp, "!unable to assign last/only workspace on monitor\n");
+		return 0;
+	}
+	return 1;
 }
 
 void changews(Workspace *ws, int swap, int warp)
@@ -1136,9 +1159,8 @@ void cmdlayout(char **argv)
 {
 	for (unsigned int i = 0; i < LEN(layouts); i++)
 		if (!strcmp(layouts[i].name, *argv)) {
-			if (&layouts[i] != setws->layout) {
+			if (&layouts[i] != setws->layout)
 				setws->layout = &layouts[i];
-			}
 			return;
 		}
 	fprintf(cmdresp, "!invalid layout name: %s\n", *argv);
@@ -1437,9 +1459,9 @@ void cmdsend(int num)
 
 void cmdset(char **argv)
 {
-	Workspace *ws;
+	Workspace *ws = NULL;
 	unsigned int j;
-	int i, names = 0;
+	int i, names = 0, set = 0;
 
 	setws = selws;
 	if (!*argv) {
@@ -1449,16 +1471,29 @@ void cmdset(char **argv)
 	while (*argv) {
 		i = -1;
 		if (!strcmp("ws", *argv)) {
-			if (!strcmp("default", *(argv + 1))) {
-				cmdwsdef(argv + 2);
+			argv++;
+			if (!strcmp("default", *argv)) {
+				cmdwsdef(argv + 1);
 				break;
-			}
-			argv = parseintclamp(argv + 1, &i, NULL, 1, globalcfg[GLB_NUMWS]);
-			if (!(ws = itows(i - 1))) {
-				fprintf(cmdresp, "!invalid workspace index: %s\n", *argv);
+			} else if (!(ws = parsewsormon(argv, 0))) {
+				fprintf(cmdresp, "!%s ws: %s\n", ebadarg, *argv);
 				break;
 			}
 			setws = ws;
+			set = 1;
+		} else if (!strcmp("mon", *argv)) {
+			argv++;
+			if (!globalcfg[GLB_STATICWS]) {
+				fprintf(cmdresp, "!unable to set monitor with dynamic workspaces enabled\n");
+				break;
+			} else if (!set) {
+				fprintf(cmdresp, "!workspace index or name is required to set the monitor\n");
+				break;
+			} else if (!(ws = parsewsormon(argv, 1))) {
+				fprintf(cmdresp, "!monitor index or name is required to assign workspace\n");
+				break;
+			}
+			assignws(setws, ws->mon);
 		} else if (!strcmp("numws", *argv)) {
 			argv = parseintclamp(argv + 1, &i, NULL, 1, 99);
 			if (i > globalcfg[GLB_NUMWS])
@@ -1467,10 +1502,12 @@ void cmdset(char **argv)
 			argv++;
 			if (!*argv) {
 				fprintf(cmdresp, "!set ws name %s\n", enoargs);
-				goto finish;
+				break;
 			}
 			strlcpy(setws->name, *argv, sizeof(setws->name));
 			names = 1;
+		} else if (!strcmp("static_ws", *argv)) {
+			argv = parsebool(argv + 1, &globalcfg[GLB_STATICWS]);
 		} else if (!strcmp("tile_tohead", *argv)) {
 			argv = parsebool(argv + 1, &globalcfg[GLB_TILETOHEAD]);
 		} else if (!strcmp("smart_border", *argv)) {
@@ -1702,7 +1739,8 @@ void cmdview(int num)
 
 	DBG("cmdview: workspace %d", num)
 	if ((ws = itows(num))) {
-		changews(ws, !cmdusemon, cmdusemon);
+		changews(ws, globalcfg[GLB_STATICWS] ? 0 : !cmdusemon,
+				cmdusemon || (globalcfg[GLB_STATICWS] && selws->mon != ws->mon));
 		needsrefresh = 1;
 	}
 }
@@ -2841,7 +2879,7 @@ void initwm(void)
 	updworkspaces(MAX(cws + 1, globalcfg[GLB_NUMWS]));
 	selws = workspaces;
 	selmon = selws->mon;
-	changews((ws = itows(cws)) ? ws : workspaces, 1, 0);
+	changews((ws = itows(cws)) ? ws : workspaces, globalcfg[GLB_STATICWS], 1);
 
 	wmcheck = xcb_generate_id(con);
 	xcb_create_window(con, XCB_COPY_FROM_PARENT, wmcheck, root, -1, -1, 1, 1, 0,
@@ -3244,6 +3282,30 @@ char **parseintclamp(char **argv, int *setting, int *rel, int min, int max)
 	return argv;
 }
 
+Workspace *parsewsormon(char **argv, int mon)
+{
+	int opt = -1, n;
+	Monitor *m;
+	Workspace *cws = selws, *ws;
+
+	if (mon) {
+		for (m = nextmon(monitors); m; m = nextmon(m->next))
+			if (!strcmp(m->name, *argv))
+				return m->ws;
+	} else {
+		FOR_EACH(ws, workspaces)
+			if (!strcmp(ws->name, *argv))
+				return ws;
+	}
+	if (mon)
+		for (n = 0, m = nextmon(monitors); m; m = nextmon(m->next), n++)
+			;
+	parseintclamp(argv, &opt, NULL, 1, mon ? n : globalcfg[GLB_NUMWS]);
+	if (opt < 0)
+		return NULL;
+	return mon ? ((m = nextmon(itomon(opt - 1))) ? m->ws : cws) : itows(opt - 1);;
+}
+
 int parseopt(char **argv)
 {
 	int i;
@@ -3346,7 +3408,7 @@ void pushstatus(void)
 	fprintf(f, "\n\n# number:name:workspace ...\nmonitors:");
 	FOR_EACH(m, monitors)
 		if (m->connected)
-			fprintf(f, " %s%d:%s:%d", m->ws == selws ? "*" : "", m->num + 1, m->name, m->ws->num);
+			fprintf(f, " %s%d:%s:%d", m->ws == selws ? "*" : "", m->num + 1, m->name, m->ws->num + 1);
 	fprintf(f, "\n\t# number:name active_window x y width height wx wy wwidth wheight");
 	FOR_EACH(m, monitors)
 		if (m->connected)
@@ -3355,7 +3417,7 @@ void pushstatus(void)
 					m->x, m->y, m->w, m->h, m->wx, m->wy, m->ww, m->wh);
 	fprintf(f, "\n\n# id:workspace ...\nwindows:");
 	FOR_CLIENTS(c, ws)
-		fprintf(f, " %s#%08x:%d", c == selws->sel ? "*" : "", c->win, c->ws->num);
+		fprintf(f, " %s#%08x:%d", c == selws->sel ? "*" : "", c->win, c->ws->num + 1);
 	fprintf(f, "\n\t# id title class instance x y width height bw hoff "
 			"float full fakefull fixed stick urgent callback trans_id");
 	FOR_CLIENTS(c, ws)

@@ -572,18 +572,17 @@ void adjustisetting(int i, int relative, int *setting, int other, int setborderg
 void adjustwsormon(char **argv)
 {
 	int opt, r;
-	unsigned int i;
 	void (*fn)(int);
 	Monitor *m = NULL, *cm;
-	Workspace *ws = NULL, *cws, *save;
+	Workspace *ws = NULL, *cur;
 
 	fn = cmdview;
-	cws = selws;
-	cm = cws->mon;
+	cur = selws;
+	cm = cur->mon;
 	cmdclient = selws->sel;
 
 	if (*argv) {
-		for (i = 0; i < LEN(wsmoncmds); i++)
+		for (unsigned int i = 0; i < LEN(wsmoncmds); i++)
 			if (!strcmp(wsmoncmds[i].name, *argv)) {
 				fn = wsmoncmds[i].fn.command;
 				argv++;
@@ -592,8 +591,8 @@ void adjustwsormon(char **argv)
 		if (fn != cmdview && (r = parseclient(argv, &cmdclient))) {
 			if (r == -1)
 				return;
-			cws = cmdclient->ws;
-			cm = cws->mon;
+			cur = cmdclient->ws;
+			cm = cur->mon;
 			argv++;
 		} else {
 			cmdclient = selws->sel;
@@ -608,24 +607,24 @@ void adjustwsormon(char **argv)
 	if ((opt = parseopt(argv)) >= 0) { /* word option (next, prev, nextne, etc.) */
 		if (opt == DIR_LAST) {
 			ws = cmdusemon
-				? (lastmon && lastmon->connected ? lastmon->ws : cws)
-				: lastws ? lastws : cws;
+				? (lastmon && lastmon->connected ? lastmon->ws : cur)
+				: lastws ? lastws : cur;
 		} else if (opt == DIR_NEXT && cmdusemon) {
 			if (!(m = nextmon(cm->next)))
 				m = nextmon(monitors);
 			ws = m->ws;
 		} else if (opt == DIR_NEXT) {
-			ws = cws->next ? cws->next : workspaces;
+			ws = cur->next ? cur->next : workspaces;
 		} else if (cmdusemon && opt == DIR_PREV) {
 			for (m = nextmon(monitors); m && nextmon(m->next)
 					&& nextmon(m->next) != cm; m = nextmon(m->next))
 				;
 			ws = m ? m->ws : selws;
 		} else if (opt == DIR_PREV) {
-			FIND_PREV(ws, cws, workspaces);
+			FIND_PREV(ws, cur, workspaces);
 		} else {
 			r = 0;
-			save = cws;
+			Workspace *save = cur;
 			while (!ws && r < globalcfg[GLB_NUMWS]) {
 				if (opt == DIR_NEXT_NE) {
 					if (cmdusemon) {
@@ -633,16 +632,16 @@ void adjustwsormon(char **argv)
 							m = nextmon(monitors);
 						ws = m->ws;
 					} else
-						ws = cws->next ? cws->next : workspaces;
+						ws = cur->next ? cur->next : workspaces;
 				} else if (cmdusemon) {
 					for (m = nextmon(monitors); m && nextmon(m->next)
 							&& nextmon(m->next) != cm; m = nextmon(m->next))
 						;
 					ws = m ? m->ws : selws;
 				} else {
-					FIND_PREV(ws, cws, workspaces);
+					FIND_PREV(ws, cur, workspaces);
 				}
-				cws = ws;
+				cur = ws;
 				cm = ws->mon;
 				if (!ws->clients && ws != save)
 					ws = NULL;
@@ -676,7 +675,6 @@ void applypanelstrut(Panel *p)
 
 int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int confine, int mouse)
 {
-	int baseismin;
 	Monitor *m = c->ws->mon;
 
 	*w = MAX(1, *w);
@@ -702,7 +700,8 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int confin
 	}
 
 	if (FLOATING(c) || globalcfg[GLB_TILEHINTS]) {
-		if (!(baseismin = c->base_w == c->min_w && c->base_h == c->min_h))
+		int baseismin;
+		if (!(baseismin = (c->base_w == c->min_w && c->base_h == c->min_h)))
 			*w -= c->base_w, *h -= c->base_h;
 		if (c->min_aspect > 0 && c->max_aspect > 0) {
 			if (c->max_aspect < (float)*w / *h)
@@ -743,7 +742,6 @@ void attach(Client *c, int tohead)
 int assignws(Workspace *ws, Monitor *new)
 {
 	int n;
-	Monitor *old;
 	Workspace *ows;
 
 	if (ws->mon == new)
@@ -762,7 +760,7 @@ int assignws(Workspace *ws, Monitor *new)
 		DBG("assignws: old mon: %s has available workspace: %d", ws->mon->name, ows->num)
 		if (ws == ws->mon->ws)
 			ws->mon->ws = ows;
-		old = ws->mon;
+		Monitor *old = ws->mon;
 		ws->mon = new;
 		relocatews(ws, old);
 		needsrefresh = 1;
@@ -775,7 +773,7 @@ int assignws(Workspace *ws, Monitor *new)
 
 void changews(Workspace *ws, int swap, int warp)
 {
-	Monitor *m, *oldmon;
+	Monitor *m;
 	int difmon = warp && selws->mon != ws->mon;
 
 	if (ws == selws)
@@ -788,14 +786,14 @@ void changews(Workspace *ws, int swap, int warp)
 	if (selws->sel)
 		unfocus(selws->sel, 1);
 	if (swap && m != ws->mon) {
-		oldmon = ws->mon;
+		Monitor *old = ws->mon;
 		selws->mon = ws->mon;
 		if (ws->mon->ws == ws)
 			ws->mon->ws = selws;
 		ws->mon = m;
 		m->ws = ws;
 		updnetworkspaces();
-		relocatews(ws, oldmon);
+		relocatews(ws, old);
 		if (lastws->mon->ws == lastws)
 			relocatews(lastws, selmon);
 	}
@@ -864,7 +862,7 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 {
 	Monitor *m;
 	Rule *r = wr;
-	int num, ws, focus = 0;
+	int ws, dofocus = 0;
 	xcb_atom_t cur = selws->num;
 
 	DBG("clientrule: 0x%08x", c->win)
@@ -884,7 +882,7 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 	if (r) {
 		DBG("clientrule: matched: %s, %s, %s", r->class, r->inst, r->title)
 		c->cb = r->cb;
-		focus = r->focus;
+		dofocus = r->focus;
 		c->state |= r->state;
 		c->x = r->x != -1 ? r->x : c->x;
 		c->y = r->y != -1 ? r->y : c->y;
@@ -892,7 +890,8 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 		c->h = r->h != -1 ? r->h : c->h;
 		c->bw = r->bw != -1 && !(c->state & STATE_NOBORDER) ? r->bw : c->bw;
 		if (!c->trans) {
-			if ((cmdusemon = r->mon != NULL)) {
+			if ((cmdusemon = (r->mon != NULL))) {
+				int num;
 				if ((num = strtol(r->mon, NULL, 0)) > 0 && (m = itomon(num))) {
 					ws = m->ws->num;
 				} else for (m = monitors; m; m = m->next)
@@ -909,7 +908,7 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 	if (ws + 1 > globalcfg[GLB_NUMWS] && ws <= 99)
 		updworkspaces(ws + 1);
 	setworkspace(c, MIN(ws, globalcfg[GLB_NUMWS]), nofocus);
-	if (focus && c->ws != selws)
+	if (dofocus && c->ws != selws)
 		cmdview(c->ws->num);
 	if (r) /* handle gravity last as it may be on another workspace */
 		gravitate(c, r->xgrav, r->ygrav, 1);
@@ -934,21 +933,20 @@ void cmdborder(char **argv)
 {
 	Client *c;
 	Workspace *ws;
-	int incol = 0, start = 0;
-	int i, old, bw, ow, rel, outer;
-	unsigned int focus, unfocus, urgent;
-	unsigned int ofocus, ounfocus, ourgent;
+	int i, old, bw, ow, rel, incol = 0, start;
+	unsigned int bfocus, bunfocus, burgent, ofocus, ounfocus, ourgent;
 
 	bw = border[BORD_WIDTH];
 	ow = border[BORD_O_WIDTH];
-	focus = border[BORD_FOCUS];
-	urgent = border[BORD_URGENT];
-	unfocus = border[BORD_UNFOCUS];
+	bfocus = border[BORD_FOCUS];
+	burgent = border[BORD_URGENT];
+	bunfocus = border[BORD_UNFOCUS];
 	ofocus = border[BORD_O_FOCUS];
 	ourgent = border[BORD_O_URGENT];
 	ounfocus = border[BORD_O_UNFOCUS];
 
 	while (*argv) {
+		int outer;
 		if ((outer = !strcmp("outer", *argv) || !strcmp("outer_width", *argv))
 				|| !strcmp(*argv, "width"))
 		{
@@ -969,11 +967,11 @@ void cmdborder(char **argv)
 				argv++;
 			}
 			if (!strcmp(*argv, "focus")) {
-				argv = parsecolour(argv + 1, &focus);
+				argv = parsecolour(argv + 1, &bfocus);
 			} else if (!strcmp(*argv, "urgent")) {
-				argv = parsecolour(argv + 1, &urgent);
+				argv = parsecolour(argv + 1, &burgent);
 			} else if (!strcmp(*argv, "unfocus")) {
-				argv = parsecolour(argv + 1, &unfocus);
+				argv = parsecolour(argv + 1, &bunfocus);
 			} else if (!strcmp(*argv, "outer_focus")) {
 				argv = parsecolour(argv + 1, &ofocus);
 			} else if (!strcmp(*argv, "outer_urgent")) {
@@ -988,7 +986,6 @@ void cmdborder(char **argv)
 				start = 0;
 				continue; /* maybe more args after so don't increment argv */
 			}
-			start = 0;
 		} else {
 			fprintf(cmdresp, "!%s border: %s\n", ebadarg, *argv);
 			break;
@@ -1005,9 +1002,9 @@ void cmdborder(char **argv)
 		border[BORD_O_WIDTH] = ow;
 	}
 	border[BORD_WIDTH] = bw;
-	border[BORD_FOCUS] = focus;
-	border[BORD_UNFOCUS] = unfocus;
-	border[BORD_URGENT] = urgent;
+	border[BORD_FOCUS] = bfocus;
+	border[BORD_UNFOCUS] = bunfocus;
+	border[BORD_URGENT] = burgent;
 	border[BORD_O_FOCUS] = ofocus;
 	border[BORD_O_UNFOCUS] = ounfocus;
 	border[BORD_O_URGENT] = ourgent;
@@ -1175,7 +1172,6 @@ void cmdmon(char **argv)
 void cmdmouse(char **argv)
 {
 	int arg;
-	xcb_button_t *btn;
 
 	while (*argv) {
 		if (!strcmp("mod", *argv)) {
@@ -1192,7 +1188,7 @@ void cmdmouse(char **argv)
 			}
 		} else if ((arg = !strcmp("move", *argv)) || !strcmp("resize", *argv)) {
 			argv++;
-			btn = arg ? &mousemove : &mouseresize;
+			xcb_button_t *btn = arg ? &mousemove : &mouseresize;
 			if (!strcmp("button1", *argv))
 				*btn = XCB_BUTTON_INDEX_1;
 			else if (!strcmp("button2", *argv))
@@ -1594,7 +1590,7 @@ void cmdswap(char **argv)
 			prev = nexttiled(cur->next);
 		if (!prev || prev != last) {
 			last = NULL;
-			if (!c || !(c = nexttiled(c->next)))
+			if (!(c = nexttiled(c->next)))
 				return;
 		} else {
 			c = prev;
@@ -1659,7 +1655,7 @@ void cmdwsdef(char **argv)
 {
 	Workspace *ws;
 	unsigned int i;
-	int inpad = 0, start = 0, apply = 0;
+	int inpad = 0, start, apply = 0;
 
 	while (*argv) {
 		if (!strcmp(*argv, "apply")) {
@@ -1708,7 +1704,6 @@ void cmdwsdef(char **argv)
 				start = 0;
 				continue; /* maybe more args after pad so don't increment argv */
 			}
-			start = 0;
 		} else {
 			fprintf(cmdresp, "!%s workspace default: %s\n", ebadarg, *argv);
 			return;
@@ -1756,8 +1751,8 @@ void drawborder(Client *c, int focused)
 		return;
 	b = c->bw;
 	o = border[BORD_O_WIDTH];
-	in = border[focused ? BORD_FOCUS : (c->state & STATE_URGENT ? BORD_URGENT : BORD_UNFOCUS)];
-	out = border[focused ? BORD_O_FOCUS : (c->state & STATE_URGENT ? BORD_O_URGENT : BORD_O_UNFOCUS)];
+	in = border[focused ? BORD_FOCUS : ((c->state & STATE_URGENT) ? BORD_URGENT : BORD_UNFOCUS)];
+	out = border[focused ? BORD_O_FOCUS : ((c->state & STATE_URGENT) ? BORD_O_URGENT : BORD_O_UNFOCUS)];
 	xcb_rectangle_t inner[] = {
 		/* x            y             width         height */
 		{ c->w,         0,            b - o,        c->h + b - o }, /* right */
@@ -1838,7 +1833,6 @@ void eventhandle(xcb_generic_event_t *ev)
 {
 	Client *c;
 	Monitor *m;
-	Workspace *ws;
 	static xcb_timestamp_t last = 0;
 	static int grabbing = 0, grabmove = 0;
 	static int mx, my, ox, oy, ow, oh, nw, nh, nx, ny;
@@ -1897,6 +1891,7 @@ void eventhandle(xcb_generic_event_t *ev)
 		return;
 	}
 	case XCB_ENTER_NOTIFY: {
+		Workspace *ws;
 		xcb_enter_notify_event_t *e = (xcb_enter_notify_event_t *)ev;
 
 		if (e->event != root && (e->mode != XCB_NOTIFY_MODE_NORMAL
@@ -2051,8 +2046,6 @@ void eventhandle(xcb_generic_event_t *ev)
 		break;
 	}
 	case XCB_MOTION_NOTIFY: {
-		int i, ohoff;
-		Client *p;
 		xcb_motion_notify_event_t *e = (xcb_motion_notify_event_t *)ev;
 
 		if (grabbing && (c = selws->sel)) {
@@ -2060,6 +2053,8 @@ void eventhandle(xcb_generic_event_t *ev)
 				return;
 			last = e->time;
 			if (!grabmove && !FLOATING(c) && selws->layout->fn.layout == tile) {
+				int i;
+				Client *p;
 				for (i = 0, p = nexttiled(selws->clients); p && p != c; p = nexttiled(p->next), i++)
 					;
 				if (i >= selws->nstack + selws->nmaster)
@@ -2070,7 +2065,7 @@ void eventhandle(xcb_generic_event_t *ev)
 					selws->msplit = (double)(ox - selws->mon->x + (e->root_x - mx)) / (double)selws->mon->ww;
 				else
 					selws->msplit = (double)((ox - selws->mon->x + ow) + (e->root_x - mx)) / (double)selws->mon->ww;
-				ohoff = c->hoff;
+				int ohoff = c->hoff;
 				if (i + 1 == selws->nmaster || i + 1 == selws->nmaster + selws->nstack
 						|| !nexttiled(c->next))
 					c->hoff = (e->root_y - my) * -1;
@@ -2173,7 +2168,7 @@ void eventhandle(xcb_generic_event_t *ev)
 		xcb_generic_error_t *e = (xcb_generic_error_t*)ev;
 
 		fprintf(stderr, "yaxwm: previous request returned error %i, \"%s\""
-				" major code %i, minor code %i resource id %i sequence num %i\n",
+				" major code %u, minor code %u resource id %u sequence num %u\n",
 				(int)e->error_code, xcb_event_get_error_label(e->error_code),
 				(uint32_t) e->major_code, (uint32_t) e->minor_code,
 				(uint32_t) e->resource_id, (uint32_t) e->sequence);
@@ -2201,10 +2196,11 @@ void eventignore(uint8_t type)
 
 void execcfg(void)
 {
-	char *cfg, *home;
+	char *cfg;
 	char path[PATH_MAX];
 
 	if (!(cfg = getenv("YAXWMRC"))) {
+		char *home;
 		if (!(home = getenv("XDG_CONFIG_HOME"))) {
 			if (!(home = getenv("HOME"))) {
 				warn("getenv");
@@ -2232,7 +2228,7 @@ void fib(Workspace *ws, int dwindle)
 	Client *c;
 	Monitor *m = ws->mon;
 	unsigned int i, n, x, y;
-	int w, h, b, g, ox, f = 0;
+	int w, h, g, f = 0;
 
 	for (n = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), n++)
 		;
@@ -2246,8 +2242,8 @@ void fib(Workspace *ws, int dwindle)
 	h = m->wh - ws->padt - ws->padb;
 
 	for (i = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), i++) {
-		ox = x;
-		b = globalcfg[GLB_SMART_BORDER] && n == 1 ? 0 : c->bw;
+		int ox = x;
+		int b = globalcfg[GLB_SMART_BORDER] && n == 1 ? 0 : c->bw;
 		if (i < n - 1) {
 			if (i % 2)
 				h /= 2;
@@ -2401,24 +2397,24 @@ void grabbuttons(Client *c, int focused)
 {
 	xcb_generic_error_t *e;
 	xcb_keysym_t nlock = 0xff7f;
-	xcb_keycode_t *kc, *t = NULL;
 	xcb_get_modifier_mapping_reply_t *m = NULL;
-	unsigned int i, j, mods[] = { 0, XCB_MOD_MASK_LOCK, 0, XCB_MOD_MASK_LOCK };
+	unsigned int mods[] = { 0, XCB_MOD_MASK_LOCK, 0, XCB_MOD_MASK_LOCK };
 
 	lockmask = 0;
 	if ((m = xcb_get_modifier_mapping_reply(con, xcb_get_modifier_mapping(con), &e))) {
+		xcb_keycode_t *kc, *t = NULL;
 		if ((t = xcb_key_symbols_get_keycode(keysyms, nlock))
 				&& (kc = xcb_get_modifier_mapping_keycodes(m)))
 		{
-			for (i = 0; i < 8; i++)
-				for (j = 0; j < m->keycodes_per_modifier; j++)
+			for (unsigned int i = 0; i < 8; i++)
+				for (unsigned int j = 0; j < m->keycodes_per_modifier; j++)
 					if (kc[i * m->keycodes_per_modifier + j] == *t)
 						lockmask = (1 << i);
 		}
+		free(t);
 	} else {
 		iferr(0, "unable to get modifier mapping for numlock", e);
 	}
-	free(t);
 	free(m);
 
 	mods[2] |= lockmask, mods[3] |= lockmask;
@@ -2428,7 +2424,7 @@ void grabbuttons(Client *c, int focused)
 				XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE,
 				XCB_GRAB_MODE_SYNC, XCB_GRAB_MODE_SYNC, XCB_NONE, XCB_NONE,
 				XCB_BUTTON_INDEX_ANY, XCB_BUTTON_MASK_ANY);
-	for (i = 0; i < LEN(mods); i++) {
+	for (unsigned int i = 0; i < LEN(mods); i++) {
 			xcb_grab_button(con, 0, c->win,
 					XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE,
 					XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_SYNC, XCB_NONE, XCB_NONE,
@@ -2476,9 +2472,8 @@ int grid(Workspace *ws)
 {
 	Client *c;
 	Monitor *m = ws->mon;
-	unsigned int cx, cy, cw, ch;
-	unsigned int wx, wy, ww, wh;
-	unsigned int i, n, b, g, cols, rows, col, row;
+	int wx, wy, ww, wh;
+	int i, n, g, cols, rows, col, row;
 
 	for (n = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), n++)
 		;
@@ -2499,11 +2494,11 @@ int grid(Workspace *ws)
 	for (i = col = row = 0, c = nexttiled(ws->clients); c; i++, c = nexttiled(c->next)) {
 		if (i / rows + 1 > cols - n % cols)
 			rows = n / cols + 1;
-		b = globalcfg[GLB_SMART_BORDER] && n == 1 ? 0 : c->bw;
-		ch = rows ? (wh - g) / rows : wh;
-		cw = cols ? (ww - g) / cols : ww;
-		cx = (wx + g) + col * cw;
-		cy = (wy + g) + row * ch;
+		int b = globalcfg[GLB_SMART_BORDER] && n == 1 ? 0 : c->bw;
+		int ch = rows ? (wh - g) / rows : wh;
+		int cw = cols ? (ww - g) / cols : ww;
+		int cx = (wx + g) + col * cw;
+		int cy = (wy + g) + row * ch;
 		resizehint(c, cx, cy, cw - (2 * b) - g, ch - (2 * b) - g, b, 0, 0);
 		if (++row >= rows) {
 			row = 0;
@@ -2936,7 +2931,6 @@ Workspace *initws(int num)
 
 char *itoa(int n, char *s)
 {
-	char c;
 	int j, i = 0, sign = n;
 
 	if (sign < 0)
@@ -2948,7 +2942,7 @@ char *itoa(int n, char *s)
 		s[i++] = '-';
 	s[i] = '\0';
 	for (j = i - 1, i = 0; i < j; i++, j--) {
-		c = s[i];
+		char c = s[i];
 		s[i] = s[j];
 		s[j] = c;
 	}
@@ -2997,12 +2991,12 @@ void manage(xcb_window_t win, xcb_get_geometry_reply_t *g, xcb_get_window_attrib
 
 int mono(Workspace *ws)
 {
-	int g, b;
+	int g;
 	Client *c;
 
 	g = globalcfg[GLB_SMART_GAP] ? 0 : ws->gappx;
 	for (c = nexttiled(ws->clients); c; c = nexttiled(c->next)) {
-		b = globalcfg[GLB_SMART_BORDER] ? 0 : c->bw;
+		int b = globalcfg[GLB_SMART_BORDER] ? 0 : c->bw;
 		resizehint(c, ws->mon->wx + ws->padl + g, ws->mon->wy + ws->padt + g,
 				ws->mon->ww - ws->padl - ws->padr - (2 * g) - (2 * b),
 				ws->mon->wh - ws->padt - ws->padb - (2 * g) - (2 * b),
@@ -3034,7 +3028,7 @@ void movefocus(int direction)
 
 void movestack(int direction)
 {
-	int i = 0;
+	int i;
 	Client *c, *t;
 
 	if (!(c = cmdclient) || FLOATING(c) || !nexttiled(c->ws->clients->next))
@@ -3092,10 +3086,10 @@ Monitor *outputtomon(xcb_randr_output_t id)
 
 char **parsebool(char **argv, int *setting)
 {
-	int i;
 	char *end;
 
 	if (argv && *argv) {
+		int i;
 		if (((i = !strcmp("true", *argv)) || !strcmp("false", *argv))
 				|| (((i = strtoul(*argv, &end, 0)) > 0 || !strcmp("0", *argv)) && *end == '\0'))
 			*setting = i ? 1 : 0;
@@ -3108,10 +3102,10 @@ char **parsebool(char **argv, int *setting)
 int parseclient(char **argv, Client **c)
 {
 	char *end;
-	unsigned int i;
 
 	if (argv && *argv) {
-		if ((*argv[0] == '#' || (*argv[0] == '0' && *argv[0] == 'x'))
+		unsigned int i;
+		if ((*argv[0] == '#' || (*argv[0] == '0' && *argv[1] == 'x'))
 				&& (i = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0')
 		{
 			if ((*c = wintoclient(i)))
@@ -3170,17 +3164,18 @@ void parsecmd(char *buf)
 char **parsecolour(char **argv, unsigned int *setting)
 {
 	char *end;
-	unsigned short a, r, g, b;
-	unsigned int argb, len;
 
 	if (argv && *argv) {
+		unsigned int len;
 		if ((len = strlen(*argv)) >= 6 && len <= 10) {
+			unsigned int argb;
 			if (**argv == '#' && len >= 7 && len <= 9)
 				len--;
 			else if (**argv == '0' && *(*argv + 1) == 'x')
 				len -= 2;
 			argb = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16);
 			if (argb <= 0xffffffff && *end == '\0') {
+				unsigned short a, r, g, b;
 				if (len == 6) {
 					*setting = (argb | 0xff000000);
 				} else if ((a = ((argb & 0xff000000) >> 24)) && a != 0xff) {
@@ -3201,10 +3196,10 @@ char **parsecolour(char **argv, unsigned int *setting)
 
 char **parsefloat(char **argv, float *setting, int *rel)
 {
-	float f;
 	char *end;
 
 	if (argv && *argv) {
+		float f;
 		if ((f = strtof(*argv, &end)) != 0.0 && *end == '\0') {
 			if (f < -0.95 || f > 0.95) {
 				fprintf(cmdresp, "!float out of range: %s - min: -0.95, max: 0.95\n", *argv);
@@ -3225,7 +3220,7 @@ char **parsegeom(char **argv, char type, int *i, int *rel, int *grav)
 	if (argv && *argv) {
 		if (!grav) {
 			argv = parseint(argv, i, rel, type == 'x' || type == 'y' ? 1 : 0);
-		} else if (grav && !strcmp("center", *argv)) {
+		} else if (!strcmp("center", *argv)) {
 			*grav = GRAV_CENTER;
 		} else {
 			switch (type) {
@@ -3251,10 +3246,10 @@ char **parsegeom(char **argv, char type, int *i, int *rel, int *grav)
 
 char **parseint(char **argv, int *setting, int *rel, int allowzero)
 {
-	int i;
 	char *end;
 
 	if (argv && *argv) {
+		int i;
 		if (rel)
 			*rel = 0;
 		if (((i = strtol(*argv, &end, 0)) || (allowzero && !strcmp("0", *argv))) && *end == '\0') {
@@ -3308,13 +3303,14 @@ Workspace *parsewsormon(char **argv, int mon)
 
 int parseopt(char **argv)
 {
-	int i;
-	char **s;
 
-	if (argv && *argv)
+	if (argv && *argv) {
+		int i;
+		char **s;
 		for (s = opts, i = 0; s && *s; s++, i++)
 			if (!strcmp(*s, *argv))
 				return i;
+	}
 	return -1;
 }
 
@@ -3391,7 +3387,7 @@ void pushstatus(void)
 			globalcfg[GLB_MIN_XY], globalcfg[GLB_MIN_WH]);
 	fprintf(f, "\n\n# width outer_width focus urgent unfocus "
 			"outer_focus outer_urgent outer_unfocus\n"
-			"border: %d %d #%08x #%08x #%08x #%08x #%08x #%08x",
+			"border: %u %u #%08x #%08x #%08x #%08x #%08x #%08x",
 			border[BORD_WIDTH], border[BORD_O_WIDTH],
 			border[BORD_FOCUS], border[BORD_URGENT],
 			border[BORD_UNFOCUS], border[BORD_O_FOCUS],
@@ -3520,8 +3516,6 @@ void refresh(void)
 
 void relocate(Client *c, Monitor *new, Monitor *old)
 {
-	float f;
-
 #define RELOC(val, opposed, offset, min, max, wmin, wmax, oldmin, oldmax, oldwmin, oldwmax) \
 		if (val - oldwmin > 0 && (offset = oldwmax / (val - oldwmin)) != 0.0) {             \
 			if (val + (opposed) == oldmin + oldmax) {                                       \
@@ -3543,6 +3537,7 @@ void relocate(Client *c, Monitor *new, Monitor *old)
 	if (c->state & STATE_FULLSCREEN && c->w == old->w && c->h == old->h) {
 		c->x = new->x, c->y = new->y, c->w = new->w, c->h = new->h;
 	} else {
+		float f;
 		RELOC(c->x, W(c), f, new->wx, new->ww, new->x, new->w, old->wx, old->ww, old->x, old->w)
 		RELOC(c->y, H(c), f, new->wy, new->wh, new->y, new->h, old->wy, old->wh, old->y, old->h)
 	}
@@ -3632,7 +3627,7 @@ void sendconfigure(Client *c)
 
 int sendwmproto(Client *c, int wmproto)
 {
-	int n, exists = 0;
+	int exists = 0;
 	xcb_generic_error_t *e;
 	xcb_get_property_cookie_t rpc;
 	xcb_client_message_event_t cme;
@@ -3641,7 +3636,7 @@ int sendwmproto(Client *c, int wmproto)
 	DBG("sendwmproto: checking support for %s - 0x%08x", wmatoms[wmproto], c->win)
 	rpc = xcb_icccm_get_wm_protocols(con, c->win, wmatom[WM_PROTO]);
 	if (xcb_icccm_get_wm_protocols_reply(con, rpc, &proto, &e)) {
-		n = proto.atoms_len;
+		int n = proto.atoms_len;
 		while (!exists && n--)
 			exists = proto.atoms[n] == wmatom[wmproto];
 		xcb_icccm_get_wm_protocols_reply_wipe(&proto);
@@ -3773,7 +3768,6 @@ void seturgent(Client *c, int urg)
 void showhide(Client *c)
 {
 	Monitor *m;
-	Client *sel;
 
 	if (!c)
 		return;
@@ -3802,7 +3796,7 @@ void showhide(Client *c)
 		if (!(c->state & STATE_STICKY)) {
 			MOVE(c->win, W(c) * -2, c->y);
 		} else if (c->ws != selws && m == selws->mon) {
-			sel = lastws->sel == c ? c : selws->sel;
+			Client *sel = lastws->sel == c ? c : selws->sel;
 			setworkspace(c, selws->num, 0);
 			focus(sel);
 		}
@@ -3924,7 +3918,7 @@ int tile(Workspace *ws)
 	Client *c, *prev = NULL;
 	int x, *y;
 	int wx, wy, ww, wh, mw, ss, sw, ssw, ns;
-	int i, n, remaining, my, sy, ssy, b, bw, g, available, minh;
+	int i, n, remaining, my, sy, ssy, g;
 
 	for (n = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), n++)
 		;
@@ -3937,7 +3931,6 @@ int tile(Workspace *ws)
 	wy = m->wy + ws->padt;
 	ww = m->ww - ws->padl - ws->padr;
 	wh = m->wh - ws->padt - ws->padb;
-	b = !globalcfg[GLB_SMART_BORDER] || n > 1;
 	g = !globalcfg[GLB_SMART_GAP] || n > 1 ? ws->gappx : 0;
 
 	if (n <= ws->nmaster)
@@ -3974,11 +3967,11 @@ int tile(Workspace *ws)
 			c->w = ssw - g * (5 - ns) / 2;
 		}
 
-		bw = b ? c->bw : b;
+		int bw = !globalcfg[GLB_SMART_BORDER] || n > 1 ? c->bw : 0;
+		int available = wh - (*y + c->h + g);
+		int minh = MAX(globalcfg[GLB_MIN_WH], c->min_h);
 		c->x = wx + x, c->y = wy + *y;
 		c->h = ((wh - *y) / MAX(1, remaining)) - g + c->hoff;
-		available = wh - (*y + c->h + g);
-		minh = MAX(globalcfg[GLB_MIN_WH], c->min_h);
 
 		if (!c->hoff && c->h < minh) {
 			popfloat(c);
@@ -4015,7 +4008,7 @@ int tile(Workspace *ws)
 		*y += c->h + g;
 		c->w -= 2 * bw;
 		c->h -= 2 * bw;
-		CMOVERESIZE(c, c->x, c->y, c->w, c->h, b ? c->bw : 0);
+		CMOVERESIZE(c, c->x, c->y, c->w, c->h, bw);
 		prev = (remaining == 1 && n - i != 0) ? NULL : c;
 	}
 	return ret;
@@ -4160,18 +4153,18 @@ out:
 
 int updrandr(void)
 {
-	int n, changed = 0;
+	int changed = 0;
 	xcb_generic_error_t *e;
 	xcb_randr_get_screen_resources_reply_t *r;
 	xcb_randr_get_screen_resources_cookie_t rc;
 
 	rc = xcb_randr_get_screen_resources(con, root);
 	if ((r = xcb_randr_get_screen_resources_reply(con, rc, &e))) {
-		if ((n = xcb_randr_get_screen_resources_outputs_length(r)) <= 0) {
+		int n;
+		if ((n = xcb_randr_get_screen_resources_outputs_length(r)) <= 0)
 			warnx("no monitors available");
-		} else {
+		else
 			changed = updoutputs(xcb_randr_get_screen_resources_outputs(r), n, r->config_timestamp);
-		}
 		free(r);
 	} else {
 		iferr(0, "unable to get screen resources", e);

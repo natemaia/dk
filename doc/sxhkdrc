@@ -3,31 +3,31 @@
 
 # launcher
 alt + p
-    dmenu_run
+	dmenu_run
 
 # terminal
 alt + shift + Return
-    st
+	st
 
 # screenshot and selection capture
 {_,alt + }@Print
-    scrot {_,-s}
+	scrot {_,-s}
 
 # dedicated volume keys
 {XF86AudioRaiseVolume,XF86AudioLowerVolume}
-    pamixer {-i,-d} 2
+	pamixer {-i,-d} 2
 
 # dedicated backlight keys
 {XF86MonBrightnessUp,XF86MonBrightnessDown}
-    xbacklight {+10,-10}
+	xbacklight {+10,-10}
 
 # alt volume keys
 alt + {Insert,Delete}
-    pamixer {-i,-d} 2
+	pamixer {-i,-d} 2
 
 # reload sxhkd
 alt + shift + x
-    pkill -USR1 -x sxhkd
+	pkill -USR1 -x sxhkd
 
 
 
@@ -49,7 +49,7 @@ alt + {j,k}
 
 # close window, swap tiled window in/out of master, cycle tiled windows in place
 alt + {q,space,Tab}
-    yaxwm -c win {kill,swap,cycle}
+	yaxwm -c win {kill,swap,cycle}
 
 # toggle fullscreen and fake fullscreen (enable manipulating fullscreen window)
 {_,alt + }F11

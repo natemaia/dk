@@ -7,19 +7,15 @@
 
 #include <sys/un.h>
 #include <sys/wait.h>
-#include <sys/types.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 
-#include <err.h>
 #include <poll.h>
 #include <stdio.h>
 #include <regex.h>
-#include <stdlib.h>
 #include <unistd.h>
 #include <limits.h>
 #include <locale.h>
-#include <string.h>
 
 #include <xcb/randr.h>
 #include <xcb/xproto.h>
@@ -27,6 +23,9 @@
 #include <xcb/xcb_icccm.h>
 #include <xcb/xcb_cursor.h>
 #include <xcb/xcb_keysyms.h>
+
+#include "strl.h"
+#include "util.h"
 
 #ifdef DEBUG
 #define DBG(fmt, ...) warnx("%d: " fmt, __LINE__, ##__VA_ARGS__);
@@ -101,6 +100,7 @@ enum Cursors {
 	CURS_MOVE   = 0,
 	CURS_NORMAL = 1,
 	CURS_RESIZE = 2,
+	CURS_LAST   = 3,
 };
 
 enum Gravity {
@@ -345,7 +345,7 @@ static int grid(Workspace *ws);
 static int iferr(int lvl, char *msg, xcb_generic_error_t *e);
 static Rule *initrule(Rule *wr);
 static void initscan(void);
-static void initsock(int send);
+static void initsock(void);
 static void initwm(void);
 static char *itoa(int n, char *s);
 static Monitor *itomon(int num);
@@ -357,15 +357,9 @@ static void movestack(int direction);
 static Monitor *nextmon(Monitor *m);
 static Client *nexttiled(Client *c);
 static Monitor *outputtomon(xcb_randr_output_t id);
-static char **parsebool(char **argv, int *setting);
-static int parseclient(char **argv, Client **c);
+static Client *parseclient(char *argv, int *ebadwin);
 static void parsecmd(char *buf);
-static char **parsecolour(char **argv, unsigned int *setting);
-static char **parsefloat(char **argv, float *setting, int *rel);
-static char **parsegeom(char **argv, char type, int *i, int *rel, int *grav);
-static char **parseint(char **argv, int *setting, int *rel, int allowzero);
-static char **parseintclamp(char **argv, int *setting, int *rel, int min, int max);
-static int parseopt(char **argv);
+static int parsegeom(char *argv, char type, int *i, int *rel, int *grav);
 static char *parsetoken(char **src);
 static Workspace *parsewsormon(char **argv, int mon);
 static void popfloat(Client *c);
@@ -375,7 +369,7 @@ static void refresh(void);
 static void relocate(Client *c, Monitor *new, Monitor *old);
 static void relocatews(Workspace *ws, Monitor *old);
 static void resize(Client *c, int x, int y, int w, int h, int bw);
-static void resizehint(Client *c, int x, int y, int w, int h, int bw, int confine, int mouse);
+static void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, int mouse);
 static void restack(Workspace *ws);
 static int rulecmp(Client *c, Rule *r);
 static void sendconfigure(Client *c);
@@ -391,8 +385,6 @@ static void showhide(Client *c);
 static void sighandle(int sig);
 static void sizehints(Client *c, int uss);
 static int spiral(Workspace *ws);
-static size_t strlcat(char *dst, const char *src, size_t siz);
-static size_t strlcpy(char *dst, const char *src, size_t dsize);
 static int tile(Workspace *ws);
 static void unfocus(Client *c, int focusroot);
 static void unmanage(xcb_window_t win, int destroyed);
@@ -409,10 +401,6 @@ static Client *wintoclient(xcb_window_t win);
 static Desk *wintodesk(xcb_window_t win);
 static Panel *wintopanel(xcb_window_t win);
 static xcb_window_t wintrans(xcb_window_t win);
-static int writecmd(int argc, char *argv[]);
-
-/* config header needs the functions to be defined */
-#include "yaxwm.h"
 
 
 extern char **environ;
@@ -434,8 +422,13 @@ static xcb_screen_t *scr;
 static xcb_connection_t *con;
 static xcb_window_t root, wmcheck;
 static xcb_key_symbols_t *keysyms;
-static xcb_cursor_t cursor[LEN(cursors)];
+static xcb_cursor_t cursor[CURS_LAST];
 static xcb_atom_t wmatom[LEN(wmatoms)], netatom[LEN(netatoms)];
+
+/* config header and parse need most things defined/prototyped before including them */
+#include "yaxwm.h"
+#include "parse.h"
+
 
 int main(int argc, char *argv[])
 {
@@ -454,10 +447,7 @@ int main(int argc, char *argv[])
 	sockfd = restart = cmdusemon = 0;
 
 	for (int i = 1; i < argc; i++) {
-		if (!strcmp(argv[i], "-c")) {
-			i++;
-			return writecmd(argc - i, &argv[i]);
-		} else if (!strcmp(argv[i], "-s")) {
+		if (!strcmp(argv[i], "-s")) {
 			if (!(sockfd = strtol(argv[++i], &end, 0)) || *end != '\0') {
 				warnx("invalid socket file descriptor: %s", argv[i]);
 				sockfd = 0;
@@ -495,7 +485,7 @@ int main(int argc, char *argv[])
 	DBG("main: sizeof(Workspace): %lu bytes", sizeof(Workspace))
 
 	initwm();
-	initsock(0);
+	initsock();
 	initscan();
 	execcfg();
 
@@ -571,7 +561,7 @@ void adjustisetting(int i, int relative, int *setting, int other, int setborderg
 
 void adjustwsormon(char **argv)
 {
-	int opt, r;
+	int opt, e = 0;
 	void (*fn)(int);
 	Monitor *m = NULL, *cm;
 	Workspace *ws = NULL, *cur;
@@ -588,12 +578,12 @@ void adjustwsormon(char **argv)
 				argv++;
 				break;
 			}
-		if (fn != cmdview && (r = parseclient(argv, &cmdclient))) {
-			if (r == -1)
-				return;
+		if (fn != cmdview && (cmdclient = parseclient(*argv, &e))) {
 			cur = cmdclient->ws;
 			cm = cur->mon;
 			argv++;
+		} else if (e == -1) {
+			return;
 		} else {
 			cmdclient = selws->sel;
 		}
@@ -604,7 +594,7 @@ void adjustwsormon(char **argv)
 		return;
 	}
 
-	if ((opt = parseopt(argv)) >= 0) { /* word option (next, prev, nextne, etc.) */
+	if ((opt = parseopt(*argv, opts)) >= 0) { /* word option (next, prev, nextne, etc.) */
 		if (opt == DIR_LAST) {
 			ws = cmdusemon
 				? (lastmon && lastmon->connected ? lastmon->ws : cur)
@@ -623,7 +613,7 @@ void adjustwsormon(char **argv)
 		} else if (opt == DIR_PREV) {
 			FIND_PREV(ws, cur, workspaces);
 		} else {
-			r = 0;
+			int r = 0;
 			Workspace *save = cur;
 			while (!ws && r < globalcfg[GLB_NUMWS]) {
 				if (opt == DIR_NEXT_NE) {
@@ -673,16 +663,13 @@ void applypanelstrut(Panel *p)
 			p->mon->wx, p->mon->wy, p->mon->ww, p->mon->wh)
 }
 
-int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int confine, int mouse)
+int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse)
 {
 	Monitor *m = c->ws->mon;
 
 	*w = MAX(1, *w);
 	*h = MAX(1, *h);
-	if (confine) {
-		*x = CLAMP(*x, m->wx, m->wx + m->ww - *w + (2 * bw));
-		*y = CLAMP(*y, m->wy, m->wy + m->wh - *h + (2 * bw));
-	} else {
+	if (usermotion) {
 		if (!mouse) {
 			if (*w > c->w && c->inc_w > *w - c->w)
 				*w = c->w + c->inc_w;
@@ -697,6 +684,9 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int confin
 		}
 		*x = CLAMP(*x, (*w + (2 * bw) - globalcfg[GLB_MIN_XY]) * -1, scr_w - globalcfg[GLB_MIN_XY]);
 		*y = CLAMP(*y, (*h + (2 * bw) - globalcfg[GLB_MIN_XY]) * -1, scr_h - globalcfg[GLB_MIN_XY]);
+	} else {
+		*x = CLAMP(*x, m->wx, m->wx + m->ww - *w + (2 * bw));
+		*y = CLAMP(*y, m->wy, m->wy + m->wh - *h + (2 * bw));
 	}
 
 	if (FLOATING(c) || globalcfg[GLB_TILEHINTS]) {
@@ -807,12 +797,6 @@ void changews(Workspace *ws, int swap, int warp)
 	}
 	PROP(REPLACE, root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1, &ws->num);
 	needsrefresh = 1;
-}
-
-void check(int i, char *msg)
-{
-	if (i < 0)
-		err(1, "%s", msg);
 }
 
 void clienthints(Client *c)
@@ -934,16 +918,14 @@ void cmdborder(char **argv)
 	Client *c;
 	Workspace *ws;
 	int i, old, bw, ow, rel, incol = 0, start;
-	unsigned int bfocus, bunfocus, burgent, ofocus, ounfocus, ourgent;
 
 	bw = border[BORD_WIDTH];
 	ow = border[BORD_O_WIDTH];
-	bfocus = border[BORD_FOCUS];
-	burgent = border[BORD_URGENT];
-	bunfocus = border[BORD_UNFOCUS];
-	ofocus = border[BORD_O_FOCUS];
-	ourgent = border[BORD_O_URGENT];
-	ounfocus = border[BORD_O_UNFOCUS];
+
+#define IF_COLOUR(str, ptr)                     \
+	if (!strcmp(str, *argv)) {                  \
+		argv++;                                 \
+		if (parsecolour(*argv, ptr) < 0) break;
 
 	while (*argv) {
 		int outer;
@@ -955,7 +937,8 @@ void cmdborder(char **argv)
 			if (!*argv) {
 				fprintf(cmdresp, "!border %s %s\n", *(argv - 1), enoargs);
 			} else {
-				argv = parseint(argv, &i, &rel, 1);
+				if ((i = parseint(*argv, &rel, 1)) == INT_MIN)
+					break;
 				if (outer)
 					adjustisetting(i, rel, &ow, selws->gappx + bw, 1);
 				else
@@ -966,18 +949,13 @@ void cmdborder(char **argv)
 				incol = 1;
 				argv++;
 			}
-			if (!strcmp(*argv, "focus")) {
-				argv = parsecolour(argv + 1, &bfocus);
-			} else if (!strcmp(*argv, "urgent")) {
-				argv = parsecolour(argv + 1, &burgent);
-			} else if (!strcmp(*argv, "unfocus")) {
-				argv = parsecolour(argv + 1, &bunfocus);
-			} else if (!strcmp(*argv, "outer_focus")) {
-				argv = parsecolour(argv + 1, &ofocus);
-			} else if (!strcmp(*argv, "outer_urgent")) {
-				argv = parsecolour(argv + 1, &ourgent);
-			} else if (!strcmp(*argv, "outer_unfocus")) {
-				argv = parsecolour(argv + 1, &ounfocus);
+
+			IF_COLOUR("focus", &border[BORD_FOCUS])
+			} else IF_COLOUR("urgent", &border[BORD_URGENT])
+			} else IF_COLOUR("unfocus", &border[BORD_UNFOCUS])
+			} else IF_COLOUR("outer_focus", &border[BORD_O_FOCUS])
+			} else IF_COLOUR("outer_urgent", &border[BORD_O_URGENT])
+			} else IF_COLOUR("outer_unfocus", &border[BORD_O_UNFOCUS])
 			} else if (start) {
 				fprintf(cmdresp, "!%s border colour: %s\n", ebadarg, *argv);
 				break;
@@ -995,19 +973,13 @@ void cmdborder(char **argv)
 	}
 
 	old = border[BORD_WIDTH];
-	if (bw - ow < 1) {
-		if ((unsigned int)ow != border[BORD_O_WIDTH])
-			fprintf(cmdresp, "!border outer exceeds limit: %d - maximum: %d\n", ow, bw - 1);
-	} else {
+	if (bw - ow < 1 && (unsigned int)ow != border[BORD_O_WIDTH])
+		fprintf(cmdresp, "!border outer exceeds limit: %d - maximum: %d\n", ow, bw - 1);
+	else if (bw - ow > 0)
 		border[BORD_O_WIDTH] = ow;
-	}
+	
 	border[BORD_WIDTH] = bw;
-	border[BORD_FOCUS] = bfocus;
-	border[BORD_UNFOCUS] = bunfocus;
-	border[BORD_URGENT] = burgent;
-	border[BORD_O_FOCUS] = ofocus;
-	border[BORD_O_UNFOCUS] = ounfocus;
-	border[BORD_O_URGENT] = ourgent;
+
 	FOR_CLIENTS(c, ws) {
 		if (!(c->state & STATE_NOBORDER)) {
 			if (c->bw == old)
@@ -1015,6 +987,8 @@ void cmdborder(char **argv)
 			drawborder(c, c == selws->sel);
 		}
 	}
+
+#undef IF_COLOUR
 }
 
 void cmdcycle(char **argv)
@@ -1091,10 +1065,8 @@ void cmdfocus(char **argv)
 		focus(cmdclient);
 		return;
 	}
-	if ((opt = parseopt(argv)) < 0) {
-		parseint(argv, &i, NULL, 0);
-		if (!i)
-			fprintf(cmdresp, "!%s focus: %s\n", ebadarg, *argv);
+	if ((opt = parseopt(*argv, opts)) < 0 && (i = parseint(*argv, NULL, 0)) == INT_MIN) {
+		fprintf(cmdresp, "!%s focus: %s\n", ebadarg, *argv);
 		return;
 	}
 	if (opt == DIR_LAST)
@@ -1119,21 +1091,18 @@ void cmdfull(char **argv)
 
 void cmdgappx(char **argv)
 {
-	int i = INT_MAX, ng, rel;
+	int i, ng, rel;
 
 	if (!strcmp(*argv, "width"))
 		argv++;
 	ng = setws->gappx;
-
 	if (!*argv) {
 		fprintf(cmdresp, "!gap %s\n", enoargs);
-	} else {
-		parseint(argv, &i, &rel, 1);
+	} else if ((i = parseint(*argv, &rel, 1)) != INT_MIN) {
 		adjustisetting(i, rel, &ng, border[BORD_WIDTH], 1);
+		if (ng != setws->gappx)
+			setws->gappx = ng;
 	}
-
-	if (ng != setws->gappx)
-		setws->gappx = ng;
 }
 
 void cmdkill(char **argv)
@@ -1212,48 +1181,43 @@ void cmdmouse(char **argv)
 
 void cmdnmaster(char **argv)
 {
-	int i = INT_MAX, rel = 1;
+	int i, rel = 1;
 
-	parseint(argv, &i, &rel, 1);
-	adjustisetting(i, rel, &setws->nmaster, 0, 0);
+	if ((i = parseint(*argv, &rel, 1)) != INT_MIN)
+		adjustisetting(i, rel, &setws->nmaster, 0, 0);
 }
 
 void cmdnstack(char **argv)
 {
-	int i = INT_MAX, rel = 1;
+	int i, rel = 1;
 
-	parseint(argv, &i, &rel, 1);
-	adjustisetting(i, rel, &setws->nstack, 0, 0);
+	if ((i = parseint(*argv, &rel, 1)) != INT_MIN)
+		adjustisetting(i, rel, &setws->nstack, 0, 0);
 }
 
 void cmdpad(char **argv)
 {
 	int i, rel;
 
-#define ASSIGN(v, o)                                                           \
-	argv = parseintclamp(argv + 1, &i, &rel, v * -1, o);                       \
-	if (i != INT_MAX)                                                          \
-		v = CLAMP(rel ? v + i : i, 0, o);
+#define IF_PAD(ch, str, v, o)                                              \
+	if (!strcmp(ch, *argv) || !strcmp(str, *argv)) {                       \
+		argv++;                                                            \
+		if ((i = parseintclamp(*argv, &rel, v * -1, o)) == INT_MIN) break; \
+		v = CLAMP(rel ? v + i : i, 0, o);                                  \
+		needsrefresh = 1;
 
 	while (*argv) {
-		i = INT_MAX;
-		if (!strcmp("l", *argv) || !strcmp("left", *argv)) {
-			ASSIGN(setws->padl, setws->mon->w / 3)
-		} else if (!strcmp("r", *argv) || !strcmp("right", *argv)) {
-			ASSIGN(setws->padr, setws->mon->w / 3)
-		} else if (!strcmp("t", *argv) || !strcmp("top", *argv)) {
-			ASSIGN(setws->padt, setws->mon->h / 3)
-		} else if (!strcmp("b", *argv) || !strcmp("bottom", *argv)) {
-			ASSIGN(setws->padb, setws->mon->h / 3)
+		IF_PAD("l", "left", setws->padl, setws->mon->w / 3)
+		} else IF_PAD("r", "right", setws->padr, setws->mon->w / 3)
+		} else IF_PAD("t", "top", setws->padt, setws->mon->h / 3)
+		} else IF_PAD("b", "bottom", setws->padb, setws->mon->h / 3)
 		} else {
-			fprintf(cmdresp, "!%s pad: %s", ebadarg, *argv);
+			fprintf(cmdresp, "!%s pad: %s\n", ebadarg, *argv);
 			break;
 		}
-		if (*argv)
-			argv++;
+		argv++;
 	}
-
-#undef ASSIGN
+#undef IF_PAD
 }
 
 void cmdresize(char **argv)
@@ -1262,47 +1226,52 @@ void cmdresize(char **argv)
 	int i, ohoff;
 	float f, *sf;
 	int xgrav = GRAV_NONE, ygrav = GRAV_NONE;
-	int x = INT_MAX, y = INT_MAX, w = 0, h = 0, bw = -1;
+	int x = INT_MIN, y = INT_MIN, w = INT_MIN, h = INT_MIN, bw = INT_MIN;
 	int relx = 0, rely = 0, relw = 0, relh = 0, relbw = 0;
 
 	if (!(c = cmdclient) || FULLSCREEN(c))
 		return;
 
+#define IF_ARG(ch, str, val, relptr, z)                        \
+	if (!strcmp(ch, *argv) || !strcmp(str, *argv)) {            \
+		argv++;                                                 \
+		if ((i = parseint(*argv, relptr, z)) == INT_MIN) break; \
+		val = i;
+
 	while (*argv) {
-		if (!strcmp("x", *argv))
-			argv = parsegeom(argv + 1, 'x', &x, &relx, &xgrav);
-		else if (!strcmp("y", *argv))
-			argv = parsegeom(argv + 1, 'y', &y, &rely, &ygrav);
-		else if (!strcmp("w", *argv) || !strcmp("width", *argv))
-			argv = parseint(argv + 1, &w, &relw, 0);
-		else if (!strcmp("h", *argv) || !strcmp("height", *argv))
-			argv = parseint(argv + 1, &h, &relh, 0);
-		else if (!strcmp(*argv, "bw") || !strcmp(*argv, "border_width"))
-			argv = parseint(argv + 1, &bw, &relbw, 1);
-		else {
+		if (!strcmp("x", *argv)) {
+			argv++;
+			if (!parsegeom(*argv, 'x', &x, &relx, &xgrav)) break;
+		} else if (!strcmp("y", *argv)) {
+			argv++;
+			if (!parsegeom(*argv, 'y', &y, &rely, &ygrav)) break;
+		} else IF_ARG("w", "width", w, &relw, 0)
+		} else IF_ARG("h", "height", h, &relh, 0)
+		} else IF_ARG("bw", "border_width", bw, &relbw, 1)
+		} else {
 			fprintf(cmdresp, "!%s resize: %s\n", ebadarg, *argv);
 			break;
 		}
-		if (*argv)
-			argv++;
+		argv++;
 	}
+#undef IF_ARG
 
 	if (FLOATING(c)) {
-		x = x == INT_MAX || xgrav != GRAV_NONE ? c->x : (relx ? c->x + x : x);
-		y = y == INT_MAX || ygrav != GRAV_NONE ? c->y : (rely ? c->y + y : y);
-		w = w == 0 ? c->w : (relw ? c->w + w : w);
-		h = h == 0 ? c->h : (relh ? c->h + h : h);
+		x = x == INT_MIN || xgrav != GRAV_NONE ? c->x : (relx ? c->x + x : x);
+		y = y == INT_MIN || ygrav != GRAV_NONE ? c->y : (rely ? c->y + y : y);
+		w = w == INT_MIN ? c->w : (relw ? c->w + w : w);
+		h = h == INT_MIN ? c->h : (relh ? c->h + h : h);
 		bw = bw == -1 ? c->bw : (relbw ? c->bw + bw : bw);
 		resizehint(c, x, y, w, h, bw, 1, 0);
 		gravitate(c, xgrav, ygrav, 1);
 	} else if (c->ws->layout->fn.layout == tile) {
-		if (bw != -1) {
+		if (bw != INT_MIN) {
 			c->bw = relbw ? c->bw + bw : bw;
-			if (y == INT_MAX && !w && !h)
+			if (y == INT_MIN && !w && !h)
 				drawborder(c, c == selws->sel);
 		}
 		/* x changes on tiled windows is ignored for now */
-		if (y != INT_MAX)
+		if (y != INT_MIN)
 			movestack(y > 0 || ygrav == GRAV_BOTTOM ? 1 : -1);
 		if (w) {
 			sf = &c->ws->ssplit;
@@ -1345,14 +1314,14 @@ void cmdrule(char **argv)
 	unsigned int i, delete, apply = 0;
 	Rule r = {
 		.x = -1, .y = -1, .w = -1, .h = -1, .ws = -1, .bw = -1,
-		.focus = 0, .state = 0, .xgrav = GRAV_NONE, .ygrav = GRAV_NONE,
+		.focus = 0, .state = STATE_NONE, .xgrav = GRAV_NONE, .ygrav = GRAV_NONE,
 		.cb = NULL, .mon = NULL, .inst = NULL, .class = NULL, .title = NULL,
 	};
 
 	if ((apply = !strcmp("apply", *argv))) {
 		argv++;
 		if (!strcmp("all", *argv))
-			goto apply;
+			goto applyall;
 	} else if ((delete = !strcmp("remove", *argv) || !strcmp("delete", *argv))) {
 		argv++;
 		if (!strcmp("all", *argv)) {
@@ -1361,6 +1330,12 @@ void cmdrule(char **argv)
 			return;
 		}
 	}
+#define IF_ARG(ch, str, val)                                 \
+	if (!strcmp(ch, *argv) || !strcmp(str, *argv)) {          \
+		argv++;                                               \
+		if ((j = parseint(*argv, NULL, 0)) == INT_MIN) break; \
+		val = j;
+
 	while (*argv) {
 		if (!r.class && !strcmp(*argv, "class")) {
 			r.class = *(++argv);
@@ -1371,8 +1346,9 @@ void cmdrule(char **argv)
 		} else if (!strcmp(*argv, "mon")) {
 			r.mon = *(++argv);
 		} else if (!strcmp(*argv, "ws")) {
-			argv = parseintclamp(argv + 1, &r.ws, NULL, 1, 99);
-			if (!r.ws && *argv) {
+			argv++;
+			if ((r.ws = parseintclamp(*argv, NULL, 1, 99)) == INT_MIN) {
+				r.ws = -1;
 				FOR_EACH(ws, workspaces)
 					if (!strcmp(ws->name, *argv)) {
 						r.ws = ws->num;
@@ -1387,25 +1363,31 @@ void cmdrule(char **argv)
 					break;
 				}
 		} else if (!strcmp(*argv, "x")) {
-			argv = parsegeom(argv + 1, 'x', &r.x, NULL, &r.xgrav);
+			argv++;
+			if (!parsegeom(*argv, 'y', &r.y, NULL, &r.ygrav)) break;
 		} else if (!strcmp(*argv, "y")) {
-			argv = parsegeom(argv + 1, 'y', &r.y, NULL, &r.ygrav);
-		} else if (!strcmp(*argv, "w") || !strcmp("width", *argv)) {
-			argv = parseint(argv + 1, &r.w, NULL, 0);
-		} else if (!strcmp(*argv, "h") || !strcmp("height", *argv)) {
-			argv = parseint(argv + 1, &r.h, NULL, 0);
+			argv++;
+			if (!parsegeom(*argv, 'y', &r.y, NULL, &r.ygrav)) break;
+		} else IF_ARG("w", "width", r.w)
+		} else IF_ARG("h", "height", r.h)
 		} else if (!strcmp(*argv, "bw")) {
-			argv = parseintclamp(argv + 1, &r.bw, NULL, 0, scr_h / 6);
+			argv++;
+			if ((j = parseintclamp(*argv, NULL, 0, scr_h / 6)) == INT_MIN) break;
+			r.bw = j;
 			if (r.bw == 0 && border[BORD_WIDTH])
 				r.state |= STATE_NOBORDER;
 		} else if (!strcmp(*argv, "float")) {
-			argv = parsebool(argv + 1, &j);
+			argv++;
+			if ((j = parsebool(*argv)) < 0) break;
 			r.state |= j ? STATE_FLOATING : STATE_NONE;
 		} else if (!strcmp(*argv, "stick")) {
-			argv = parsebool(argv + 1, &j);
+			argv++;
+			if ((j = parsebool(*argv)) < 0) break;
 			r.state |= j ? STATE_STICKY | STATE_FLOATING : STATE_NONE;
 		} else if (!strcmp(*argv, "focus")) {
-			argv = parsebool(argv + 1, &r.focus);
+			argv++;
+			if ((j = parsebool(*argv)) < 0) break;
+			r.focus = j;
 		} else {
 			fprintf(cmdresp, "!%s rule: %s\n", ebadarg, *argv);
 			break;
@@ -1413,9 +1395,10 @@ void cmdrule(char **argv)
 		if (*argv)
 			argv++;
 	}
+#undef IF_ARG
 
-	if ((r.class || r.inst || r.title) && (r.ws || r.mon || r.focus || r.cb
-				|| r.state & STATE_FLOATING || r.x != -1 || r.y != -1 || r.w != -1
+	if ((r.class || r.inst || r.title) && (r.ws != -1 || r.mon || r.focus || r.cb
+				|| r.state != STATE_NONE || r.x != -1 || r.y != -1 || r.w != -1
 				|| r.h != -1 || r.bw != -1 || r.xgrav != GRAV_NONE || r.ygrav != GRAV_NONE))
 	{
 #define M(a, b) (a == NULL || (b && !strcmp(a, b)))
@@ -1428,7 +1411,7 @@ void cmdrule(char **argv)
 #undef M
 		if (!delete) {
 			if ((nr = initrule(&r)) && apply) {
-apply: /* {"rule" "apply" "all"} case: bypass checks and nr == NULL so all rules will be applied */
+applyall: /* rule apply all case bypasses checks and nr will be NULL so all rules will be applied */
 				FOR_CLIENTS(c, ws) {
 					clientrule(c, nr, 0);
 					if (c->cb)
@@ -1459,13 +1442,18 @@ void cmdset(char **argv)
 	unsigned int j;
 	int i, names = 0, set = 0;
 
+#define ELIF_BOOL(str, setting)                \
+	else if (!strcmp(str, *argv)) {            \
+		argv++;                                \
+		if ((i = parsebool(*argv)) < 0) break; \
+		globalcfg[GLB_##setting] = i;
+
 	setws = selws;
 	if (!*argv) {
 		fprintf(cmdresp, "!set %s\n", enoargs);
 		return;
 	}
 	while (*argv) {
-		i = -1;
 		if (!strcmp("ws", *argv)) {
 			argv++;
 			if (!strcmp("default", *argv)) {
@@ -1491,7 +1479,9 @@ void cmdset(char **argv)
 			}
 			assignws(setws, ws->mon);
 		} else if (!strcmp("numws", *argv)) {
-			argv = parseintclamp(argv + 1, &i, NULL, 1, 99);
+			argv++;
+			if ((i = parseintclamp(*argv, NULL, 1, 99)) == INT_MIN)
+				break;
 			if (i > globalcfg[GLB_NUMWS])
 				updworkspaces(i);
 		} else if (!strcmp("name", *argv)) {
@@ -1502,26 +1492,24 @@ void cmdset(char **argv)
 			}
 			strlcpy(setws->name, *argv, sizeof(setws->name));
 			names = 1;
-		} else if (!strcmp("static_ws", *argv)) {
-			argv = parsebool(argv + 1, &globalcfg[GLB_STATICWS]);
-		} else if (!strcmp("tile_tohead", *argv)) {
-			argv = parsebool(argv + 1, &globalcfg[GLB_TILETOHEAD]);
-		} else if (!strcmp("smart_border", *argv)) {
-			argv = parsebool(argv + 1, &globalcfg[GLB_SMART_BORDER]);
-		} else if (!strcmp("smart_gap", *argv)) {
-			argv = parsebool(argv + 1, &globalcfg[GLB_SMART_GAP]);
-		} else if (!strcmp("focus_urgent", *argv)) {
-			argv = parsebool(argv + 1, &globalcfg[GLB_FOCUS_URGENT]);
-		} else if (!strcmp("focus_open", *argv)) {
-			argv = parsebool(argv + 1, &globalcfg[GLB_FOCUS_OPEN]);
-		} else if (!strcmp("focus_mouse", *argv)) {
-			argv = parsebool(argv + 1, &globalcfg[GLB_FOCUS_MOUSE]);
-		} else if (!strcmp("tile_hints", *argv)) {
-			argv = parsebool(argv + 1, &globalcfg[GLB_TILEHINTS]);
+		} ELIF_BOOL("tile_hints", TILEHINTS)
+		} ELIF_BOOL("tile_tohead", TILETOHEAD)
+		} ELIF_BOOL("smart_gap", SMART_GAP)
+		} ELIF_BOOL("smart_border", SMART_BORDER)
+		} ELIF_BOOL("focus_urgent", FOCUS_URGENT)
+		} ELIF_BOOL("focus_mouse", FOCUS_MOUSE)
+		} ELIF_BOOL("focus_open", FOCUS_OPEN)
+		} ELIF_BOOL("static_ws", STATICWS)
 		} else if (!strcmp("win_minxy", *argv)) {
-			argv = parseintclamp(argv + 1, &globalcfg[GLB_MIN_XY], NULL, 10, 1000);
+			argv++;
+			if ((i = parseintclamp(*argv, NULL, 10, 1000)) == INT_MIN)
+				break;
+			globalcfg[GLB_MIN_XY] = i;
 		} else if (!strcmp("win_minwh", *argv)) {
-			argv = parseintclamp(argv + 1, &globalcfg[GLB_MIN_WH], NULL, 10, 1000);
+			argv++;
+			if ((i = parseintclamp(*argv, NULL, 10, 1000)) == INT_MIN)
+				break;
+			globalcfg[GLB_MIN_WH] = i;
 		} else {
 			for (j = 0; j < LEN(setcmds); j++)
 				if (!strcmp(setcmds[j].name, *argv)) {
@@ -1533,11 +1521,13 @@ void cmdset(char **argv)
 		if (*argv)
 			argv++;
 	}
+#undef ELIF_BOOL
 
 finish:
 	needsrefresh = 1;
 	if (names)
 		setnetwsnames();
+
 }
 
 void cmdmsplit(char **argv)
@@ -1545,8 +1535,8 @@ void cmdmsplit(char **argv)
 	int rel = 1;
 	float f = 0.0;
 
-	parsefloat(argv, &f, &rel);
-	adjustfsetting(f, rel, &setws->msplit);
+	if ((f = parsefloat(*argv, &rel)) != -1.0)
+		adjustfsetting(f, rel, &setws->msplit);
 }
 
 void cmdssplit(char **argv)
@@ -1554,8 +1544,8 @@ void cmdssplit(char **argv)
 	int rel = 1;
 	float f = 0.0;
 
-	parsefloat(argv, &f, &rel);
-	adjustfsetting(f, rel, &setws->ssplit);
+	if ((f = parsefloat(*argv, &rel)) != -1.0)
+		adjustfsetting(f, rel, &setws->ssplit);
 }
 
 void cmdstick(char **argv)
@@ -1612,14 +1602,16 @@ void cmdswap(char **argv)
 
 void cmdwin(char **argv)
 {
-	int i;
+	int e = 0;
 	unsigned int ui;
-	cmdclient = selws->sel;
 
-	if ((i = parseclient(argv, &cmdclient))) {
-		if (i == -1) return;
+	if ((cmdclient = parseclient(*argv, &e)))
 		argv++;
-	}
+	else if (e == -1)
+		return;
+	else
+		cmdclient = selws->sel;
+
 	if (!*argv) {
 		fprintf(cmdresp, "!win %s\n", enoargs);
 		return;
@@ -1653,11 +1645,26 @@ void cmdws(char **argv)
 
 void cmdwsdef(char **argv)
 {
+	float f;
 	Workspace *ws;
 	unsigned int i;
-	int inpad = 0, start, apply = 0;
+	int j, inpad = 0, start, apply = 0;
+
+
+#define IF_PAD(ch, str, v)                                                 \
+	if (!strcmp(ch, *argv) || !strcmp(str, *argv)) {                          \
+		argv++;                                                               \
+		if ((j = parseintclamp(*argv, NULL, 0, scr_h / 3)) == INT_MIN) break; \
+		v = j;
+#define IF_ARG(ch, str, val, min, max)                                    \
+	if (!strcmp(ch, *argv) || !strcmp(str, *argv)) {                      \
+		argv++;                                                           \
+		if ((j = parseintclamp(*argv, NULL, min, max)) == INT_MIN) break; \
+		val = j;
 
 	while (*argv) {
+		int *s;
+		float *ff;
 		if (!strcmp(*argv, "apply")) {
 			apply = 1;
 		} else if (!strcmp(*argv, "layout")) {
@@ -1668,37 +1675,38 @@ void cmdwsdef(char **argv)
 					wsdef.layout = &layouts[i];
 					break;
 				}
-		} else if (!strcmp(*argv, "master")) {
+		} else if ((s = !strcmp(*argv, "master") ? &wsdef.nmaster
+					: !strcmp(*argv, "stack") ? &wsdef.nstack : NULL))
+		{
 			inpad = 0;
-			argv = parseintclamp(argv + 1, &wsdef.nmaster, NULL, 0, INT_MAX - 1);
-		} else if (!strcmp(*argv, "stack")) {
+			argv++;
+			if ((j = parseintclamp(*argv, NULL, 0, INT_MAX - 1)) == INT_MIN) break;
+			*s = j;
+		} else if ((ff = !strcmp(*argv, "msplit") ? &wsdef.msplit
+					: !strcmp(*argv, "ssplit") ? &wsdef.ssplit : NULL))
+		{
 			inpad = 0;
-			argv = parseintclamp(argv + 1, &wsdef.nstack, NULL, 0, INT_MAX - 1);
-		} else if (!strcmp(*argv, "msplit")) {
-			inpad = 0;
-			argv = parsefloat(argv + 1, &wsdef.msplit, NULL);
-		} else if (!strcmp(*argv, "ssplit")) {
-			inpad = 0;
-			argv = parsefloat(argv + 1, &wsdef.ssplit, NULL);
+			argv++;
+			if ((f = parsefloat(*argv, NULL)) == -1.0)
+				break;
+			*ff = f;
 		} else if (!strcmp(*argv, "gap")) {
 			inpad = 0;
-			argv = parseintclamp(argv + 1, &wsdef.gappx, NULL, 0, scr_h / 6);
+			argv++;
+			if ((j = parseintclamp(*argv, NULL, 0, scr_h / 6)) == INT_MIN) break;
+			wsdef.gappx = j;
 		} else if (inpad || (start = !strcmp(*argv, "pad"))) {
 			if (!inpad) {
 				inpad = 1;
 				argv++;
 			}
-			if (!strcmp(*argv, "l") || !strcmp(*argv, "left"))
-				argv = parseintclamp(argv + 1, &wsdef.padl, NULL, 0, scr_h / 3);
-			else if (!strcmp(*argv, "r") || !strcmp(*argv, "right"))
-				argv = parseintclamp(argv + 1, &wsdef.padr, NULL, 0, scr_h / 3);
-			else if (!strcmp(*argv, "t") || !strcmp(*argv, "top"))
-				argv = parseintclamp(argv + 1, &wsdef.padt, NULL, 0, scr_h / 3);
-			else if (!strcmp(*argv, "b") || !strcmp(*argv, "bottom"))
-				argv = parseintclamp(argv + 1, &wsdef.padb, NULL, 0, scr_h / 3);
-			else if (start) {
+			IF_PAD("l", "left", wsdef.padl)
+			} else IF_PAD("r", "right", wsdef.padr)
+			} else IF_PAD("t", "top", wsdef.padt)
+			} else IF_PAD("b", "bottom", wsdef.padb)
+			} else if (start) {
 				fprintf(cmdresp, "!%s pad: %s\n", ebadarg, *argv);
-				return;
+				break;
 			} else {
 				inpad = 0;
 				start = 0;
@@ -1706,10 +1714,9 @@ void cmdwsdef(char **argv)
 			}
 		} else {
 			fprintf(cmdresp, "!%s workspace default: %s\n", ebadarg, *argv);
-			return;
+			break;
 		}
-		if (*argv)
-			argv++;
+		argv++;
 	}
 
 	if (apply) {
@@ -1726,6 +1733,8 @@ void cmdwsdef(char **argv)
 			ws->padb = wsdef.padb;
 		}
 	}
+#undef IF_PAD
+#undef IF_ARG
 }
 
 void cmdview(int num)
@@ -1820,15 +1829,6 @@ int dwindle(Workspace *ws)
 	return 1;
 }
 
-void *ecalloc(size_t elems, size_t size)
-{
-	void *p;
-
-	if (!(p = calloc(elems, size)))
-		err(1, "unable to allocate space");
-	return p;
-}
-
 void eventhandle(xcb_generic_event_t *ev)
 {
 	Client *c;
@@ -1887,7 +1887,7 @@ void eventhandle(xcb_generic_event_t *ev)
 			wc.stack_mode = e->stack_mode;
 			xcb_configure_window(con, e->window, e->value_mask, &wc);
 		}
-		xcb_flush(con);
+		xcb_aux_sync(con);
 		return;
 	}
 	case XCB_ENTER_NOTIFY: {
@@ -1918,9 +1918,10 @@ void eventhandle(xcb_generic_event_t *ev)
 				|| e->detail == XCB_NOTIFY_DETAIL_POINTER_ROOT
 				|| e->detail == XCB_NOTIFY_DETAIL_NONE)
 			return;
-		DBG("eventhandle: FOCUS_IN - 0x%08x", e->event)
-		if (selws->sel && e->event != selws->sel->win)
+		if (selws->sel && e->event != selws->sel->win) {
+			DBG("eventhandle: FOCUS_IN - 0x%08x", e->event)
 			setinputfocus(selws->sel);
+		}
 		return;
 	}
 	case XCB_CONFIGURE_NOTIFY: {
@@ -1949,11 +1950,12 @@ void eventhandle(xcb_generic_event_t *ev)
 	case XCB_UNMAP_NOTIFY: {
 		xcb_unmap_notify_event_t *e = (xcb_unmap_notify_event_t *)ev;
 
-		DBG("eventhandle: UNMAP_NOTIFY - 0x%08x", e->window)
 		if (e->response_type & ~0x7f)
 			setwmwinstate(e->window, XCB_ICCCM_WM_STATE_WITHDRAWN);
-		else
+		else {
+			DBG("eventhandle: UNMAP_NOTIFY - 0x%08x", e->window)
 			unmanage(e->window, 0);
+		}
 		return;
 	}
 	case XCB_CLIENT_MESSAGE: {
@@ -2232,8 +2234,7 @@ void fib(Workspace *ws, int dwindle)
 
 	for (n = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), n++)
 		;
-	if (!n)
-		return;
+	if (!n) return;
 
 	g = globalcfg[GLB_SMART_GAP] && n == 1 ? 0 : ws->gappx;
 	x = m->wx + ws->padl;
@@ -2245,10 +2246,8 @@ void fib(Workspace *ws, int dwindle)
 		int ox = x;
 		int b = globalcfg[GLB_SMART_BORDER] && n == 1 ? 0 : c->bw;
 		if (i < n - 1) {
-			if (i % 2)
-				h /= 2;
-			else
-				w /= 2;
+			if (i % 2) h /= 2;
+			else w /= 2;
 			if (!dwindle) {
 				if (i % 4 == 2)
 					x += w;
@@ -2279,11 +2278,11 @@ void fib(Workspace *ws, int dwindle)
 				x = ox;
 				w *= 2;
 			}
-			if (f) {
+			if (f) { /* allow the first to be fit in before setting the flag */
 				popfloat(c);
 				continue;
 			}
-			f = 1;
+			f = 1; /* pop all remaining clients */
 		}
 		resizehint(c, x + g, y + g,
 				w - (2 * b) - (n > 1 ? g : (2 * g)),
@@ -2436,7 +2435,7 @@ void grabbuttons(Client *c, int focused)
 	}
 }
 
-void gravitate(Client *c, int horz, int vert, int matchgap)
+void gravitate(Client *c, int xgrav, int ygrav, int matchgap)
 {
 	int x, y, gap;
 	int mx, my, mw, mh;
@@ -2454,12 +2453,12 @@ void gravitate(Client *c, int horz, int vert, int matchgap)
 		mx = c->ws->mon->wx, my = c->ws->mon->wy;
 		mw = c->ws->mon->ww, mh = c->ws->mon->wh;
 	}
-	switch (horz) {
+	switch (xgrav) {
 	case GRAV_LEFT:   x = mx + gap; break;
 	case GRAV_RIGHT:  x = mx + mw - W(c) - gap; break;
 	case GRAV_CENTER: x = (mx + mw - W(c)) / 2; break;
 	}
-	switch (vert) {
+	switch (ygrav) {
 	case GRAV_TOP:    y = my + gap; break;
 	case GRAV_BOTTOM: y = my + mh - H(c) - gap; break;
 	case GRAV_CENTER: y = (my + mh - H(c)) / 2; break;
@@ -2791,12 +2790,12 @@ void initscan(void)
 	free(rt);
 }
 
-void initsock(int send)
+void initsock(void)
 {
 	int r = 0;
 	char *hostname = NULL;
 	int display = 0, screen = 0;
-	static struct sockaddr_un sockaddr;
+	static struct sockaddr_un addr;
 
 #define ENVPATH(var, str, fmt, fallback)                                          \
 	do {                                                                          \
@@ -2806,7 +2805,7 @@ void initsock(int send)
 				snprintf(str, sizeof(str), fmt, hostname, display, screen);       \
 			else                                                                  \
 				strlcpy(str, fallback, sizeof(str));                              \
-			if (!send && setenv(var, str, 0) < 0)                                 \
+			if (setenv(var, str, 0) < 0)                                          \
 				warn("unable to set %s environment variable", var);               \
 		} else {                                                                  \
 			strlcpy(str, env, sizeof(str));                                       \
@@ -2815,21 +2814,14 @@ void initsock(int send)
 
 	if (sockfd <= 0) {
 		ENVPATH("YAXWM_SOCK", sock, "/tmp/yaxwm_%s_%i_%i.socket", "/tmp/yaxwm.socket"); // NOLINT
-		sockaddr.sun_family = AF_UNIX;
-		strlcpy(sockaddr.sun_path, sock, sizeof(sockaddr.sun_path));
+		addr.sun_family = AF_UNIX;
+		strlcpy(addr.sun_path, sock, sizeof(addr.sun_path));
 		check((sockfd = socket(AF_UNIX, SOCK_STREAM, 0)), "unable to create socket");
-		if (send) {
-			check(connect(sockfd, (struct sockaddr *)&sockaddr, sizeof(sockaddr)),
-					"unable to connect socket");
-		} else {
-			unlink(sock);
-			check(bind(sockfd, (struct sockaddr *)&sockaddr, sizeof(sockaddr)),
-					"unable to bind socket");
-			check(listen(sockfd, SOMAXCONN), "unable to listen on socket");
-		}
+		unlink(sock);
+		check(bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)), "unable to bind socket");
+		check(listen(sockfd, SOMAXCONN), "unable to listen on socket");
 	}
-	if (!send)
-		ENVPATH("YAXWM_STATUS", status, "/tmp/yaxwm_%s_%i_%i.status", "/tmp/yaxwm.status"); // NOLINT
+	ENVPATH("YAXWM_STATUS", status, "/tmp/yaxwm_%s_%i_%i.status", "/tmp/yaxwm.status"); // NOLINT
 	free(hostname);
 
 #undef ENVPATH
@@ -3084,37 +3076,23 @@ Monitor *outputtomon(xcb_randr_output_t id)
 	return m;
 }
 
-char **parsebool(char **argv, int *setting)
+Client *parseclient(char *argv, int *ebadwin)
 {
 	char *end;
-
-	if (argv && *argv) {
-		int i;
-		if (((i = !strcmp("true", *argv)) || !strcmp("false", *argv))
-				|| (((i = strtoul(*argv, &end, 0)) > 0 || !strcmp("0", *argv)) && *end == '\0'))
-			*setting = i ? 1 : 0;
-		else
-			fprintf(cmdresp, "!invalid boolean: %s - expected true, false, 1, 0\n", *argv);
-	}
-	return argv;
-}
-
-int parseclient(char **argv, Client **c)
-{
-	char *end;
+	Client *c = NULL;
 
 	if (argv && *argv) {
 		unsigned int i;
-		if ((*argv[0] == '#' || (*argv[0] == '0' && *argv[1] == 'x'))
-				&& (i = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16)) > 0 && *end == '\0')
+		if ((argv[0] == '#' || (argv[0] == '0' && argv[1] == 'x'))
+				&& (i = strtoul(*argv == '#' ? argv + 1 : argv, &end, 16)) > 0 && *end == '\0')
 		{
-			if ((*c = wintoclient(i)))
-				return 1;
-			fprintf(cmdresp, "!invalid window id: %s\n", *argv);
-			return -1;
+			if (!(c = wintoclient(i))) {
+				fprintf(cmdresp, "!invalid window id: %s\n", argv);
+				*ebadwin = -1;
+			}
 		}
 	}
-	return 0;
+	return c;
 }
 
 void parsecmd(char *buf)
@@ -3161,125 +3139,41 @@ void parsecmd(char *buf)
 	fclose(cmdresp);
 }
 
-char **parsecolour(char **argv, unsigned int *setting)
+int parsegeom(char *argv, char type, int *i, int *rel, int *grav)
 {
-	char *end;
+	int j;
 
-	if (argv && *argv) {
-		unsigned int len;
-		if ((len = strlen(*argv)) >= 6 && len <= 10) {
-			unsigned int argb;
-			if (**argv == '#' && len >= 7 && len <= 9)
-				len--;
-			else if (**argv == '0' && *(*argv + 1) == 'x')
-				len -= 2;
-			argb = strtoul(**argv == '#' ? *argv + 1 : *argv, &end, 16);
-			if (argb <= 0xffffffff && *end == '\0') {
-				unsigned short a, r, g, b;
-				if (len == 6) {
-					*setting = (argb | 0xff000000);
-				} else if ((a = ((argb & 0xff000000) >> 24)) && a != 0xff) {
-					r = (((argb & 0xff0000) >> 16) * a) / 255;
-					g = (((argb & 0xff00) >> 8) * a) / 255;
-					b = (((argb & 0xff) >> 0) * a) / 255;
-					*setting = (a << 24 | r << 16 | g << 8 | b);
-				} else {
-					*setting = argb;
-				}
-			}
-		} else {
-			fprintf(cmdresp, "!invalid colour: %s - expected (#/0x)(AA)RRGGBB\n", *argv);
+	if (!grav && (j = parseint(argv, rel, type == 'x' || type == 'y' ? 1 : 0)) != INT_MIN) {
+		*i = j;
+	} else if (!strcmp("center", argv)) {
+		*grav = GRAV_CENTER;
+	} else {
+		switch (type) {
+		case 'x':
+			if (grav && !strcmp("left", argv)) *grav = GRAV_LEFT;
+			else if (grav && !strcmp("right", argv)) *grav = GRAV_RIGHT;
+			else if ((j = parseint(argv, rel, 1)) != INT_MIN) *i = j;
+			else return 0;
+			break;
+		case 'y':
+			if (grav && !strcmp("top", argv)) *grav = GRAV_TOP;
+			else if (grav && !strcmp("bottom", argv)) *grav = GRAV_BOTTOM;
+			else if ((j = parseint(argv, rel, 1)) != INT_MIN) *i = j;
+			else return 0;
+			break;
+		case 'w': /* FALLTHROUGH */
+		case 'h':
+			if ((j = parseint(argv, rel, 0)) != INT_MIN) *i = j;
+			else return 0;
+			break;
 		}
 	}
-	return argv;
-}
-
-char **parsefloat(char **argv, float *setting, int *rel)
-{
-	char *end;
-
-	if (argv && *argv) {
-		float f;
-		if ((f = strtof(*argv, &end)) != 0.0 && *end == '\0') {
-			if (f < -0.95 || f > 0.95) {
-				fprintf(cmdresp, "!float out of range: %s - min: -0.95, max: 0.95\n", *argv);
-			} else {
-				if (rel)
-					*rel = **argv == '-' || **argv == '+';
-				*setting = f;
-			}
-		} else {
-			fprintf(cmdresp, "!invalid float argument: %s - expected (-/+)0.N\n", *argv);
-		}
-	}
-	return argv;
-}
-
-char **parsegeom(char **argv, char type, int *i, int *rel, int *grav)
-{
-	if (argv && *argv) {
-		if (!grav) {
-			argv = parseint(argv, i, rel, type == 'x' || type == 'y' ? 1 : 0);
-		} else if (!strcmp("center", *argv)) {
-			*grav = GRAV_CENTER;
-		} else {
-			switch (type) {
-			case 'x':
-				if (grav && !strcmp("left", *argv)) *grav = GRAV_LEFT;
-				else if (grav && !strcmp("right", *argv)) *grav = GRAV_RIGHT;
-				else argv = parseint(argv, i, rel, 1);
-				break;
-			case 'y':
-				if (grav && !strcmp("top", *argv)) *grav = GRAV_TOP;
-				else if (grav && !strcmp("bottom", *argv)) *grav = GRAV_BOTTOM;
-				else argv = parseint(argv, i, rel, 1);
-				break;
-			case 'w': /* FALLTHROUGH */
-			case 'h':
-				argv = parseint(argv, i, rel, 0);
-				break;
-			}
-		}
-	}
-	return argv;
-}
-
-char **parseint(char **argv, int *setting, int *rel, int allowzero)
-{
-	char *end;
-
-	if (argv && *argv) {
-		int i;
-		if (rel)
-			*rel = 0;
-		if (((i = strtol(*argv, &end, 0)) || (allowzero && !strcmp("0", *argv))) && *end == '\0') {
-			if (i && rel)
-				*rel = **argv == '-' || **argv == '+';
-			*setting = i;
-		} else {
-			fprintf(cmdresp, "!invalid integer argument: %s - expected (-/+)N\n", *argv);
-		}
-	}
-	return argv;
-}
-
-char **parseintclamp(char **argv, int *setting, int *rel, int min, int max)
-{
-	int i = min - 1;
-
-	if (argv && *argv) {
-		parseint(argv, &i, rel, 1);
-		if (i >= min && i <= max)
-			*setting = i;
-		else if (i != min - 1)
-			fprintf(cmdresp, "!int out of range: %s - min: %d, max: %d\n", *argv, min, max);
-	}
-	return argv;
+	return 1;
 }
 
 Workspace *parsewsormon(char **argv, int mon)
 {
-	int opt = -1, n;
+	int i, n;
 	Monitor *m;
 	Workspace *cws = selws, *ws;
 
@@ -3295,61 +3189,9 @@ Workspace *parsewsormon(char **argv, int mon)
 	if (mon)
 		for (n = 0, m = nextmon(monitors); m; m = nextmon(m->next), n++)
 			;
-	parseintclamp(argv, &opt, NULL, 1, mon ? n : globalcfg[GLB_NUMWS]);
-	if (opt < 0)
+	if ((i = parseintclamp(*argv, NULL, 1, mon ? n : globalcfg[GLB_NUMWS])) == INT_MIN || i <= 0)
 		return NULL;
-	return mon ? ((m = nextmon(itomon(opt - 1))) ? m->ws : cws) : itows(opt - 1);;
-}
-
-int parseopt(char **argv)
-{
-
-	if (argv && *argv) {
-		int i;
-		char **s;
-		for (s = opts, i = 0; s && *s; s++, i++)
-			if (!strcmp(*s, *argv))
-				return i;
-	}
-	return -1;
-}
-
-char *parsetoken(char **src)
-{
-	size_t n = 0;
-	int q, sq = 0;
-	char *s, *t, *head, *tail;
-
-	if (!(*src) || !(**src))
-		return NULL;
-	while (**src && (**src == ' ' || **src == '\t' || **src == '='))
-		(*src)++;
-
-	if ((q = **src == '"' || (sq = **src == '\''))) {
-		head = *src + 1;
-		if (!(tail = strchr(head, sq ? '\'' : '"')))
-			return 0;
-		if (!sq)
-			while (*(tail - 1) == '\\')
-				tail = strchr(tail + 1, '"');
-	} else {
-		head = *src;
-		tail = strpbrk(*src, " =\n\t");
-	}
-
-	s = t = head;
-	while (tail ? s < tail : *s) {
-		if (q && !sq && *s == '\\' && *(s + 1) == '"') {
-			s++;
-		} else {
-			n++;
-			*t++ = *s++;
-		}
-	}
-	*t = '\0';
-	*src = tail ? ++tail : '\0';
-
-	return head;
+	return mon ? ((m = nextmon(itomon(i - 1))) ? m->ws : cws) : itows(i - 1);
 }
 
 void popfloat(Client *c)
@@ -3576,7 +3418,6 @@ void restack(Workspace *ws)
 	Desk *d;
 	Panel *p;
 	Client *c;
-	uint32_t v[] = { XCB_WINDOW_NONE, XCB_STACK_MODE_ABOVE };
 
 	if (!ws || !(ws = selws) || !(c = ws->sel))
 		return;
@@ -3587,9 +3428,9 @@ void restack(Workspace *ws)
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	for (c = ws->stack; c; c = c->snext) {
 		if (c->trans && FLOATING(c)) {
-			v[0] = c->trans->win;
 			xcb_configure_window(con, c->win,
-					XCB_CONFIG_WINDOW_SIBLING | XCB_CONFIG_WINDOW_STACK_MODE, v);
+					XCB_CONFIG_WINDOW_SIBLING | XCB_CONFIG_WINDOW_STACK_MODE,
+					(uint32_t []){ c->trans->win, XCB_STACK_MODE_ABOVE });
 		} else if (!FLOATING(c) && ws == ws->mon->ws) {
 			setstackmode(c->win, XCB_STACK_MODE_BELOW);
 		}
@@ -3868,49 +3709,6 @@ int spiral(Workspace *ws)
 	return 1;
 }
 
-size_t strlcat(char *dst, const char *src, size_t siz)
-{
-	char *d = dst;
-	const char *s = src;
-	size_t n = siz;
-	size_t dlen;
-
-	while (n-- != 0 && *d != '\0')
-		d++;
-	dlen = d - dst;
-	n = siz - dlen;
-	if (n == 0)
-		return dlen + strlen(s);
-	while (*s != '\0') {
-		if (n != 1) {
-			*d++ = *s;
-			n--;
-		}
-		s++;
-	}
-	*d = '\0';
-	return dlen + (s - src);
-}
-
-size_t strlcpy(char *dst, const char *src, size_t dsize)
-{
-	const char *osrc = src;
-	size_t nleft = dsize;
-
-	if (nleft != 0) {
-		while (--nleft != 0)
-			if ((*dst++ = *src++) == '\0')
-				break;
-	}
-	if (nleft == 0) {
-		if (dsize != 0)
-			*dst = '\0';
-		while (*src++)
-			;
-	}
-	return (src - osrc - 1);
-}
-
 int tile(Workspace *ws)
 {
 	int ret = 1;
@@ -4035,6 +3833,8 @@ void unmanage(xcb_window_t win, int destroyed)
 	Workspace *ws;
 
 	if ((ptr = c = wintoclient(win))) {
+		if (!FLOATING(c))
+			needsrefresh = 1;
 		if (c->cb && running)
 			c->cb->fn.callback(c, 1);
 		detach(c, 0);
@@ -4043,6 +3843,7 @@ void unmanage(xcb_window_t win, int destroyed)
 		pp = &panels;
 		DETACH(p, pp);
 		updstruts(p, 0);
+		needsrefresh = 1;
 	} else if ((ptr = d = wintodesk(win))) {
 		dd = &desks;
 		DETACH(d, dd);
@@ -4074,10 +3875,7 @@ void unmanage(xcb_window_t win, int destroyed)
 			PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &p->win);
 		FOR_EACH(d, desks)
 			PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &d->win);
-	} else {
-		focus(NULL);
 	}
-	needsrefresh = 1;
 }
 
 int updoutputs(xcb_randr_output_t *outs, int nouts, xcb_timestamp_t t)
@@ -4258,7 +4056,7 @@ void updworkspaces(int needed)
 int usage(int e, char flag)
 {
 	switch (flag) {
-	case 'h': fprintf(stderr, "usage: yaxwm [-hv] [-s SOCKET_FD] [-c COMMAND]\n"); break;
+	case 'h': fprintf(stderr, "usage: yaxwm [-hv] [-s SOCKET_FD]\n"); break;
 	case 'v': fprintf(stderr, "yaxwm "VERSION"\n"); break;
 	}
 	return e;
@@ -4302,7 +4100,7 @@ int winprop(xcb_window_t win, xcb_atom_t prop, xcb_atom_t *ret)
 	xcb_get_property_reply_t *r = NULL;
 
 	c = xcb_get_property(con, 0, win, prop, XCB_ATOM_ANY, 0, 1);
-	DBG("winprop: getting window property atom - 0x%08x", win)
+	DBG("winprop: getting window property atom: %d - 0x%08x", prop, win)
 	if ((r = xcb_get_property_reply(con, c, &e)) && xcb_get_property_value_length(r)) {
 		i = 1;
 		*ret = *(xcb_atom_t *)xcb_get_property_value(r);
@@ -4359,62 +4157,4 @@ xcb_window_t wintrans(xcb_window_t win)
 	if (!xcb_icccm_get_wm_transient_for_reply(con, pc, &t, &e))
 		iferr(0, "unable to get wm transient for hint", e);
 	return t;
-}
-
-int writecmd(int argc, char *argv[])
-{
-	ssize_t s;
-	size_t j, n = 0;
-	int i, ret = 0, offs;
-	char *eq = NULL, *sp = NULL, buf[BUFSIZ], resp[BUFSIZ];
-
-	if (!argc)
-		errx(1, "%s", enoargs);
-	initsock(1);
-
-	struct pollfd fds[] = {
-		{ sockfd,        POLLIN,  0 },
-		{ STDOUT_FILENO, POLLHUP, 0 },
-	};
-
-	for (i = 0, j = 0, offs = 1; n + 1 < sizeof(buf) && i < argc; i++, j = 0, offs = 1) {
-		if ((sp = strchr(argv[i], ' ')) || (sp = strchr(argv[i], '\t'))) {
-			if (!(eq = strchr(argv[i], '=')) || sp < eq)
-				buf[n++] = '"';
-			offs++;
-		}
-		while (n + offs < sizeof(buf) && argv[i][j]) {
-			buf[n++] = argv[i][j++];
-			if (eq && sp > eq && buf[n - 1] == '=') {
-				buf[n++] = '"';
-				eq = NULL;
-			}
-		}
-		if (offs > 1)
-			buf[n++] = '"';
-		buf[n++] = ' ';
-	}
-	buf[n - 1] = '\0';
-	check(send(sockfd, buf, n, 0), "unable to send command");
-
-	while (poll(fds, 2, 1000) > 0) {
-		if (fds[1].revents & (POLLERR | POLLHUP))
-			break;
-		if (fds[0].revents & POLLIN) {
-			if ((s = recv(sockfd, resp, sizeof(resp) - 1, 0)) > 0) {
-				resp[s] = '\0';
-				if ((ret = *resp == '!')) {
-					fprintf(stderr, "yaxwm: error: %s", resp + 1);
-					fflush(stderr);
-				} else {
-					fprintf(stdout, "%s", resp);
-					fflush(stdout);
-				}
-			} else {
-				break;
-			}
-		}
-	}
-	close(sockfd);
-	return ret;
 }

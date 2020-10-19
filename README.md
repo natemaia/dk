@@ -94,7 +94,7 @@ configuration and avoid conflicts when pulling new updates.
 Most if not all of your interaction with the window manager will be using  
 commands in the form of
 ```
-yaxwm -c <command>
+yaxcmd <command>
 ```
 This will spawn a new instance of yaxwm to write our command into the socket  
 where it can then be read and parsed by the operating yaxwm process.

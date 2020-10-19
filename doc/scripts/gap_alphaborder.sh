@@ -7,7 +7,7 @@
 # alt + {equal,minus,apostrophe}
 #	 /path/to/script {+5,-5,reset}
 
-# first runs `yaxwm -c set gap width $1`, then checks to see what the current
+# first runs `yaxcmd set gap width $1`, then checks to see what the current
 # gap setting is if it's >=threshold we add slight border transparency
 
 # does not have to be transparency were toggling, could be any setting where

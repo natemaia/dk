@@ -28,7 +28,7 @@ static int globalcfg[] = {
 	[GLB_TILETOHEAD]   = 0,  /* place new clients at the tail of the stack */
 };
 
-static const char *cursors[] = {
+static const char *cursors[CURS_LAST] = {
 	/* see: https://tronche.com/gui/x/xlib/appendix/b/ */
 	[CURS_MOVE]   = "fleur",
 	[CURS_NORMAL] = "arrow",

@@ -6,11 +6,9 @@
 #define _XOPEN_SOURCE 700
 
 #include <sys/un.h>
-#include <sys/wait.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 
-#include <poll.h>
 #include <stdio.h>
 #include <regex.h>
 #include <unistd.h>
@@ -359,7 +357,6 @@ static Rule *initrule(Rule *wr);
 static void initscan(void);
 static void initsock(void);
 static void initwm(void);
-static char *itoa(int n, char *s);
 static Monitor *itomon(int num);
 static Workspace *itows(int num);
 static void manage(xcb_window_t win, xcb_get_geometry_reply_t *g, xcb_get_window_attributes_reply_t *wa);
@@ -388,7 +385,6 @@ static void seturgent(Client *c, int urg);
 static void setwmwinstate(xcb_window_t win, long state);
 static void setworkspace(Client *c, int num, int stacktail);
 static void showhide(Client *c);
-static void sighandle(int sig);
 static void sizehints(Client *c, int uss);
 static int spiral(Workspace *ws);
 static int tile(Workspace *ws);
@@ -399,7 +395,6 @@ static int updoutputs(xcb_randr_output_t *outs, int nouts, xcb_timestamp_t t);
 static int updrandr(void);
 static void updstruts(Panel *p, int apply);
 static void updworkspaces(int needed);
-static int usage(int e, char flag);
 static xcb_get_window_attributes_reply_t *winattr(xcb_window_t win);
 static xcb_get_geometry_reply_t *wingeom(xcb_window_t win);
 static int winprop(xcb_window_t win, xcb_atom_t prop, xcb_atom_t *ret);
@@ -458,9 +453,9 @@ int main(int argc, char *argv[])
 				sockfd = 0;
 			}
 		} else if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "-h")) {
-			return usage(0, argv[i][1]);
+			return usage(argv[0], VERSION, 0, argv[i][1], "[-hv] [-s SOCKET_FD]");
 		} else {
-			return usage(1, 'h');
+			return usage(argv[0], VERSION, 1, 'h', "[-hv] [-s SOCKET_FD]");
 		}
 	}
 	if (!setlocale(LC_ALL, ""))
@@ -2842,22 +2837,6 @@ Workspace *initws(int num)
 	return ws;
 }
 
-char *itoa(int n, char *s)
-{
-	int j, i = 0, sign = n;
-
-	if (sign < 0) n = -n;
-	do { s[i++] = n % 10 + '0'; } while ((n /= 10) > 0);
-	if (sign < 0) s[i++] = '-';
-	s[i] = '\0';
-	for (j = i - 1, i = 0; i < j; i++, j--) {
-		char c = s[i];
-		s[i] = s[j];
-		s[j] = c;
-	}
-	return s;
-}
-
 Monitor *itomon(int num)
 {
 	Monitor *mon = monitors;
@@ -3060,8 +3039,7 @@ void quadrant(Client *c, int *x, int *y, int *w, int *h)
 	static int index = 0;
 	static Workspace *ws = NULL;
 	unsigned int i = 0;
-	int thirdw = m->ww / 3;
-	int thirdh = m->wh / 3;
+	int thirdw = m->ww / 3, thirdh = m->wh / 3;
 	int quadrants[][3] = {
 		{ 1, m->wx + thirdw,       m->wy + thirdh       },
 		{ 1, m->wx + (thirdw * 2), m->wy + thirdh       },
@@ -3403,22 +3381,6 @@ void showhide(Client *c)
 	}
 }
 
-void sighandle(int sig)
-{
-	switch (sig) {
-	case SIGINT: /* FALLTHROUGH */
-	case SIGTERM: /* FALLTHROUGH */
-	case SIGHUP:
-		exit(1);
-		break;
-	case SIGCHLD:
-		signal(sig, sighandle);
-		while (waitpid(-1, NULL, WNOHANG) > 0)
-			;
-		break;
-	}
-}
-
 void sizehints(Client *c, int uss)
 {
 	xcb_size_hints_t s;
@@ -3636,7 +3598,6 @@ int updoutputs(xcb_randr_output_t *outs, int nouts, xcb_timestamp_t t)
 	xcb_randr_get_output_info_cookie_t oc[nouts];
 	xcb_randr_get_output_primary_reply_t *po = NULL;
 
-
 	DBG("updoutputs: checking %d outputs for changes", nouts)
 	for (i = 0; i < nouts; i++)
 		oc[i] = xcb_randr_get_output_info(con, outs[i], t);
@@ -3796,15 +3757,6 @@ void updworkspaces(int needed)
 		}
 	setnetwsnames();
 	needsrefresh = 1;
-}
-
-int usage(int e, char flag)
-{
-	switch (flag) {
-	case 'h': fprintf(stderr, "usage: yaxwm [-hv] [-s SOCKET_FD]\n"); break;
-	case 'v': fprintf(stderr, "yaxwm "VERSION"\n"); break;
-	}
-	return e;
 }
 
 xcb_get_window_attributes_reply_t *winattr(xcb_window_t win)

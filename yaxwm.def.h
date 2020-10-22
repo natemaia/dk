@@ -5,27 +5,28 @@
 
 
 static unsigned int border[] = {
-	[BORD_WIDTH]     = 1,          /* total border width in pixels */
-	[BORD_FOCUS]     = 0xFF6699cc, /* focused window border colour (inner) */
-	[BORD_URGENT]    = 0xFFee5555, /* urgent window border colour (inner) */
-	[BORD_UNFOCUS]   = 0xFF444444, /* unfocused window border colour (inner) */
-	[BORD_O_WIDTH]   = 0,          /* outer border width in pixels */
-	[BORD_O_FOCUS]   = 0xFF222222, /* focused window border colour (outer) */
-	[BORD_O_URGENT]  = 0xFF222222, /* urgent window border colour (outer) */
-	[BORD_O_UNFOCUS] = 0xFF222222, /* unfocused window border colour (outer) */
+	[BORD_WIDTH]     = 1,          /* int: total border width in pixels */
+	[BORD_FOCUS]     = 0xFF6699cc, /* hex: focused window border colour (inner) */
+	[BORD_URGENT]    = 0xFFee5555, /* hex: urgent window border colour (inner) */
+	[BORD_UNFOCUS]   = 0xFF444444, /* hex: unfocused window border colour (inner) */
+	[BORD_O_WIDTH]   = 0,          /* int: outer border width in pixels */
+	[BORD_O_FOCUS]   = 0xFF222222, /* hex: focused window border colour (outer) */
+	[BORD_O_URGENT]  = 0xFF222222, /* hex: urgent window border colour (outer) */
+	[BORD_O_UNFOCUS] = 0xFF222222, /* hex: unfocused window border colour (outer) */
 };
 
 static int globalcfg[] = {
-	[GLB_FOCUS_MOUSE]  = 1,  /* enable focus follows mouse */
-	[GLB_FOCUS_OPEN]   = 1,  /* enable focus on open */
-	[GLB_FOCUS_URGENT] = 1,  /* enable focus urgent windows */
-	[GLB_MIN_WH]       = 50, /* minimum window size allowed when resizing */
-	[GLB_MIN_XY]       = 10, /* minimum window area allowed inside the screen when moving */
-	[GLB_NUMWS]        = 0,  /* number of workspaces currently allocated */
-	[GLB_TILEHINTS]    = 0,  /* respect size hints in tiled layouts */
-	[GLB_SMART_BORDER] = 1,  /* disable borders in layouts with only one visible window */
-	[GLB_SMART_GAP]    = 1,  /* disable gaps in layouts with only one visible window */
-	[GLB_TILETOHEAD]   = 0,  /* place new clients at the tail of the stack */
+	[GLB_FOCUS_MOUSE]  = 1,  /* bool: enable focus follows mouse */
+	[GLB_FOCUS_OPEN]   = 1,  /* bool: enable focus on open */
+	[GLB_FOCUS_URGENT] = 1,  /* bool: enable focus urgent windows */
+	[GLB_MIN_WH]       = 50, /* int:  minimum window size allowed when resizing */
+	[GLB_MIN_XY]       = 10, /* int:  minimum window area allowed inside the screen when moving */
+	[GLB_NUMWS]        = 0,  /* bool: number of workspaces currently allocated */
+	[GLB_TILEHINTS]    = 0,  /* bool: respect size hints in tiled layouts */
+	[GLB_SMART_BORDER] = 1,  /* bool: disable borders in layouts with only one visible window */
+	[GLB_SMART_GAP]    = 1,  /* bool: disable gaps in layouts with only one visible window */
+	[GLB_TILETOHEAD]   = 0,  /* bool: place new clients at the tail of the stack */
+	[GLB_STATICWS]     = 0,  /* bool: use static workspace assignment */
 };
 
 static const char *cursors[CURS_LAST] = {
@@ -54,73 +55,67 @@ static void albumart(Client *c, int closed)
 	}
 }
 
-/* primary keywords and parser functions
- * .keyword functions have the following prototype: void fn(char **); */
-static const Set keywords[] = {
-	{ "mon",   {.keyword = cmdmon  } },
-	{ "rule",  {.keyword = cmdrule } },
-	{ "set",   {.keyword = cmdset  } },
-	{ "win",   {.keyword = cmdwin  } },
-	{ "wm",    {.keyword = cmdwm   } },
-	{ "ws",    {.keyword = cmdws   } },
+/* "callback" names recognized for use with rules. */
+static const Callback callbacks[] = {
+	/* name,       function */
+	{ "albumart",  albumart },
 };
 
-/* "callback" names recognized for use with rules.
- * .callback functions have the following prototype: void fn(Client *, int); */
-static const Set callbacks[] = {
-	/* name,                     fn type    fn name */
-	{ "albumart",              {.callback = albumart} },
+/* primary command keywords and parser functions */
+static const VoidCmd keywords[] = {
+	{ "mon",   cmdmon  },
+	{ "rule",  cmdrule },
+	{ "set",   cmdset  },
+	{ "win",   cmdwin  },
+	{ "wm",    cmdwm   },
+	{ "ws",    cmdws   },
 };
 
-/* "set" keyword options, used by cmdset() to parse arguments
- * .keyword functions have the following prototype: void fn(char **); */
-static const Set setcmds[] = {
-	{ "border", {.keyword = cmdborder } },
-	{ "gap",    {.keyword = cmdgappx  } },
-	{ "layout", {.keyword = cmdlayout } },
-	{ "master", {.keyword = cmdnmaster} },
-	{ "mouse",  {.keyword = cmdmouse  } },
-	{ "pad",    {.keyword = cmdpad    } },
-	{ "msplit", {.keyword = cmdmsplit } },
-	{ "ssplit", {.keyword = cmdssplit } },
-	{ "stack",  {.keyword = cmdnstack } },
+/* "set" keyword options, used by cmdset() */
+static const VoidCmd setcmds[] = {
+	{ "border",  cmdborder  },
+	{ "gap",     cmdgappx   },
+	{ "layout",  cmdlayout  },
+	{ "master",  cmdnmaster },
+	{ "mouse",   cmdmouse   },
+	{ "pad",     cmdpad     },
+	{ "msplit",  cmdmsplit  },
+	{ "ssplit",  cmdssplit  },
+	{ "stack",   cmdnstack  },
 };
 
-/* "layout" names used by cmdlayout() to parse arguments.
- * .layout functions have the following prototype: int fn(Workspace *); */
-static const Set layouts[] = {
-	{ "tile",    {.layout = tile   } }, /* first is default */
-	{ "mono",    {.layout = mono   } },
-	{ "grid",    {.layout = grid   } },
-	{ "spiral",  {.layout = spiral } },
-	{ "dwindle", {.layout = dwindle} },
-	{ "none",    {.layout = NULL   } },
+/* "win" keyword options, used by cmdwin() */
+static const VoidCmd wincmds[] = {
+	{ "cycle",    cmdcycle    },
+	{ "fakefull", cmdfakefull },
+	{ "float",    cmdfloat    },
+	{ "full",     cmdfull     },
+	{ "focus",    cmdfocus    },
+	{ "kill",     cmdkill     },
+	{ "resize",   cmdresize   },
+	{ "stick",    cmdstick    },
+	{ "swap",     cmdswap     },
 };
 
-/* "win" keyword options, used by cmdwin() to parse arguments
- * .keyword functions have the following prototype: void fn(char **); */
-static const Set wincmds[] = {
-	{ "cycle",    {.keyword = cmdcycle   } },
-	{ "fakefull", {.keyword = cmdfakefull} },
-	{ "float",    {.keyword = cmdfloat   } },
-	{ "full",     {.keyword = cmdfull    } },
-	{ "focus",    {.keyword = cmdfocus   } },
-	{ "kill",     {.keyword = cmdkill    } },
-	{ "resize",   {.keyword = cmdresize  } },
-	{ "stick",    {.keyword = cmdstick   } },
-	{ "swap",     {.keyword = cmdswap    } },
+/* "layout" names used by cmdlayout() */
+static const Layout layouts[] = {
+	{ "tile",     tile    }, /* first is default */
+	{ "mono",     mono    },
+	{ "grid",     grid    },
+	{ "spiral",   spiral  },
+	{ "dwindle",  dwindle },
+	{ "none",     NULL    }, /* no layout means floating */
 };
 
-/* "ws" and "mon" commands used by cmdws() and cmdmon() to parse arguments.
- * .command functions have the following prototype: void fn(int); */
-static const Set wsmoncmds[] = {
-	{ "follow", {.command = cmdfollow} },
-	{ "send",   {.command = cmdsend  } },
-	{ "view",   {.command = cmdview  } },
+/* "ws" and "mon" commands used by cmdws() and cmdmon() */
+static const WsCmd wscmds[] = {
+	{ "follow", cmdfollow },
+	{ "send",   cmdsend   },
+	{ "view",   cmdview   },
 };
 
-static Workspace wsdef = { /* settings for newly created workspaces
- because were using the Workspace struct we have a bunch of unused fields */
+/* workspaces defaults */
+static Workspace wsdef = {
 	1,           /* nmaster */
 	3,           /* nstack  */
 	0,           /* gappx   */
@@ -135,4 +130,3 @@ static Workspace wsdef = { /* settings for newly created workspaces
 	/* unused values - inherited from Workspace struct */
 	0, { '\0' }, NULL, NULL, NULL, NULL, NULL
 };
-

@@ -38,7 +38,7 @@ yaxcmd.o: %.o: %.c
 	${CC} ${CFLAGS} ${CPPFLAGS} -c $< -o $@
 
 clean:
-	rm -f yaxwm yaxwm.o yaxcmd yaxcmd.o
+	rm -f *.o yaxwm yaxcmd
 
 install: all
 	@yaxwm -v 2>&1 | awk '{exit $$2 <= 0.84}' || echo -e '\nYour rc files need to be updated to use yaxcmd, a script for automatic conversion\n\n\tdoc/scripts/convertrc\nor\n\t${DESTDIR}${DOCPREFIX}/yaxwm/scripts/convertrc\n'

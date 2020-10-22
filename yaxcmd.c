@@ -5,8 +5,8 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "strl.h"
-#include "util.h"
+#include "include/strl.c"
+#include "include/util.c"
 
 #ifndef VERSION
 #define VERSION "0.84"

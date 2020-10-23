@@ -14,4 +14,4 @@ awk '{
 		print;
 		exit;
 	}
-}' "$YAXWM_STATUS"
+}' "$DKSTAT"

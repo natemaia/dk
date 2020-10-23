@@ -1,10 +1,4 @@
-#include <sys/wait.h>
-#include <sys/types.h>
-
-#include <err.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <signal.h>
+#include "util.h"
 
 void check(int i, char *msg)
 {

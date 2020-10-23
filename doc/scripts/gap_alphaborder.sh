@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# simple script to toggle yaxwm border opacity based on the gap width
+# simple script to toggle dk border opacity based on the gap width
 # written by Nathaniel Maia, 2020
 
 # example usage bind with sxhkd
 # alt + {equal,minus,apostrophe}
 #	 /path/to/script {+5,-5,reset}
 
-# first runs `yaxcmd set gap width $1`, then checks to see what the current
+# first runs `dkcmd set gap width $1`, then checks to see what the current
 # gap setting is if it's >=threshold we add slight border transparency
 
 # does not have to be transparency were toggling, could be any setting where
@@ -52,12 +52,12 @@ currentwsgap()
 			print $7;
 			exit;
 		}
-	}' "$YAXWM_STATUS"
+	}' "$DKSTAT"
 }
 
 # store the gap width before and after changing
 old=$(currentwsgap)
-yaxwm -c set gap width "$1"
+dkcmd set gap width "$1"
 ret=$? # if we don't cross the threshold this will be our exit code
 new=$(currentwsgap)
 
@@ -68,8 +68,7 @@ if (( (old >= thresh && new < thresh) || (old < thresh && new >= thresh) )); the
 		c="${col[$i]}"
 		col[$i]="${c/\#/\#$alpha}"
 	done
-	yaxwm -c set border colour \
-		focus="${col[f]}" urgent="${col[u]}" unfocus="${col[uf]}" \
+	dkcmd set border colour focus="${col[f]}" urgent="${col[u]}" unfocus="${col[uf]}" \
 		outer_focus="${col[of]}" outer_urgent="${col[ou]}" outer_unfocus="${col[ouf]}"
 else
 	exit $ret

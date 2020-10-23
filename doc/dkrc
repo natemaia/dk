@@ -1,10 +1,10 @@
 #!/bin/sh
 
-# example yaxwmrc to show some basic concepts like error reporting
+# example dkrc to show some basic command usage and error reporting
 
 # determine where to place the log file
-logfile="$HOME/.yaxwmrc.log"
-[ -d "$HOME/.local/share/xorg" ] && logfile="$HOME/.local/share/xorg/yaxwmrc.log"
+logfile="$HOME/.dkrc.log"
+[ -d "$HOME/.local/share/xorg" ] && logfile="$HOME/.local/share/xorg/dkrc.log"
 : > "$logfile"
 
 
@@ -19,61 +19,57 @@ fi
 	# workspace settings
 	# ------------------------
 	# initialize 10 workspaces (1-10)
-	yaxcmd set numws=10
+	dkcmd set numws=10
 
 	# default workspace values used when allocating new workspaces
 	# can be applied to all existing workspaces when passed 'apply' after ws=default
-	yaxcmd set ws=default apply layout=tile master=1 stack=4 gap=0 msplit=0.55 ssplit=0.55
+	dkcmd set ws=default apply layout=tile master=1 stack=4 gap=0 msplit=0.55 ssplit=0.55
 
 	# change workspace names
-	yaxcmd set ws=1 name="term" ws=2 name="web"
+	dkcmd set ws=1 name="term" ws=2 name="web"
 
 	# change workspace layouts
-	yaxcmd set ws=10 layout=grid
+	dkcmd set ws=10 layout=grid
 
 	# # use static workspaces (not default)
-	# yaxcmd set static_ws=true
+	# dkcmd set static_ws=true
 	# # assign workspaces to monitors (requires static_ws=true)
 	# mon1='DisplayPort-0'
 	# mon2='HDMI-A-0'
-	# yaxcmd set ws=1 mon=$mon1 ws=2 mon=$mon1 ws=3 mon=$mon1 ws=4 mon=$mon1 ws=5 mon=$mon1
-	# yaxcmd set ws=6 mon=$mon2 ws=7 mon=$mon2 ws=8 mon=$mon2 ws=9 mon=$mon2 ws=10 mon=$mon2
+	# dkcmd set ws=1 mon=$mon1 ws=2 mon=$mon1 ws=3 mon=$mon1 ws=4 mon=$mon1 ws=5 mon=$mon1
+	# dkcmd set ws=6 mon=$mon2 ws=7 mon=$mon2 ws=8 mon=$mon2 ws=9 mon=$mon2 ws=10 mon=$mon2
 
 	# use some padding and gaps on the last workspace
-	if yaxcmd print numws 2>&1 | grep -q 'error:'; then
-		last=$(awk '/^numws:/ {print $2}' "$YAXWM_STATUS")
-	else
-		last=$(yaxcmd print numws)
-	fi
-	yaxcmd set ws="$last" pad left=200 right=200 top=100 bottom=100
-	yaxcmd set ws="$last" gap width=50
+	last=$(awk '/^numws:/ {print $2}' "$DKSTAT")
+	dkcmd set ws="$last" pad left=200 right=200 top=100 bottom=100
+	dkcmd set ws="$last" gap width=50
 
 
 	# global settings
 	# ---------------------
 	# focus windows when receiving activation and enable focus-follows-mouse
-	yaxcmd set focus_open=true focus_urgent=true focus_mouse=true
+	dkcmd set focus_open=true focus_urgent=true focus_mouse=true
 
 	# place clients at the tail and ignore size hints on tiled windows
-	yaxcmd set tile_tohead=0 tile_hints=false
+	dkcmd set tile_tohead=0 tile_hints=false
 
 	# minimum width/height for resizing, and minimum allowed on-screen when moving
-	yaxcmd set win_minwh=50 win_minxy=10
+	dkcmd set win_minwh=50 win_minxy=10
 
 	# disable gaps and borders in single window layouts
-	yaxcmd set smart_gap=true smart_border=true
+	dkcmd set smart_gap=true smart_border=true
 
 	# define mouse mod and move/resize buttons
-	yaxcmd set mouse mod=alt move=button1 resize=button3
+	dkcmd set mouse mod=alt move=button1 resize=button3
 
 
 	# borders
 	# ---------
 	# set border width and colour for each window state
-	# yaxcmd set border width=1 colour focus='#6699cc' unfocus='#000000' urgent='#ee5555'
+	# dkcmd set border width=1 colour focus='#6699cc' unfocus='#000000' urgent='#ee5555'
 
 	# alternatively, enable split borders and colours
-	yaxcmd set border width=5 outer=3 colour \
+	dkcmd set border width=5 outer=3 colour \
 		focus='#6699cc' unfocus='#444444' urgent='#ee5555' \
 		outer_focus='#222222' outer_unfocus='#222222' outer_urgent='#222222'
 
@@ -83,39 +79,39 @@ fi
 	# rule class, instance, and title regexes are always case insensitive
 
 	# open window(s) on a specific workspace (assigned monitor)
-	yaxcmd rule class="^gimp$" ws=2
+	dkcmd rule class="^gimp$" ws=2
 
 	# open window(s) on a monitor by number or name (active workspace on monitor)
-	yaxcmd rule class="^chromium$" mon="HDMI-A-0"
+	dkcmd rule class="^chromium$" mon="HDMI-A-0"
 
 	# open window(s) and use a callback function (defined in config.h)
 	# eg. mpv --x11-name=albumart /path/to/media
-	yaxcmd rule class="^mpv$" instance="^albumart$" float=true callback=albumart bw=0
+	dkcmd rule class="^mpv$" instance="^albumart$" float=true callback=albumart bw=0
 
 	# open window(s) in a floating state
-	yaxcmd rule class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" float=true
+	dkcmd rule class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" float=true
 
 	# open window(s) with a specific geometry and coordinates (floating only!)
-	yaxcmd rule class="^google-chrome$" title="^open files$" float=true w=1280 h=720
+	dkcmd rule class="^google-chrome$" title="^open files$" float=true w=1280 h=720
 
 	# open window(s) with sticky and floating enabled to view on all workspaces.
-	yaxcmd rule class="^stickyterm$" stick=true float=true w=1280 h=720
+	dkcmd rule class="^stickyterm$" stick=true float=true w=1280 h=720
 
 	# focus window and workspace on opening
-	yaxcmd rule class="^firefox$" ws=1 focus=true
+	dkcmd rule class="^firefox$" ws=1 focus=true
 
 	# update or remove an existing rule with the same match patterns
-	yaxcmd rule class="^firefox$" mon="HDMI-A-0"
-	yaxcmd rule remove class="^firefox$"
+	dkcmd rule class="^firefox$" mon="HDMI-A-0"
+	dkcmd rule remove class="^firefox$"
 
 	# apply current rule set to all existing windows
-	yaxcmd rule apply all
+	dkcmd rule apply all
 
 } >> "$logfile" 2>&1 # append responses
 
 # inform of any errors in a notification
 if grep -q 'error:' "$logfile"; then
-	hash notify-send && notify-send -t 0 -u critical "Yaxwmrc Has Errors" \
+	hash notify-send && notify-send -t 0 -u critical "dkrc has errors" \
 		"$(awk '/error:/ {sub(/^error: /, ""); gsub(/</, "\<"); print}' "$logfile")"
 	exit 1
 fi

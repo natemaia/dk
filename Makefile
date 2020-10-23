@@ -1,19 +1,21 @@
-# yaxwm - yet another x window manager
+# dk (de·cay) window manager
 # see license file for copyright and license details
 
 VERSION = 0.85
 
 # install paths
-PREFIX    ?= /usr/local
-MANPREFIX ?= ${PREFIX}/share/man
-DOCPREFIX ?= ${PREFIX}/share/doc
+PREFIX ?= /usr/local
+MAN    ?= ${PREFIX}/share/man
+DOC    ?= ${PREFIX}/share/doc
 
 # compiler and linker flags
 CPPFLAGS += -D_DEFAULT_SOURCE -D_BSD_SOURCE -DVERSION=\"${VERSION}\"
 CFLAGS   += -std=c11 -O2 -static -pedantic -Wall -Wextra
 LDFLAGS  ?=
 
-all: yaxwm yaxcmd
+VPATH = src
+
+all: dk dkcmd
 
 debug: CPPFLAGS += -DDEBUG
 debug: all
@@ -25,39 +27,38 @@ coverage: all
 nostrip: CFLAGS += -g -O0
 nostrip: debug
 
-yaxwm: LDLIBS := -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
-yaxwm: yaxwm.o
-yaxcmd: LDLIBS :=
-yaxcmd: yaxcmd.o
+dk: LDLIBS := -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
+dk: dk.o
+dkcmd: LDLIBS :=
+dkcmd: dkcmd.o
 
-yaxwm.o: %.o: %.c
-	test -f yaxwm.h || cp yaxwm.def.h yaxwm.h
+dk.o: %.o: %.c
+	test -f src/config.h || cp src/config.def.h src/config.h
 	${CC} ${CFLAGS} ${CPPFLAGS} -c $< -o $@
 
-yaxcmd.o: %.o: %.c
+dkcmd.o: %.o: %.c
 	${CC} ${CFLAGS} ${CPPFLAGS} -c $< -o $@
 
 clean:
-	rm -f *.o yaxwm yaxcmd
+	rm -f *.o dk dkcmd
 
 install: all
-	@yaxwm -v 2>&1 | awk '{exit $$2 <= 0.84}' || echo -e '\nYour rc files need to be updated to use yaxcmd, a script for automatic conversion\n\n\tdoc/scripts/convertrc\nor\n\t${DESTDIR}${DOCPREFIX}/yaxwm/scripts/convertrc\n'
 	mkdir -p ${DESTDIR}${PREFIX}/bin
-	install -Dm755 yaxwm ${DESTDIR}${PREFIX}/bin/
-	install -Dm755 yaxcmd ${DESTDIR}${PREFIX}/bin/
-	mkdir -p ${DESTDIR}${MANPREFIX}/man1
-	sed "s/VERSION/${VERSION}/g" man/yaxwm.1 > ${DESTDIR}${MANPREFIX}/man1/yaxwm.1
-	cp -rfp man/yaxcmd.1 ${DESTDIR}${MANPREFIX}/man1/yaxcmd.1
-	chmod 644 ${DESTDIR}${MANPREFIX}/man1/yaxwm.1
-	chmod 644 ${DESTDIR}${MANPREFIX}/man1/yaxcmd.1
-	mkdir -p ${DESTDIR}${DOCPREFIX}/yaxwm
-	cp -rf doc/* ${DESTDIR}${DOCPREFIX}/yaxwm
+	install -Dm755 dk ${DESTDIR}${PREFIX}/bin/
+	install -Dm755 dkcmd ${DESTDIR}${PREFIX}/bin/
+	mkdir -p ${DESTDIR}${MAN}/man1
+	sed "s/VERSION/${VERSION}/g" man/dk.1 > ${DESTDIR}${MAN}/man1/dk.1
+	cp -rfp man/dkcmd.1 ${DESTDIR}${MAN}/man1/dkcmd.1
+	chmod 644 ${DESTDIR}${MAN}/man1/dk.1
+	chmod 644 ${DESTDIR}${MAN}/man1/dkcmd.1
+	mkdir -p ${DESTDIR}${DOC}/dk
+	cp -rf doc/* ${DESTDIR}${DOC}/dk
 
 uninstall:
-	rm -f ${DESTDIR}${PREFIX}/bin/yaxwm
-	rm -f ${DESTDIR}${PREFIX}/bin/yaxcmd
-	rm -f ${DESTDIR}${MANPREFIX}/man1/yaxwm.1
-	rm -f ${DESTDIR}${MANPREFIX}/man1/yaxcmd.1
-	rm -rf ${DESTDIR}${DOCPREFIX}/yaxwm
+	rm -f ${DESTDIR}${PREFIX}/bin/dk
+	rm -f ${DESTDIR}${PREFIX}/bin/dkcmd
+	rm -f ${DESTDIR}${MAN}/man1/dk.1
+	rm -f ${DESTDIR}${MAN}/man1/dkcmd.1
+	rm -rf ${DESTDIR}${DOC}/dk
 
 .PHONY: all debug nostrip clean install uninstall

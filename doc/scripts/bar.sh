@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# simple lemonbar script for use with yaxwm
+# simple lemonbar script for use with dk
 
 bg="#111111"
 fg="#666666"
@@ -29,7 +29,7 @@ workspaces()
 				s = s $i
 			}
 		}
-	}' "$YAXWM_STATUS")
+	}' "$DKSTAT")
 
 	# walk status and output workspace info with formatting
 	awk -v fg="$fg" -v hi="$hi" -v a="$a" '/^workspaces:/ {
@@ -48,7 +48,7 @@ workspaces()
 				printf " " $i " "
 			}
 		}
-	}' "$YAXWM_STATUS"
+	}' "$DKSTAT"
 }
 
 layout()
@@ -61,7 +61,7 @@ layout()
 				print $i
 			}
 		}
-	}' "$YAXWM_STATUS"
+	}' "$DKSTAT"
 }
 
 battery()

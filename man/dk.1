@@ -1,8 +1,8 @@
-.TH YAXWM 1 yaxwm\-VERSION
+.TH DK 1 dk\-VERSION
 .SH NAME
-yaxwm \- Yet another X window manager, as if we didn't have enough.
+dk \- (de·cay) window manager
 .SH SYNOPSIS
-.B yaxwm
+.B dk
 .RB [ \-vh ]
 .RB [ \-s
 .RB \fISOCKET_FD\fR]
@@ -40,32 +40,32 @@ Prints usage information to stdout and exits.
 Prints version information to stdout and exits.
 .TP
 .B \-s
-Use an existing socket connection file descriptor when restarting yaxwm.
+Use an existing socket connection file descriptor when restarting dk.
 .SH USAGE
 .SS COMMANDS
 TODO - Somebody yell at me!
 .SH CUSTOMIZATION
-For basic changes yaxwm can be customized by running commands through the
-.B yaxcmd
+For basic changes dk can be customized by running commands through the
+.B dkcmd
 program.
 .P
-On startup yaxwm looks for a yaxwmrc file in:
+On startup dk looks for a dkrc file in:
 .TP
-  - $YAXWMRC
+  - $DKRC
 .TP
-  - $XDG_CONFIG_HOME/yaxwm/yaxwmrc
+  - $XDG_CONFIG_HOME/dk/dkrc
 .TP
-  - $HOME/.config/yaxwm/yaxwmrc
+  - $HOME/.config/dk/dkrc
 .P
 in that order and runs the first it can, this file must be executable.
 This can be used to initialize settings, customization, and running programs
 on startup.
 .P
 Further configuration such as adding layouts or callbacks can be done by
-copying yaxwm.def.h to yaxwm.h, editing it, and recompiling.
+copying config.def.h to config.h, editing it, and recompiling.
 .SH BUGS
 Please submit a bug report with as much detail as possible to
-.B https://bitbucket.org/natemaia/yaxwm/issues/new
+.B https://bitbucket.org/natemaia/dk/issues/new
 .SH AUTHORS/CONTRIBUTORS
 Nathaniel Maia <\fInatemaia10@gmail.com\fR>,
 Dmitry Belitsky <\fIdmitry.belitsky@gmail.com\fR>

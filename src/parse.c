@@ -1,5 +1,4 @@
-#include <stdio.h>
-#include <limits.h>
+#include "parse.h"
 
 int parsebool(char *arg)
 {
@@ -98,6 +97,7 @@ void parsecmd(char *buf)
 			}
 #endif
 			if (n) {
+				cmdclient = selws->sel;
 				((void (*)(char **))keywords[i].func)(argv);
 			} else {
 				fprintf(cmdresp, "!%s %s\n", key, enoargs);
@@ -106,8 +106,16 @@ void parsecmd(char *buf)
 			break;
 		}
 	}
-	if (!match)
-		fprintf(cmdresp, "!invalid or unknown command: %s\n", key);
+	if (!match) {
+		if (!strcmp("exit", key))
+			running = 0;
+		else if (!strcmp("reload", key))
+			execcfg();
+		else if (!strcmp("restart", key))
+			running = 0, restart = 1;
+		else
+			fprintf(cmdresp, "!invalid or unknown command: %s\n", key);
+	}
 	fflush(cmdresp);
 	fclose(cmdresp);
 }
@@ -182,31 +190,31 @@ int parseopt(char *argv, char **optarr)
 	return -1;
 }
 
-int parsegeom(char *argv, char type, int *i, int *rel, int *grav)
+int parsegeom(char *arg, char type, int *i, int *rel, int *grav)
 {
 	int j;
 
-	if (!grav && (j = parseint(argv, rel, type == 'x' || type == 'y' ? 1 : 0)) != INT_MIN) {
+	if (!grav && (j = parseint(arg, rel, type == 'x' || type == 'y' ? 1 : 0)) != INT_MIN) {
 		*i = j;
-	} else if (!strcmp("center", argv)) {
+	} else if (grav && !strcmp("center", arg)) {
 		*grav = GRAV_CENTER;
 	} else {
 		switch (type) {
 		case 'x':
-			if (grav && !strcmp("left", argv)) *grav = GRAV_LEFT;
-			else if (grav && !strcmp("right", argv)) *grav = GRAV_RIGHT;
-			else if ((j = parseint(argv, rel, 1)) != INT_MIN) *i = j;
+			if (grav && !strcmp("left", arg)) *grav = GRAV_LEFT;
+			else if (grav && !strcmp("right", arg)) *grav = GRAV_RIGHT;
+			else if ((j = parseint(arg, rel, 1)) != INT_MIN) *i = j;
 			else return 0;
 			break;
 		case 'y':
-			if (grav && !strcmp("top", argv)) *grav = GRAV_TOP;
-			else if (grav && !strcmp("bottom", argv)) *grav = GRAV_BOTTOM;
-			else if ((j = parseint(argv, rel, 1)) != INT_MIN) *i = j;
+			if (grav && !strcmp("top", arg)) *grav = GRAV_TOP;
+			else if (grav && !strcmp("bottom", arg)) *grav = GRAV_BOTTOM;
+			else if ((j = parseint(arg, rel, 1)) != INT_MIN) *i = j;
 			else return 0;
 			break;
 		case 'w': /* FALLTHROUGH */
 		case 'h':
-			if ((j = parseint(argv, rel, 0)) != INT_MIN) *i = j;
+			if ((j = parseint(arg, rel, 0)) != INT_MIN) *i = j;
 			else return 0;
 			break;
 		}
@@ -214,7 +222,7 @@ int parsegeom(char *argv, char type, int *i, int *rel, int *grav)
 	return 1;
 }
 
-Workspace *parsewsormon(char **argv, int mon)
+Workspace *parsewsormon(char *arg, int mon)
 {
 	int i, n;
 	Monitor *m;
@@ -222,17 +230,17 @@ Workspace *parsewsormon(char **argv, int mon)
 
 	if (mon) {
 		for (m = nextmon(monitors); m; m = nextmon(m->next))
-			if (!strcmp(m->name, *argv))
+			if (!strcmp(m->name, arg))
 				return m->ws;
 	} else {
 		FOR_EACH(ws, workspaces)
-			if (!strcmp(ws->name, *argv))
+			if (!strcmp(ws->name, arg))
 				return ws;
 	}
 	if (mon)
 		for (n = 0, m = nextmon(monitors); m; m = nextmon(m->next), n++)
 			;
-	if ((i = parseintclamp(*argv, NULL, 1, mon ? n : globalcfg[GLB_NUMWS])) == INT_MIN || i <= 0)
+	if ((i = parseintclamp(arg, NULL, 1, mon ? n : globalcfg[GLB_NUMWS])) == INT_MIN || i <= 0)
 		return NULL;
 	return mon ? ((m = nextmon(itomon(i - 1))) ? m->ws : cws) : itows(i - 1);
 }

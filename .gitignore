@@ -1,5 +1,5 @@
-yaxwm
-yaxcmd
-yaxwm.h
+dk
+dkcmd
+config.h
+src/config.h
 *.o
-*.bak

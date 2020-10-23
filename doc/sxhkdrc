@@ -1,4 +1,4 @@
-# example sxhkdrc for use with yaxwm
+# example sxhkdrc for use with dk
 #########################################################
 
 # launcher
@@ -31,67 +31,67 @@ alt + shift + x
 
 
 
-# quit yaxwm
+# quit dk
 alt + shift + q
-	yaxcmd wm exit
+	dkcmd exit
 
-# reload yaxwmrc
+# reload dkrc
 alt + shift + r
-	yaxcmd wm reload
+	dkcmd reload
 
-# restart yaxwm
+# restart dk
 alt + ctrl + shift + r
-	yaxcmd wm restart
+	dkcmd restart
 
 # focus next or previous window
 alt + {j,k}
-	yaxcmd win focus {next,prev}
+	dkcmd win focus {next,prev}
 
 # close window, swap tiled window in/out of master, cycle tiled windows in place
 alt + {q,space,Tab}
-	yaxcmd win {kill,swap,cycle}
+	dkcmd win {kill,swap,cycle}
 
 # toggle fullscreen and fake fullscreen (enable manipulating fullscreen window)
 {_,alt + }F11
-	yaxcmd win {full,fakefull}
+	dkcmd win {full,fakefull}
 
 # toggle floating or sticky
 alt + shift + {space,s}
-	yaxcmd win {float,stick}
+	dkcmd win {float,stick}
 
 # move window, signed (+/-) for relative changes
 alt + shift + {h,j,k,l}
-	yaxcmd win resize {x=-10,y=+10,y=-10,x=+10}
+	dkcmd win resize {x=-10,y=+10,y=-10,x=+10}
 
 # resize window, signed (+/-) for relative changes
 alt + ctrl + {h,j,k,l}
-	yaxcmd win resize {w=-10,h=+10,h=-10,w=+10}
+	dkcmd win resize {w=-10,h=+10,h=-10,w=+10}
 
 # view, send, or follow to a workspace (by number)
 alt + {_,shift + ,ctrl + }{1-9,0}
-	yaxcmd ws {view,send,follow} {1-9,10}
+	dkcmd ws {view,send,follow} {1-9,10}
 
 # view, send, or follow to the next, previous, last active,
 # next non-empty, or prev non-empty workspace
 alt + {_,shift + ,ctrl + }{bracketleft,bracketright,BackSpace,Left,Right}
-	yaxcmd ws {view,send,follow} {prev,next,last,prevne,nextne}
+	dkcmd ws {view,send,follow} {prev,next,last,prevne,nextne}
 
 # view, send, or follow to the next, previous, or last active monitor
 alt + {_,shift + ,ctrl + }{comma,period,backslash}
-	yaxcmd mon {view,send,follow} {prev,next,last}
+	dkcmd mon {view,send,follow} {prev,next,last}
 
 # change active workspace layout
 alt + {t,m,g,s,w,f}
-	yaxcmd set layout {tile,mono,grid,spiral,dwindle,none}
+	dkcmd set layout {tile,mono,grid,spiral,dwindle,none}
 
 # change number of windows in master or first stack
 alt + {_,shift + }{i,d}
-	yaxcmd set {master,stack} {+1,-1}
+	dkcmd set {master,stack} {+1,-1}
 
 # change gap width
 alt + {equal,minus}
-	yaxcmd set gap width {+5,-5}
+	dkcmd set gap width {+5,-5}
 
 # change border widths
 alt + ctrl + {_,shift + }{equal,minus}
-	yaxcmd set border {width,outer_width} {+1,-1}
+	dkcmd set border {width,outer_width} {+1,-1}

@@ -1,7 +1,8 @@
 /* In order to customize settings or add new commands
- * copy this file to yaxwm.h and edit it
+ * copy this file to config.h and edit it
  *
  * see license file for copyright and license details */
+#pragma once
 
 
 static unsigned int border[] = {
@@ -67,7 +68,6 @@ static const VoidCmd keywords[] = {
 	{ "rule",  cmdrule },
 	{ "set",   cmdset  },
 	{ "win",   cmdwin  },
-	{ "wm",    cmdwm   },
 	{ "ws",    cmdws   },
 };
 

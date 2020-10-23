@@ -1,12 +1,6 @@
-### yaxwm
+### dk *(de·cay)*
 
-Yet another X window manager.
-
----
-
-A tiling window manager taking inspiration from dwm, bspwm, xmonad, and more.  
-Designed to be lightweight and simple while offering more features and  
-more approachable for non-native coders than the likes of dwm, xmonad, and others.
+A tiling window manager taking inspiration from dwm, bspwm, and xmonad.
 
 Some basics:
 
@@ -32,7 +26,7 @@ pacman -S xcb-proto xcb-util xcb-util-wm xcb-util-cursor xcb-util-keysyms
 ```
 Other systems should have packages with similar names.
 
-As mentioned above yaxwm has no keybind support so you'll need a separate  
+As mentioned above dk has no keybind support so you'll need a separate  
 program like `sxhkd` to launch programs and control the window manager.
 On an Arch based distro this can be installed using
 ```
@@ -45,12 +39,12 @@ To compile run
 make
 ```
 
-Edit `yaxwm.h` if needed, then run *(as root if needed)*
+Edit `config.h` if needed, then run *(as root if needed)*
 ```
 make install
 ```
 
-If at any time you want to remove yaxwm, run
+If at any time you want to uninstall, run
 ```
 make uninstall
 ```
@@ -58,35 +52,33 @@ make uninstall
 
 #### Usage
 
-To start yaxwm you can add the following to your `~/.xinitrc`
+To start dk you can add the following to your `~/.xinitrc`
 ```
-exec yaxwm
+exec dk
 ```
 
-Optionally copy the example yaxwmrc and/or sxhkdrc to their  
-respective locations
+Optionally copy the example dkrc and/or sxhkdrc to their respective locations
 ```
-mkdir -p ~/.config/sxhkd ~/.config/yaxwm
-cp /usr/local/share/doc/yaxwm/sxhkdrc ~/.config/sxhkd/
-cp /usr/local/share/doc/yaxwm/yaxwmrc ~/.config/yaxwm/
-chmod +x ~/.config/yaxwm/yaxwmrc
+mkdir -p ~/.config/sxhkd ~/.config/dk
+cp /usr/local/share/doc/dk/sxhkdrc ~/.config/sxhkd/
+cp /usr/local/share/doc/dk/dkrc ~/.config/dk/
+chmod +x ~/.config/dk/dkrc
 ```
 
 #### Configuration
 
-There are example `yaxwmrc` and `sxhkdrc` files in `doc/` or  
-`/usr/local/share/doc/yaxwm` after installation.
+There are example `dkrc` and `sxhkdrc` files in `doc/` or  
+`/usr/local/share/doc/dk` after installation.
 
-Yaxwm looks for a file in the following order
+dk looks for a file in the following order
 ```
-$YAXWMRC                        # user specified location, otherwise defined by the WM
-$XDG_CONFIG_HOME/yaxwm/yaxwmrc  # expected location on systems with xdg
-$HOME/.config/yaxwm/yaxwmrc     # fallback location when all else is lost
+$DKRC                     # user specified location
+$HOME/.config/dk/dkrc     # default location
 ```
 and to runs it, **it must be executable in order for this to happen**.
 
 Advanced changes and configuration like new layouts, callbacks, or new commands  
-can be done by copying the default config header `yaxwm.def.h` to `yaxwm.h`,  
+can be done by copying the default config header `config.def.h` to `config.h`,  
 editing it and recompiling. This file isn't tracked by git so you can keep your  
 configuration and avoid conflicts when pulling new updates.
 
@@ -94,10 +86,10 @@ configuration and avoid conflicts when pulling new updates.
 Most if not all of your interaction with the window manager will be using  
 commands in the form of
 ```
-yaxcmd <command>
+dkcmd <command>
 ```
-This will spawn a new instance of yaxwm to write our command into the socket  
-where it can then be read and parsed by the operating yaxwm process.
+This will spawn a new instance of dk to write our command into the socket  
+where it can then be read and parsed by the operating dk process.
 
 
 ###### Syntax Outline
@@ -141,7 +133,7 @@ title='^"preserved quotes"$'
 
 ---
 
-For various commands yaxwm will expect a certain data type or format to be given.
+For various commands dk will expect a certain data type or format to be given.
 
 - string: normal plain text, must be less than 256 characters.
 
@@ -186,6 +178,7 @@ See the LICENSE file for a list of authors/contributors.
 
 Non contributors that I owe a huge thanks to:
 [dwm](https://dmw.suckless.org), [bspwm](https://github.com/baskerville/bspwm),
-[evilwm](http://www.6809.org.uk/evilwm/), [monsterwm-xcb](https://github.com/Cloudef/monsterwm-xcb),
+[xmonad](https://xmonad.org), [evilwm](http://www.6809.org.uk/evilwm/),
+[monsterwm-xcb](https://github.com/Cloudef/monsterwm-xcb),
 [4wm](https://github.com/dct2012/4wm), and [frankenwm](https://github.com/sulami/FrankenWM).
 

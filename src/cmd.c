@@ -21,19 +21,21 @@ void cmdborder(char **argv)
 				argv++;
 			}
 			if (!strcmp("focus", *argv)) {
-				if (parsecolour(*(++argv), &border[BORD_FOCUS]) < 0) break;
+				if (parsecolour(*(++argv), &border[BORD_FOCUS]) < 0) goto badcolour;
 			} else if (!strcmp("urgent", *argv)) {
-				if (parsecolour(*(++argv), &border[BORD_URGENT]) < 0) break;
+				if (parsecolour(*(++argv), &border[BORD_URGENT]) < 0) goto badcolour;
 			} else if (!strcmp("unfocus", *argv)) {
-				if (parsecolour(*(++argv), &border[BORD_UNFOCUS]) < 0) break;
+				if (parsecolour(*(++argv), &border[BORD_UNFOCUS]) < 0) goto badcolour;
 			} else if (!strcmp("outer_focus", *argv)) {
-				if (parsecolour(*(++argv), &border[BORD_O_FOCUS]) < 0) break;
+				if (parsecolour(*(++argv), &border[BORD_O_FOCUS]) < 0) goto badcolour;
 			} else if (!strcmp("outer_urgent", *argv)) {
-				if (parsecolour(*(++argv), &border[BORD_O_URGENT]) < 0) break;
+				if (parsecolour(*(++argv), &border[BORD_O_URGENT]) < 0) goto badcolour;
 			} else if (!strcmp("outer_unfocus", *argv)) {
-				if (parsecolour(*(++argv), &border[BORD_O_UNFOCUS]) < 0) break;
+				if (parsecolour(*(++argv), &border[BORD_O_UNFOCUS]) < 0) goto badcolour;
 			} else if (first) {
-				fprintf(cmdresp, "!%s border colour: %s\n", ebadarg, *argv);
+badcolour:
+				fprintf(cmdresp, first ? "!%s border colour setting: %s\n"
+						: "!invalid %s colour value: %s\n", ebadarg, *argv);
 				break;
 			} else {
 				col = first = 0;
@@ -45,7 +47,6 @@ void cmdborder(char **argv)
 		}
 		argv++;
 	}
-
 	if (bw - ow < 1 && (unsigned int)ow != border[BORD_O_WIDTH])
 		fprintf(cmdresp, "!border outer exceeds limit: %d - maximum: %d\n", ow, bw - 1);
 	else if (bw - ow > 0)
@@ -153,6 +154,8 @@ void cmdfocus(char **argv)
 
 void cmdfollow(Workspace *ws)
 {
+	if (!ws || !cmdclient || ws == cmdclient->ws)
+		return;
 	cmdsend(ws);
 	cmdview(ws);
 }
@@ -511,9 +514,8 @@ void cmdset(char **argv)
 	unsigned int j;
 	int i, names = 0, set = 0;
 
-#define BOOL(val)                       \
-	if ((i = parsebool(*(++argv))) < 0) \
-		break; \
+#define BOOL(val)                                      \
+	if ((i = parsebool(*(++argv))) < 0) goto badvalue; \
 	globalcfg[GLB_##val] = i
 
 	setws = selws;
@@ -526,10 +528,9 @@ void cmdset(char **argv)
 			argv++;
 			if (!strcmp("default", *argv)) {
 				cmdwsdef(argv + 1);
-				break;
+				return;
 			} else if (!(ws = parsewsormon(*argv, 0))) {
-				fprintf(cmdresp, "!%s ws: %s\n", ebadarg, *argv);
-				break;
+				goto badvalue;
 			}
 			setws = ws;
 			set = 1;
@@ -547,16 +548,11 @@ void cmdset(char **argv)
 			}
 			assignws(setws, ws->mon);
 		} else if (!strcmp("numws", *argv)) {
-			if ((i = parseintclamp(*(++argv), NULL, 1, 99)) == INT_MIN)
-				break;
-			if (i > globalcfg[GLB_NUMWS])
-				updworkspaces(i);
+			if ((i = parseintclamp(*(++argv), NULL, 1, 99)) == INT_MIN) goto badvalue;
+			if (i > globalcfg[GLB_NUMWS]) updworkspaces(i);
 		} else if (!strcmp("name", *argv)) {
-			if (!*(++argv)) {
-				fprintf(cmdresp, "!set ws name %s\n", enoargs);
-				break;
-			}
-			strlcpy(setws->name, *argv, sizeof(setws->name));
+			char s[4];
+			strlcpy(setws->name, *(++argv) ? *argv : itoa(setws->num, s), sizeof(setws->name));
 			names = 1;
 		} else if (!strcmp("tile_hints", *argv)) {
 			BOOL(TILEHINTS);
@@ -575,22 +571,22 @@ void cmdset(char **argv)
 		} else if (!strcmp("static_ws", *argv)) {
 			BOOL(STATICWS);
 		} else if (!strcmp("win_minxy", *argv)) {
-			argv++;
-			if ((i = parseintclamp(*argv, NULL, 10, 1000)) == INT_MIN)
-				break;
+			if ((i = parseintclamp(*(++argv), NULL, 10, 1000)) == INT_MIN) goto badvalue;
 			globalcfg[GLB_MIN_XY] = i;
 		} else if (!strcmp("win_minwh", *argv)) {
-			argv++;
-			if ((i = parseintclamp(*argv, NULL, 10, 1000)) == INT_MIN)
-				break;
+			if ((i = parseintclamp(*(++argv), NULL, 10, 1000)) == INT_MIN) goto badvalue;
 			globalcfg[GLB_MIN_WH] = i;
 		} else {
 			for (j = 0; j < LEN(setcmds); j++)
 				if (!strcmp(setcmds[j].str, *argv)) {
-					((void (*)(char **))setcmds[j].func)(argv + 1);
+					setcmds[j].func(argv + 1);
 					goto finish;
 				}
 			fprintf(cmdresp, "!%s set: %s\n", ebadarg, *argv);
+			break;
+badvalue:
+			fprintf(cmdresp, "!invalid %s value: %s\n", *(argv - 1), *argv);
+			break;
 		}
 		argv++;
 	}
@@ -674,12 +670,14 @@ void cmdwin(char **argv)
 {
 	int e = 0;
 
-	if ((cmdclient = parseclient(*argv, &e)))
+	if ((cmdclient = parseclient(*argv, &e))) {
 		argv++;
-	else if (e == -1)
+	} else if (e == -1) {
+		fprintf(cmdresp, "!invalid window id: %s", *argv);
 		return;
-	else
+	} else {
 		cmdclient = selws->sel;
+	}
 	if (cmdclient) {
 		if (*argv) {
 			for (unsigned int ui = 0; ui < LEN(wincmds); ui++)
@@ -706,12 +704,6 @@ void cmdwsdef(char **argv)
 	unsigned int i;
 	int j, pad = 0, first, apply = 0;
 
-
-#define PAD(v)                                                             \
-		if ((j = parseintclamp(*(++argv), NULL, 0, scr_h / 3)) == INT_MIN) \
-			break;                                                         \
-		v = j
-
 	while (*argv) {
 		int *s;
 		float *ff;
@@ -720,29 +712,29 @@ void cmdwsdef(char **argv)
 		} else if (!strcmp(*argv, "layout")) {
 			argv++;
 			pad = 0;
+			int match = 0;
 			for (i = 0; i < LEN(layouts); i++)
-				if (!strcmp(layouts[i].name, *argv)) {
+				if ((match = !strcmp(layouts[i].name, *argv))) {
 					wsdef.layout = &layouts[i];
 					break;
 				}
+			if (!match)
+				goto badvalue;
 		} else if ((s = !strcmp(*argv, "master") ? &wsdef.nmaster
 					: !strcmp(*argv, "stack") ? &wsdef.nstack : NULL))
 		{
 			pad = 0;
-			argv++;
-			if ((j = parseintclamp(*argv, NULL, 0, INT_MAX - 1)) == INT_MIN) break;
+			if ((j = parseintclamp(*(++argv), NULL, 0, INT_MAX - 1)) == INT_MIN) goto badvalue;
 			*s = j;
 		} else if ((ff = !strcmp(*argv, "msplit") ? &wsdef.msplit
 					: !strcmp(*argv, "ssplit") ? &wsdef.ssplit : NULL))
 		{
 			pad = 0;
-			argv++;
-			if ((f = parsefloat(*argv, NULL)) == -1.0) break;
+			if ((f = parsefloat(*(++argv), NULL)) == -1.0) goto badvalue;
 			*ff = f;
 		} else if (!strcmp(*argv, "gap")) {
 			pad = 0;
-			argv++;
-			if ((j = parseintclamp(*argv, NULL, 0, scr_h / 6)) == INT_MIN) break;
+			if ((j = parseintclamp(*(++argv), NULL, 0, scr_h / 6)) == INT_MIN) goto badvalue;
 			wsdef.gappx = j;
 		} else if (pad || (first = !strcmp(*argv, "pad"))) {
 			if (!pad) {
@@ -750,13 +742,17 @@ void cmdwsdef(char **argv)
 				argv++;
 			}
 			if (!strcmp("l", *argv) || !strcmp("left", *argv)) {
-				PAD(wsdef.padl);
+				if ((j = parseintclamp(*(++argv), NULL, 0, scr_h / 3)) == INT_MIN) goto badvalue;
+				wsdef.padl = j;
 			} else if (!strcmp("r", *argv) || !strcmp("right", *argv)) {
-				PAD(wsdef.padr);
+				if ((j = parseintclamp(*(++argv), NULL, 0, scr_h / 3)) == INT_MIN) goto badvalue;
+				wsdef.padr = j;
 			} else if (!strcmp("t", *argv) || !strcmp("top", *argv)) {
-				PAD(wsdef.padt);
+				if ((j = parseintclamp(*(++argv), NULL, 0, scr_h / 3)) == INT_MIN) goto badvalue;
+				wsdef.padt = j;
 			} else if (!strcmp("b", *argv) || !strcmp("bottom", *argv)) {
-				PAD(wsdef.padb);
+				if ((j = parseintclamp(*(++argv), NULL, 0, scr_h / 3)) == INT_MIN) goto badvalue;
+				wsdef.padb = j;
 			} else if (first) {
 				fprintf(cmdresp, "!%s pad: %s\n", ebadarg, *argv);
 				break;
@@ -765,7 +761,10 @@ void cmdwsdef(char **argv)
 				continue;
 			}
 		} else {
-			fprintf(cmdresp, "!%s workspace default: %s\n", ebadarg, *argv);
+			fprintf(cmdresp, "!%s ws default: %s\n", ebadarg, *argv);
+			break;
+badvalue:
+			fprintf(cmdresp, "!invalid %s value: %s\n", *(argv - 1), *argv);
 			break;
 		}
 		argv++;
@@ -786,7 +785,6 @@ void cmdwsdef(char **argv)
 			ws->padb = wsdef.padb;
 		}
 	}
-#undef PAD
 }
 
 void cmdview(Workspace *ws)

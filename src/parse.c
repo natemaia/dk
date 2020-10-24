@@ -125,7 +125,7 @@ int parsecolour(char *arg, unsigned int *result)
 	char *end;
 	unsigned int argb, len;
 
-	if ((len = strlen(arg)) >= 6 && len <= 10)
+	if ((len = strlen(arg)) < 6 || len > 10)
 		return -1;
 	len -= arg[0] == '#' ? 1 : (arg[0] == '0' && arg[1] == 'x') ? 2 : 0;
 	if ((argb = strtoul(arg[0] == '#' ? arg + 1 : arg, &end, 16)) <= 0xffffffff && *end == '\0') {

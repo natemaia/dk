@@ -114,30 +114,34 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
-void adjustfsetting(float f, int relative, float *setting)
+int adjustfsetting(float f, int relative, float *setting)
 {
 	float nf;
 
-	if (f == 0.0 || !setws->layout->func || (!relative && !(f -= *setting)))
-		return;
+	if (!setws->layout->func || (!relative && !(f -= *setting)))
+		return -1;
 	if ((nf = CLAMP(f < 1.0 ? f + *setting : f - 1.0, 0.05, 0.95)) != *setting)
 		*setting = nf;
+	return 0;
 }
 
-void adjustisetting(int i, int relative, int *setting, int other, int setbordergap)
+int adjustisetting(int i, int relative, int *setting, int other, int setbordergap)
 {
-	int n = INT_MAX;
+	int n;
 	int max = setws->mon->wh - setws->padb - setws->padt;
 
-	if (i == INT_MAX || (!relative && !(i -= *setting))) return;
+	if (!relative && !(i -= *setting))
+		return -1;
 	n = CLAMP(*setting + i, 0, setbordergap ? (max / 6) - other : max / globalcfg[GLB_MIN_WH]);
-	if (n != *setting) *setting = n;
+	if (n != *setting)
+		*setting = n;
+	return 0;
 }
 
-void adjustwsormon(char **argv)
+int adjustwsormon(char **argv)
 {
-	int opt, e = 0;
-	void (*fn)(Workspace *) = cmdview;
+	int opt, nparsed = 0, e = 0;
+	int (*fn)(Workspace *) = cmdview;
 	Workspace *ws = NULL, *cur = selws;
 	Monitor *m = NULL, *cm = cur->mon;
 
@@ -147,23 +151,26 @@ void adjustwsormon(char **argv)
 			if (!strcmp(wscmds[i].str, *argv)) {
 				fn = wscmds[i].func;
 				argv++;
+				nparsed++;
 				break;
 			}
 		if (fn != cmdview && (cmdclient = parseclient(*argv, &e))) {
 			cur = cmdclient->ws;
 			cm = cur->mon;
 			argv++;
+			nparsed++;
 		} else if (e == -1) {
-			return;
+			return e;
 		} else {
 			cmdclient = selws->sel;
 		}
 	}
 	if (!*argv) {
 		fprintf(cmdresp, "!%s %s\n", cmdusemon ? "mon" : "ws", enoargs);
-		return;
+		return -1;
 	}
 	if ((opt = parseopt(*argv, opts)) >= 0) {
+		nparsed++;
 		if (opt == DIR_LAST) {
 			ws = cmdusemon
 				? (lastmon && lastmon->connected ? lastmon->ws : cur)
@@ -210,10 +217,14 @@ void adjustwsormon(char **argv)
 	} else {
 		ws = parsewsormon(*argv, cmdusemon);
 	}
-	if (ws)
-		fn(ws);
-	else
-		fprintf(cmdresp, "!unable to locate %s\n", cmdusemon ? "monitor" : "workspace");
+	if (ws) {
+		if (fn(ws) == -1)
+			return -1;
+	} else {
+		fprintf(cmdresp, "!invalid %s: %s\n", cmdusemon ? "monitor" : "workspace", *argv);
+		return -1;
+	}
+	return nparsed;
 }
 
 void applypanelstrut(Panel *p)

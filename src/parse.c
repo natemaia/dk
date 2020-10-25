@@ -70,42 +70,94 @@ char *parsetoken(char **src)
 
 void parsecmd(char *buf)
 {
-	unsigned int i;
 	int n = 0, match = 0, max = 32;
-	char **argv, **new, *tok, *key;
+	char **argv, **save, **new, *tok, *key;
 
 	DBG("parsecmd: tokenizing buffer: %s", buf)
 	if (!(key = parsetoken(&buf)))
 		return;
-	for (i = 0; i < LEN(keywords); i++) {
-		if ((match = !strcmp(keywords[i].str, key))) {
-			argv = ecalloc(max, sizeof(char *));
-			while ((tok = parsetoken(&buf))) {
-				if (n + 1 >= max) {
-					max *= 2;
-					if (!(new = realloc(argv, max * sizeof(char *))))
-						err(1, "unable to reallocate space");
-					argv = new;
-				}
-				argv[n++] = tok;
-			}
-			argv[n] = NULL;
+
+	argv = ecalloc(max, sizeof(char *));
+	save = argv;
+	argv[0] = key;
+	n++;
+	DBG("parsecmd: tokenized - argv[%d] = %s", n, argv[n - 1])
+	while ((tok = parsetoken(&buf))) {
+		if (n + 1 >= max) {
+			max *= 2;
+			if (!(new = realloc(argv, max * sizeof(char *))))
+				err(1, "unable to reallocate space");
+			argv = new;
+		}
+		argv[n++] = tok;
+		DBG("parsecmd: tokenized - argv[%d] = %s", n, argv[n - 1])
+	}
+	argv[n] = NULL;
+
+	if (n > 1) {
+		unsigned int i;
+		int j = n;
+		while (j > 0 && *argv) {
+			DBG("parsecmd: outer loop -- j: %d - keyword: %s", j, *argv)
+			match = 0;
+			for (i = 0; i < LEN(keywords); i++) {
+				if ((match = !strcmp(keywords[i].str, *argv))) {
+					cmdclient = selws->sel;
+					if ((n = keywords[i].func(argv + 1)) == -1)
+						goto end;
+					n++;
+					argv += n;
+					j -= n;
 #ifdef DEBUG
-			DBG("parsecmd: keyword = %s", key)
-			for (int j = 0; j < n; j++) {
-				DBG("parsecmd: argv[%d] = %s", j, argv[j])
-			}
+					DBG("parsecmd: inner loop -- parsed: %d -- remaining: %d", n, j)
+					if (j - 1 <= 0) {
+						int p;
+						char **s;
+						for (p = 0, s = argv; *s; p++, s++) {
+							DBG("parsecmd: remaining after call: argv[%d] = %s", p, *s)
+						}
+					}
 #endif
-			if (n) {
-				cmdclient = selws->sel;
-				((void (*)(char **))keywords[i].func)(argv);
-			} else {
-				fprintf(cmdresp, "!%s %s\n", key, enoargs);
+					break;
+				}
 			}
-			free(argv);
-			break;
+			if (--j <= 0 || !match)
+				break;
 		}
 	}
+
+	/* for (i = 0; i < LEN(keywords); i++) { */
+	/* 	if ((match = !strcmp(keywords[i].str, key))) { */
+	/* 		argv = ecalloc(max, sizeof(char *)); */
+	/* 		while ((tok = parsetoken(&buf))) { */
+	/* 			if (n + 1 >= max) { */
+	/* 				max *= 2; */
+	/* 				if (!(new = realloc(argv, max * sizeof(char *)))) */
+	/* 					err(1, "unable to reallocate space"); */
+	/* 				argv = new; */
+	/* 			} */
+	/* 			argv[n++] = tok; */
+	/* 		} */
+	/* 		argv[n] = NULL; */
+/* #ifdef DEBUG */
+	/* 		DBG("parsecmd: keyword = %s", key) */
+	/* 		for (int j = 0; j < n; j++) { */
+	/* 			DBG("parsecmd: argv[%d] = %s", j, argv[j]) */
+	/* 		} */
+/* #endif */
+	/* 		if (n) { */
+	/* 			cmdclient = selws->sel; */
+	/* 			if ((n = keywords[i].func(argv)) != -1) { */
+
+	/* 			} */
+	/* 		} else { */
+	/* 			fprintf(cmdresp, "!%s %s\n", key, enoargs); */
+	/* 		} */
+	/* 		free(argv); */
+	/* 		break; */
+	/* 	} */
+	/* } */
+
 	if (!match) {
 		if (!strcmp("exit", key))
 			running = 0;
@@ -116,6 +168,8 @@ void parsecmd(char *buf)
 		else
 			fprintf(cmdresp, "!invalid or unknown command: %s\n", key);
 	}
+end:
+	free(save);
 	fflush(cmdresp);
 	fclose(cmdresp);
 }

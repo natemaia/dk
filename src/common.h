@@ -269,14 +269,14 @@ typedef struct Client {
 	const Callback *cb;
 } Client;
 
-typedef struct VoidCmd {
+typedef struct Cmd {
 	const char *str;
-	void (*func)(char **);
-} VoidCmd;
+	int (*func)(char **);
+} Cmd;
 
 typedef struct WsCmd {
 	const char *str;
-	void (*func)(Workspace *);
+	int (*func)(Workspace *);
 } WsCmd;
 
 typedef struct Layout {
@@ -302,9 +302,9 @@ struct Workspace {
 };
 
 
-void adjustfsetting(float f, int relative, float *setting);
-void adjustisetting(int i, int relative, int *setting, int other, int setbordergap);
-void adjustwsormon(char **argv);
+int adjustfsetting(float f, int relative, float *setting);
+int adjustisetting(int i, int relative, int *setting, int other, int setbordergap);
+int adjustwsormon(char **argv);
 void applypanelstrut(Panel *p);
 int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse);
 int assignws(Workspace *ws, Monitor *new);

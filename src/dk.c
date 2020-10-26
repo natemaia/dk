@@ -172,7 +172,6 @@ int adjustwsormon(char **argv)
 		return -1;
 	}
 	if ((opt = parseopt(*argv, opts)) >= 0) {
-		nparsed++;
 		if (opt == DIR_LAST) {
 			ws = cmdusemon
 				? (lastmon && lastmon->connected ? lastmon->ws : cur)
@@ -220,10 +219,10 @@ int adjustwsormon(char **argv)
 		ws = parsewsormon(*argv, cmdusemon);
 	}
 	if (ws) {
-		if (fn(ws) == -1)
-			return -1;
+		nparsed++;
+		fn(ws);
 	} else {
-		fprintf(cmdresp, "!invalid %s: %s", cmdusemon ? "monitor" : "workspace", *argv);
+		fprintf(cmdresp, "!invalid value for %s: %s", cmdusemon ? "monitor" : "workspace", *argv);
 		return -1;
 	}
 	return nparsed;
@@ -885,9 +884,9 @@ void eventhandle(xcb_generic_event_t *ev)
 	case 0: {
 		xcb_generic_error_t *e = (xcb_generic_error_t*)ev;
 
-		fprintf(stderr, "%s: previous request returned error %i, \"%s\""
+		fprintf(stderr, "dk: previous request returned error %i, \"%s\""
 				" major code %u, minor code %u resource id %u sequence %u\n",
-				argv0, (int)e->error_code, xcb_event_get_error_label(e->error_code),
+				(int)e->error_code, xcb_event_get_error_label(e->error_code),
 				(uint32_t) e->major_code, (uint32_t) e->minor_code,
 				(uint32_t) e->resource_id, (uint32_t) e->sequence);
 		break;

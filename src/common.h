@@ -19,7 +19,7 @@
 #include <xcb/xcb_keysyms.h>
 
 #ifdef DEBUG
-#define DBG(fmt, ...) warnx("%d: " fmt, __LINE__, ##__VA_ARGS__);
+#define DBG(fmt, ...) warnx("%d: " fmt, __LINE__, ##__VA_ARGS__); fflush(stderr);
 #else
 #define DBG(fmt, ...)
 #endif

@@ -36,6 +36,7 @@ int main(int argc, char *argv[])
 	if (addr.sun_path[0] == '\0')
 		err(1, "unable to write socket path: %s", sock);
 	check(connect(fd, (struct sockaddr *)&addr, sizeof(addr)), "unable to connect socket");
+
 	for (i = 1, j = 0, offs = 1; n + 1 < sizeof(buf) && i < argc; i++, j = 0, offs = 1) {
 		if ((sp = strchr(argv[i], ' ')) || (sp = strchr(argv[i], '\t'))) {
 			if (!(eq = strchr(argv[i], '=')) || sp < eq) buf[n++] = '"';	
@@ -52,6 +53,7 @@ int main(int argc, char *argv[])
 		buf[n++] = ' ';
 	}
 	buf[n - 1] = '\0';
+
 	check(send(fd, buf, n, 0), "unable to send command");
 	while (poll(fds, 2, 1000) > 0) {
 		if (fds[1].revents & (POLLERR | POLLHUP)) break;

@@ -94,8 +94,9 @@ void parsecmd(char *buf)
 			for (i = 0; i < LEN(keywords); i++) {
 				if ((match = !strcmp(keywords[i].str, *argv))) {
 					cmdclient = selws->sel;
-					DBG("parsecmd: inner loop -- matched: %s", *argv)
-					if ((n = keywords[i].func(argv + 1)) == -1) goto end;
+					DBG("parsecmd: inner loop -- matched: %s -- calling function", *argv)
+					if ((n = keywords[i].func(argv + 1)) == -1)
+						goto end;
 					argv += ++n;
 					j -= n;
 #ifdef DEBUG
@@ -117,14 +118,18 @@ void parsecmd(char *buf)
 	}
 
 	if (!match && *argv) {
-		if (!strcmp("exit", *argv))
-			running = 0;
-		else if (!strcmp("reload", *argv))
+		int r;
+		if (!strcmp("reload", *argv))
 			execcfg();
-		else if (!strcmp("restart", *argv))
-			running = 0, restart = 1;
+		else if ((r = !strcmp("restart", *argv)) || !strcmp("exit", *argv))
+			running = 0, restart = r;
 		else
 			fprintf(cmdresp, "!invalid or unknown command: %s", *argv);
+#ifdef DEBUG
+	} else if (match && !*argv) {
+		fprintf(stderr, "dk: parsecmd: all arguments successfully parsed\n");
+		fflush(stderr);
+#endif
 	}
 
 end:

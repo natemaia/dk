@@ -11,27 +11,24 @@ int parsebool(char *arg)
 	return -1;
 }
 
-Client *parseclient(char *argv, int *ebadwin)
+Client *parseclient(char *arg, int *ebadwin)
 {
 	char *end;
+	unsigned int i;
 	Client *c = NULL;
 
-	if (argv && *argv) {
-		unsigned int i;
-		if ((argv[0] == '#' || (argv[0] == '0' && argv[1] == 'x'))
-				&& (i = strtoul(*argv == '#' ? argv + 1 : argv, &end, 16)) > 0 && *end == '\0')
-		{
-			if (!(c = wintoclient(i))) {
-				fprintf(cmdresp, "!invalid window id: %s\n", argv);
-				*ebadwin = -1;
-			}
-		}
-	}
+	if (arg && arg[0] && (arg[0] == '#' || (arg[0] == '0' && arg[1] == 'x'))
+			&& (i = strtoul(*arg == '#' ? arg + 1 : arg, &end, 16)) > 0 && *end == '\0')
+		*ebadwin = (c = wintoclient(i)) ? 0 : -1;
 	return c;
 }
 
 char *parsetoken(char **src)
 {
+	/* returns a pointer to a null terminated char * inside src
+	 * *unsafe* modifies src replace separator with null terminator
+	 * handles both strong and weak quoted strings
+	 */
 	size_t n = 0;
 	int q, sq = 0;
 	char *s, *t, *head, *tail;
@@ -71,42 +68,35 @@ char *parsetoken(char **src)
 void parsecmd(char *buf)
 {
 	int n = 0, match = 0, max = 32;
-	char **argv, **save, **new, *tok, *key;
+	char **argv, **save, *tok;
 
 	DBG("parsecmd: tokenizing buffer: %s", buf)
-	if (!(key = parsetoken(&buf)))
-		return;
-
-	argv = ecalloc(max, sizeof(char *));
-	save = argv;
-	argv[0] = key;
-	n++;
-	DBG("parsecmd: tokenized - argv[%d] = %s", n, argv[n - 1])
+	save = argv = ecalloc(max, sizeof(char *));
 	while ((tok = parsetoken(&buf))) {
 		if (n + 1 >= max) {
+			char **tmp;
 			max *= 2;
-			if (!(new = realloc(argv, max * sizeof(char *))))
+			if (!(tmp = realloc(argv, max * sizeof(char *))))
 				err(1, "unable to reallocate space");
-			argv = new;
+			argv = tmp;
 		}
 		argv[n++] = tok;
-		DBG("parsecmd: tokenized - argv[%d] = %s", n, argv[n - 1])
+		DBG("parsecmd: token - argv[%d] = %s", n, argv[n - 1])
 	}
 	argv[n] = NULL;
 
 	if (n > 1) {
-		unsigned int i;
 		int j = n;
+		unsigned int i;
 		while (j > 0 && *argv) {
-			DBG("parsecmd: outer loop -- j: %d - keyword: %s", j, *argv)
+			DBG("parsecmd: outer loop -- j: %d - head: %s", j, *argv)
 			match = 0;
 			for (i = 0; i < LEN(keywords); i++) {
 				if ((match = !strcmp(keywords[i].str, *argv))) {
 					cmdclient = selws->sel;
-					if ((n = keywords[i].func(argv + 1)) == -1)
-						goto end;
-					n++;
-					argv += n;
+					DBG("parsecmd: inner loop -- matched: %s", *argv)
+					if ((n = keywords[i].func(argv + 1)) == -1) goto end;
+					argv += ++n;
 					j -= n;
 #ifdef DEBUG
 					DBG("parsecmd: inner loop -- parsed: %d -- remaining: %d", n, j)
@@ -121,53 +111,22 @@ void parsecmd(char *buf)
 					break;
 				}
 			}
-			if (--j <= 0 || !match)
+			if (--j <= 0)
 				break;
 		}
 	}
 
-	/* for (i = 0; i < LEN(keywords); i++) { */
-	/* 	if ((match = !strcmp(keywords[i].str, key))) { */
-	/* 		argv = ecalloc(max, sizeof(char *)); */
-	/* 		while ((tok = parsetoken(&buf))) { */
-	/* 			if (n + 1 >= max) { */
-	/* 				max *= 2; */
-	/* 				if (!(new = realloc(argv, max * sizeof(char *)))) */
-	/* 					err(1, "unable to reallocate space"); */
-	/* 				argv = new; */
-	/* 			} */
-	/* 			argv[n++] = tok; */
-	/* 		} */
-	/* 		argv[n] = NULL; */
-/* #ifdef DEBUG */
-	/* 		DBG("parsecmd: keyword = %s", key) */
-	/* 		for (int j = 0; j < n; j++) { */
-	/* 			DBG("parsecmd: argv[%d] = %s", j, argv[j]) */
-	/* 		} */
-/* #endif */
-	/* 		if (n) { */
-	/* 			cmdclient = selws->sel; */
-	/* 			if ((n = keywords[i].func(argv)) != -1) { */
-
-	/* 			} */
-	/* 		} else { */
-	/* 			fprintf(cmdresp, "!%s %s\n", key, enoargs); */
-	/* 		} */
-	/* 		free(argv); */
-	/* 		break; */
-	/* 	} */
-	/* } */
-
-	if (!match) {
-		if (!strcmp("exit", key))
+	if (!match && *argv) {
+		if (!strcmp("exit", *argv))
 			running = 0;
-		else if (!strcmp("reload", key))
+		else if (!strcmp("reload", *argv))
 			execcfg();
-		else if (!strcmp("restart", key))
+		else if (!strcmp("restart", *argv))
 			running = 0, restart = 1;
 		else
-			fprintf(cmdresp, "!invalid or unknown command: %s\n", key);
+			fprintf(cmdresp, "!invalid or unknown command: %s", *argv);
 	}
+
 end:
 	free(save);
 	fflush(cmdresp);

@@ -4,7 +4,6 @@
  * see license file for copyright and license details */
 #pragma once
 
-
 static unsigned int border[] = {
 	[BORD_WIDTH]     = 1,          /* int: total border width in pixels */
 	[BORD_FOCUS]     = 0xFF6699cc, /* hex: focused window border colour (inner) */

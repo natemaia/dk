@@ -32,6 +32,7 @@ dk: dk.o
 dkcmd: LDLIBS :=
 dkcmd: dkcmd.o
 
+
 dk.o: %.o: %.c
 	test -f src/config.h || cp src/config.def.h src/config.h
 	${CC} ${CFLAGS} ${CPPFLAGS} -c $< -o $@

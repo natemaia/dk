@@ -95,7 +95,7 @@ void parsecmd(char *buf)
 		int j = n;
 		unsigned int i;
 		while (j > 0 && *argv) {
-			DBG("parsecmd: outer loop -- j: %d - head: %s", j, *argv)
+			DBG("parsecmd: outer loop -- args: %d - head: %s", j, *argv)
 			match = 0;
 			for (i = 0; i < LEN(keywords); i++) {
 				if ((match = !strcmp(keywords[i].str, *argv))) {
@@ -106,14 +106,14 @@ void parsecmd(char *buf)
 					argv += ++n;
 					j -= n;
 #ifdef DEBUG
-					DBG("parsecmd: inner loop -- parsed: %d -- remaining: %d", n, j)
+					warnx("%d: parsecmd: inner loop -- parsed: %d -- remaining: %d", __LINE__, n, j);
 					if (j - 1 > 0) {
 						int p;
 						char **s;
-						for (p = 0, s = argv; *s; p++, s++) {
-							DBG("parsecmd: remaining after call: argv[%d] = %s", p, *s)
-						}
+						for (p = 0, s = argv; *s; p++, s++)
+							warnx("%d: parsecmd: remaining after call: argv[%d] = %s", __LINE__, p, *s);
 					}
+					fflush(stderr);
 #endif
 					break;
 				}
@@ -133,7 +133,7 @@ void parsecmd(char *buf)
 			fprintf(cmdresp, "!invalid or unknown command: %s", *argv);
 #ifdef DEBUG
 	} else if (match && !*argv) {
-		fprintf(stderr, "dk: parsecmd: all arguments successfully parsed\n");
+		fprintf(stderr, "dk: %d: parsecmd: all arguments successfully parsed\n", __LINE__);
 		fflush(stderr);
 #endif
 	}

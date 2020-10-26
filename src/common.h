@@ -42,11 +42,13 @@
 #define CLAMP(x, min, max) (MIN(MAX((x), (min)), (max)))
 #define CLNMOD(mod) ((mod) & ~(lockmask | XCB_MOD_MASK_LOCK))
 #define SAVEOLD(c) c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h
+#define INRECT(x, y, rx, ry, rw, rh) \
+	((x) >= (rx) && (x) < (rx) + (rw) && (y) >= (ry) && (y) < (ry) + (rh))
 
 #define FLOATING(c) (c->state & STATE_FLOATING || !c->ws->layout->func)
 #define FULLSCREEN(c) (c->state & STATE_FULLSCREEN && !(c->state & STATE_FAKEFULL))
 
-#define FOR_EACH(v, list) for (v = list; v; v = v->next)
+#define FOR_EACH(v, list) if (list) for (v = list; v; v = v->next)
 #define FOR_CLIENTS(c, ws) FOR_EACH(ws, workspaces) FOR_EACH(c, ws->clients)
 
 #define FIND_TAIL(v, list) for (v = list; v && v->next; v = v->next)
@@ -63,6 +65,15 @@
 #define PROP(mode, win, atom, type, membsize, nmemb, value) \
 	xcb_change_property(con, XCB_PROP_MODE_##mode, win, atom, type, \
 			(membsize), (nmemb), value)
+#define GET(win, val, vc, error, type, functtype)                       \
+	do {                                                                \
+		if (win && win != root) {                                       \
+			vc = xcb_get_##functtype(con, win);                         \
+			if (!(val = xcb_get_##functtype##_reply(con, vc, &error)))  \
+				iferr(0, "unable to get window " type " reply", error); \
+		}                                                               \
+	} while (0)
+
 #define MOVE(win, x, y)                                                       \
 	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, \
 			(unsigned int[]){(x), (y)})

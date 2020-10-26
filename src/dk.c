@@ -376,7 +376,6 @@ void clienthints(Client *c)
 	xcb_get_property_cookie_t pc;
 
 	pc = xcb_icccm_get_wm_hints(con, c->win);
-	DBG("clienthints: getting window wm hints - 0x%08x", c->win)
 	if (xcb_icccm_get_wm_hints_reply(con, pc, &wmh, &e)) {
 		if (c == selws->sel && wmh.flags & XCB_ICCCM_WM_HINT_X_URGENCY) {
 			wmh.flags &= ~XCB_ICCCM_WM_HINT_X_URGENCY;
@@ -419,7 +418,6 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 	int ws, dofocus = 0;
 	xcb_atom_t cur = selws->num;
 
-	DBG("clientrule: 0x%08x", c->win)
 	if (c->trans)
 		cur = c->trans->ws->num;
 	else if (!winprop(c->win, netatom[NET_WM_DESK], &cur) || cur > 99)
@@ -473,7 +471,6 @@ void clienttype(Client *c)
 {
 	xcb_atom_t type, state;
 
-	DBG("clienttype: getting window type hint - 0x%08x", c->win)
 	if (winprop(c->win, netatom[NET_WM_STATE], &state) && state == netatom[NET_STATE_FULL])
 		setfullscreen(c, 1);
 	if (winprop(c->win, netatom[NET_WM_TYPE], &type)) {
@@ -530,7 +527,7 @@ Monitor *coordtomon(int x, int y)
 	Monitor *m = NULL;
 
 	FOR_EACH(m, monitors)
-		if (m->connected && x >= m->x && y >= m->y && x <= m->x + m->w && y <= m->y + m->h)
+		if (m->connected && INRECT(x, y, m->x, m->y, m->w, m->h))
 			return m;
 	return m;
 }
@@ -866,10 +863,9 @@ void eventhandle(xcb_generic_event_t *ev)
 				}
 				return;
 			default:
-				if ((e->atom == XCB_ATOM_WM_NAME || e->atom == netatom[NET_WM_NAME])
-						&& clientname(c))
-					pushstatus();
-				else if (e->atom == netatom[NET_WM_TYPE])
+				if (e->atom == XCB_ATOM_WM_NAME || e->atom == netatom[NET_WM_NAME]) {
+					if (clientname(c)) pushstatus();
+				} else if (e->atom == netatom[NET_WM_TYPE])
 					clienttype(c);
 				return;
 			}
@@ -966,7 +962,8 @@ void freemon(Monitor *m)
 		monitors = monitors->next;
 	} else {
 		FIND_PREV(mon, m, monitors);
-		if (mon) mon->next = m->next;
+		if (mon)
+			mon->next = m->next;
 	}
 	free(m);
 }
@@ -1609,7 +1606,7 @@ Client *nexttiled(Client *c)
 
 Monitor *outputtomon(xcb_randr_output_t id)
 {
-	Monitor *m;
+	Monitor *m = NULL;
 
 	FOR_EACH(m, monitors)
 		if (m->id == id)
@@ -1864,7 +1861,6 @@ void sendconfigure(Client *c)
 {
 	xcb_configure_notify_event_t ce;
 
-	DBG("sendconfigure: sending 0x%08x configure notify event", c->win)
 	ce.event = c->win;
 	ce.window = c->win;
 	ce.response_type = XCB_CONFIGURE_NOTIFY;
@@ -1886,7 +1882,6 @@ int sendwmproto(Client *c, int wmproto)
 	xcb_client_message_event_t cme;
 	xcb_icccm_get_wm_protocols_reply_t proto;
 
-	DBG("sendwmproto: checking support for %s - 0x%08x", wmatoms[wmproto], c->win)
 	rpc = xcb_icccm_get_wm_protocols(con, c->win, wmatom[WM_PROTO]);
 	if (xcb_icccm_get_wm_protocols_reply(con, rpc, &proto, &e)) {
 		int n = proto.atoms_len;
@@ -1897,7 +1892,6 @@ int sendwmproto(Client *c, int wmproto)
 		iferr(0, "unable to get requested wm protocol", e);
 	}
 	if (exists) {
-		DBG("sendwmproto: %s client message event -> 0x%08x", wmatoms[wmproto], c->win)
 		cme.response_type = XCB_CLIENT_MESSAGE;
 		cme.window = c->win;
 		cme.type = wmatom[WM_PROTO];
@@ -1952,7 +1946,6 @@ void setwmwinstate(xcb_window_t win, long state)
 
 void setnetwsnames(void)
 {
-	unsigned int i;
 	char *names;
 	Workspace *ws;
 	size_t len = 1;
@@ -1962,7 +1955,7 @@ void setnetwsnames(void)
 	names = ecalloc(1, len);
 	len = 0;
 	FOR_EACH(ws, workspaces)
-		for (i = 0; (names[len++] = ws->name[i]); i++)
+		for (unsigned int i = 0; (names[len++] = ws->name[i]); i++)
 			;
 	PROP(REPLACE, root, netatom[NET_DESK_NAMES], wmatom[WM_UTF8STR], 8, --len, names);
 	free(names);
@@ -2101,10 +2094,10 @@ void unfocus(Client *c, int focusroot)
 
 void unmanage(xcb_window_t win, int destroyed)
 {
-	void *ptr;
+	Desk *d;
+	Panel *p;
 	Client *c;
-	Desk *d, **dd;
-	Panel *p, **pp;
+	void *ptr;
 	Workspace *ws;
 
 	if ((ptr = c = wintoclient(win))) {
@@ -2114,11 +2107,11 @@ void unmanage(xcb_window_t win, int destroyed)
 		detachstack(c);
 		focus(NULL);
 	} else if ((ptr = p = wintopanel(win))) {
-		pp = &panels;
+		Panel **pp = &panels;
 		DETACH(p, pp);
 		updstruts(p, 0);
 	} else if ((ptr = d = wintodesk(win))) {
-		dd = &desks;
+		Desk **dd = &desks;
 		DETACH(d, dd);
 	}
 
@@ -2284,7 +2277,6 @@ void updworkspaces(int needed)
 {
 	int n;
 	Desk *d;
-	Panel *p;
 	Client *c;
 	Monitor *m;
 	Workspace *ws;
@@ -2294,7 +2286,8 @@ void updworkspaces(int needed)
 	if (n < 1 || n > 99 || needed > 99) {
 		warnx(n < 1 ? "no connected monitors" : "allocating too many workspaces: max 99");
 		return;
-	} else while (n > globalcfg[GLB_NUMWS] || needed > globalcfg[GLB_NUMWS]) {
+	}
+	while (n > globalcfg[GLB_NUMWS] || needed > globalcfg[GLB_NUMWS]) {
 		initws(globalcfg[GLB_NUMWS]);
 		globalcfg[GLB_NUMWS]++;
 	}
@@ -2311,11 +2304,12 @@ void updworkspaces(int needed)
 	FOR_CLIENTS(c, ws)
 		if (c->state & STATE_FULLSCREEN && c->w == c->ws->mon->w && c->h == c->ws->mon->h)
 			resize(c, ws->mon->x, ws->mon->y, ws->mon->w, ws->mon->h, c->bw);
-	if (panels) {
+	if (!panels) {
+		updnetworkspaces();
+	} else {
+		Panel *p;
 		FOR_EACH(p, panels)
 			updstruts(p, 1);
-	} else {
-		updnetworkspaces();
 	}
 	FOR_EACH(d, desks)
 		if (d->x != d->mon->wx || d->y != d->mon->wy || d->w != d->mon->ww || d->h != d->mon->wh) {
@@ -2330,14 +2324,9 @@ xcb_get_window_attributes_reply_t *winattr(xcb_window_t win)
 {
 	xcb_get_window_attributes_reply_t *wa = NULL;
 	xcb_generic_error_t *e;
-	xcb_get_window_attributes_cookie_t c;
+	xcb_get_window_attributes_cookie_t wc;
 
-	if (win && win != root) {
-		c = xcb_get_window_attributes(con, win);
-		DBG("winattr: getting window attributes - 0x%08x", win)
-		if (!(wa = xcb_get_window_attributes_reply(con, c, &e)))
-			iferr(0, "unable to get window attributes reply", e);
-	}
+	GET(win, wa, wc, e, "attributes", window_attributes);
 	return wa;
 }
 
@@ -2347,12 +2336,7 @@ xcb_get_geometry_reply_t *wingeom(xcb_window_t win)
 	xcb_generic_error_t *e;
 	xcb_get_geometry_cookie_t gc;
 
-	if (win && win != root) {
-		gc = xcb_get_geometry(con, win);
-		DBG("wingeom: getting window geometry - 0x%08x", win)
-		if (!(g = xcb_get_geometry_reply(con, gc, &e)))
-			iferr(0, "unable to get window geometry reply", e);
-	}
+	GET(win, g, gc, e, "geometry", geometry);
 	return g;
 }
 
@@ -2364,11 +2348,9 @@ int winprop(xcb_window_t win, xcb_atom_t prop, xcb_atom_t *ret)
 	xcb_get_property_reply_t *r = NULL;
 
 	c = xcb_get_property(con, 0, win, prop, XCB_ATOM_ANY, 0, 1);
-	DBG("winprop: getting window property atom: %d - 0x%08x", prop, win)
 	if ((r = xcb_get_property_reply(con, c, &e)) && xcb_get_property_value_length(r)) {
 		i = 1;
 		*ret = *(xcb_atom_t *)xcb_get_property_value(r);
-		DBG("winprop: property reply value: %d", *ret)
 	} else {
 		iferr(0, "unable to get window property reply", e);
 	}

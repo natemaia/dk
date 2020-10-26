@@ -1,4 +1,4 @@
-### dk *(de·cay)*
+### dk /dəˈkā/*
 
 A tiling window manager taking inspiration from dwm, bspwm, and xmonad.
 

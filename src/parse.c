@@ -100,7 +100,7 @@ void parsecmd(char *buf)
 					j -= n;
 #ifdef DEBUG
 					DBG("parsecmd: inner loop -- parsed: %d -- remaining: %d", n, j)
-					if (j - 1 <= 0) {
+					if (j - 1 > 0) {
 						int p;
 						char **s;
 						for (p = 0, s = argv; *s; p++, s++) {
@@ -111,7 +111,7 @@ void parsecmd(char *buf)
 					break;
 				}
 			}
-			if (--j <= 0)
+			if (!match && j-- <= 0)
 				break;
 		}
 	}

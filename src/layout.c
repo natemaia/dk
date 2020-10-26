@@ -218,4 +218,3 @@ int tile(Workspace *ws)
 	}
 	return ret;
 }
-

@@ -62,7 +62,7 @@ static const Callback callbacks[] = {
 };
 
 /* primary command keywords and parser functions */
-static const VoidCmd keywords[] = {
+static const Cmd keywords[] = {
 	{ "mon",   cmdmon  },
 	{ "rule",  cmdrule },
 	{ "set",   cmdset  },
@@ -71,20 +71,20 @@ static const VoidCmd keywords[] = {
 };
 
 /* "set" keyword options, used by cmdset() */
-static const VoidCmd setcmds[] = {
+static const Cmd setcmds[] = {
 	{ "border",  cmdborder  },
 	{ "gap",     cmdgappx   },
 	{ "layout",  cmdlayout  },
-	{ "master",  cmdnmaster },
+	{ "master",  cmdmors    },
 	{ "mouse",   cmdmouse   },
 	{ "pad",     cmdpad     },
-	{ "msplit",  cmdmsplit  },
-	{ "ssplit",  cmdssplit  },
-	{ "stack",   cmdnstack  },
+	{ "msplit",  cmdsplit   },
+	{ "ssplit",  cmdsplit   },
+	{ "stack",   cmdmors    },
 };
 
 /* "win" keyword options, used by cmdwin() */
-static const VoidCmd wincmds[] = {
+static const Cmd wincmds[] = {
 	{ "cycle",    cmdcycle    },
 	{ "fakefull", cmdfakefull },
 	{ "float",    cmdfloat    },

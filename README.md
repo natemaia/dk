@@ -1,4 +1,4 @@
-### dk /dəˈkā/*
+### dk */dəˈkā/*
 
 A tiling window manager taking inspiration from dwm, bspwm, and xmonad.
 
@@ -91,7 +91,7 @@ to write our command into the socket where it is then read and parsed
 by the window manager *(see commands below)*.
 
 
-##### Syntax Outline
+#### Syntax Outline
 The commands have a very basic syntax and parsing, the input is broken  
 down into smaller pieces *(tokens)* which are then passed to the matching  
 keyword function, otherwise an error is returned.
@@ -148,63 +148,21 @@ For various commands dk will expect a certain data type or format to be given.
 
 ---
 
-##### Keywords
-- `mon`, `ws`
-  Operate on monitors or workspaces respectively, see ws/mon subcommands.
-  ```
-  <ws/mon> [SUBCOMMAND] <TARGET>
-  ```
-    - `TARGET`
-    Name or number of the workspace or monitor to target.
+#### Commands
 
-    - `CLIENT`
-    The window id in hex to operate on, when unspecified the active window is used.
-
-    - `view`
-    View the TARGET (default behaviour when no subcommand given).
-    ```
-    <ws/mon> [view] <TARGET>
-    ```
-    - `send`
-    Send CLIENT or the active window to the TARGET.
-    ```
-    <ws/mon> <send> [CLIENT] <TARGET>
-    ```
-
-    - `follow`
-    Follow CLIENT to the TARGET.
-    ```
-    <ws/mon> <follow> [CLIENT] <TARGET>
-    ```
-
-- `rule`
-Operate on window rules, see rule subcommands.
+###### Workspaces and Monitors
+`mon` and `ws` operate on monitors and workspaces respectively.
 ```
-<rule> <SUBCOMMAND> <RULE>
+<ws/mon> [SUBCOMMAND] <TARGET>
 ```
-
-- `set`
-Operate on configuration settings, see set subcommands.
-```
-<set> [SUBCOMMAND] <SETTING>
-
-```
-
-- `win`
-Operate on windows, see win subcommands.
-```
-<win> [SUBCOMMAND] [CLIENT] <TARGET>
-```
-
-##### Subcommands
-
-###### ws/mon
+---
 - `TARGET`
 Name or number of the workspace or monitor to target.
 
 - `CLIENT`
 The window id in hex to operate on, when unspecified the active window is used.
 
+---
 - `view`
 View the TARGET (default behaviour when no subcommand given).
 ```
@@ -215,13 +173,33 @@ Send CLIENT or the active window to the TARGET.
 ```
 <ws/mon> <send> [CLIENT] <TARGET>
 ```
-
 - `follow`
 Follow CLIENT to the TARGET.
 ```
 <ws/mon> <follow> [CLIENT] <TARGET>
 ```
 
+###### Rules
+
+`rule` operates on window rules.
+```
+<rule> <SUBCOMMAND> <RULE>
+```
+---
+
+###### Settings
+`set` operates on configuration settings.
+```
+<set> [SUBCOMMAND] <SETTING>
+```
+---
+
+###### Windows
+`win` operates on windows.
+```
+<win> [SUBCOMMAND] [CLIENT] <TARGET>
+```
+---
 
 #### Todo
 

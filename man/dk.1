@@ -21,7 +21,8 @@ minimum is allocated to populate each monitor with a single workspace.
 Monitors can be assigned one workspace at a time, all workspaces are available
 from all monitors unless in static mode, floating windows will retain their
 relative location within each monitor area. If viewing an already visible
-workspace on another monitor, the two workspaces will swap monitors.
+workspace on another monitor, the two workspaces will swap monitors when
+dynamic, otherwise the mouse will be warped to the assigned monitor.
 .P
 In tiled layout windows are organized in a master and two stack areas,
 the number of masters and first stack windows can be adjusted
@@ -29,6 +30,12 @@ from 0-n with the second stack containing all remaining windows.
 .P
 In monocle layout windows are maximized and stacked on top of each other with
 only one visible at a time.
+.P
+In grid layout windows attempt to occupy equal space with all being visible.
+.P
+In spiral and dwindle layout windows occupy 1/2 the space of the previous,
+moving inwards to the center of the screen or outwards to the bottom left
+respectively.
 .P
 In floating layout windows are not organized or placed in any particular way
 and can be moved or resized freely.
@@ -43,8 +50,50 @@ Prints version information to stdout and exits.
 .B \-s
 Use an existing socket connection file descriptor when restarting dk.
 .SH USAGE
-.SS COMMANDS
-TODO - Somebody yell at me!
+.SS KEYWORDS
+.TP
+\fImon\fR, \fIws\fR
+Operate on monitors or workspaces respectively, see \fBWS/MON SUBCOMMANDS\fR.
+
+\fI<ws/mon> [SUBCOMMAND] <TARGET>\fR
+.TP
+\fIrule\fR
+Operate on window rules, see \fBRULE SUBCOMMANDS\fR.
+
+\fI<rule> <SUBCOMMAND> <RULE>\fR
+.TP
+\fIset\fR
+Operate on configuration settings, see \fBSET SUBCOMMANDS\fR.
+
+\fI<set> [SUBCOMMAND] <SETTING>\fR
+.TP
+\fIwin\fR
+Operate on windows, see \fBWIN SUBCOMMANDS\fR.
+
+\fI<win> [SUBCOMMAND] [CLIENT] <TARGET>\fR
+.SS WS/MON COMMANDS
+.TP
+\fITARGET\fR
+Name or number of the workspace or monitor to target.
+.TP
+\fICLIENT\fR
+The window id in hex (0x.. or #..) to operate on, when unspecified
+the active window is used.
+.TP
+\fIview\fR
+View the TARGET (default behaviour when no subcommand given).
+
+\fI<ws/mon> [view] <TARGET>\fR
+.TP
+\fIsend\fR
+Send CLIENT or the active window to the TARGET.
+
+\fI<ws/mon> <send> [CLIENT] <TARGET>\fR
+.TP
+\fIfollow\fR
+Follow CLIENT to the TARGET.
+
+\fI<ws/mon> <follow> [CLIENT] <TARGET>\fR
 .SH CUSTOMIZATION
 For basic changes dk can be customized by running commands through the
 .B dkcmd

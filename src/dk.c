@@ -1625,6 +1625,7 @@ void popfloat(Client *c)
 	quadrant(c, &x, &y, &w, &h);
 	setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	resizehint(c, x, y, w, h, c->bw, 0, 0);
+	xcb_aux_sync(con);
 }
 
 void pushstatus(void)
@@ -1768,6 +1769,7 @@ void refresh(void)
 	for (m = nextmon(monitors); m; m = nextmon(m->next))
 		restack(m->ws);
 	focus(NULL);
+	xcb_aux_sync(con);
 	eventignore(XCB_ENTER_NOTIFY);
 	pushstatus();
 

@@ -67,6 +67,7 @@ int fib(Workspace *ws, int out)
 		resizehint(c, x + g, y + g, w - (2 * b) - (n > 1 ? g : (2 * g)),
 				h - (2 * b) - (n > 1 ? g : (2 * g)), b, 0, 0);
 	}
+	xcb_aux_sync(con);
 	return ret;
 }
 
@@ -106,6 +107,7 @@ int grid(Workspace *ws)
 			col++;
 		}
 	}
+	xcb_aux_sync(con);
 	return 1;
 }
 
@@ -122,6 +124,7 @@ int mono(Workspace *ws)
 				ws->mon->wh - ws->padt - ws->padb - (2 * g) - (2 * b),
 				globalcfg[GLB_SMART_BORDER] ? 0 : c->bw, 0, 0);
 	}
+	xcb_aux_sync(con);
 	return 1;
 }
 
@@ -222,6 +225,6 @@ int tile(Workspace *ws)
 		CMOVERESIZE(c, c->x, c->y, c->w, c->h, bw);
 		prev = (remaining == 1 && n - i != 0) ? NULL : c;
 	}
-	eventignore(XCB_ENTER_NOTIFY);
+	xcb_aux_sync(con);
 	return ret;
 }

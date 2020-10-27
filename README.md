@@ -1,4 +1,4 @@
-### dk */dəˈkā/*
+## dk */dəˈkā/*
 
 A tiling window manager taking inspiration from dwm, bspwm, and xmonad.
 
@@ -17,7 +17,7 @@ Some basics:
 [motif](http://www.ist.co.uk/motif/books/vol6A/ch-20.fm.html#963509).
 
 
-#### Installation
+### Installation
 
 You need the xcb headers
 
@@ -53,7 +53,7 @@ make uninstall
 ```
 
 
-#### Usage
+### Usage
 
 To start dk you can add the following to your `~/.xinitrc`
 ```
@@ -68,7 +68,7 @@ cp /usr/local/share/doc/dk/dkrc ~/.config/dk/
 chmod +x ~/.config/dk/dkrc
 ```
 
-#### Configuration
+### Configuration
 
 There are example `dkrc` and `sxhkdrc` files in `doc/` or  
 `/usr/local/share/doc/dk` after installation.
@@ -85,13 +85,13 @@ can be done by copying the default config header `config.def.h` to `config.h`,
 editing it and recompiling. This file isn't tracked by git so you can keep your  
 configuration and avoid conflicts when pulling new updates.
 
-#### dkcmd
+### dkcmd
 Most of your interaction with the window manager will be using `dkcmd`  
 which writes one or more commands into the socket where it is then read  
 and parsed by the window manager *(see Commands section below)*.
 
 
-#### Syntax Outline
+### Syntax Outline
 The commands have a very basic syntax and parsing, the input is broken  
 down into smaller pieces *(tokens)* which are then passed to the matching  
 keyword function, otherwise an error is returned.
@@ -148,9 +148,9 @@ For various commands dk will expect a certain data type or format to be given.
 
 ---
 
-#### Commands
+### Commands
 
-##### Workspaces and Monitors
+#### Workspaces and Monitors
 `mon` and `ws` operate on monitors and workspaces respectively.
 
 - `TARGET` Name or number of the workspace or monitor to target.
@@ -180,7 +180,7 @@ mon send [CLIENT] TARGET
 ws follow [CLIENT] TARGET
 ```
 
-##### Rules
+#### Rules
 ---
 `rule` operates on window rules.
 
@@ -253,26 +253,26 @@ rule ... focus=true
 
 ---
 
-##### Settings
+#### Settings
 `set` operates on configuration settings.
 ```
 set [SUBCOMMAND] SETTING
 ```
 ---
 
-##### Windows
+#### Windows
 `win` operates on windows.
 ```
 win [SUBCOMMAND] [CLIENT] ACTION
 ```
 ---
 
-#### Todo
+### Todo
 
 - Simplification.
 
 
-#### Contributing
+### Contributing
 
 I'm very open to contributions or ideas.
 

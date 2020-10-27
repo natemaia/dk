@@ -35,18 +35,20 @@ workspaces()
 	awk -v fg="$fg" -v hi="$hi" -v a="$a" '/^workspaces:/ {
 		gsub(/^workspaces: |:\w*/, "");
 		for (i = 1; i <= NF; i++) {
+			printf "%%{A:dkcmd ws %d:}", i
 			if ($i ~ /*/) { /* active workspace*/
 				gsub(/*/, "");
 				if (a ~ $i) {
-					printf " %%{+u}%%{F" hi "}" $i "%%{F" fg "}%%{-u} "
+					printf " %%{+u}%%{F%s}%s%%{F%s}%%{-u} ", hi, $i, fg
 				} else {
-					printf " %%{F" hi "}" $i "%%{F" fg "} "
+					printf " %%{F%s}%s%%{F%s} ", hi, $i, fg
 				}
 			} else if (a ~ $i) {
-				printf " %%{+u}" $i "%%{-u} "
+				printf " %%{+u}%s%%{-u} ", $i
 			} else {
-				printf " " $i " "
+				printf " %s ", $i
 			}
+			printf "%%{A}"
 		}
 	}' "$DKSTAT"
 }
@@ -80,7 +82,7 @@ clock()
 	date "+%H:%M:%S  -  %a, %d %B %Y"
 }
 
-while sleep 0.5; do
+while sleep 0.3; do
 	layout=${layouts[$(layout)]}
 	echo -e "%{l} $(workspaces)  ${layout:-\???} %{r}$(battery) $(volume)  -  $(clock) "
 done | lemonbar -B "$bg" -F "$fg" -f "$font" | sh

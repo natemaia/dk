@@ -29,8 +29,8 @@ int cmdborder(char **argv)
 
 	while (*argv) {
 		int outer = 0;
-		if (!strcmp(*argv, "width")
-				|| (outer = !strcmp("outer", *argv) || !strcmp("outer_width", *argv)))
+		if (!strcmp(*argv, "w") || !strcmp(*argv, "width") || (outer = !strcmp("ow", *argv)
+					|| !strcmp("outer", *argv) || !strcmp("outer_width", *argv)))
 		{
 			col = 0;
 			nparsed++;
@@ -458,23 +458,6 @@ int cmdrule(char **argv)
 		.cb = NULL, .mon = NULL, .inst = NULL, .class = NULL, .title = NULL,
 	};
 
-	if ((apply = !strcmp("apply", *argv))) {
-		argv++;
-		nparsed++;
-		if (!strcmp("all", *argv)) {
-			nparsed++;
-			goto applyall;
-		}
-	} else if ((delete = !strcmp("remove", *argv) || !strcmp("delete", *argv))) {
-		argv++;
-		nparsed++;
-		if (!strcmp("all", *argv)) {
-			nparsed++;
-			while (rules)
-				freerule(rules);
-			return nparsed;
-		}
-	}
 #define ARG(val)                                                      \
 	nparsed++;                                                        \
 	if ((j = parseint(*(++argv), NULL, 0)) == INT_MIN) goto badvalue; \
@@ -543,6 +526,19 @@ int cmdrule(char **argv)
 			nparsed++;
 			if ((j = parsebool(*(++argv))) < 0) goto badvalue;
 			r.focus = j;
+		} else if (!strcmp("apply", *argv)) {
+			apply = 1;
+			if (!strcmp("*", *argv)) {
+				nparsed++;
+				goto applyall;
+			}
+		} else if (!strcmp("remove", *argv)) {
+			delete = 1;
+			if (!strcmp("*", *(argv + 1))) {
+				nparsed++;
+				while (rules) freerule(rules);
+				return nparsed;
+			}
 		} else {
 			break;
 badvalue:

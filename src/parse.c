@@ -36,7 +36,7 @@ char *parsetoken(char **src)
 	 * handles both strong and weak quoted strings
 	 */
 	size_t n = 0;
-	int q, sq = 0;
+	int qoute, strongquote = 0;
 	char *s, *t, *head, *tail;
 
 	if (!(*src) || !(**src))
@@ -44,11 +44,11 @@ char *parsetoken(char **src)
 	while (**src && (**src == ' ' || **src == '\t' || **src == '='))
 		(*src)++;
 
-	if ((q = **src == '"' || (sq = **src == '\''))) {
+	if ((qoute = **src == '"' || (strongquote = **src == '\''))) {
 		head = *src + 1;
-		if (!(tail = strchr(head, sq ? '\'' : '"')))
+		if (!(tail = strchr(head, strongquote ? '\'' : '"')))
 			return 0;
-		if (!sq)
+		if (!strongquote)
 			while (*(tail - 1) == '\\')
 				tail = strchr(tail + 1, '"');
 	} else {
@@ -58,7 +58,7 @@ char *parsetoken(char **src)
 
 	s = t = head;
 	while (tail ? s < tail : *s) {
-		if (q && !sq && *s == '\\' && *(s + 1) == '"') {
+		if (qoute && !strongquote && *s == '\\' && *(s + 1) == '"') {
 			s++;
 		} else {
 			n++;
@@ -204,12 +204,12 @@ int parseintclamp(char *arg, int *rel, int min, int max)
 	return INT_MIN;
 }
 
-int parseopt(char *argv, char **optarr)
+int parseopt(char *arg, char **optarr)
 {
 	char **s = optarr;
 
 	for (int i = 0; s && *s; s++, i++)
-		if (!strcmp(*s, argv))
+		if (!strcmp(*s, arg))
 			return i;
 	return -1;
 }
@@ -218,30 +218,27 @@ int parsegeom(char *arg, char type, int *i, int *rel, int *grav)
 {
 	int j;
 
-	if (!grav && (j = parseint(arg, rel, type == 'x' || type == 'y' ? 1 : 0)) != INT_MIN) {
+	if ((j = parseint(arg, rel, type == 'x' || type == 'y' ? 1 : 0)) != INT_MIN) {
 		*i = j;
-	} else if (grav && !strcmp("center", arg)) {
-		*grav = GRAV_CENTER;
-	} else {
-		switch (type) {
-		case 'x':
-			if (grav && !strcmp("left", arg)) *grav = GRAV_LEFT;
-			else if (grav && !strcmp("right", arg)) *grav = GRAV_RIGHT;
-			else if ((j = parseint(arg, rel, 1)) != INT_MIN) *i = j;
-			else return 0;
-			break;
-		case 'y':
-			if (grav && !strcmp("top", arg)) *grav = GRAV_TOP;
-			else if (grav && !strcmp("bottom", arg)) *grav = GRAV_BOTTOM;
-			else if ((j = parseint(arg, rel, 1)) != INT_MIN) *i = j;
-			else return 0;
-			break;
-		case 'w': /* FALLTHROUGH */
-		case 'h':
-			if ((j = parseint(arg, rel, 0)) != INT_MIN) *i = j;
-			else return 0;
-			break;
-		}
+	} else if (grav) {
+		if (!strcmp("center", arg))
+			*grav = GRAV_CENTER;
+		else
+			switch (type) {
+			case 'x':
+				if (!strcmp("left", arg)) *grav = GRAV_LEFT;
+				else if (!strcmp("right", arg)) *grav = GRAV_RIGHT;
+				else return 0;
+				break;
+			case 'y':
+				if (!strcmp("top", arg)) *grav = GRAV_TOP;
+				else if (!strcmp("bottom", arg)) *grav = GRAV_BOTTOM;
+				else return 0;
+				break;
+			case 'w': /* FALLTHROUGH */
+			case 'h':
+				return 0;
+			}
 	}
 	return 1;
 }

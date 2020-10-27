@@ -87,8 +87,8 @@ configuration and avoid conflicts when pulling new updates.
 
 #### dkcmd
 Most of your interaction with the window manager will be using `dkcmd`  
-to write our command into the socket where it is then read and parsed  
-by the window manager *(see commands below)*.
+which writes one or more commands into the socket where it is then read  
+and parsed by the window manager *(see Commands section below)*.
 
 
 #### Syntax Outline
@@ -150,54 +150,120 @@ For various commands dk will expect a certain data type or format to be given.
 
 #### Commands
 
-###### Workspaces and Monitors
+##### Workspaces and Monitors
 `mon` and `ws` operate on monitors and workspaces respectively.
+
+- `TARGET` Name or number of the workspace or monitor to target.
+
+- `CLIENT` The window id in hex to operate on, when unspecified the active window is used.
+
 ```
-<ws/mon> [SUBCOMMAND] <TARGET>
+ws  [SUBCOMMAND] [CLIENT] TARGET
+mon [SUBCOMMAND] [CLIENT] TARGET
 ```
+
+###### Subcommands
+
+`view` View the TARGET, default if no subcommand is given.
+```
+ws view TARGET
+ws TARGET
+```
+
+`send` Send CLIENT to the TARGET.
+```
+mon send [CLIENT] TARGET
+```
+
+`follow` Follow CLIENT to the TARGET.
+```
+ws follow [CLIENT] TARGET
+```
+
+##### Rules
 ---
-- `TARGET`
-Name or number of the workspace or monitor to target.
-
-- `CLIENT`
-The window id in hex to operate on, when unspecified the active window is used.
-
----
-- `view`
-View the TARGET (default behaviour when no subcommand given).
-```
-<ws/mon> [view] <TARGET>
-```
-- `send`
-Send CLIENT or the active window to the TARGET.
-```
-<ws/mon> <send> [CLIENT] <TARGET>
-```
-- `follow`
-Follow CLIENT to the TARGET.
-```
-<ws/mon> <follow> [CLIENT] <TARGET>
-```
-
-###### Rules
-
 `rule` operates on window rules.
+
+- `RULE` one or more regex matches as well as one or more rule setting.
+
 ```
-<rule> <SUBCOMMAND> <RULE>
+rule [SUBCOMMAND] RULE
 ```
----
+
+###### Subcommands
+
+`apply` applies RULE to all matching windows, if RULE is `*` apply all rules.
+```
+rule apply RULE
+```
+
+`remove` removes RULE, if RULE is `*` remove all rules.
+
+```
+rule remove RULE
+```
 
 ###### Settings
+
+`class` `instance` `title` (string) regex to match the window class, instance, and  
+title respectively. Regex matching is always done **case insensitive** with extended mode enabled.
+```
+rule class="^firefox$" instance="^navigator$" title="^mozilla firefox$" ...
+```
+
+`ws` (string/integer) determine what workspace the window should be on.
+```
+rule ... ws=1      # using index
+rule ... ws=term   # using name
+```
+
+`mon` (string/integer) determine what monitor the window should be on.
+```
+rule ... mon=1          # using index
+rule ... mon=HDMI-A-0   # using name
+```
+
+`x` `y` (integer/string) determine the window location using absolute values or gravities.
+```
+rule ... x=20 y=100                                # using absolute values
+rule ... x=center/left/right y=center/top/bottom   # using gravities
+```
+
+`w/width` `h/height` `bw/border_width` (integer) determine the window location, size,
+and border width respectively.
+```
+rule ... w=1280 h=720 bw=0
+```
+
+`callback` (string) determine a callback function to be invoked on window open and close.
+```
+rule ... callback=albumart
+```
+
+`float` `stick` (boolean) determine if the window should be floating or stick respectively.
+```
+rule ... float=true stick=true
+```
+
+`focus` (boolean) determine if the window should be focused and `view` it's workspace.  
+If `mon` is also set it will be activated first before viewing the workspace.
+```
+rule ... focus=true
+```
+
+---
+
+##### Settings
 `set` operates on configuration settings.
 ```
-<set> [SUBCOMMAND] <SETTING>
+set [SUBCOMMAND] SETTING
 ```
 ---
 
-###### Windows
+##### Windows
 `win` operates on windows.
 ```
-<win> [SUBCOMMAND] [CLIENT] <TARGET>
+win [SUBCOMMAND] [CLIENT] ACTION
 ```
 ---
 

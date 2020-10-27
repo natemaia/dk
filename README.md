@@ -19,19 +19,22 @@ Some basics:
 
 #### Installation
 
-You need the xcb headers, if you're on an Arch based distro you can run
+You need the xcb headers
 
+Arch
 ```
-pacman -S xcb-proto xcb-util xcb-util-wm xcb-util-cursor xcb-util-keysyms
+xcb-proto xcb-util xcb-util-wm xcb-util-cursor xcb-util-keysyms
 ```
+
+Debian/Ubuntu
+```
+build-essential libxcb-randr0-dev libxcb-util-dev libxcb-icccm4-dev libxcb-cursor-dev libxcb-keysyms1-dev
+```
+
 Other systems should have packages with similar names.
 
 As mentioned above dk has no keybind support so you'll need a separate  
 program like `sxhkd` to launch programs and control the window manager.
-On an Arch based distro this can be installed using
-```
-pacman -S sxhkd
-```
 
 
 To compile run
@@ -82,17 +85,13 @@ can be done by copying the default config header `config.def.h` to `config.h`,
 editing it and recompiling. This file isn't tracked by git so you can keep your  
 configuration and avoid conflicts when pulling new updates.
 
-#### Commands
-Most if not all of your interaction with the window manager will be using  
-commands in the form of
-```
-dkcmd <command>
-```
-This will spawn a new instance of dk to write our command into the socket  
-where it can then be read and parsed by the operating dk process.
+#### dkcmd
+Most of your interaction with the window manager will be using `dkcmd`  
+to write our command into the socket where it is then read and parsed  
+by the window manager *(see commands below)*.
 
 
-###### Syntax Outline
+##### Syntax Outline
 The commands have a very basic syntax and parsing, the input is broken  
 down into smaller pieces *(tokens)* which are then passed to the matching  
 keyword function, otherwise an error is returned.
@@ -149,6 +148,79 @@ For various commands dk will expect a certain data type or format to be given.
 
 ---
 
+##### Keywords
+- `mon`, `ws`
+  Operate on monitors or workspaces respectively, see ws/mon subcommands.
+  ```
+  <ws/mon> [SUBCOMMAND] <TARGET>
+  ```
+    - `TARGET`
+    Name or number of the workspace or monitor to target.
+
+    - `CLIENT`
+    The window id in hex to operate on, when unspecified the active window is used.
+
+    - `view`
+    View the TARGET (default behaviour when no subcommand given).
+    ```
+    <ws/mon> [view] <TARGET>
+    ```
+    - `send`
+    Send CLIENT or the active window to the TARGET.
+    ```
+    <ws/mon> <send> [CLIENT] <TARGET>
+    ```
+
+    - `follow`
+    Follow CLIENT to the TARGET.
+    ```
+    <ws/mon> <follow> [CLIENT] <TARGET>
+    ```
+
+- `rule`
+Operate on window rules, see rule subcommands.
+```
+<rule> <SUBCOMMAND> <RULE>
+```
+
+- `set`
+Operate on configuration settings, see set subcommands.
+```
+<set> [SUBCOMMAND] <SETTING>
+
+```
+
+- `win`
+Operate on windows, see win subcommands.
+```
+<win> [SUBCOMMAND] [CLIENT] <TARGET>
+```
+
+##### Subcommands
+
+###### ws/mon
+- `TARGET`
+Name or number of the workspace or monitor to target.
+
+- `CLIENT`
+The window id in hex to operate on, when unspecified the active window is used.
+
+- `view`
+View the TARGET (default behaviour when no subcommand given).
+```
+<ws/mon> [view] <TARGET>
+```
+- `send`
+Send CLIENT or the active window to the TARGET.
+```
+<ws/mon> <send> [CLIENT] <TARGET>
+```
+
+- `follow`
+Follow CLIENT to the TARGET.
+```
+<ws/mon> <follow> [CLIENT] <TARGET>
+```
 
 
 #### Todo

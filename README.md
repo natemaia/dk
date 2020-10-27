@@ -153,7 +153,8 @@ For various commands dk will expect a certain data type or format to be given.
 #### Workspaces and Monitors
 `mon` and `ws` operate on monitors and workspaces respectively.
 
-- `TARGET` Name or number of the workspace or monitor to target.
+- `TARGET` Name or number of the workspace or monitor to target or  
+relative strings `next`, `prev`, `last`, `nextne`, and `prevne`; `*ne` signify non-empty.
 
 - `CLIENT` The window id in hex to operate on, when unspecified the active window is used.
 

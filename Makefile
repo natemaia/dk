@@ -55,6 +55,13 @@ install: all
 	mkdir -p ${DESTDIR}${DOC}/dk
 	cp -rf doc/* ${DESTDIR}${DOC}/dk
 
+release: clean
+	mkdir -p dk-${VERSION}
+	cp -R LICENSE Makefile README.md src man doc dk-${VERSION}
+	tar -cf dk-${VERSION}.tar dk-${VERSION}
+	gzip dk-${VERSION}.tar
+	rm -rf dk-${VERSION}
+
 uninstall:
 	rm -f ${DESTDIR}${PREFIX}/bin/dk
 	rm -f ${DESTDIR}${PREFIX}/bin/dkcmd

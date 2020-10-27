@@ -411,7 +411,7 @@ badvalue:
 		}
 		if (y != INT_MIN)
 			movestack(y > 0 || ygrav == GRAV_BOTTOM ? 1 : -1);
-		if (w) {
+		if (w != INT_MIN) {
 			sf = &c->ws->ssplit;
 			for (i = 0, t = nexttiled(c->ws->clients); t; t = nexttiled(t->next), i++)
 				if (t == c) {
@@ -427,7 +427,7 @@ badvalue:
 					break;
 				}
 		}
-		if (h) {
+		if (h != INT_MIN) {
 			ohoff = c->hoff;
 			c->hoff = relh ? c->hoff + h : h;
 			if (c->ws->layout->func(c->ws) == -1) {
@@ -511,8 +511,7 @@ int cmdrule(char **argv)
 		} else if (!strcmp("bw", *argv) || !strcmp("border_width", *argv)) {
 			nparsed++;
 			if ((j = parseintclamp(*(++argv), NULL, 0, scr_h / 6)) == INT_MIN) goto badvalue;
-			r.bw = j;
-			if (r.bw == 0 && border[BORD_WIDTH])
+			if ((r.bw = j) == 0 && border[BORD_WIDTH])
 				r.state |= STATE_NOBORDER;
 		} else if (!strcmp(*argv, "float")) {
 			nparsed++;
@@ -528,14 +527,14 @@ int cmdrule(char **argv)
 			r.focus = j;
 		} else if (!strcmp("apply", *argv)) {
 			apply = 1;
-			if (!strcmp("*", *argv)) {
-				nparsed++;
+			if (!strcmp("*", *(argv + 1))) {
+				nparsed += 2;
 				goto applyall;
 			}
 		} else if (!strcmp("remove", *argv)) {
 			delete = 1;
 			if (!strcmp("*", *(argv + 1))) {
-				nparsed++;
+				nparsed += 2;
 				while (rules) freerule(rules);
 				return nparsed;
 			}

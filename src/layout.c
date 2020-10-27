@@ -178,12 +178,12 @@ int tile(Workspace *ws)
 			y = &ssy;
 			c->w = ssw - g * (5 - ns) / 2;
 		}
-
-		int bw = !globalcfg[GLB_SMART_BORDER] || n > 1 ? c->bw : 0;
-		int available = wh - (*y + c->h + g);
-		int minh = MAX(globalcfg[GLB_MIN_WH], c->min_h);
-		c->x = wx + x, c->y = wy + *y;
+		c->x = wx + x;
+		c->y = wy + *y;
 		c->h = ((wh - *y) / MAX(1, remaining)) - g + c->hoff;
+		int bw = !globalcfg[GLB_SMART_BORDER] || n > 1 ? c->bw : 0;
+		int minh = MAX(globalcfg[GLB_MIN_WH], c->min_h);
+		int available = wh - (*y + c->h + g);
 		if (!c->hoff && c->h < minh) {
 			popfloat(c);
 		} else if (remaining > 1 && (remaining - 1) * (minh + g) > available) {
@@ -217,10 +217,11 @@ int tile(Workspace *ws)
 			c->h = minh;
 		}
 		*y += c->h + g;
-		c->w -= 2 * bw;
-		c->h -= 2 * bw;
+		c->w -= (2 * bw);
+		c->h -= (2 * bw);
 		CMOVERESIZE(c, c->x, c->y, c->w, c->h, bw);
 		prev = (remaining == 1 && n - i != 0) ? NULL : c;
 	}
+	eventignore(XCB_ENTER_NOTIFY);
 	return ret;
 }

@@ -164,7 +164,6 @@ mon [SUBCOMMAND] [CLIENT] TARGET
 ```
 
 ###### Subcommands
-
 `view` View the TARGET, default if no subcommand is given.
 ```
 ws view TARGET
@@ -182,7 +181,6 @@ ws follow [CLIENT] TARGET
 ```
 
 #### Rules
----
 `rule` operates on window rules.
 
 - `RULE` one or more regex matches as well as one or more rule setting.

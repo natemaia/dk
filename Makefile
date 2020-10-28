@@ -1,7 +1,7 @@
 # dk (de·cay) window manager
 # see license file for copyright and license details
 
-VERSION = 0.85
+VERSION = 0.9
 
 # install paths
 PREFIX ?= /usr/local

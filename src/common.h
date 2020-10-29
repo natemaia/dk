@@ -319,19 +319,20 @@ struct Workspace {
 };
 
 
-int adjustfsetting(float f, int relative, float *setting);
 int adjustisetting(int i, int relative, int *setting, int other, int setbordergap);
 int adjustwsormon(char **argv);
 void applypanelstrut(Panel *p);
 int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse);
 int assignws(Workspace *ws, Monitor *new);
-void clientrule(Client *c, Rule *wr, int nofocus);
 void changews(Workspace *ws, int swap, int warp);
+void clienthints(Client *c);
+int clientname(Client *c);
+void clienttype(Client *c);
+void clientrule(Client *c, Rule *wr, int nofocus);
+Monitor *coordtomon(int x, int y);
 void detach(Client *c, int reattach);
 void drawborder(Client *c, int focused);
 int dwindle(Workspace *ws);
-void eventhandle(xcb_generic_event_t *ev);
-void eventignore(uint8_t type);
 void execcfg(void);
 int fib(Workspace *ws, int out);
 void focus(Client *c);

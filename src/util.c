@@ -65,4 +65,3 @@ int usage(char *prog, char *ver, int e, char flag, char *flagstr)
 	}
 	return e;
 }
-

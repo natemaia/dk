@@ -440,7 +440,7 @@ badvalue:
 		fprintf(cmdresp, "!unable to resize windows in %s layout", c->ws->layout->name);
 		return -1;
 	}
-	eventignore(XCB_ENTER_NOTIFY);
+	ignore(XCB_ENTER_NOTIFY);
 	return nparsed;
 #undef ARG
 }
@@ -703,9 +703,15 @@ int cmdsplit(char **argv)
 	int rel = 1;
 	float f = 0.0;
 
-	if ((f = parsefloat(*argv, &rel)) != -1.0)
-		return adjustfsetting(f, rel,
-				!strcmp("msplit", *(argv - 1)) ? &setws->msplit : &setws->ssplit);
+	if ((f = parsefloat(*argv, &rel)) != -1.0) {
+		float *ff = !strcmp("msplit", *(argv - 1)) ? &setws->msplit : &setws->ssplit;
+		if (setws->layout->func && (!rel && !(f -= *ff))) {
+			float nf;
+			if ((nf = CLAMP(f < 1.0 ? f + *ff : f - 1.0, 0.05, 0.95)) != *ff)
+				*ff = nf;
+		}
+		return 1;
+	}
 	return -1;
 }
 

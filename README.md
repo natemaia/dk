@@ -1,6 +1,6 @@
 ## dk */dəˈkā/*
 
-A tiling window manager taking inspiration from dwm, bspwm, and xmonad.
+A list based tiling window manager in the vein of dwm, bspwm, and xmonad.
 
 Some basics:
 
@@ -150,13 +150,12 @@ For various commands dk will expect a certain data type or format to be given.
 
 ### Commands
 
-#### Workspaces and Monitors
+#### Ws and Mon
 `mon` and `ws` operate on monitors and workspaces respectively.
 
-- `TARGET` Name or number of the workspace or monitor to target or  
+- `CLIENT` (hex) The window id in hex to operate on, if unspecified the active window is used.
+- `TARGET` (string/integer) Name or number of the workspace or monitor to target or  
 relative strings `next`, `prev`, `last`, `nextne`, and `prevne`; `*ne` signify non-empty.
-
-- `CLIENT` The window id in hex to operate on, when unspecified the active window is used.
 
 ```
 ws  [SUBCOMMAND] [CLIENT] TARGET
@@ -180,26 +179,27 @@ mon send [CLIENT] TARGET
 ws follow [CLIENT] TARGET
 ```
 
-#### Rules
+#### Rule
 `rule` operates on window rules.
 
-- `RULE` one or more regex matches as well as one or more rule setting.
+- `MATCH` one or more regex strings to be used when matching window properties.
+- `SETTING` one or more window setting to be applied when a matched window is encountered.
 
 ```
-rule [SUBCOMMAND] RULE
+rule [SUBCOMMAND] MATCH SETTING
 ```
 
 ###### Subcommands
 
-`apply` applies RULE to all matching windows, if RULE is `*` apply all rules.
+`apply` applies RULE to all matching windows, if RULE is `*` apply all rules and MATCH is ignored.
 ```
-rule apply RULE
+rule apply RULE [MATCH]
 ```
 
-`remove` removes RULE, if RULE is `*` remove all rules.
+`remove` removes RULE, if RULE is `*` remove all rules and MATCH is ignored.
 
 ```
-rule remove RULE
+rule remove RULE [MATCH]
 ```
 
 ###### Settings
@@ -207,59 +207,77 @@ rule remove RULE
 `class` `instance` `title` (string) regex to match the window class, instance, and  
 title respectively. Regex matching is always done **case insensitive** with extended mode enabled.
 ```
-rule class="^firefox$" instance="^navigator$" title="^mozilla firefox$" ...
+rule [SUBCOMMAND] class="^firefox$" instance="^navigator$" title="^mozilla firefox$" [SETTING]
 ```
 
 `ws` (string/integer) determine what workspace the window should be on.
 ```
-rule ... ws=1      # using index
-rule ... ws=term   # using name
+rule MATCH ws=1      # using index
+rule MATCH ws=term   # using name
 ```
 
 `mon` (string/integer) determine what monitor the window should be on.
 ```
-rule ... mon=1          # using index
-rule ... mon=HDMI-A-0   # using name
+rule MATCH mon=1          # using index
+rule MATCH mon=HDMI-A-0   # using name
 ```
 
 `x` `y` (integer/string) determine the window location using absolute values or gravities.
 ```
-rule ... x=20 y=100                                # using absolute values
-rule ... x=center/left/right y=center/top/bottom   # using gravities
+rule MATCH x=20 y=100                                # using absolute values
+rule MATCH x=center/left/right y=center/top/bottom   # using gravities
 ```
 
 `w/width` `h/height` `bw/border_width` (integer) determine the window location, size,
 and border width respectively.
 ```
-rule ... w=1280 h=720 bw=0
+rule MATCH w=1280 h=720 bw=0
 ```
 
 `callback` (string) determine a callback function to be invoked on window open and close.
 ```
-rule ... callback=albumart
+rule MATCH callback=albumart
 ```
 
 `float` `stick` (boolean) determine if the window should be floating or stick respectively.
 ```
-rule ... float=true stick=true
+rule MATCH float=true stick=true
 ```
 
 `focus` (boolean) determine if the window should be focused and `view` it's workspace.  
 If `mon` is also set it will be activated first before viewing the workspace.
 ```
-rule ... focus=true
+rule MATCH focus=true
 ```
 
 ---
 
-#### Settings
-`set` operates on configuration settings.
+#### Set
+`set` operates on workspace or global configuration settings.
+
+- `SETTING` one or more subcommand settings to be changed.
+- `WS` the workspace which subcommand should apply to, if unspecified the current is used.  
+`default` is a special workspace used to define default values for new workspaces which  
+haven't been created yet.
+
 ```
-set [SUBCOMMAND] SETTING
+set [WS] SUBCOMMAND SETTING
 ```
+
+###### Subcommands
+`border` change the window border sizes and colours (see border settings).
+```
+set [WS] border SETTING
+```
+
+`gap` change the workspace border sizes and colours.
+```
+set [WS] gap SETTING
+```
+
 ---
 
-#### Windows
+#### Win
 `win` operates on windows.
 ```
 win [SUBCOMMAND] [CLIENT] ACTION

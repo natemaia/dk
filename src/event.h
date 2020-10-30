@@ -18,14 +18,12 @@ void configrequest(xcb_generic_event_t *ev);
 void destroynotify(xcb_generic_event_t *ev);
 void dispatch(xcb_generic_event_t *ev);
 void enternotify(xcb_generic_event_t *ev);
-void error(xcb_generic_event_t *ev);
 void focusin(xcb_generic_event_t *ev);
 void ignore(uint8_t type);
 void maprequest(xcb_generic_event_t *ev);
 void motionnotify(xcb_generic_event_t *ev);
 void mouse(Client *c, int move, int mx, int my);
 void propertynotify(xcb_generic_event_t *ev);
-void randr(xcb_generic_event_t *ev);
 void unmapnotify(xcb_generic_event_t *ev);
 
 static void (*handlers[XCB_NO_OPERATION + 1])(xcb_generic_event_t *) = {

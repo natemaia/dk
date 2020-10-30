@@ -18,7 +18,7 @@ void buttonpress(xcb_generic_event_t *ev)
 	DBG("buttonpress: 0x%08x - button: %d", e->event, e->detail)
 	focus(c);
 	restack(c->ws);
-	xcb_allow_events(con, XCB_ALLOW_REPLAY_POINTER, e->time);
+	xcb_allow_events(con, XCB_ALLOW_REPLAY_POINTER, XCB_CURRENT_TIME);
 	if (CLNMOD(e->state) == CLNMOD(mousemod) && (e->detail == mousemove || e->detail == mouseresize)) {
 		int move = e->detail == mousemove;
 		if (FULLSCREEN(c) || ((c->state & STATE_FIXED) && !move))
@@ -142,12 +142,20 @@ void dispatch(xcb_generic_event_t *ev)
 	short type;
 
 	if ((type = ev->response_type & 0x7f)) {
-		if (handlers[type])
+		if (handlers[type]) {
 			handlers[type](ev);
-		else if (ev->response_type == randrbase + XCB_RANDR_SCREEN_CHANGE_NOTIFY)
-			randr(ev);
+		} else if (ev->response_type == randrbase + XCB_RANDR_SCREEN_CHANGE_NOTIFY) {
+			if (((xcb_randr_screen_change_notify_event_t *)ev)->root == root && updrandr())
+				updworkspaces(globalcfg[GLB_NUMWS]);
+		}
 	} else {
-		error(ev);
+		xcb_generic_error_t *e = (xcb_generic_error_t*)ev;
+
+		fprintf(stderr, "dk: previous request returned error %i, \"%s\""
+				" major code %u, minor code %u resource id %u sequence %u\n",
+				(int)e->error_code, xcb_event_get_error_label(e->error_code),
+				(uint32_t) e->major_code, (uint32_t) e->minor_code,
+				(uint32_t) e->resource_id, (uint32_t) e->sequence);
 	}
 }
 
@@ -171,17 +179,6 @@ void enternotify(xcb_generic_event_t *ev)
 		changews(ws, 0, 0);
 	if (c && globalcfg[GLB_FOCUS_MOUSE])
 		focus(c);
-}
-
-void error(xcb_generic_event_t *ev)
-{
-	xcb_generic_error_t *e = (xcb_generic_error_t*)ev;
-
-	fprintf(stderr, "dk: previous request returned error %i, \"%s\""
-			" major code %u, minor code %u resource id %u sequence %u\n",
-			(int)e->error_code, xcb_event_get_error_label(e->error_code),
-			(uint32_t) e->major_code, (uint32_t) e->minor_code,
-			(uint32_t) e->resource_id, (uint32_t) e->sequence);
 }
 
 void focusin(xcb_generic_event_t *ev)
@@ -230,7 +227,8 @@ void motionnotify(xcb_generic_event_t *ev)
 	Monitor *m;
 	xcb_motion_notify_event_t *e = (xcb_motion_notify_event_t *)ev;
 
-	if (e->event == root && (m = coordtomon(e->root_x, e->root_y)) && m->ws != selws) {
+	if (e->event != root) return;
+	if ((m = coordtomon(e->root_x, e->root_y)) && m->ws != selws) {
 		DBG("motionnotify: updating active monitor - 0x%08x", e->event)
 		changews(m->ws, 0, 0);
 		focus(NULL);
@@ -376,12 +374,6 @@ void propertynotify(xcb_generic_event_t *ev)
 		updstruts(p, 1);
 		needsrefresh = 1;
 	}
-}
-
-void randr(xcb_generic_event_t *ev)
-{
-	if (((xcb_randr_screen_change_notify_event_t *)ev)->root == root && updrandr())
-		updworkspaces(globalcfg[GLB_NUMWS]);
 }
 
 void unmapnotify(xcb_generic_event_t *ev)

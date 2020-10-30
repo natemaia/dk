@@ -23,6 +23,7 @@ char *parsetoken(char **src);
 #include "strl.h"
 #include "util.h"
 #include "cmd.h"
+#include "layout.h"
 
 /* if you need to include config.h do it last */
 #include "config.h"

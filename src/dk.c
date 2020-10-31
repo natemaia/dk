@@ -10,18 +10,39 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
+#include <limits.h>
 #include <locale.h>
+#include <regex.h>
+#include <signal.h>
+#include <err.h>
 
-#include "common.h"
+#include <xcb/randr.h>
+#include <xcb/xproto.h>
+#include <xcb/xcb_util.h>
+#include <xcb/xcb_icccm.h>
+#include <xcb/xcb_cursor.h>
+#include <xcb/xcb_keysyms.h>
+
+#include "dk.h"
+#include "strl.h"
+#include "util.h"
+#include "parse.h"
+#include "layout.h"
+#include "event.h"
+#include "cmd.h"
+
+#include "config.h"
+
 #include "strl.c"
 #include "util.c"
 #include "parse.c"
 #include "layout.c"
 #include "event.c"
 #include "cmd.c"
-
-#include "config.h"
 
 int main(int argc, char *argv[])
 {
@@ -98,12 +119,11 @@ int main(int argc, char *argv[])
 				if (cmdfd > 0 && (n = recv(cmdfd, buf, sizeof(buf) - 1, 0)) > 0) {
 					if (buf[n - 1] == '\n') n--;
 					buf[n] = '\0';
-					if ((cmdresp = fdopen(cmdfd, "w"))) {
-						parsecmd(buf);
-					} else {
+					if (!(cmdresp = fdopen(cmdfd, "w"))) {
 						warn("unable to open the socket as file: %s", sock);
 						close(cmdfd);
 					}
+					parsecmd(buf);
 				}
 			}
 			if (FD_ISSET(confd, &read_fds))
@@ -114,108 +134,6 @@ int main(int argc, char *argv[])
 		}
 	}
 	return 0;
-}
-
-int adjustisetting(int i, int relative, int *setting, int other, int setbordergap)
-{
-	int n;
-	int max = setws->mon->wh - setws->padb - setws->padt;
-
-	if (!relative && !(i -= *setting))
-		return -1;
-	n = CLAMP(*setting + i, 0, setbordergap ? (max / 6) - other : max / globalcfg[GLB_MIN_WH]);
-	if (n != *setting)
-		*setting = n;
-	return 0;
-}
-
-int adjustwsormon(char **argv)
-{
-	int opt, nparsed = 0, e = 0;
-	int (*fn)(Workspace *) = cmdview;
-	Workspace *ws = NULL, *cur = selws;
-	Monitor *m = NULL, *cm = cur->mon;
-
-	cmdclient = selws->sel;
-	if (*argv) {
-		for (unsigned int i = 0; i < LEN(wscmds); i++)
-			if (!strcmp(wscmds[i].str, *argv)) {
-				fn = wscmds[i].func;
-				argv++;
-				nparsed++;
-				break;
-			}
-		if (fn != cmdview && (cmdclient = parseclient(*argv, &e))) {
-			cur = cmdclient->ws;
-			cm = cur->mon;
-			argv++;
-			nparsed++;
-		} else if (e == -1) {
-			fprintf(cmdresp, "!invalid window id: %s", *argv);
-			return e;
-		} else {
-			cmdclient = selws->sel;
-		}
-	}
-	if (!*argv) {
-		fprintf(cmdresp, "!%s %s", cmdusemon ? "mon" : "ws", enoargs);
-		return -1;
-	}
-	if ((opt = parseopt(*argv, opts)) >= 0) {
-		if (opt == DIR_LAST) {
-			ws = cmdusemon
-				? (lastmon && lastmon->connected ? lastmon->ws : cur)
-				: lastws ? lastws : cur;
-		} else if (opt == DIR_NEXT && cmdusemon) {
-			if (!(m = nextmon(cm->next)))
-				m = nextmon(monitors);
-			ws = m->ws;
-		} else if (opt == DIR_NEXT) {
-			ws = cur->next ? cur->next : workspaces;
-		} else if (cmdusemon && opt == DIR_PREV) {
-			for (m = nextmon(monitors); m && nextmon(m->next)
-					&& nextmon(m->next) != cm; m = nextmon(m->next))
-				;
-			ws = m ? m->ws : selws;
-		} else if (opt == DIR_PREV) {
-			FIND_PREV(ws, cur, workspaces);
-		} else {
-			int r = 0;
-			Workspace *save = cur;
-			while (!ws && r < globalcfg[GLB_NUMWS]) {
-				if (opt == DIR_NEXT_NONEMPTY) {
-					if (cmdusemon) {
-						if (!(m = nextmon(cm)))
-							m = nextmon(monitors);
-						ws = m->ws;
-					} else
-						ws = cur->next ? cur->next : workspaces;
-				} else if (cmdusemon) {
-					for (m = nextmon(monitors); m && nextmon(m->next)
-							&& nextmon(m->next) != cm; m = nextmon(m->next))
-						;
-					ws = m ? m->ws : selws;
-				} else {
-					FIND_PREV(ws, cur, workspaces);
-				}
-				cur = ws;
-				cm = ws->mon;
-				if (!ws->clients && ws != save)
-					ws = NULL;
-				r++;
-			}
-		}
-	} else {
-		ws = parsewsormon(*argv, cmdusemon);
-	}
-	if (ws) {
-		nparsed++;
-		fn(ws);
-	} else {
-		fprintf(cmdresp, "!invalid value for %s: %s", cmdusemon ? "monitor" : "workspace", *argv);
-		return -1;
-	}
-	return nparsed;
 }
 
 void applypanelstrut(Panel *p)
@@ -316,7 +234,7 @@ int assignws(Workspace *ws, Monitor *new)
 		relocatews(ws, old);
 		needsrefresh = 1;
 	} else {
-		fprintf(cmdresp, "!unable to assign last/only workspace on monitor");
+		respond(cmdresp, "!unable to assign last/only workspace on monitor");
 		return 0;
 	}
 	return 1;
@@ -517,7 +435,7 @@ Monitor *coordtomon(int x, int y)
 	Monitor *m = NULL;
 
 	FOR_EACH(m, monitors)
-		if (m->connected && INRECT(x, y, m->x, m->y, m->w, m->h))
+		if (m->connected && x >= m->x && x < m->x + m->w && y >= m->y && y < m->y + m->h)
 			return m;
 	return m;
 }
@@ -620,7 +538,7 @@ void freewm(void)
 	while (panels) unmanage(panels->win, 0);
 	while (desks) unmanage(desks->win, 0);
 	while (workspaces) {
-		while (workspaces->stack) unmanage(workspaces->stack->win, 0); // NOLINT
+		while (workspaces->stack) unmanage(workspaces->stack->win, 0);
 		freews(workspaces);
 	}
 	while (monitors) freemon(monitors);
@@ -936,7 +854,7 @@ Rule *initrule(Rule *wr)
 		strlcpy(str, wstr, len);                                               \
 		if ((i = regcomp(reg, str, REG_NOSUB|REG_EXTENDED|REG_ICASE))) {       \
 			regerror(i, reg, buf, sizeof(buf));                                \
-			fprintf(cmdresp, "!invalid regex %s: %s", str, buf);               \
+			respond(cmdresp, "!invalid regex %s: %s", str, buf);                        \
 			goto error;                                                        \
 		}                                                                      \
 	}
@@ -1050,7 +968,6 @@ void initsock(void)
 	}
 	ENVPATH("DKSTAT", status, "/tmp/dk_%s_%i_%i.status", "/tmp/dk.status"); // NOLINT
 	free(hostname);
-
 #undef ENVPATH
 }
 
@@ -1454,14 +1371,16 @@ void relocatews(Workspace *ws, Monitor *old)
 
 void resize(Client *c, int x, int y, int w, int h, int bw)
 {
-	SAVEOLD(c);
+	c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 	c->x = x, c->y = y, c->w = w, c->h = h;
-	CMOVERESIZE(c, x, y, w, h, bw);
+	MOVERESIZE(c->win, x, y, w, h, bw);
+	drawborder(c, c == selws->sel);
+	sendconfigure(c);
 }
 
-void resizehint(Client *c, int x, int y, int w, int h, int bw, int confine, int mouse)
+void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, int mouse)
 {
-	if (applysizehints(c, &x, &y, &w, &h, bw, confine, mouse))
+	if (applysizehints(c, &x, &y, &w, &h, bw, usermotion, mouse))
 		resize(c, x, y, w, h, bw);
 }
 

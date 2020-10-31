@@ -4,7 +4,25 @@
  * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
  */
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
+#include <regex.h>
+#include <err.h>
+
+#include <xcb/randr.h>
+#include <xcb/xcb_keysyms.h>
+
+#include "dk.h"
 #include "parse.h"
+#include "strl.h"
+#include "util.h"
+#include "cmd.h"
+#include "layout.h"
+
+/* if you need to include config.h do it last */
+#include "config.h"
 
 int parsebool(char *arg)
 {
@@ -130,7 +148,7 @@ void parsecmd(char *buf)
 		else if ((r = !strcmp("restart", *argv)) || !strcmp("exit", *argv))
 			running = 0, restart = r;
 		else
-			fprintf(cmdresp, "!invalid or unknown command: %s", *argv);
+			respond(cmdresp, "!invalid or unknown command: %s", *argv);
 #ifdef DEBUG
 	} else if (match && !*argv) {
 		fprintf(stderr, "dk: %d: parsecmd: all arguments successfully parsed\n", __LINE__);
@@ -140,8 +158,10 @@ void parsecmd(char *buf)
 
 end:
 	free(save);
-	fflush(cmdresp);
-	fclose(cmdresp);
+	if (cmdresp) {
+		fflush(cmdresp);
+		fclose(cmdresp);
+	}
 }
 
 int parsecolour(char *arg, unsigned int *result)

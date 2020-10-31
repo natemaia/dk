@@ -6,8 +6,8 @@
 
 #pragma once
 
-#include "common.h"
-
+int adjustisetting(int i, int relative, int *setting, int other, int border);
+int adjustwsormon(char **argv);
 int cmdborder(char **argv);
 int cmdcycle(char **argv);
 int cmdfakefull(char **argv);
@@ -34,6 +34,3 @@ int cmdwin(char **argv);
 int cmdwm(char **argv);
 int cmdws(char **argv);
 int cmdwsdef(char **argv);
-
-#include "strl.h"
-#include "parse.h"

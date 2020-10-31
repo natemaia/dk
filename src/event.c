@@ -4,7 +4,39 @@
  * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
  */
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <regex.h>
+#include <err.h>
+
+#include <xcb/randr.h>
+#include <xcb/xcb_util.h>
+#include <xcb/xcb_icccm.h>
+#include <xcb/xcb_keysyms.h>
+
+#include "dk.h"
+#include "cmd.h"
+#include "parse.h"
+#include "layout.h"
 #include "event.h"
+
+#include "config.h"
+
+static void (*handlers[XCB_NO_OPERATION + 1])(xcb_generic_event_t *) = {
+	[XCB_BUTTON_PRESS]      = &buttonpress,
+	[XCB_CLIENT_MESSAGE]    = &clientmessage,
+	[XCB_CONFIGURE_NOTIFY]  = &confignotify,
+	[XCB_CONFIGURE_REQUEST] = &configrequest,
+	[XCB_DESTROY_NOTIFY]    = &destroynotify,
+	[XCB_ENTER_NOTIFY]      = &enternotify,
+	[XCB_FOCUS_IN]          = &focusin,
+	[XCB_MAP_REQUEST]       = &maprequest,
+	[XCB_MOTION_NOTIFY]     = &motionnotify,
+	[XCB_PROPERTY_NOTIFY]   = &propertynotify,
+	[XCB_UNMAP_NOTIFY]      = &unmapnotify,
+	[XCB_NO_OPERATION]      = NULL
+};
+
 
 void buttonpress(xcb_generic_event_t *ev)
 {
@@ -19,7 +51,9 @@ void buttonpress(xcb_generic_event_t *ev)
 	focus(c);
 	restack(c->ws);
 	xcb_allow_events(con, XCB_ALLOW_REPLAY_POINTER, XCB_CURRENT_TIME);
-	if (CLNMOD(e->state) == CLNMOD(mousemod) && (e->detail == mousemove || e->detail == mouseresize)) {
+	if ((e->state & ~(lockmask | XCB_MOD_MASK_LOCK)) == (mousemod & ~(lockmask | XCB_MOD_MASK_LOCK))
+			&& (e->detail == mousemove || e->detail == mouseresize))
+	{
 		int move = e->detail == mousemove;
 		if (FULLSCREEN(c) || ((c->state & STATE_FIXED) && !move))
 			return;
@@ -97,7 +131,7 @@ void configrequest(xcb_generic_event_t *ev)
 				c->bw = e->border_width;
 			} else if (FLOATING(c)) {
 				m = c->ws->mon;
-				SAVEOLD(c);
+				c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 				if (e->value_mask & XCB_CONFIG_WINDOW_X && e->x != W(c) * -2)
 					c->x = m->x + e->x - c->bw;
 				if (e->value_mask & XCB_CONFIG_WINDOW_Y && e->x != W(c) * -2)

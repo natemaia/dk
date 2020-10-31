@@ -6,8 +6,6 @@
 
 #pragma once
 
-#include "common.h"
-
 int parsebool(char *arg);
 float parsefloat(char *arg, int *rel);
 int parseint(char *arg, int *rel, int allowzero);
@@ -19,11 +17,3 @@ Client *parseclient(char *arg, int *ebadwin);
 Workspace *parsewsormon(char *arg, int mon);
 void parsecmd(char *buf);
 char *parsetoken(char **src);
-
-#include "strl.h"
-#include "util.h"
-#include "cmd.h"
-#include "layout.h"
-
-/* if you need to include config.h do it last */
-#include "config.h"

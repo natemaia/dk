@@ -4,6 +4,14 @@
  * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
  */
 
+#include <sys/wait.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
+#include <signal.h>
+#include <err.h>
+
 #include "util.h"
 
 void check(int i, char *msg)
@@ -39,6 +47,16 @@ char *itoa(int n, char *s)
 		s[j] = c;
 	}
 	return s;
+}
+
+void respond(FILE *f, const char *fmt, ...)
+{
+	if (f) {
+		va_list ap;
+		va_start(ap, fmt);
+		vfprintf(f, fmt, ap);
+		va_end(ap);
+	}
 }
 
 void sighandle(int sig)

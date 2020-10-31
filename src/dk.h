@@ -6,24 +6,6 @@
 
 #pragma once
 
-#include <sys/wait.h>
-#include <sys/types.h>
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <limits.h>
-#include <regex.h>
-#include <signal.h>
-#include <err.h>
-
-#include <xcb/randr.h>
-#include <xcb/xproto.h>
-#include <xcb/xcb_util.h>
-#include <xcb/xcb_icccm.h>
-#include <xcb/xcb_cursor.h>
-#include <xcb/xcb_keysyms.h>
-
 #ifdef DEBUG
 #define DBG(fmt, ...) warnx("%d: " fmt, __LINE__, ##__VA_ARGS__); fflush(stderr);
 #else
@@ -31,7 +13,7 @@
 #endif
 
 #ifndef VERSION
-#define VERSION "0.84"
+#define VERSION "0.91"
 #endif
 
 #define W(c) (c->w + (2 * c->bw))
@@ -40,10 +22,6 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define CLAMP(x, min, max) (MIN(MAX((x), (min)), (max)))
-#define CLNMOD(mod) ((mod) & ~(lockmask | XCB_MOD_MASK_LOCK))
-#define SAVEOLD(c) c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h
-#define INRECT(x, y, rx, ry, rw, rh) \
-	((x) >= (rx) && (x) < (rx) + (rw) && (y) >= (ry) && (y) < (ry) + (rh))
 
 #define FLOATING(c) (c->state & STATE_FLOATING || !c->ws->layout->func)
 #define FULLSCREEN(c) (c->state & STATE_FULLSCREEN && !(c->state & STATE_FAKEFULL))
@@ -63,8 +41,7 @@
 	} while (0)
 
 #define PROP(mode, win, atom, type, membsize, nmemb, value) \
-	xcb_change_property(con, XCB_PROP_MODE_##mode, win, atom, type, \
-			(membsize), (nmemb), value)
+	xcb_change_property(con, XCB_PROP_MODE_##mode, win, atom, type, (membsize), (nmemb), value)
 #define GET(win, val, vc, error, type, functtype)                       \
 	do {                                                                \
 		if (win && win != root) {                                       \
@@ -84,10 +61,6 @@
 			| XCB_CONFIG_WINDOW_BORDER_WIDTH,                           \
 			(unsigned int[]){(x), (y), MAX((w), globalcfg[GLB_MIN_WH]), \
 			MAX((h), globalcfg[GLB_MIN_WH]), (bw)})
-#define CMOVERESIZE(c, x, y, w, h, bw)            \
-	MOVERESIZE(c->win, (x), (y), (w), (h), (bw)); \
-	drawborder(c, c == selws->sel);               \
-	sendconfigure(c)
 
 
 enum States {
@@ -188,11 +161,6 @@ enum GlobalCfg {
 	GLB_STATICWS     = 10,
 };
 
-
-static char *opts[] = {
-	[DIR_NEXT] = "next", [DIR_PREV] = "prev", [DIR_LAST] = "last",
-	[DIR_NEXT_NONEMPTY] = "nextne", [DIR_PREV_NONEMPTY] = "prevne", NULL
-};
 
 static const char *gravities[] = {
 	[GRAV_NONE] = "none",     [GRAV_LEFT] = "left", [GRAV_RIGHT] = "right",
@@ -319,8 +287,29 @@ struct Workspace {
 };
 
 
-int adjustisetting(int i, int relative, int *setting, int other, int setbordergap);
-int adjustwsormon(char **argv);
+extern char **environ;
+static FILE *cmdresp;
+static unsigned int lockmask = 0;
+static char *argv0, sock[255], status[255];
+static int scr_h, scr_w, sockfd, running, restart, randrbase, cmdusemon, needsrefresh;
+const char *ebadarg = "invalid argument for";
+const char *enoargs = "command requires additional arguments but none were given";
+
+Desk *desks;
+Rule *rules;
+Panel *panels;
+Client *cmdclient;
+Monitor *primary, *monitors, *selmon, *lastmon;
+Workspace *setws, *selws, *lastws, *workspaces;
+
+static xcb_screen_t *scr;
+static xcb_connection_t *con;
+static xcb_window_t root, wmcheck;
+static xcb_key_symbols_t *keysyms;
+static xcb_cursor_t cursor[CURS_LAST];
+static xcb_atom_t wmatom[LEN(wmatoms)], netatom[LEN(netatoms)];
+
+
 void applypanelstrut(Panel *p);
 int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse);
 int assignws(Workspace *ws, Monitor *new);
@@ -387,27 +376,3 @@ Client *wintoclient(xcb_window_t win);
 Desk *wintodesk(xcb_window_t win);
 Panel *wintopanel(xcb_window_t win);
 xcb_window_t wintrans(xcb_window_t win);
-
-
-extern char **environ;
-static FILE *cmdresp;
-static unsigned int lockmask = 0;
-static char *argv0, sock[255], status[255];
-static int scr_h, scr_w, sockfd, running, restart, randrbase, cmdusemon, needsrefresh;
-static const char *ebadarg = "invalid argument for";
-static const char *enoargs = "command requires additional arguments but none were given";
-
-static Desk *desks;
-static Rule *rules;
-static Panel *panels;
-static Client *cmdclient;
-static Monitor *primary, *monitors, *selmon, *lastmon;
-static Workspace *setws, *selws, *lastws, *workspaces;
-
-static xcb_screen_t *scr;
-static xcb_connection_t *con;
-static xcb_window_t root, wmcheck;
-static xcb_key_symbols_t *keysyms;
-static xcb_cursor_t cursor[CURS_LAST];
-static xcb_atom_t wmatom[LEN(wmatoms)], netatom[LEN(netatoms)];
-

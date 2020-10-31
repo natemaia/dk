@@ -9,12 +9,16 @@
 
 #include <poll.h>
 #include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <err.h>
 
 #include "strl.c"
 #include "util.c"
 
 #ifndef VERSION
-#define VERSION "0.84"
+#define VERSION "0.91"
 #endif
 
 int main(int argc, char *argv[])
@@ -22,7 +26,7 @@ int main(int argc, char *argv[])
 	ssize_t s;
 	size_t j = 0, n = 0;
 	int i, fd, ret = 0, offs = 1;
-	char *sock, *eq = NULL, *sp = NULL, buf[BUFSIZ], resp[BUFSIZ];
+	char *sock, *equal = NULL, *space = NULL, buf[BUFSIZ], resp[BUFSIZ];
 	struct sockaddr_un addr;
 	struct pollfd fds[] = {
 		{ -1,            POLLIN,  0 },
@@ -44,18 +48,20 @@ int main(int argc, char *argv[])
 	check(connect(fd, (struct sockaddr *)&addr, sizeof(addr)), "unable to connect socket");
 
 	for (i = 1, j = 0, offs = 1; n + 1 < sizeof(buf) && i < argc; i++, j = 0, offs = 1) {
-		if ((sp = strchr(argv[i], ' ')) || (sp = strchr(argv[i], '\t'))) {
-			if (!(eq = strchr(argv[i], '=')) || sp < eq) buf[n++] = '"';	
+		if ((space = strchr(argv[i], ' ')) || (space = strchr(argv[i], '\t'))) {
+			if (!(equal = strchr(argv[i], '=')) || space < equal)
+				buf[n++] = '"';
 			offs++;
 		}
 		while (n + offs < sizeof(buf) && argv[i][j]) {
-			buf[n++] = argv[i][j++];	
-			if (eq && sp > eq && buf[n - 1] == '=') {
+			buf[n++] = argv[i][j++];
+			if (equal && space > equal && buf[n - 1] == '=') {
 				buf[n++] = '"';
-				eq = NULL;
+				equal = NULL;
 			}
 		}
-		if (offs > 1) buf[n++] = '"';
+		if (offs > 1)
+			buf[n++] = '"';
 		buf[n++] = ' ';
 	}
 	buf[n - 1] = '\0';

@@ -1,7 +1,7 @@
-# dk (de·cay) window manager
+# dk /dəˈkā/ window manager
 # see license file for copyright and license details
 
-VERSION = 0.9
+VERSION = 0.91
 
 # install paths
 PREFIX ?= /usr/local
@@ -19,10 +19,6 @@ all: dk dkcmd
 
 debug: CPPFLAGS += -DDEBUG
 debug: all
-
-coverage: CFLAGS += --coverage
-coverage: LDLIBS += -lgcov
-coverage: all
 
 nostrip: CFLAGS += -g -O0
 nostrip: debug

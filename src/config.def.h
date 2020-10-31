@@ -1,9 +1,3 @@
-/* dk - /dəˈkā/ window manager
- *
- * see license file for copyright and license details
- * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
- */
-
 /* In order to customize settings or add new commands
  * copy this file to config.h and edit it
  *
@@ -48,7 +42,8 @@ static xcb_button_t mousemove = XCB_BUTTON_INDEX_1;
 static xcb_button_t mouseresize = XCB_BUTTON_INDEX_3;
 
 static void albumart(Client *c, int closed)
-{ /* example of a simple callback for album art windows */
+{
+	/* example of a simple callback for album art windows */
 	switch (closed) {
 	case 0: /* opened */
 		c->ws->padr = c->w + (2 * c->ws->gappx);
@@ -61,13 +56,11 @@ static void albumart(Client *c, int closed)
 	}
 }
 
-/* "callback" names recognized for use with rules. */
 static const Callback callbacks[] = {
 	/* name,       function */
 	{ "albumart",  albumart },
 };
 
-/* primary command keywords and parser functions */
 static const Cmd keywords[] = {
 	{ "mon",   cmdmon  },
 	{ "rule",  cmdrule },
@@ -76,7 +69,6 @@ static const Cmd keywords[] = {
 	{ "ws",    cmdws   },
 };
 
-/* "set" keyword options, used by cmdset() */
 static const Cmd setcmds[] = {
 	{ "border",  cmdborder  },
 	{ "gap",     cmdgappx   },
@@ -89,7 +81,6 @@ static const Cmd setcmds[] = {
 	{ "stack",   cmdmors    },
 };
 
-/* "win" keyword options, used by cmdwin() */
 static const Cmd wincmds[] = {
 	{ "cycle",    cmdcycle    },
 	{ "fakefull", cmdfakefull },
@@ -102,7 +93,6 @@ static const Cmd wincmds[] = {
 	{ "swap",     cmdswap     },
 };
 
-/* "layout" names used by cmdlayout() */
 static const Layout layouts[] = {
 	{ "tile",     tile    }, /* first is default */
 	{ "mono",     mono    },
@@ -112,7 +102,6 @@ static const Layout layouts[] = {
 	{ "none",     NULL    }, /* no layout means floating */
 };
 
-/* "ws" and "mon" commands used by cmdws() and cmdmon() */
 static const WsCmd wscmds[] = {
 	{ "follow", cmdfollow },
 	{ "send",   cmdsend   },

@@ -4,7 +4,23 @@
  * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
  */
 
+#include <regex.h>
+#include <stdio.h>
+
+#ifdef DEBUG
+#include <err.h>
+#endif
+
+#include <xcb/randr.h>
+#include <xcb/xcb_util.h>
+#include <xcb/xcb_keysyms.h>
+
+#include "dk.h"
+#include "cmd.h"
 #include "layout.h"
+#include "parse.h"
+#include "config.h"
+
 
 int dwindle(Workspace *ws)
 {
@@ -137,8 +153,8 @@ int tile(Workspace *ws)
 {
 	Monitor *m = ws->mon;
 	Client *c, *prev = NULL;
+	int i, n, remaining, my, sy, ssy, g, ret = 0;
 	int x, *y, wx, wy, ww, wh, mw, ss, sw, ssw, ns = 1;
-	int i, n, remaining, my, sy, ssy, g, ret = 1;
 
 	for (n = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), n++)
 		;
@@ -162,9 +178,8 @@ int tile(Workspace *ws)
 	if (n - ws->nmaster > ws->nstack)
 		ss = 1, ssw = ww - mw - sw;
 
-	DBG("tile: ws: %d - h: %d - mw: %d - sw: %d - ssw: %d", ws->num, m->ww, mw, sw, ssw)
 	for (i = 0, my = sy = ssy = g, c = nexttiled(ws->clients); c; c = nexttiled(c->next), ++i) {
-		SAVEOLD(c);
+		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 		if (i < ws->nmaster) {
 			remaining = MIN(n, ws->nmaster) - i;
 			x = g;
@@ -191,40 +206,46 @@ int tile(Workspace *ws)
 			popfloat(c);
 		} else if (remaining > 1 && (remaining - 1) * (minh + g) > available) {
 			c->h += available - ((remaining - 1) * (minh + g));
-			ret = -1;
-		} else if (remaining == 1 && *y + (c->h - g) != wh - (2 * g)) {
+		} else if (remaining == 1 && *y + c->h != wh - g) {
 			if (prev) {
 				prev->old_h = prev->h;
-				minh = MAX(globalcfg[GLB_MIN_WH], prev->min_h);
 				if (prev->h + available < minh) {
-					ret = -1;
-					prev->h = minh;
-					c->y = prev->y + minh + g;
+					prev->h = MAX(globalcfg[GLB_MIN_WH], prev->min_h);
+					c->y = prev->y + prev->h + g;
 					c->h = (wh - (2 * g)) - (prev->y + prev->h);
-				} else if (c->h < minh) {
-					ret = -1;
-					prev->h += available - (minh - c->h - (2 * bw));
-					c->y = prev->y + prev->h + (2 * bw) + g;
-					c->h = minh - (2 * bw);
+				} else if (c->h <= minh) {
+					prev->h -= minh - c->h;
+					c->y = prev->y + prev->h + g;
+					c->h = minh;
 				} else {
 					prev->h += available;
 					c->y += available;
 				}
-				CMOVERESIZE(prev, prev->x, prev->y, prev->w, prev->h, prev->bw);
 			} else {
-				c->h = wh - (2 * g);
-				ret = -1;
+				c->h = available;
 			}
-		} else if (c->h < minh) {
-			ret = -1;
-			c->h = minh;
+		} else if (c->h <= minh) {
+			c->h = remaining == 1 ? wh - (2 * g) : minh;
 		}
 		*y += c->h + g;
 		c->w -= (2 * bw);
 		c->h -= (2 * bw);
-		CMOVERESIZE(c, c->x, c->y, c->w, c->h, bw);
 		prev = (remaining == 1 && n - i != 0) ? NULL : c;
 	}
+
+	for (c = nexttiled(ws->clients); c; c = nexttiled(c->next)) {
+		int bw = !globalcfg[GLB_SMART_BORDER] || n > 1 ? c->bw : 0;
+		if (c->h <= MAX(globalcfg[GLB_MIN_WH], c->min_h))
+			ret = -1;
+		if (applysizehints(c, &c->x, &c->y, &c->w, &c->h, c->bw, 0, 0)
+				|| (c->x != c->old_x || c->y != c->old_y || c->w != c->old_w || c->h != c->old_h))
+		{
+			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, bw);
+			drawborder(c, c == selws->sel);
+			sendconfigure(c);
+		}
+	}
+
 	xcb_aux_sync(con);
 	return ret;
 }

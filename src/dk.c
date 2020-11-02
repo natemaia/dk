@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
 
 #ifdef __OpenBSD__
 	if (pledge("stdio rpath unix proc exec", NULL) == -1)
-		err("pledge");
+		err(1, "pledge");
 #endif
 
 	initwm();
@@ -397,43 +397,45 @@ void clienttype(Client *c)
 
 void drawborder(Client *c, int focused)
 { /* modified from swm/wmutils */
-	int o, b;
-	unsigned int in, out;
+	if (c->state & STATE_NOBORDER || !c->bw) return;
+
 	xcb_gcontext_t gc;
 	xcb_pixmap_t pmap;
+	int b = c->bw;
+	int o = border[BORD_O_WIDTH];
+	unsigned int in = border[focused ? BORD_FOCUS : ((c->state & STATE_URGENT) ? BORD_URGENT : BORD_UNFOCUS)];
 
-	if (c->state & STATE_NOBORDER || !c->bw) return;
-	b = c->bw;
-	o = border[BORD_O_WIDTH];
-	in = border[focused ? BORD_FOCUS : ((c->state & STATE_URGENT) ? BORD_URGENT : BORD_UNFOCUS)];
-	out = border[focused ? BORD_O_FOCUS : ((c->state & STATE_URGENT) ? BORD_O_URGENT : BORD_O_UNFOCUS)];
-	xcb_rectangle_t inner[] = {
-		{ c->w,         0,            b - o,        c->h + b - o },
-		{ c->w + b + o, 0,            b - o,        c->h + b - o },
-		{ 0,            c->h,         c->w + b - o, b - o        },
-		{ 0,            c->h + b + o, c->w + b - o, b - o        },
-		{ c->w + b + o, c->h + b + o, b,            b            }
-	};
-	xcb_rectangle_t outer[] = {
-		{ c->w + b - o, 0,            o,            c->h + b * 2 },
-		{ c->w + b,     0,            o,            c->h + b * 2 },
-		{ 0,            c->h + b - o, c->w + b * 2, o            },
-		{ 0,            c->h + b,     c->w + b * 2, o            },
-		{ 1,            1,            1,            1            }
-	};
-
-	pmap = xcb_generate_id(con);
-	xcb_create_pixmap(con, c->depth, pmap, c->win, W(c), H(c));
-	gc = xcb_generate_id(con);
-	xcb_create_gc(con, gc, pmap, XCB_GC_FOREGROUND, &in);
 	if (b - o > 0) {
+		unsigned int out = border[focused ? BORD_O_FOCUS : ((c->state & STATE_URGENT)
+				? BORD_O_URGENT : BORD_O_UNFOCUS)];
+		xcb_rectangle_t inner[] = {
+			{ c->w,         0,            b - o,        c->h + b - o },
+			{ c->w + b + o, 0,            b - o,        c->h + b - o },
+			{ 0,            c->h,         c->w + b - o, b - o        },
+			{ 0,            c->h + b + o, c->w + b - o, b - o        },
+			{ c->w + b + o, c->h + b + o, b,            b            }
+		};
+		xcb_rectangle_t outer[] = {
+			{ c->w + b - o, 0,            o,            c->h + b * 2 },
+			{ c->w + b,     0,            o,            c->h + b * 2 },
+			{ 0,            c->h + b - o, c->w + b * 2, o            },
+			{ 0,            c->h + b,     c->w + b * 2, o            },
+			{ 1,            1,            1,            1            }
+		};
+
+		pmap = xcb_generate_id(con);
+		xcb_create_pixmap(con, c->depth, pmap, c->win, W(c), H(c));
+		gc = xcb_generate_id(con);
+		xcb_create_gc(con, gc, pmap, XCB_GC_FOREGROUND, &in);
 		xcb_poly_fill_rectangle(con, pmap, gc, LEN(inner), inner);
 		xcb_change_gc(con, gc, XCB_GC_FOREGROUND, &out);
+		xcb_poly_fill_rectangle(con, pmap, gc, LEN(outer), outer);
+		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXMAP, &pmap);
+		xcb_free_pixmap(con, pmap);
+		xcb_free_gc(con, gc);
+	} else {
+		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, &in);
 	}
-	xcb_poly_fill_rectangle(con, pmap, gc, LEN(outer), outer);
-	xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXMAP, &pmap);
-	xcb_free_pixmap(con, pmap);
-	xcb_free_gc(con, gc);
 }
 
 Monitor *coordtomon(int x, int y)
@@ -592,19 +594,18 @@ void freews(Workspace *ws)
 void grabbuttons(Client *c, int focused)
 {
 	xcb_generic_error_t *e;
-	xcb_keysym_t nlock = 0xff7f;
 	xcb_get_modifier_mapping_reply_t *m = NULL;
 	unsigned int mods[] = { 0, XCB_MOD_MASK_LOCK, 0, XCB_MOD_MASK_LOCK };
 
 	lockmask = 0;
 	if ((m = xcb_get_modifier_mapping_reply(con, xcb_get_modifier_mapping(con), &e))) {
-		xcb_keycode_t *kc, *t = NULL;
-		if ((t = xcb_key_symbols_get_keycode(keysyms, nlock))
-				&& (kc = xcb_get_modifier_mapping_keycodes(m)))
+		xcb_keycode_t *k, *t = NULL;
+		if ((t = xcb_key_symbols_get_keycode(keysyms, 0xff7f))
+				&& (k = xcb_get_modifier_mapping_keycodes(m)))
 		{
 			for (unsigned int i = 0; i < 8; i++)
 				for (unsigned int j = 0; j < m->keycodes_per_modifier; j++)
-					if (kc[i * m->keycodes_per_modifier + j] == *t)
+					if (k[i * m->keycodes_per_modifier + j] == *t)
 						lockmask = (1 << i);
 		}
 		free(t);
@@ -1198,6 +1199,7 @@ void pushstatus(void)
 		warn("unable to open status file: %s", status);
 		return;
 	}
+
 	fprintf(f, "# globals - key: value ...\nnumws: %d\nsmart_border: %d\n"
 			"smart_gap: %d\nfocus_urgent: %d\nfocus_mouse: %d\n"
 			"tile_hints: %d\nwin_minxy: %d\nwin_minwh: %d",

@@ -381,6 +381,7 @@ void propertynotify(xcb_generic_event_t *ev)
 			}
 	}
 #endif
+
 	if (e->state == XCB_PROPERTY_DELETE)
 		return;
 	if ((c = wintoclient(e->window))) {
@@ -414,9 +415,9 @@ void unmapnotify(xcb_generic_event_t *ev)
 {
 	xcb_unmap_notify_event_t *e = (xcb_unmap_notify_event_t *)ev;
 
-	if (e->response_type & ~0x7f)
+	if (e->response_type & ~0x7f) {
 		setwmwinstate(e->window, XCB_ICCCM_WM_STATE_WITHDRAWN);
-	else {
+	} else {
 		DBG("unmapnotify: 0x%08x", e->window)
 		unmanage(e->window, 0);
 	}

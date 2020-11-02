@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
 
 #ifdef __OpenBSD__
 	if (pledge("stdio unix", NULL) == -1)
-		err("pledge");
+		err(1, "pledge");
 #endif
 
 	if (!(sock = getenv("DKSOCK")))

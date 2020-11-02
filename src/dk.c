@@ -86,6 +86,12 @@ int main(int argc, char *argv[])
 			xcb_request_check(con,
 				xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK,
 					(unsigned int[]){XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT})));
+
+#ifdef __OpenBSD__
+	if (pledge("stdio rpath unix proc exec", NULL) == -1)
+		err("pledge");
+#endif
+
 	initwm();
 	initsock();
 	initscan();
@@ -1488,17 +1494,6 @@ void setinputfocus(Client *c)
 	sendwmproto(c, WM_FOCUS);
 }
 
-void setstackmode(xcb_window_t win, unsigned int mode)
-{
-	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_STACK_MODE, &mode);
-}
-
-void setwmwinstate(xcb_window_t win, long state)
-{
-	long data[] = { state, XCB_ATOM_NONE };
-	PROP(REPLACE, win, wmatom[WM_STATE], wmatom[WM_STATE], 32, 2, (unsigned char *)data);
-}
-
 void setnetwsnames(void)
 {
 	char *names;
@@ -1514,6 +1509,39 @@ void setnetwsnames(void)
 			;
 	PROP(REPLACE, root, netatom[NET_DESK_NAMES], wmatom[WM_UTF8STR], 8, --len, names);
 	free(names);
+}
+
+void setstackmode(xcb_window_t win, unsigned int mode)
+{
+	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_STACK_MODE, &mode);
+}
+
+void seturgent(Client *c, int urg)
+{
+	xcb_generic_error_t *e;
+	xcb_icccm_wm_hints_t wmh;
+	xcb_get_property_cookie_t pc;
+
+	DBG("seturgent: 0x%08x -> %d", c->win, urg)
+	pc = xcb_icccm_get_wm_hints(con, c->win);
+	if (c != selws->sel && urg) {
+		c->state |= STATE_URGENT;
+		drawborder(c, 0);
+	}
+	if (xcb_icccm_get_wm_hints_reply(con, pc, &wmh, &e)) {
+		wmh.flags = urg
+			? (wmh.flags | XCB_ICCCM_WM_HINT_X_URGENCY)
+			: (wmh.flags & ~XCB_ICCCM_WM_HINT_X_URGENCY);
+		xcb_icccm_set_wm_hints(con, c->win, &wmh);
+	} else {
+		iferr(0, "unable to get wm window hints", e);
+	}
+}
+
+void setwmwinstate(xcb_window_t win, long state)
+{
+	long data[] = { state, XCB_ATOM_NONE };
+	PROP(REPLACE, win, wmatom[WM_STATE], wmatom[WM_STATE], 32, 2, (unsigned char *)data);
 }
 
 void setworkspace(Client *c, int num, int stacktail)
@@ -1539,28 +1567,6 @@ void setworkspace(Client *c, int num, int stacktail)
 	} else {
 		c->snext = c->ws->stack;
 		c->ws->stack = c;
-	}
-}
-
-void seturgent(Client *c, int urg)
-{
-	xcb_generic_error_t *e;
-	xcb_icccm_wm_hints_t wmh;
-	xcb_get_property_cookie_t pc;
-
-	DBG("seturgent: 0x%08x -> %d", c->win, urg)
-	pc = xcb_icccm_get_wm_hints(con, c->win);
-	if (c != selws->sel && urg) {
-		c->state |= STATE_URGENT;
-		drawborder(c, 0);
-	}
-	if (xcb_icccm_get_wm_hints_reply(con, pc, &wmh, &e)) {
-		wmh.flags = urg
-			? (wmh.flags | XCB_ICCCM_WM_HINT_X_URGENCY)
-			: (wmh.flags & ~XCB_ICCCM_WM_HINT_X_URGENCY);
-		xcb_icccm_set_wm_hints(con, c->win, &wmh);
-	} else {
-		iferr(0, "unable to get wm window hints", e);
 	}
 }
 

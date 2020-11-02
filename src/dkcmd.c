@@ -37,6 +37,12 @@ int main(int argc, char *argv[])
 		return usage(argv[0], VERSION, 0, argv[1][1], "[-hv] <COMMAND>");
 	else if (argc == 1)
 		return usage(argv[0], VERSION, 1, 'h', "[-hv] <COMMAND>");
+
+#ifdef __OpenBSD__
+	if (pledge("stdio unix", NULL) == -1)
+		err("pledge");
+#endif
+
 	if (!(sock = getenv("DKSOCK")))
 		err(1, "unable to get socket path from environment");
 	addr.sun_family = AF_UNIX;

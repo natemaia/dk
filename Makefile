@@ -4,6 +4,7 @@
 VERSION = 0.91
 
 # install paths
+VPATH   = src
 PREFIX ?= /usr/local
 MAN    ?= ${PREFIX}/share/man
 DOC    ?= ${PREFIX}/share/doc
@@ -11,9 +12,6 @@ DOC    ?= ${PREFIX}/share/doc
 # compiler and linker flags
 CPPFLAGS += -D_DEFAULT_SOURCE -D_BSD_SOURCE -DVERSION=\"${VERSION}\"
 CFLAGS   += -std=c11 -O2 -static -pedantic -Wall -Wextra
-LDFLAGS  ?=
-
-VPATH = src
 
 all: dk dkcmd
 
@@ -23,18 +21,19 @@ debug: all
 nostrip: CFLAGS += -g -O0
 nostrip: debug
 
+dk: CFLAGS += -I/usr/X11R6/include
 dk: LDLIBS := -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
+dk: LDFLAGS = -L/usr/X11R6/lib
 dk: dk.o
+dk.o: config.h
 dkcmd: LDLIBS :=
 dkcmd: dkcmd.o
 
-
-dk.o: %.o: %.c
-	test -f src/config.h || cp src/config.def.h src/config.h
+.c.o:
 	${CC} ${CFLAGS} ${CPPFLAGS} -c $< -o $@
 
-dkcmd.o: %.o: %.c
-	${CC} ${CFLAGS} ${CPPFLAGS} -c $< -o $@
+config.h:
+	cp src/config.def.h src/$@
 
 clean:
 	rm -f *.o dk dkcmd

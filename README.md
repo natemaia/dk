@@ -168,11 +168,13 @@ mon [SUBCOMMAND] [CLIENT] TARGET
 ws view TARGET
 ws TARGET
 ```
+---
 
 `send` Send CLIENT to the TARGET.
 ```
 mon send [CLIENT] TARGET
 ```
+---
 
 `follow` Follow CLIENT to the TARGET.
 ```
@@ -195,6 +197,7 @@ rule [SUBCOMMAND] MATCH SETTING
 ```
 rule apply RULE [MATCH]
 ```
+---
 
 `remove` removes RULE, if RULE is `*` remove all rules and MATCH is ignored.
 
@@ -209,40 +212,47 @@ title respectively. Regex matching is always done **case insensitive** with exte
 ```
 rule [SUBCOMMAND] class="^firefox$" instance="^navigator$" title="^mozilla firefox$" [SETTING]
 ```
+---
 
 `ws` (string/integer) determine what workspace the window should be on.
 ```
 rule MATCH ws=1      # using index
 rule MATCH ws=term   # using name
 ```
+---
 
 `mon` (string/integer) determine what monitor the window should be on.
 ```
 rule MATCH mon=1          # using index
 rule MATCH mon=HDMI-A-0   # using name
 ```
+---
 
 `x` `y` (integer/string) determine the window location using absolute values or gravities.
 ```
 rule MATCH x=20 y=100                                # using absolute values
 rule MATCH x=center/left/right y=center/top/bottom   # using gravities
 ```
+---
 
 `w/width` `h/height` `bw/border_width` (integer) determine the window location, size,
 and border width respectively.
 ```
 rule MATCH w=1280 h=720 bw=0
 ```
+---
 
 `callback` (string) determine a callback function to be invoked on window open and close.
 ```
 rule MATCH callback=albumart
 ```
+---
 
 `float` `stick` (boolean) determine if the window should be floating or stick respectively.
 ```
 rule MATCH float=true stick=true
 ```
+---
 
 `focus` (boolean) determine if the window should be focused and `view` it's workspace.  
 If `mon` is also set it will be activated first before viewing the workspace.
@@ -270,17 +280,20 @@ set [WS] SUBCOMMAND SETTING
 set [WS] master VALUE
 set [WS] stack  VALUE
 ```
+---
 
 `msplit` `ssplit` (integer) change the workspace master or stack split ratios respectively.
 ```
 set [WS] msplit VALUE
 set [WS] ssplit VALUE
 ```
+---
 
 `gap` (integer) change the workspace gap width.
 ```
 set [WS] gap VALUE
 ```
+---
 
 `layout` (string) change the workspace window layout.
 ```
@@ -293,6 +306,7 @@ set [WS] layout VALUE
 - `dwindle` windows shrink by 1/2 towards the bottom right of the screen
 - `none` floating, no layout
 
+---
 
 `border` change the window border sizes and colours.
 ```
@@ -308,6 +322,7 @@ set [WS] border VALUE
   - `outer_urgent` (colour) urgent window outer border colour.
   - `outer_unfocus` (colour) normal window outer border colour.
 
+---
 
 `pad` change the workspace padding.
 ```
@@ -318,6 +333,7 @@ set [WS] pad VALUE
 - `t` `top` (integer) change the workspace top padding.
 - `b` `bottom` (integer) change the workspace bottom padding.
 
+---
 
 `mouse` change the mouse binds for move and resize (global, does not take a workspace).
 ```

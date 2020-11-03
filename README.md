@@ -410,7 +410,6 @@ set [WS] layout mono
 - `w` `width` (integer) change the overall window border width.
 - `ow` `outer` `outer_width` (integer) change the outer border width (greater than 0 makes double borders).
 - `colour` `color` (string) change the border (overall and outer) colour for various window states.
-
     - `f` `focus` (colour) the active window border overall colour.
     - `r` `urgent` (colour) urgent window border overall colour.
     - `u` `unfocus` (colour) normal window border overall colour.
@@ -438,13 +437,11 @@ set [WS] pad l=50 r=50 t=50 b=50
 `mouse` change the mouse binds for move and resize (global, does not take a workspace).
 
 - `mod` (string) change the modifier used in combination with move resize buttons.
-
     - `alt` `mod1` Alt key (default).
     - `super` `mod4` Win key.
     - `ctrl` `control` Ctrl key.
 
 - `move` `resize` (string) change the button used for move and resize respectively.
-
     - `button1` left mouse button.
     - `button2` right mouse button.
     - `button3` middle mouse button.
@@ -521,13 +518,15 @@ win focus +2      # focus two windows ahead
 `resize` change the window size, location, and border width.
 
 - `x` change the x coordinate.
-  - `center` justify to the center of the screen.
-  - `left` justify to the left of the screen.
-  - `right` justify to the right of the screen.
+    - `center` justify to the center of the screen.
+    - `left` justify to the left of the screen.
+    - `right` justify to the right of the screen.
+
 - `y` change the y coordinate.
-  - `center` justify to the center of the screen.
-  - `top` justify to the top of the screen.
-  - `bottom` justify to the bottom of the screen.
+    - `center` justify to the center of the screen.
+    - `top` justify to the top of the screen.
+    - `bottom` justify to the bottom of the screen.
+
 - `w` `width` change the window width.
 - `h` `height` change the window height.
 - `bw` `border_width` change the window border width.

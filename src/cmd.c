@@ -168,17 +168,17 @@ int cmdborder(char **argv)
 				argv++;
 				nparsed++;
 			}
-			if (!strcmp("focus", *argv)) {
+			if (!strcmp("f", *argv) || !strcmp("focus", *argv)) {
 				if (parsecolour(*(++argv), &border[BORD_FOCUS]) < 0) goto badvalue;
-			} else if (!strcmp("urgent", *argv)) {
+			} else if (!strcmp("u", *argv) || !strcmp("urgent", *argv)) {
 				if (parsecolour(*(++argv), &border[BORD_URGENT]) < 0) goto badvalue;
-			} else if (!strcmp("unfocus", *argv)) {
+			} else if (!strcmp("r", *argv) || !strcmp("unfocus", *argv)) {
 				if (parsecolour(*(++argv), &border[BORD_UNFOCUS]) < 0) goto badvalue;
-			} else if (!strcmp("outer_focus", *argv)) {
+			} else if (!strcmp("of", *argv) || !strcmp("outer_focus", *argv)) {
 				if (parsecolour(*(++argv), &border[BORD_O_FOCUS]) < 0) goto badvalue;
-			} else if (!strcmp("outer_urgent", *argv)) {
+			} else if (!strcmp("ou", *argv) || !strcmp("outer_urgent", *argv)) {
 				if (parsecolour(*(++argv), &border[BORD_O_URGENT]) < 0) goto badvalue;
-			} else if (!strcmp("outer_unfocus", *argv)) {
+			} else if (!strcmp("or", *argv) || !strcmp("outer_unfocus", *argv)) {
 				if (parsecolour(*(++argv), &border[BORD_O_UNFOCUS]) < 0) goto badvalue;
 			} else if (first) {
 				goto badvalue;
@@ -737,8 +737,8 @@ int cmdset(char **argv)
 		if (!strcmp("ws", *argv)) {
 			argv++;
 			nparsed++;
-			if (!strcmp("default", *argv)) {
-				if ((i = cmdwsdef(argv + 1)) == -1) return -1;
+			if (!strcmp("_", *argv)) {
+				if ((i = cmdws_(argv + 1)) == -1) return -1;
 				argv += i + 1;
 				nparsed += i + 1;
 				continue;
@@ -901,22 +901,17 @@ int cmdswap(char **argv)
 
 int cmdwin(char **argv)
 {
+	Client *c;
 	int e = 0, nparsed = 0;
 
-	if ((cmdclient = parseclient(*argv, &e))) {
-		argv++;
-		nparsed++;
-	} else if (e == -1) {
-		respond(cmdresp, "!invalid window id: %s", *argv);
-		return e;
-	} else {
-		cmdclient = selws->sel;
-	}
-	if (cmdclient) {
-		if (!*argv) {
-			respond(cmdresp, "!win %s", enoargs);
+	cmdclient = selws->sel;
+	while (*argv) {
+		if ((c = parseclient(*argv, &e))) {
+			cmdclient = c;
+		} else if (e == -1) {
+			respond(cmdresp, "!invalid window id: %s", *argv);
 			return -1;
-		} else while (*argv) {
+		} else {
 			int match = 0;
 			for (unsigned int ui = 0; ui < LEN(wincmds); ui++)
 				if ((match = !strcmp(wincmds[ui].str, *argv))) {
@@ -926,9 +921,9 @@ int cmdwin(char **argv)
 					break;
 				}
 			if (!match) break;
-			argv++;
-			nparsed++;
 		}
+		argv++;
+		nparsed++;
 	}
 	return nparsed;
 }
@@ -942,7 +937,7 @@ int cmdws(char **argv)
 	return nparsed;
 }
 
-int cmdwsdef(char **argv)
+int cmdws_(char **argv)
 {
 	float f;
 	unsigned int i;

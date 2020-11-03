@@ -22,8 +22,8 @@ fi
 	dkcmd set numws=10
 
 	# default workspace values used when allocating new workspaces
-	# can be applied to all existing workspaces when passed 'apply' after ws=default
-	dkcmd set ws=default apply layout=tile master=1 stack=4 gap=0 msplit=0.55 ssplit=0.55
+	# can be applied to all existing workspaces when passed 'apply' after ws=_
+	dkcmd set ws=_ apply layout=tile master=1 stack=4 gap=0 msplit=0.55 ssplit=0.55
 
 	# change workspace names
 	dkcmd set ws=1 name="term" ws=2 name="web"

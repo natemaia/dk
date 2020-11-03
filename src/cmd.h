@@ -33,4 +33,4 @@ int cmdview(Workspace *ws);
 int cmdwin(char **argv);
 int cmdwm(char **argv);
 int cmdws(char **argv);
-int cmdwsdef(char **argv);
+int cmdws_(char **argv);

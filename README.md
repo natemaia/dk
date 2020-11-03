@@ -229,9 +229,14 @@ rule MATCH mon=HDMI-A-0   # using name
 ---
 
 `x` `y` (integer/string) determine the window location using absolute values or gravities.
+- `center` justify to the center of the screen (x or y)
+- `left` justify to the left of the screen (x only)
+- `right` justify to the right of the screen (x only)
+- `top` justify to the top of the screen (y only)
+- `bottom` justify to the bottom of the screen (y only)
 ```
-rule MATCH x=20 y=100                                # using absolute values
-rule MATCH x=center/left/right y=center/top/bottom   # using gravities
+rule MATCH x=20 y=100         # using absolute values
+rule MATCH x=center y=center  # using gravities
 ```
 ---
 
@@ -243,6 +248,7 @@ rule MATCH w=1280 h=720 bw=0
 ---
 
 `callback` (string) determine a callback function to be invoked on window open and close.
+callbacks are pre-defined and compiled into the source, one example is provided.
 ```
 rule MATCH callback=albumart
 ```
@@ -259,46 +265,128 @@ If `mon` is also set it will be activated first before viewing the workspace.
 ```
 rule MATCH focus=true
 ```
-
 ---
 
 #### Set
 `set` operates on workspace or global configuration settings.
 
-- `SETTING` one or more subcommand settings to be changed.
+- `SETTING` one or more settings to be changed.
 - `WS` the workspace which subcommand should apply to, if unspecified the current is used.  
-`default` is a special workspace used to define default values for new workspaces which  
+`_` is a special workspace used to define default values for new workspaces which  
 haven't been created yet.
 
 ```
-set [WS] SUBCOMMAND SETTING
+set [WS] SETTING
+set ws=_ [apply] SETTING
 ```
 
-###### Subcommands
-`master` `stack` (integer) change the number of windows to occupy the master area (tile layout).
+###### Settings
+`numws` (integer) change the number of workspaces to allocate.
 ```
-set [WS] master VALUE
-set [WS] stack  VALUE
+set numws=10
 ```
 ---
 
-`msplit` `ssplit` (integer) change the workspace master or stack split ratios respectively.
+`name` (string) change the WS name.
 ```
-set [WS] msplit VALUE
-set [WS] ssplit VALUE
+set ws=1 name="term"
+```
+---
+
+`static_ws` (boolean) disable dynamic workspaces for multi-head systems.
+```
+set static_ws=false
+```
+---
+
+`mon` (string/integer) change which monitor WS should be on (requires `static_ws=true`).
+```
+set ws=1 mon=HDMI-A-0
+set ws=1 mon=1
+```
+---
+
+`master` `stack` (integer) change the number of windows to occupy the master area (tile layout).
+```
+set [WS] stack  3            # absolute values have no signs
+set [WS] master +1 stack -1  # relative change with signed integers (+/-)
+```
+---
+
+`msplit` `ssplit` (float) change the workspace master or stack split ratios respectively.
+```
+set [WS] msplit +0.1
+set [WS] ssplit 0.55
 ```
 ---
 
 `gap` (integer) change the workspace gap width.
 ```
-set [WS] gap VALUE
+set [WS] gap 10
+```
+---
+
+`tile_hints` (boolean) obey size hints in tiled layouts (default is false).
+```
+set tile_hints=true
+```
+---
+
+`tile_tohead` (boolean) place new windows at the head of the list in tiled layouts (default is false).
+```
+set tile_tohead=true
+```
+---
+
+`smart_gap` (boolean) remove gaps on workspaces with only one tiled window.
+```
+set smart_gap=true
+```
+---
+
+`smart_border` (boolean) remove borders on workspaces with only one tiled window.
+```
+set tile_hints=true
+```
+---
+
+`focus_urgent` (boolean) focus windows that request it through client messages.
+```
+set focus_urgent=true
+```
+---
+
+`focus_open` (boolean) disable focus-on-open.
+```
+set focus_open=false
+```
+---
+
+`focus_mouse` (boolean) disable focus-follows-mouse.
+```
+set focus_mouse=false
+```
+---
+
+`win_minxy` (integer) amount of window (in pixels) to be kept on the screen when moving.
+```
+set win_minxy=20
+```
+---
+
+`win_minwh` (integer) minimum window size.
+```
+set win_minwh=50
+```
+---
+
+`apply` when changing the default `_` workspace apply settings to existing real workspaces.
+```
+set ws=_ apply SETTING
 ```
 ---
 
 `layout` (string) change the workspace window layout.
-```
-set [WS] layout VALUE
-```
 - `tile` default tile layout
 - `mono` windows arranged maximized and stacked
 - `grid` all windows try to occupy equal space
@@ -306,39 +394,37 @@ set [WS] layout VALUE
 - `dwindle` windows shrink by 1/2 towards the bottom right of the screen
 - `none` floating, no layout
 
+```
+set [WS] layout mono
+```
 ---
 
 `border` change the window border sizes and colours.
-```
-set [WS] border VALUE
-```
 - `w` `width` (integer) change the overall window border width.
 - `ow` `outer` `outer_width` (integer) change the outer border width (greater than 0 makes double borders).
 - `colour` `color` (string) change the border (overall and outer) colour for various window states.
-  - `focus` (colour) the active window border overall colour.
-  - `urgent` (colour) urgent window border overall colour.
-  - `unfocus` (colour) normal window border overall colour.
-  - `outer_focus` (colour) the active window outer border colour.
-  - `outer_urgent` (colour) urgent window outer border colour.
-  - `outer_unfocus` (colour) normal window outer border colour.
-
+  - `f` `focus` (colour) the active window border overall colour.
+  - `r` `urgent` (colour) urgent window border overall colour.
+  - `u` `unfocus` (colour) normal window border overall colour.
+  - `of` `outer_focus` (colour) the active window outer border colour.
+  - `or` `outer_urgent` (colour) urgent window outer border colour.
+  - `ou` `outer_unfocus` (colour) normal window outer border colour.
+```
+set border w=5 ow=3 colour f='#6699cc' u='#444444' r='#ee5555' of='#222222' ou='#222222' or='#222222'
+```
 ---
 
 `pad` change the workspace padding.
-```
-set [WS] pad VALUE
-```
 - `l` `left` (integer) change the workspace left side padding.
 - `r` `right` (integer) change the workspace right side padding.
 - `t` `top` (integer) change the workspace top padding.
 - `b` `bottom` (integer) change the workspace bottom padding.
-
+```
+set [WS] pad l=50 r=50 t=50 b=50
+```
 ---
 
 `mouse` change the mouse binds for move and resize (global, does not take a workspace).
-```
-set mouse VALUE
-```
 - `mod` (string) change the modifier used in combination with move resize buttons.
   - `alt` `mod1` Alt key (default).
   - `super` `mod4` Win key.
@@ -347,16 +433,91 @@ set mouse VALUE
   - `button1` left mouse button.
   - `button2` right mouse button.
   - `button3` middle mouse button.
-
-
+```
+set mouse move=button1 resize=button2 mod=mod1
+```
 ---
 
 #### Win
 `win` operates on windows.
+
+- `CLIENT` (hex) the window id, if unspecified the current window is used.
+
 ```
-win [SUBCOMMAND] [CLIENT] ACTION
+win [CLIENT] ACTION
+```
+
+###### Settings
+`cycle` cycle windows in place.
+```
+win cycle
 ```
 ---
+
+`float` change the window floating state.
+```
+win [CLIENT] float
+```
+---
+
+`full` change the window fullscreen state.
+```
+win [CLIENT] full
+```
+---
+
+`fakefull` change the window fake fullscreen state (allow moving, resizing, and tiling when fullscreen).
+```
+win [CLIENT] fakefull
+```
+---
+
+`stick` change the window sticky state.
+```
+win [CLIENT] stick
+```
+---
+
+`swap` change the window between it's current location and master.
+```
+win [CLIENT] swap
+```
+---
+
+`kill` close the window.
+```
+win [CLIENT] kill
+```
+---
+
+`focus` (integer/string) change the focused window.
+- `next` focus the next window.
+- `prev` focus the previous window.
+
+```
+win CLIENT focus  # focus window by id
+win focus next    # focus the next window
+win focus +2      # focus two windows ahead
+```
+---
+
+`resize` change the window size, location, and border width.
+- `x` change the x coordinate.
+  - `center` justify to the center of the screen.
+  - `left` justify to the left of the screen.
+  - `right` justify to the right of the screen.
+- `y` change the y coordinate.
+  - `center` justify to the center of the screen.
+  - `top` justify to the top of the screen.
+  - `bottom` justify to the bottom of the screen.
+- `w` `width` change the window width.
+- `h` `height` change the window height.
+- `bw` `border_width` change the window border width.
+
+```
+win [CLIENT] resize x=100 y=100 w=1280 h=720 bw=1
+win [CLIENT] resize x=center y=center w=1280 h=720 bw=1
+```
 
 ### Todo
 

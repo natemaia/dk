@@ -410,12 +410,13 @@ set [WS] layout mono
 - `w` `width` (integer) change the overall window border width.
 - `ow` `outer` `outer_width` (integer) change the outer border width (greater than 0 makes double borders).
 - `colour` `color` (string) change the border (overall and outer) colour for various window states.
-  - `f` `focus` (colour) the active window border overall colour.
-  - `r` `urgent` (colour) urgent window border overall colour.
-  - `u` `unfocus` (colour) normal window border overall colour.
-  - `of` `outer_focus` (colour) the active window outer border colour.
-  - `or` `outer_urgent` (colour) urgent window outer border colour.
-  - `ou` `outer_unfocus` (colour) normal window outer border colour.
+
+    - `f` `focus` (colour) the active window border overall colour.
+    - `r` `urgent` (colour) urgent window border overall colour.
+    - `u` `unfocus` (colour) normal window border overall colour.
+    - `of` `outer_focus` (colour) the active window outer border colour.
+    - `or` `outer_urgent` (colour) urgent window outer border colour.
+    - `ou` `outer_unfocus` (colour) normal window outer border colour.
 
 ```
 set border w=5 ow=3 colour f='#6699cc' u='#444444' r='#ee5555' of='#222222' ou='#222222' or='#222222'
@@ -437,13 +438,16 @@ set [WS] pad l=50 r=50 t=50 b=50
 `mouse` change the mouse binds for move and resize (global, does not take a workspace).
 
 - `mod` (string) change the modifier used in combination with move resize buttons.
-  - `alt` `mod1` Alt key (default).
-  - `super` `mod4` Win key.
-  - `ctrl` `control` Ctrl key.
+
+    - `alt` `mod1` Alt key (default).
+    - `super` `mod4` Win key.
+    - `ctrl` `control` Ctrl key.
+
 - `move` `resize` (string) change the button used for move and resize respectively.
-  - `button1` left mouse button.
-  - `button2` right mouse button.
-  - `button3` middle mouse button.
+
+    - `button1` left mouse button.
+    - `button2` right mouse button.
+    - `button3` middle mouse button.
 
 ```
 set mouse move=button1 resize=button2 mod=mod1

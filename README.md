@@ -154,7 +154,7 @@ For various commands dk will expect a certain data type or format to be given.
 `mon` and `ws` operate on monitors and workspaces respectively.
 
 - `CLIENT` (hex) The window id in hex to operate on, if unspecified the active window is used.
-- `TARGET` (string/integer) Name or number of the workspace or monitor to target or  
+- `TARGET` (integer/string) Name or number of the workspace or monitor to target or  
 relative strings `next`, `prev`, `last`, `nextne`, and `prevne`; `*ne` signify non-empty.
 
 ```
@@ -214,44 +214,42 @@ rule [SUBCOMMAND] class="^firefox$" instance="^navigator$" title="^mozilla firef
 ```
 ---
 
-`ws` (string/integer) determine what workspace the window should be on.
+`ws` (integer/string) determine what workspace the window should be on.
 ```
 rule MATCH ws=1      # using index
 rule MATCH ws=term   # using name
 ```
 ---
 
-`mon` (string/integer) determine what monitor the window should be on.
+`mon` (integer/string) determine what monitor the window should be on.
 ```
 rule MATCH mon=1          # using index
 rule MATCH mon=HDMI-A-0   # using name
 ```
 ---
 
-`x` `y` (integer/string) determine the window location using absolute values or gravities.
+`x` `y` `w` `width` `h` `height` `bw` `border_width` (integer/string) determine the window location and size.
 
-- `center` justify to the center of the screen (x or y)
-- `left` justify to the left of the screen (x only)
-- `right` justify to the right of the screen (x only)
-- `top` justify to the top of the screen (y only)
-- `bottom` justify to the bottom of the screen (y only)
-
+- `x` change the x coordinate.
+  - `center` justify to the center of the screen.
+  - `left` justify to the left of the screen.
+  - `right` justify to the right of the screen.
+- `y` change the y coordinate.
+  - `center` justify to the center of the screen.
+  - `top` justify to the top of the screen.
+  - `bottom` justify to the bottom of the screen.
+- `w` `width` change the window width.
+- `h` `height` change the window height.
+- `bw` `border_width` change the window border width.
 
 ```
-rule MATCH x=20 y=100         # using absolute values
-rule MATCH x=center y=center  # using gravities
-```
----
-
-`w/width` `h/height` `bw/border_width` (integer) determine the window location, size,
-and border width respectively.
-```
-rule MATCH w=1280 h=720 bw=0
+rule MATCH x=20 y=100 w=1280 h=720 bw=0         # using absolute values
+rule MATCH x=center y=center w=1280 h=720 bw=0  # using gravities
 ```
 ---
 
 `callback` (string) determine a callback function to be invoked on window open and close.
-callbacks are pre-defined and compiled into the source, one example is provided.
+These are defined in the config header and compiled into the source, one example is provided.
 ```
 rule MATCH callback=albumart
 ```
@@ -302,7 +300,7 @@ set static_ws=false
 ```
 ---
 
-`mon` (string/integer) change which monitor WS should be on (requires `static_ws=true`).
+`mon` (integer/string) change which monitor WS should be on (requires `static_ws=true`).
 ```
 set ws=1 mon=HDMI-A-0
 set ws=1 mon=1

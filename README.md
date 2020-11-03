@@ -265,15 +265,73 @@ set [WS] SUBCOMMAND SETTING
 ```
 
 ###### Subcommands
-`border` change the window border sizes and colours (see border settings).
+`master` `stack` (integer) change the number of windows to occupy the master area (tile layout).
 ```
-set [WS] border SETTING
+set [WS] master VALUE
+set [WS] stack  VALUE
 ```
 
-`gap` change the workspace border sizes and colours.
+`msplit` `ssplit` (integer) change the workspace master or stack split ratios respectively.
 ```
-set [WS] gap SETTING
+set [WS] msplit VALUE
+set [WS] ssplit VALUE
 ```
+
+`gap` (integer) change the workspace gap width.
+```
+set [WS] gap VALUE
+```
+
+`layout` (string) change the workspace window layout.
+```
+set [WS] layout VALUE
+```
+- `tile` default tile layout
+- `mono` windows arranged maximized and stacked
+- `grid` all windows try to occupy equal space
+- `spiral` windows shrink by 1/2 towards the center of the screen
+- `dwindle` windows shrink by 1/2 towards the bottom right of the screen
+- `none` floating, no layout
+
+
+`border` change the window border sizes and colours.
+```
+set [WS] border VALUE
+```
+- `w` `width` (integer) change the overall window border width.
+- `ow` `outer` `outer_width` (integer) change the outer border width (greater than 0 makes double borders).
+- `colour` `color` (string) change the border (overall and outer) colour for various window states.
+  - `focus` (colour) the active window border overall colour.
+  - `urgent` (colour) urgent window border overall colour.
+  - `unfocus` (colour) normal window border overall colour.
+  - `outer_focus` (colour) the active window outer border colour.
+  - `outer_urgent` (colour) urgent window outer border colour.
+  - `outer_unfocus` (colour) normal window outer border colour.
+
+
+`pad` change the workspace padding.
+```
+set [WS] pad VALUE
+```
+- `l` `left` (integer) change the workspace left side padding.
+- `r` `right` (integer) change the workspace right side padding.
+- `t` `top` (integer) change the workspace top padding.
+- `b` `bottom` (integer) change the workspace bottom padding.
+
+
+`mouse` change the mouse binds for move and resize (global, does not take a workspace).
+```
+set mouse VALUE
+```
+- `mod` (string) change the modifier used in combination with move resize buttons.
+  - `alt` `mod1` Alt key (default).
+  - `super` `mod4` Win key.
+  - `ctrl` `control` Ctrl key.
+- `move` `resize` (string) change the button used for move and resize respectively.
+  - `button1` left mouse button.
+  - `button2` right mouse button.
+  - `button3` middle mouse button.
+
 
 ---
 

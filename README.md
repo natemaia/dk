@@ -155,11 +155,11 @@ For various commands dk will expect a certain data type or format to be given.
 
 - `CLIENT` (hex) The window id in hex to operate on, if unspecified the active window is used.
 - `TARGET` (integer/string) Name or number of the workspace or monitor to target or strings
-  - `next` relative forward
-  - `prev` relative backward
-  - `last` last viewed
-  - `nextne` next non-empty
-  - `prevne` previous non-empty
+    - `next` relative forward
+    - `prev` relative backward
+    - `last` last viewed
+    - `nextne` next non-empty
+    - `prevne` previous non-empty
 
 ```
 ws  [SUBCOMMAND] [CLIENT] TARGET
@@ -235,13 +235,13 @@ rule MATCH mon=HDMI-A-0   # using name
 `x` `y` `w` `width` `h` `height` `bw` `border_width` (integer/string) determine the window location and size.
 
 - `x` change the x coordinate.
-  - `center` justify to the center of the screen.
-  - `left` justify to the left of the screen.
-  - `right` justify to the right of the screen.
+    - `center` justify to the center of the screen.
+    - `left` justify to the left of the screen.
+    - `right` justify to the right of the screen.
 - `y` change the y coordinate.
-  - `center` justify to the center of the screen.
-  - `top` justify to the top of the screen.
-  - `bottom` justify to the bottom of the screen.
+    - `center` justify to the center of the screen.
+    - `top` justify to the top of the screen.
+    - `bottom` justify to the bottom of the screen.
 - `w` `width` change the window width.
 - `h` `height` change the window height.
 - `bw` `border_width` change the window border width.

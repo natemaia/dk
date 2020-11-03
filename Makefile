@@ -1,7 +1,7 @@
 # dk /dəˈkā/ window manager
 # see license file for copyright and license details
 
-VERSION = 0.91
+VERSION = 1.0
 
 # install paths
 VPATH   = src

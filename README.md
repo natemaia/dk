@@ -10,6 +10,7 @@ Some basics:
 - Gaps, fancy borders, extra layouts and more.
 - Better support for mouse and floating windows.
 - Startup script for configuration and running programs.
+- Status info is output to a file for use in bars or scripts.
 - No built-in extras *(bar, font drawing, or key bindings)*.
 - Sane support for
 [icccm](https://www.x.org/releases/X11R7.6/doc/xorg-docs/specs/ICCCM/icccm.html#client_to_window_manager_communication),
@@ -79,6 +80,8 @@ $DKRC                     # user specified location
 $HOME/.config/dk/dkrc     # default location
 ```
 and to runs it, **it must be executable in order for this to happen**.
+
+Status info is output to a file `$DKSTAT` for use in status bars or scripts.
 
 Advanced changes and configuration like new layouts, callbacks, or new commands  
 can be done by copying the default config header `config.def.h` to `config.h`,  

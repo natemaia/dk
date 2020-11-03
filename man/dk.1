@@ -1,6 +1,6 @@
 .TH DK 1 dk\-VERSION
 .SH NAME
-A tiling window manager in the vein of dwm, bspwm, and xmonad.
+dk \- A tiling window manager in the vein of dwm, bspwm, and xmonad.
 .SH SYNOPSIS
 .B dk
 .RB [ \-vh ]
@@ -8,15 +8,15 @@ A tiling window manager in the vein of dwm, bspwm, and xmonad.
 .RB \fISOCKET_FD\fR]
 .SH DESCRIPTION
 .P
-Windows are managed in tiled, monocle, or floating layouts, and are grouped by
-workspaces. Each window can be assigned to a single workspace and will have a
-small border to indicate the focus state. Windows are grouped into workspaces
-and changes to one workspace will not impact others. Workspaces can be
-dynamically allocated and viewed on any monitor, by default only the bare
-minimum is allocated to populate each monitor with a single workspace.
+Windows are managed in various layouts, and are grouped by workspaces.
+Each window can be assigned to a single workspace and will have a
+small border to indicate the focus state. Changes to one workspace will
+not impact others. Workspaces can be dynamically or statically assigned
+and viewed on any monitor, by default only one workspace per monitor is
+created.
 .P
 Monitors can be assigned one workspace at a time, all workspaces are available
-from all monitors unless in static mode, floating windows will retain their
+from all monitors in dynamic mode, floating windows will retain their
 relative location within each monitor area. If viewing an already visible
 workspace on another monitor, the two workspaces will swap monitors when
 dynamic, otherwise the mouse will be warped to the assigned monitor.
@@ -46,51 +46,6 @@ Prints version information to stdout and exits.
 .TP
 .B \-s
 Use an existing socket connection file descriptor when restarting dk.
-.SH USAGE
-.SS KEYWORDS
-.TP
-\fImon\fR, \fIws\fR
-Operate on monitors or workspaces respectively, see \fBWS/MON SUBCOMMANDS\fR.
-
-\fI<ws/mon> [SUBCOMMAND] <TARGET>\fR
-.TP
-\fIrule\fR
-Operate on window rules, see \fBRULE SUBCOMMANDS\fR.
-
-\fI<rule> <SUBCOMMAND> <RULE>\fR
-.TP
-\fIset\fR
-Operate on configuration settings, see \fBSET SUBCOMMANDS\fR.
-
-\fI<set> [SUBCOMMAND] <SETTING>\fR
-.TP
-\fIwin\fR
-Operate on windows, see \fBWIN SUBCOMMANDS\fR.
-
-\fI<win> [SUBCOMMAND] [CLIENT] <TARGET>\fR
-.SS WS/MON SUBCOMMANDS
-.TP
-\fITARGET\fR
-Name or number of the workspace or monitor to target.
-.TP
-\fICLIENT\fR
-The window id in hex (0x.. or #..) to operate on, when unspecified
-the active window is used.
-.TP
-\fIview\fR
-View the TARGET (default behaviour when no subcommand given).
-
-\fI<ws/mon> [view] <TARGET>\fR
-.TP
-\fIsend\fR
-Send CLIENT or the active window to the TARGET.
-
-\fI<ws/mon> <send> [CLIENT] <TARGET>\fR
-.TP
-\fIfollow\fR
-Follow CLIENT to the TARGET.
-
-\fI<ws/mon> <follow> [CLIENT] <TARGET>\fR
 .SH CUSTOMIZATION
 For basic changes dk can be customized by running commands through the
 .B dkcmd
@@ -105,11 +60,611 @@ On startup dk looks for a dkrc file in:
   - $HOME/.config/dk/dkrc
 .P
 in that order and runs the first it can, this file must be executable.
-This can be used to initialize settings, customization, and running programs
-on startup.
+This can be used to initialize settings, customization, and running programs.
 .P
 Further configuration such as adding layouts or callbacks can be done by
 copying config.def.h to config.h, editing it, and recompiling.
+.P
+Status info is output to a file \fI$DKSTAT\fR for use in status bars or scripts.
+.SH COMMANDS
+.SS Ws and Mon
+.PP
+\f[C]\fImon\f[R]\fR and \f[C]\fIws\f[R]\fR operate on monitors and workspaces
+respectively.
+.IP \[bu] 2
+\f[C]\fICLIENT\f[R]\fR (hex) The window id in hex to operate on, if
+unspecified the active window is used.
+.IP \[bu] 2
+\f[C]\fITARGET\f[R]\fR (integer/string) Name or number of the workspace or
+monitor to target or strings
+.RS 2
+.IP \[bu] 2
+\f[C]\fInext\f[R]\fR relative forward
+.IP \[bu] 2
+\f[C]\fIprev\f[R]\fR relative backward
+.IP \[bu] 2
+\f[C]\fIlast\f[R]\fR last viewed
+.IP \[bu] 2
+\f[C]\fInextne\f[R]\fR next non-empty
+.IP \[bu] 2
+\f[C]\fIprevne\f[R]\fR previous non-empty
+.RE
+.IP
+.nf
+\fI\f[C]
+ws  [SUBCOMMAND] [CLIENT] TARGET
+mon [SUBCOMMAND] [CLIENT] TARGET
+\f[R]\fR
+.fi
+.SS Subcommands
+.PP
+\f[C]\fIview\f[R]\fR View the TARGET, default if no subcommand is given.
+.IP
+.nf
+\fI\f[C]
+ws view TARGET
+ws TARGET
+\f[R]\fR
+.fi
+.PP
+\f[C]\fIsend\f[R]\fR Send CLIENT to the TARGET.
+.IP
+.nf
+\fI\f[C]
+mon send [CLIENT] TARGET
+\f[R]\fR
+.fi
+.PP
+\f[C]\fIfollow\f[R]\fR Follow CLIENT to the TARGET.
+.IP
+.nf
+\fI\f[C]
+ws follow [CLIENT] TARGET
+\f[R]\fR
+.fi
+.PP
+--------------------------------------------------------------------------
+.PP
+.SS Rule
+.PP
+\f[C]rule\f[R] operates on window rules.
+.IP \[bu] 2
+\f[C]MATCH\f[R] one or more regex strings to be used when matching
+window properties.
+.IP \[bu] 2
+\f[C]SETTING\f[R] one or more window setting to be applied when a
+matched window is encountered.
+.IP
+.nf
+\f[C]
+rule [SUBCOMMAND] MATCH SETTING
+\f[R]
+.fi
+.SS Subcommands
+.PP
+\fI\f[C]apply\f[R] applies RULE to all matching windows, if RULE is
+\fI\f[C]*\f[R] apply all rules and MATCH is ignored.
+.IP
+.nf
+\fI\f[C]
+rule apply RULE [MATCH]
+\f[R]
+.fi
+.PP
+\fI\f[C]remove\f[R] removes RULE, if RULE is \fI\f[C]*\f[R] remove all rules
+and MATCH is ignored.
+.IP
+.nf
+\fI\f[C]
+rule remove RULE [MATCH]
+\f[R]
+.fi
+.SS Settings
+.PP
+\fI\f[C]class instance title\f[R] (string) regex to
+match the window class, instance, and
+.PD 0
+.P
+.PD
+title respectively.
+Regex matching is always done \f[B]case insensitive\f[R] with extended regex.
+.IP
+.nf
+\fI\f[C]
+rule [SUBCOMMAND] class=\[dq]\[ha]firefox$\[dq] instance=\[dq]\[ha]navigator$\[dq] title=\[dq]\[ha]mozilla firefox$\[dq] [SETTING]
+\f[R]
+.fi
+.PP
+\fI\f[C]ws\f[R] (integer/string) determine what workspace the window should
+be on.
+.IP
+.nf
+\fI\f[C]
+rule MATCH ws=1
+rule MATCH ws=term
+\f[R]
+.fi
+.PP
+\fI\f[C]mon\f[R] (integer/string) determine what monitor the window should
+be on.
+.IP
+.nf
+\fI\f[C]
+rule MATCH mon=1
+rule MATCH mon=HDMI-A-0
+\f[R]
+.fi
+.PP
+\fI\f[C]x y w width h height bw border_width\f[R] (integer/string)
+determine the window location and size.
+.IP \[bu] 2
+\fI\f[C]x\f[R] change the x coordinate.
+.RS 2
+.IP \[bu] 2
+\fI\f[C]center\f[R] justify to the center of the screen.
+.IP \[bu] 2
+\fI\f[C]left\f[R] justify to the left of the screen.
+.IP \[bu] 2
+\fI\f[C]right\f[R] justify to the right of the screen.
+.RE
+.IP \[bu] 2
+\fI\f[C]y\f[R] change the y coordinate.
+.RS 2
+.IP \[bu] 2
+\fI\f[C]center\f[R] justify to the center of the screen.
+.IP \[bu] 2
+\fI\f[C]top\f[R] justify to the top of the screen.
+.IP \[bu] 2
+\fI\f[C]bottom\f[R] justify to the bottom of the screen.
+.RE
+.IP \[bu] 2
+\fI\f[C]w width\f[R] change the window width.
+.IP \[bu] 2
+\fI\f[C]h height\f[R] change the window height.
+.IP \[bu] 2
+\fI\f[C]bw border_width\f[R] change the window border width.
+.IP
+.nf
+\fI\f[C]
+rule MATCH x=20 y=100 w=1280 h=720 bw=0
+rule MATCH x=center y=center w=1280 h=720 bw=0
+\f[R]
+.fi
+.PP
+\fI\f[C]callback\f[R] (string) determine a callback function to be invoked
+on window open and close.
+These are defined in the config header and compiled into the source, one
+example is provided.
+.IP
+.nf
+\fI\f[C]
+rule MATCH callback=albumart
+\f[R]
+.fi
+.PP
+\fI\f[C]float stick\f[R] (boolean) determine if the window should
+be floating or stick respectively.
+.IP
+.nf
+\fI\f[C]
+rule MATCH float=true stick=true
+\f[R]
+.fi
+.PP
+\fI\f[C]focus\f[R] (boolean) determine if the window should be focused and
+view it\[cq]s workspace.
+.PD 0
+.P
+.PD
+If \fI\f[C]mon\f[R] is also set it will be activated first before viewing
+the workspace.
+.IP
+.nf
+\fI\f[C]
+rule MATCH focus=true
+\f[R]
+.fi
+.PP
+--------------------------------------------------------------------------
+.PP
+.SS Set
+.PP
+\fI\f[C]set\f[R] operates on workspace or global configuration settings.
+.IP \[bu] 2
+\fI\f[C]SETTING\f[R] one or more settings to be changed.
+.IP \[bu] 2
+\fI\f[C]WS\f[R] the workspace which subcommand should apply to, if
+unspecified the current is used. \fI\f[C]_\f[R] is a special workspace used
+to define default values for new workspaces which haven\[cq]t been created yet.
+.IP
+.nf
+\fI\f[C]
+set [WS] SETTING
+set ws=_ [apply] SETTING
+\f[R]
+.fi
+.SS Set Options
+.PP
+\fI\f[C]numws\f[R] (integer) change the number of workspaces to allocate.
+.IP
+.nf
+\fI\f[C]
+set numws=10
+\f[R]
+.fi
+.PP
+\fI\f[C]name\f[R] (string) change the WS name.
+.IP
+.nf
+\fI\f[C]
+set ws=1 name=\[dq]term\[dq]
+\f[R]
+.fi
+.PP
+\fI\f[C]static_ws\f[R] (boolean) disable dynamic workspaces for multi-head
+systems.
+.IP
+.nf
+\fI\f[C]
+set static_ws=false
+\f[R]
+.fi
+.PP
+\fI\f[C]mon\f[R] (integer/string) change which monitor WS should be on
+(requires \fI\f[C]static_ws=true\f[R]).
+.IP
+.nf
+\fI\f[C]
+set ws=1 mon=HDMI-A-0
+set ws=1 mon=1
+\f[R]
+.fi
+.PP
+\fI\f[C]master stack\f[R] (integer) change the number of windows
+to occupy the master area (tile layout).
+.IP
+.nf
+\fI\f[C]
+set [WS] stack  3
+set [WS] master +1 stack -1
+\f[R]
+.fi
+.PP
+\fI\f[C]msplit ssplit\f[R] (float) change the workspace master or
+stack split ratios respectively.
+.IP
+.nf
+\fI\f[C]
+set [WS] msplit +0.1
+set [WS] ssplit 0.55
+\f[R]
+.fi
+.PP
+\fI\f[C]gap\f[R] (integer) change the workspace gap width.
+.IP
+.nf
+\fI\f[C]
+set [WS] gap 10
+\f[R]
+.fi
+.PP
+\fI\f[C]tile_hints\f[R] (boolean) obey size hints in tiled layouts (default
+is false).
+.IP
+.nf
+\fI\f[C]
+set tile_hints=true
+\f[R]
+.fi
+.PP
+\fI\f[C]tile_tohead\f[R] (boolean) place new windows at the head of the
+list in tiled layouts (default is false).
+.IP
+.nf
+\fI\f[C]
+set tile_tohead=true
+\f[R]
+.fi
+.PP
+\fI\f[C]smart_gap\f[R] (boolean) remove gaps on workspaces with only one
+tiled window.
+.IP
+.nf
+\fI\f[C]
+set smart_gap=true
+\f[R]
+.fi
+.PP
+\fI\f[C]smart_border\f[R] (boolean) remove borders on workspaces with only
+one tiled window.
+.IP
+.nf
+\fI\f[C]
+set tile_hints=true
+\f[R]
+.fi
+.PP
+\fI\f[C]focus_urgent\f[R] (boolean) focus windows that request it through
+client messages.
+.IP
+.nf
+\fI\f[C]
+set focus_urgent=true
+\f[R]
+.fi
+.PP
+\fI\f[C]focus_open\f[R] (boolean) disable focus-on-open.
+.IP
+.nf
+\fI\f[C]
+set focus_open=false
+\f[R]
+.fi
+.PP
+\fI\f[C]focus_mouse\f[R] (boolean) disable focus-follows-mouse.
+.IP
+.nf
+\fI\f[C]
+set focus_mouse=false
+\f[R]
+.fi
+.PP
+\fI\f[C]win_minxy\f[R] (integer) amount of window (in pixels) to be kept on
+the screen when moving.
+.IP
+.nf
+\fI\f[C]
+set win_minxy=20
+\f[R]
+.fi
+.PP
+\fI\f[C]win_minwh\f[R] (integer) minimum window size.
+.IP
+.nf
+\fI\f[C]
+set win_minwh=50
+\f[R]
+.fi
+.PP
+\fI\f[C]apply\f[R] when changing the default \fI\f[C]_\f[R] workspace apply
+settings to existing real workspaces.
+.IP
+.nf
+\fI\f[C]
+set ws=_ apply SETTING
+\f[R]
+.fi
+.PP
+\fI\f[C]layout\f[R] (string) change the workspace window layout.
+.IP \[bu] 2
+\fI\f[C]tile\f[R] default tile layout
+.IP \[bu] 2
+\fI\f[C]mono\f[R] windows arranged maximized and stacked
+.IP \[bu] 2
+\fI\f[C]grid\f[R] all windows try to occupy equal space
+.IP \[bu] 2
+\fI\f[C]spiral\f[R] windows shrink by 1/2 towards the center of the screen
+.IP \[bu] 2
+\fI\f[C]dwindle\f[R] windows shrink by 1/2 towards the bottom right of the
+screen
+.IP \[bu] 2
+\fI\f[C]none\f[R] floating, no layout
+.IP
+.nf
+\fI\f[C]
+set [WS] layout mono
+\f[R]
+.fi
+.PP
+\fI\f[C]border\f[R] change the window border sizes and colours.
+.IP \[bu] 2
+\fI\f[C]w width\f[R] (integer) change the overall window border
+width.
+.IP \[bu] 2
+\fI\f[C]ow outer outer_width\f[R] (integer) change the
+outer border width (greater than 0 makes double borders).
+.IP \[bu] 2
+\fI\f[C]colour color\f[R] (string) change the border (overall and
+outer) colour for various window states.
+.RS 2
+.IP \[bu] 2
+\fI\f[C]f focus\f[R] (colour) the active window border overall
+colour.
+.IP \[bu] 2
+\fI\f[C]r urgent\f[R] (colour) urgent window border overall
+colour.
+.IP \[bu] 2
+\fI\f[C]u unfocus\f[R] (colour) normal window border overall
+colour.
+.IP \[bu] 2
+\fI\f[C]of outer_focus\f[R] (colour) the active window outer
+border colour.
+.IP \[bu] 2
+\fI\f[C]or outer_urgent\f[R] (colour) urgent window outer border
+colour.
+.IP \[bu] 2
+\fI\f[C]ou outer_unfocus\f[R] (colour) normal window outer border
+colour.
+.RE
+.IP
+.nf
+\fI\f[C]
+set border w=5 ow=3 colour f=\[aq]#6699cc\[aq] u=\[aq]#444444\[aq] r=\[aq]#ee5555\[aq] of=\[aq]#222222\[aq] ou=\[aq]#222222\[aq] or=\[aq]#222222\[aq]
+\f[R]
+.fi
+.PP
+\fI\f[C]pad\f[R] change the workspace padding.
+.IP \[bu] 2
+\fI\f[C]l left\f[R] (integer) change the workspace left side
+padding.
+.IP \[bu] 2
+\fI\f[C]r right\f[R] (integer) change the workspace right side
+padding.
+.IP \[bu] 2
+\fI\f[C]t top\f[R] (integer) change the workspace top padding.
+.IP \[bu] 2
+\fI\f[C]b bottom\f[R] (integer) change the workspace bottom
+padding.
+.IP
+.nf
+\fI\f[C]
+set [WS] pad l=50 r=50 t=50 b=50
+\f[R]
+.fi
+.PP
+\fI\f[C]mouse\f[R] change the mouse binds for move and resize (global, does
+not take a workspace).
+.IP \[bu] 2
+\fI\f[C]mod\f[R] (string) change the modifier used in combination with move
+resize buttons.
+.RS 2
+.IP \[bu] 2
+\fI\f[C]alt mod1\f[R] Alt key (default).
+.IP \[bu] 2
+\fI\f[C]super mod4\f[R] Win key.
+.IP \[bu] 2
+\fI\f[C]ctrl control\f[R] Ctrl key.
+.RE
+.IP \[bu] 2
+\fI\f[C]move resize\f[R] (string) change the button used for move
+and resize respectively.
+.RS 2
+.IP \[bu] 2
+\fI\f[C]button1\f[R] left mouse button.
+.IP \[bu] 2
+\fI\f[C]button2\f[R] right mouse button.
+.IP \[bu] 2
+\fI\f[C]button3\f[R] middle mouse button.
+.RE
+.IP
+.nf
+\fI\f[C]
+set mouse move=button1 resize=button2 mod=mod1
+\f[R]
+.fi
+.PP
+--------------------------------------------------------------------------
+.PP
+.SS Win
+.PP
+\fI\f[C]win\f[R] operates on windows.
+.IP \[bu] 2
+\fI\f[C]CLIENT\f[R] (hex) the window id, if unspecified the current window
+is used.
+.IP
+.nf
+\fI\f[C]
+win [CLIENT] ACTION
+\f[R]
+.fi
+.SS Actions
+.PP
+\fI\f[C]cycle\f[R] cycle windows in place.
+.IP
+.nf
+\fI\f[C]
+win cycle
+\f[R]
+.fi
+.PP
+\fI\f[C]float\f[R] change the window floating state.
+.IP
+.nf
+\fI\f[C]
+win [CLIENT] float
+\f[R]
+.fi
+.PP
+\fI\f[C]full\f[R] change the window fullscreen state.
+.IP
+.nf
+\fI\f[C]
+win [CLIENT] full
+\f[R]
+.fi
+.PP
+\fI\f[C]fakefull\f[R] change the window fake fullscreen state (allow
+moving, resizing, and tiling when fullscreen).
+.IP
+.nf
+\fI\f[C]
+win [CLIENT] fakefull
+\f[R]
+.fi
+.PP
+\fI\f[C]stick\f[R] change the window sticky state.
+.IP
+.nf
+\fI\f[C]
+win [CLIENT] stick
+\f[R]
+.fi
+.PP
+\fI\f[C]swap\f[R] change the window between it\[cq]s current location and
+master.
+.IP
+.nf
+\fI\f[C]
+win [CLIENT] swap
+\f[R]
+.fi
+.PP
+\fI\f[C]kill\f[R] close the window.
+.IP
+.nf
+\fI\f[C]
+win [CLIENT] kill
+\f[R]
+.fi
+.PP
+\fI\f[C]focus\f[R] (integer/string) change the focused window.
+.IP \[bu] 2
+\fI\f[C]next\f[R] focus the next window.
+.IP \[bu] 2
+\fI\f[C]prev\f[R] focus the previous window.
+.IP
+.nf
+\fI\f[C]
+win CLIENT focus
+win focus next
+win focus +2
+\f[R]
+.fi
+.PP
+\fI\f[C]resize\f[R] change the window size, location, and border width.
+.IP \[bu] 2
+\fI\f[C]x\f[R] change the x coordinate.
+.RS 2
+.IP \[bu] 2
+\fI\f[C]center\f[R] justify to the center of the screen.
+.IP \[bu] 2
+\fI\f[C]left\f[R] justify to the left of the screen.
+.IP \[bu] 2
+\fI\f[C]right\f[R] justify to the right of the screen.
+.RE
+.IP \[bu] 2
+\fI\f[C]y\f[R] change the y coordinate.
+.RS 2
+.IP \[bu] 2
+\fI\f[C]center\f[R] justify to the center of the screen.
+.IP \[bu] 2
+\fI\f[C]top\f[R] justify to the top of the screen.
+.IP \[bu] 2
+\fI\f[C]bottom\f[R] justify to the bottom of the screen.
+.RE
+.IP \[bu] 2
+\fI\f[C]w width\f[R] change the window width.
+.IP \[bu] 2
+\fI\f[C]h height\f[R] change the window height.
+.IP \[bu] 2
+\fI\f[C]bw border_width\f[R] change the window border width.
+.IP
+.nf
+\fI\f[C]
+win [CLIENT] resize x=100 y=100 w=1280 h=720 bw=1
+win [CLIENT] resize x=center y=center w=1280 h=720 bw=1
+\f[R]
+.fi
 .SH BUGS
 Please submit a bug report with as much detail as possible to
 .B https://bitbucket.org/natemaia/dk/issues/new

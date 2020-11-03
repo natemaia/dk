@@ -107,6 +107,9 @@ fi
 	# apply current rule set to all existing windows
 	dkcmd rule apply '*'
 
+	# delete all rules
+	# dkcmd rule remove '*'
+
 } >> "$logfile" 2>&1 # append responses
 
 # inform of any errors in a notification

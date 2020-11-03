@@ -229,11 +229,14 @@ rule MATCH mon=HDMI-A-0   # using name
 ---
 
 `x` `y` (integer/string) determine the window location using absolute values or gravities.
+
 - `center` justify to the center of the screen (x or y)
 - `left` justify to the left of the screen (x only)
 - `right` justify to the right of the screen (x only)
 - `top` justify to the top of the screen (y only)
 - `bottom` justify to the bottom of the screen (y only)
+
+
 ```
 rule MATCH x=20 y=100         # using absolute values
 rule MATCH x=center y=center  # using gravities
@@ -387,6 +390,7 @@ set ws=_ apply SETTING
 ---
 
 `layout` (string) change the workspace window layout.
+
 - `tile` default tile layout
 - `mono` windows arranged maximized and stacked
 - `grid` all windows try to occupy equal space
@@ -400,6 +404,7 @@ set [WS] layout mono
 ---
 
 `border` change the window border sizes and colours.
+
 - `w` `width` (integer) change the overall window border width.
 - `ow` `outer` `outer_width` (integer) change the outer border width (greater than 0 makes double borders).
 - `colour` `color` (string) change the border (overall and outer) colour for various window states.
@@ -409,22 +414,26 @@ set [WS] layout mono
   - `of` `outer_focus` (colour) the active window outer border colour.
   - `or` `outer_urgent` (colour) urgent window outer border colour.
   - `ou` `outer_unfocus` (colour) normal window outer border colour.
+
 ```
 set border w=5 ow=3 colour f='#6699cc' u='#444444' r='#ee5555' of='#222222' ou='#222222' or='#222222'
 ```
 ---
 
 `pad` change the workspace padding.
+
 - `l` `left` (integer) change the workspace left side padding.
 - `r` `right` (integer) change the workspace right side padding.
 - `t` `top` (integer) change the workspace top padding.
 - `b` `bottom` (integer) change the workspace bottom padding.
+
 ```
 set [WS] pad l=50 r=50 t=50 b=50
 ```
 ---
 
 `mouse` change the mouse binds for move and resize (global, does not take a workspace).
+
 - `mod` (string) change the modifier used in combination with move resize buttons.
   - `alt` `mod1` Alt key (default).
   - `super` `mod4` Win key.
@@ -433,6 +442,7 @@ set [WS] pad l=50 r=50 t=50 b=50
   - `button1` left mouse button.
   - `button2` right mouse button.
   - `button3` middle mouse button.
+
 ```
 set mouse move=button1 resize=button2 mod=mod1
 ```
@@ -491,6 +501,7 @@ win [CLIENT] kill
 ---
 
 `focus` (integer/string) change the focused window.
+
 - `next` focus the next window.
 - `prev` focus the previous window.
 
@@ -502,6 +513,7 @@ win focus +2      # focus two windows ahead
 ---
 
 `resize` change the window size, location, and border width.
+
 - `x` change the x coordinate.
   - `center` justify to the center of the screen.
   - `left` justify to the left of the screen.

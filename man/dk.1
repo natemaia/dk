@@ -7,33 +7,33 @@ dk \- A tiling window manager in the vein of dwm, bspwm, and xmonad.
 .RB [ \-s
 .RB \fISOCKET_FD\fR]
 .SH DESCRIPTION
-.P
+.PP
 Windows are managed in various layouts, and are grouped by workspaces.
 Each window can be assigned to a single workspace and will have a
 small border to indicate the focus state. Changes to one workspace will
 not impact others. Workspaces can be dynamically or statically assigned
 and viewed on any monitor, by default only one workspace per monitor is
 created.
-.P
+.PP
 Monitors can be assigned one workspace at a time, all workspaces are available
 from all monitors in dynamic mode, floating windows will retain their
 relative location within each monitor area. If viewing an already visible
 workspace on another monitor, the two workspaces will swap monitors when
 dynamic, otherwise the mouse will be warped to the assigned monitor.
-.P
+.PP
 In tiled layout windows are organized in a master and two stack areas,
 the number of masters and first stack windows can be adjusted
 from 0-n with the second stack containing all remaining windows.
-.P
+.PP
 In monocle layout windows are maximized and stacked on top of each other with
 only one visible at a time.
-.P
+.PP
 In grid layout windows attempt to occupy equal space with all being visible.
-.P
+.PP
 In spiral and dwindle layout windows occupy 1/2 the space of the previous,
 moving inwards to the center of the screen or outwards to the bottom right
 respectively.
-.P
+.PP
 In floating layout windows are not organized or placed in any particular way
 and can be moved or resized freely.
 .SH OPTIONS
@@ -50,7 +50,7 @@ Use an existing socket connection file descriptor when restarting dk.
 For basic changes dk can be customized by running commands through the
 .B dkcmd
 program.
-.P
+.PP
 On startup dk looks for a dkrc file in:
 .IP \[bu] 2
 .BR $DKRC
@@ -58,13 +58,13 @@ On startup dk looks for a dkrc file in:
 .BR $XDG_CONFIG_HOME/dk/dkrc
 .IP \[bu] 2
 .BR $HOME/.config/dk/dkrc
-.P
+.PP
 and runs the first it can, this file must be executable.
 This can be used to initialize settings, customization, and running programs.
-.P
+.PP
 Further configuration such as adding layouts or callbacks can be done by
 copying config.def.h to config.h, editing it, and recompiling.
-.P
+.PP
 Status info is output to a file \fI$DKSTAT\fR for use in status bars or scripts.
 .SH DKCMD
 .PP
@@ -131,7 +131,9 @@ given the colour is opaque.
 .SH COMMANDS
 \fI\fC
 dkcmd COMMAND
-\fR\fR
+\fR
+.PP
+\l'60'
 .SS WM
 .IP \[bu] 2
 \fIquit\fR exit dk.
@@ -194,7 +196,8 @@ mon send [CLIENT] TARGET
 ws follow [CLIENT] TARGET
 \fR\fR
 .fi
-.SS ----------------------------------------------------------
+.PP
+\l'60'
 .SS Rule
 .PP
 \fCrule\fR operates on window rules.
@@ -334,7 +337,8 @@ the workspace.
 rule MATCH focus=true
 \fR
 .fi
-.SS ----------------------------------------------------------
+.PP
+\l'60'
 .SS Set
 .PP
 \fI\fCset\fR operates on workspace or global configuration settings.
@@ -610,7 +614,8 @@ and resize respectively.
 set mouse move=button1 resize=button2 mod=mod1
 \fR
 .fi
-.SS ----------------------------------------------------------
+.PP
+\l'60'
 .SS Win
 .PP
 \fI\fCwin\fR operates on windows.

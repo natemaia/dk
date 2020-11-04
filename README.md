@@ -152,6 +152,14 @@ For various commands dk will expect a certain data type or format to be given.
 ---
 
 ### Commands
+```
+dkcmd COMMAND
+```
+#### WM
+
+- `quit` exit dk.
+- `restart` re-execute dk.
+- `reload` re-execute dkrc.
 
 #### Ws and Mon
 `mon` and `ws` operate on monitors and workspaces respectively.

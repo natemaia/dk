@@ -316,7 +316,7 @@ int clientname(Client *c)
 		pc = xcb_icccm_get_text_property(con, c->win, XCB_ATOM_WM_NAME);
 		if (!xcb_icccm_get_text_property_reply(con, pc, &r, &e)) {
 			iferr(0, "unable to get WM_NAME text property reply", e);
-			c->title[0] = '\0';
+			strlcpy(c->title, "broken", sizeof(c->title));
 			return 0;
 		}
 	}
@@ -387,12 +387,9 @@ void clienttype(Client *c)
 
 	if (winprop(c->win, netatom[NET_WM_STATE], &state) && state == netatom[NET_STATE_FULL])
 		setfullscreen(c, 1);
-	if (winprop(c->win, netatom[NET_WM_TYPE], &type)) {
-		if (type == netatom[NET_TYPE_DIALOG] || type == netatom[NET_TYPE_SPLASH])
-			c->state |= STATE_FLOATING;
-	} else if (c->trans || (c->trans = wintoclient(wintrans(c->win)))) {
+	if ((winprop(c->win, netatom[NET_WM_TYPE], &type) && type == netatom[NET_TYPE_DIALOG])
+			|| c->trans || (c->trans = wintoclient(wintrans(c->win))))
 		c->state |= STATE_FLOATING;
-	}
 }
 
 void drawborder(Client *c, int focused)
@@ -665,12 +662,10 @@ void gravitate(Client *c, int xgrav, int ygrav, int matchgap)
 
 int iferr(int lvl, char *msg, xcb_generic_error_t *e)
 {
-	if (!e)
-		return 1;
+	if (!e) return 1;
 	warn("%s", msg);
 	free(e);
-	if (lvl)
-		exit(lvl);
+	if (lvl) exit(lvl);
 	return 0;
 }
 
@@ -739,11 +734,6 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	clientrule(c, NULL, !globalcfg[GLB_FOCUS_OPEN]);
 	c->w = CLAMP(c->w, globalcfg[GLB_MIN_WH], c->ws->mon->ww);
 	c->h = CLAMP(c->h, globalcfg[GLB_MIN_WH], c->ws->mon->wh);
-	if (c->trans) {
-		c->state |= STATE_FLOATING;
-		c->x = c->trans->x + ((W(c->trans) - W(c)) / 2);
-		c->y = c->trans->y + ((H(c->trans) - H(c)) / 2);
-	}
 	clienttype(c);
 	sizehints(c, 1);
 	clienthints(c);
@@ -755,16 +745,19 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	drawborder(c, 0);
 	grabbuttons(c, 0);
 	if (FLOATING(c) || c->state & STATE_FIXED) {
-		c->x = CLAMP(c->x, c->ws->mon->wx, c->ws->mon->wx + c->ws->mon->ww - W(c));
-		c->y = CLAMP(c->y, c->ws->mon->wy, c->ws->mon->wy + c->ws->mon->wh - H(c));
+		if (c->trans) {
+			c->x = c->trans->x + ((W(c->trans) - W(c)) / 2);
+			c->y = c->trans->y + ((H(c->trans) - H(c)) / 2);
+		} else {
+			c->x = CLAMP(c->x, c->ws->mon->wx, c->ws->mon->wx + c->ws->mon->ww - W(c));
+			c->y = CLAMP(c->y, c->ws->mon->wy, c->ws->mon->wy + c->ws->mon->wh - H(c));
+		}
 		if (c->x == c->ws->mon->wx && c->y == c->ws->mon->wy)
 			quadrant(c, &c->x, &c->y, &c->w, &c->h);
 	}
 	MOVE(c->win, c->x + 2 * scr_w, c->y);
-	if (globalcfg[GLB_FOCUS_OPEN])
-		focus(c);
-	if (c->cb)
-		c->cb->func(c, 0);
+	if (globalcfg[GLB_FOCUS_OPEN]) focus(c);
+	if (c->cb) c->cb->func(c, 0);
 }
 
 void initdesk(xcb_window_t win, xcb_get_geometry_reply_t *g)
@@ -919,8 +912,10 @@ void initscan(void)
 		wa = ecalloc(rt->children_len, sizeof(xcb_get_window_attributes_reply_t *));
 		for (i = 0; i < rt->children_len; i++) {
 			g[i] = NULL;
-			if (!(wa[i] = winattr(w[i])) || !(g[i] = wingeom(w[i]))
-					|| !(wa[i]->map_state == XCB_MAP_STATE_VIEWABLE
+			wa[i] = winattr(w[i]);
+			if (!(wa[i] = winattr(w[i])) || !(g[i] = wingeom(w[i]))) {
+				w[i] = XCB_WINDOW_NONE;
+			} else if (!(wa[i]->map_state == XCB_MAP_STATE_VIEWABLE
 						|| (winprop(w[i], wmatom[WM_STATE], &state)
 							&& state == XCB_ICCCM_WM_STATE_ICONIC)))
 			{
@@ -1098,22 +1093,22 @@ void manage(xcb_window_t win, xcb_get_geometry_reply_t *g, xcb_get_window_attrib
 {
 	xcb_atom_t type;
 
+	if (wintoclient(win) || wintopanel(win) || wintodesk(win))
+		return;
 	DBG("manage: 0x%08x - %d,%d @ %dx%d", win, g->x, g->y, g->width, g->height)
-	if (!wintoclient(win) && !wintopanel(win) && !wintodesk(win)) {
-		if (winprop(win, netatom[NET_WM_TYPE], &type)) {
-			if (type == netatom[NET_TYPE_DOCK])
-				initpanel(win, g);
-			else if (type == netatom[NET_TYPE_DESK])
-				initdesk(win, g);
-			else if (type != netatom[NET_TYPE_SPLASH] && !wa->override_redirect)
-				initclient(win, g);
-		} else if (!wa->override_redirect) {
+	if (winprop(win, netatom[NET_WM_TYPE], &type)) {
+		if (type == netatom[NET_TYPE_DOCK])
+			initpanel(win, g);
+		else if (type == netatom[NET_TYPE_DESK])
+			initdesk(win, g);
+		else if (type != netatom[NET_TYPE_SPLASH] && !wa->override_redirect)
 			initclient(win, g);
-		}
-		PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &win);
-		setwmwinstate(win, XCB_ICCCM_WM_STATE_NORMAL);
-		needsrefresh = 1;
+	} else if (!wa->override_redirect) {
+		initclient(win, g);
 	}
+	PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &win);
+	setwmwinstate(win, XCB_ICCCM_WM_STATE_NORMAL);
+	needsrefresh = 1;
 }
 
 void movestack(int direction)
@@ -1669,6 +1664,7 @@ void unmanage(xcb_window_t win, int destroyed)
 		detach(c, 0);
 		detachstack(c);
 		focus(NULL);
+		ignore(XCB_ENTER_NOTIFY);
 	} else if ((ptr = p = wintopanel(win))) {
 		Panel **pp = &panels;
 		DETACH(p, pp);
@@ -1962,7 +1958,6 @@ xcb_window_t wintrans(xcb_window_t win)
 	xcb_window_t t = XCB_WINDOW_NONE;
 
 	pc = xcb_icccm_get_wm_transient_for(con, win);
-	DBG("wintrans: getting wm transient for hint - 0x%08x", win)
 	if (!xcb_icccm_get_wm_transient_for_reply(con, pc, &t, &e))
 		iferr(0, "unable to get wm transient for hint", e);
 	return t;

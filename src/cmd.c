@@ -368,6 +368,7 @@ int cmdkill(char **argv)
 	} else {
 		xcb_flush(con);
 	}
+	ignore(XCB_ENTER_NOTIFY);
 	(void)(argv);
 	return 0;
 }

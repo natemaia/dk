@@ -37,7 +37,6 @@ static void (*handlers[XCB_NO_OPERATION + 1])(xcb_generic_event_t *) = {
 	[XCB_NO_OPERATION]      = NULL
 };
 
-
 void buttonpress(xcb_generic_event_t *ev)
 {
 	Client *c;
@@ -185,6 +184,13 @@ void dispatch(xcb_generic_event_t *ev)
 	} else {
 		xcb_generic_error_t *e = (xcb_generic_error_t*)ev;
 
+		/* ignore some unavoidable errors */
+		if (e->error_code == XCB_WINDOW
+				|| (e->error_code == XCB_MATCH
+					&& (e->major_code == XCB_SET_INPUT_FOCUS || e->major_code == XCB_CONFIGURE_WINDOW))
+				|| (e->error_code == XCB_ACCESS
+					&& (e->major_code == XCB_GRAB_BUTTON || e->major_code == XCB_GRAB_KEY)))
+			return;
 		fprintf(stderr, "dk: previous request returned error %i, \"%s\""
 				" major code %u, minor code %u resource id %u sequence %u\n",
 				(int)e->error_code, xcb_event_get_error_label(e->error_code),
@@ -413,12 +419,18 @@ void propertynotify(xcb_generic_event_t *ev)
 
 void unmapnotify(xcb_generic_event_t *ev)
 {
+	xcb_generic_error_t *er;
 	xcb_unmap_notify_event_t *e = (xcb_unmap_notify_event_t *)ev;
 
+	free(xcb_query_tree_reply(con, xcb_query_tree(con, e->window), &er));
+	if (er) {
+		free(er);
+		return;
+	}
 	if (e->response_type & ~0x7f) {
 		setwmwinstate(e->window, XCB_ICCCM_WM_STATE_WITHDRAWN);
 	} else {
 		DBG("unmapnotify: 0x%08x", e->window)
-		unmanage(e->window, 0);
+			unmanage(e->window, 0);
 	}
 }

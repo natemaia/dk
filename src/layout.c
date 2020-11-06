@@ -202,8 +202,9 @@ int tile(Workspace *ws)
 		int bw = !globalcfg[GLB_SMART_BORDER] || n > 1 ? c->bw : 0;
 		int minh = MAX(globalcfg[GLB_MIN_WH], c->min_h);
 		int available = wh - (*y + c->h + g);
-		if (!c->hoff && c->h < minh) {
+		if (!c->hoff && c->h - (2 * bw) < minh) {
 			popfloat(c);
+			continue;
 		} else if (remaining > 1 && (remaining - 1) * (minh + g) > available) {
 			c->h += available - ((remaining - 1) * (minh + g));
 		} else if (remaining == 1 && *y + c->h != wh - g) {
@@ -224,7 +225,7 @@ int tile(Workspace *ws)
 			} else {
 				c->h = available;
 			}
-		} else if (c->h <= minh) {
+		} else if (c->h - (2 * bw) < minh) {
 			c->h = remaining == 1 ? wh - (2 * g) : minh;
 		}
 		*y += c->h + g;

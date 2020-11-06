@@ -693,7 +693,7 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	Client *c;
 	xcb_generic_error_t *e;
 	xcb_get_property_cookie_t pc;
-	xcb_get_property_reply_t *pr = NULL;
+	xcb_get_property_reply_t *pr;
 	xcb_icccm_get_wm_class_reply_t p;
 
 	DBG("initclient: 0x%08x", win)
@@ -815,8 +815,10 @@ void initpanel(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	rc = xcb_get_property(con, 0, win, netatom[NET_WM_STRUTP], XCB_ATOM_CARDINAL, 0, 4);
 	p = ecalloc(1, sizeof(Panel));
 	p->win = win;
-	p->x = g->x, p->y = g->y;
-	p->w = g->width; p->h = g->height;
+	p->x = g->x;
+	p->y = g->y;
+	p->w = g->width;
+	p->h = g->height;
 	p->state |= STATE_NEEDSMAP;
 	if (!(p->mon = coordtomon(p->x, p->y)))
 		p->mon = selws->mon;
@@ -1071,13 +1073,12 @@ Workspace *itows(int num)
 void manage(xcb_window_t win, int scan)
 {
 	xcb_atom_t type, state;
-	xcb_get_geometry_reply_t *g = NULL;
-	xcb_get_window_attributes_reply_t *wa;
 
-	if (!scan && (wintoclient(win) || wintopanel(win) || wintodesk(win)))
+	if (wintoclient(win) || wintopanel(win) || wintodesk(win))
 		return;
-	if (!(wa = winattr(win)) || !(g = wingeom(win)))
-		goto end;
+	xcb_get_geometry_reply_t *g = wingeom(win);
+	xcb_get_window_attributes_reply_t *wa = winattr(win);
+	if (!wa || !g) goto end;
 
 	DBG("manage: 0x%08x - %d,%d @ %dx%d", win, g->x, g->y, g->width, g->height)
 	if (winprop(win, netatom[NET_WM_TYPE], &type)) {

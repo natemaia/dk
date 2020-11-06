@@ -184,7 +184,6 @@ void dispatch(xcb_generic_event_t *ev)
 	} else {
 		xcb_generic_error_t *e = (xcb_generic_error_t*)ev;
 
-		/* ignore some unavoidable errors */
 		if (e->error_code == XCB_WINDOW
 				|| (e->error_code == XCB_MATCH
 					&& (e->major_code == XCB_SET_INPUT_FOCUS || e->major_code == XCB_CONFIGURE_WINDOW))
@@ -251,15 +250,7 @@ void ignore(uint8_t type)
 
 void maprequest(xcb_generic_event_t *ev)
 {
-	xcb_get_geometry_reply_t *g;
-	xcb_get_window_attributes_reply_t *wa;
-	xcb_map_request_event_t *e = (xcb_map_request_event_t *)ev;
-
-	if (!(wa = winattr(e->window)) || !(g = wingeom(e->window)))
-		return;
-	manage(e->window, g, wa);
-	free(wa);
-	free(g);
+	manage(((xcb_map_request_event_t *)ev)->window, 0);
 }
 
 void motionnotify(xcb_generic_event_t *ev)

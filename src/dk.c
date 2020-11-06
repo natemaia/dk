@@ -897,42 +897,21 @@ error:
 void initscan(void)
 {
 	unsigned int i;
-	xcb_window_t *w;
-	xcb_atom_t state;
 	xcb_generic_error_t *e;
 	xcb_query_tree_reply_t *rt;
-	xcb_get_geometry_reply_t **g;
-	xcb_get_window_attributes_reply_t **wa;
 
 	if (!(rt = xcb_query_tree_reply(con, xcb_query_tree(con, root), &e))) {
 		iferr(1, "unable to query tree from root window", e);
 	} else if (rt->children_len) {
-		w = xcb_query_tree_children(rt);
-		g = ecalloc(rt->children_len, sizeof(xcb_get_geometry_reply_t *));
-		wa = ecalloc(rt->children_len, sizeof(xcb_get_window_attributes_reply_t *));
-		for (i = 0; i < rt->children_len; i++) {
-			g[i] = NULL;
-			wa[i] = winattr(w[i]);
-			if (!(wa[i] = winattr(w[i])) || !(g[i] = wingeom(w[i]))) {
-				w[i] = XCB_WINDOW_NONE;
-			} else if (!(wa[i]->map_state == XCB_MAP_STATE_VIEWABLE
-						|| (winprop(w[i], wmatom[WM_STATE], &state)
-							&& state == XCB_ICCCM_WM_STATE_ICONIC)))
-			{
-				w[i] = XCB_WINDOW_NONE;
-			} else if (!wintrans(w[i])) {
-				manage(w[i], g[i], wa[i]);
+		xcb_window_t *w = xcb_query_tree_children(rt);
+		for (i = 0; i < rt->children_len; i++)
+			if (!wintrans(w[i])) {
+				manage(w[i], 1);
 				w[i] = XCB_WINDOW_NONE;
 			}
-		}
-		for (i = 0; i < rt->children_len; i++) {
+		for (i = 0; i < rt->children_len; i++)
 			if (w[i] != XCB_WINDOW_NONE)
-				manage(w[i], g[i], wa[i]);
-			free(g[i]);
-			free(wa[i]);
-		}
-		free(g);
-		free(wa);
+				manage(w[i], 1);
 	}
 	free(rt);
 }
@@ -1089,12 +1068,17 @@ Workspace *itows(int num)
 	return ws;
 }
 
-void manage(xcb_window_t win, xcb_get_geometry_reply_t *g, xcb_get_window_attributes_reply_t *wa)
+void manage(xcb_window_t win, int scan)
 {
-	xcb_atom_t type;
+	xcb_atom_t type, state;
+	xcb_get_geometry_reply_t *g = NULL;
+	xcb_get_window_attributes_reply_t *wa;
 
-	if (wintoclient(win) || wintopanel(win) || wintodesk(win))
+	if (!scan && (wintoclient(win) || wintopanel(win) || wintodesk(win)))
 		return;
+	if (!(wa = winattr(win)) || !(g = wingeom(win)))
+		goto end;
+
 	DBG("manage: 0x%08x - %d,%d @ %dx%d", win, g->x, g->y, g->width, g->height)
 	if (winprop(win, netatom[NET_WM_TYPE], &type)) {
 		if (type == netatom[NET_TYPE_DOCK])
@@ -1102,13 +1086,21 @@ void manage(xcb_window_t win, xcb_get_geometry_reply_t *g, xcb_get_window_attrib
 		else if (type == netatom[NET_TYPE_DESK])
 			initdesk(win, g);
 		else if (type != netatom[NET_TYPE_SPLASH] && !wa->override_redirect)
-			initclient(win, g);
+			goto client;
 	} else if (!wa->override_redirect) {
+client:
+		if (scan && !(wa->map_state == XCB_MAP_STATE_VIEWABLE
+					|| (winprop(win, wmatom[WM_STATE], &state)
+						&& state == XCB_ICCCM_WM_STATE_ICONIC)))
+			goto end;
 		initclient(win, g);
 	}
 	PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &win);
 	setwmwinstate(win, XCB_ICCCM_WM_STATE_NORMAL);
 	needsrefresh = 1;
+end:
+	free(wa);
+	free(g);
 }
 
 void movestack(int direction)
@@ -1728,14 +1720,16 @@ int updoutputs(xcb_randr_output_t *outs, int nouts, xcb_timestamp_t t)
 			crtc = xcb_randr_get_crtc_info_reply(con, ck, &e);
 			if (!crtc || !xcb_randr_get_crtc_info_outputs_length(crtc)) {
 				iferr(0, "unable to get crtc info reply", e);
-				goto out;
+				goto next;
 			}
 			n = xcb_randr_get_output_info_name_length(o) + 1;
 			strlcpy(name, (char *)xcb_randr_get_output_info_name(o), MIN(sizeof(name), n));
 			FOR_EACH(m, monitors) {
-				if (outs[i] != m->id && m->x == crtc->x && m->y == crtc->y) {
+				if (outs[i] != m->id && crtc->x >= m->x && crtc->y >= m->y
+						&& crtc->x < m->x + m->w && crtc->y < m->y + m->h)
+				{
 					DBG("updoutput: %s is a clone of %s", name, m->name)
-					goto out;
+					goto next;
 				}
 			}
 			if ((m = outputtomon(outs[i]))) {
@@ -1754,7 +1748,7 @@ int updoutputs(xcb_randr_output_t *outs, int nouts, xcb_timestamp_t t)
 			}
 			DBG("updoutputs: %s - %d,%d @ %dx%d - changed: %d", name,
 					crtc->x, crtc->y, crtc->width, crtc->height, changed)
-out:
+next:
 			free(crtc);
 		} else if (o->connection == XCB_RANDR_CONNECTION_DISCONNECTED
 				&& (m = outputtomon(outs[i])))

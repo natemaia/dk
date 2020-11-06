@@ -336,7 +336,7 @@ void initsock(void);
 void initwm(void);
 Monitor *itomon(int num);
 Workspace *itows(int num);
-void manage(xcb_window_t win, xcb_get_geometry_reply_t *g, xcb_get_window_attributes_reply_t *wa);
+void manage(xcb_window_t win, int scan);
 void movestack(int direction);
 Monitor *nextmon(Monitor *m);
 Client *nexttiled(Client *c);

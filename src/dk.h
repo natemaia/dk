@@ -241,7 +241,7 @@ typedef struct Panel {
 } Panel;
 
 typedef struct Client {
-	char title[255], class[64], inst[64];
+	char title[256], class[64], inst[64];
 	int x, y, w, h, bw, hoff, depth;
 	int old_x, old_y, old_w, old_h, old_bw;
 	int max_w, max_h, min_w, min_h;
@@ -290,7 +290,7 @@ struct Workspace {
 extern char **environ;
 static FILE *cmdresp;
 static unsigned int lockmask = 0;
-static char *argv0, sock[255], status[255];
+static char *argv0, sock[256], status[256];
 static int scr_h, scr_w, sockfd, running, restart, randrbase, cmdusemon, needsrefresh;
 const char *ebadarg = "invalid argument for";
 const char *enoargs = "command requires additional arguments but none were given";

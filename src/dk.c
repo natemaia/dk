@@ -88,7 +88,7 @@ int main(int argc, char *argv[])
 					(unsigned int[]){XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT})));
 
 #ifdef __OpenBSD__
-	if (pledge("stdio rpath unix proc exec", NULL) == -1)
+	if (pledge("stdio rpath wpath cpath tmppath flock unix proc exec", NULL) == -1)
 		err(1, "pledge");
 #endif
 

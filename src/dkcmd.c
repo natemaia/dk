@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
 		return usage(argv[0], VERSION, 1, 'h', "[-hv] <COMMAND>");
 
 #ifdef __OpenBSD__
-	if (pledge("stdio unix", NULL) == -1)
+	if (pledge("stdio rpath wpath cpath tmppath flock unix", NULL) == -1)
 		err(1, "pledge");
 #endif
 

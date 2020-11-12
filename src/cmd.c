@@ -33,12 +33,21 @@
 #include "event.h"
 #include "layout.h"
 
+
+enum DirOpts {
+	DIR_NEXT   = 0,
+	DIR_PREV   = 1,
+	DIR_LAST   = 2,
+	DIR_NEXTNE = 3,
+	DIR_PREVNE = 4,
+};
+
 static char *opts[] = {
-	[DIR_NEXT] = "next",
-	[DIR_PREV] = "prev",
-	[DIR_LAST] = "last",
-	[DIR_NEXT_NONEMPTY] = "nextne",
-	[DIR_PREV_NONEMPTY] = "prevne",
+	[DIR_NEXT]   = "next",
+	[DIR_PREV]   = "prev",
+	[DIR_LAST]   = "last",
+	[DIR_NEXTNE] = "nextne",
+	[DIR_PREVNE] = "prevne",
 	NULL
 };
 
@@ -110,7 +119,7 @@ int adjustwsormon(char **argv)
 			int r = 0;
 			Workspace *save = cur;
 			while (!ws && r < globalcfg[GLB_NUMWS]) {
-				if (opt == DIR_NEXT_NONEMPTY) {
+				if (opt == DIR_NEXTNE) {
 					if (cmdusemon) {
 						if (!(m = nextmon(cm)))
 							m = nextmon(monitors);

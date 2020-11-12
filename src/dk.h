@@ -44,7 +44,7 @@
 	xcb_change_property(con, XCB_PROP_MODE_##mode, win, atom, type, (membsize), (nmemb), value)
 #define GET(win, val, vc, error, type, functtype)                       \
 	do {                                                                \
-		if (win && win != root) {                                       \
+		if (win != XCB_WINDOW_NONE && win != root) {                    \
 			vc = xcb_get_##functtype(con, win);                         \
 			if (!(val = xcb_get_##functtype##_reply(con, vc, &error)))  \
 				iferr(0, "unable to get window " type " reply", error); \
@@ -85,7 +85,7 @@ enum Cursors {
 	CURS_LAST   = 3,
 };
 
-enum Gravity {
+enum Gravities {
 	GRAV_NONE   = 0,
 	GRAV_LEFT   = 1,
 	GRAV_RIGHT  = 2,
@@ -105,14 +105,6 @@ enum Borders {
 	BORD_O_URGENT  = 6,
 	BORD_O_UNFOCUS = 7,
 	BORD_LAST      = 8,
-};
-
-enum DirOpts {
-	DIR_NEXT          = 0,
-	DIR_PREV          = 1,
-	DIR_LAST          = 2,
-	DIR_NEXT_NONEMPTY = 3,
-	DIR_PREV_NONEMPTY = 4,
 };
 
 enum WMAtoms {

@@ -208,6 +208,7 @@ void applypanelstrut(Panel *p)
 int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse)
 {
 	Monitor *m = c->ws->mon;
+	int min = globalcfg[GLB_MIN_XY];
 
 	*w = MAX(1, *w);
 	*h = MAX(1, *h);
@@ -224,8 +225,8 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 			*h = MIN(*h, m->wh);
 			*w = MIN(*w, m->ww);
 		}
-		*x = CLAMP(*x, (*w + (2 * bw) - globalcfg[GLB_MIN_XY]) * -1, scr_w - globalcfg[GLB_MIN_XY]);
-		*y = CLAMP(*y, (*h + (2 * bw) - globalcfg[GLB_MIN_XY]) * -1, scr_h - globalcfg[GLB_MIN_XY]);
+		*x = CLAMP(*x, (*w + (2 * bw) - min) * -1, scr_w - min);
+		*y = CLAMP(*y, (*h + (2 * bw) - min) * -1, scr_h - min);
 	} else {
 		*x = CLAMP(*x, m->wx, m->wx + m->ww - *w + (2 * bw));
 		*y = CLAMP(*y, m->wy, m->wy + m->wh - *h + (2 * bw));
@@ -765,7 +766,8 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	pc = xcb_icccm_get_wm_class(con, c->win);
 	if (!xcb_icccm_get_wm_class_reply(con, pc, &p, &e)) {
 		iferr(0, "failed to get window class", e);
-		c->class[0] = c->inst[0] = '\0';
+		strlcpy(c->class, "broken", sizeof(c->class));
+		strlcpy(c->inst, "broken", sizeof(c->inst));
 	} else {
 		strlcpy(c->class, p.class_name, sizeof(c->class));
 		strlcpy(c->inst, p.instance_name, sizeof(c->inst));
@@ -784,8 +786,6 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	free(pr);
 
 	clientrule(c, NULL, !globalcfg[GLB_FOCUS_OPEN]);
-	c->w = CLAMP(c->w, globalcfg[GLB_MIN_WH], c->ws->mon->ww);
-	c->h = CLAMP(c->h, globalcfg[GLB_MIN_WH], c->ws->mon->wh);
 	clienttype(c);
 	sizehints(c, 1);
 	clienthints(c);
@@ -797,6 +797,8 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	drawborder(c, 0);
 	grabbuttons(c, 0);
 	if (FLOATING(c) || c->state & STATE_FIXED) {
+		c->w = CLAMP(c->w, globalcfg[GLB_MIN_WH], c->ws->mon->ww);
+		c->h = CLAMP(c->h, globalcfg[GLB_MIN_WH], c->ws->mon->wh);
 		if (c->trans) {
 			c->x = c->trans->x + ((W(c->trans) - W(c)) / 2);
 			c->y = c->trans->y + ((H(c->trans) - H(c)) / 2);
@@ -807,9 +809,11 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		if (c->x == c->ws->mon->wx && c->y == c->ws->mon->wy)
 			quadrant(c, &c->x, &c->y, &c->w, &c->h);
 	}
-	MOVE(c->win, c->x + 2 * scr_w, c->y);
-	if (globalcfg[GLB_FOCUS_OPEN]) focus(c);
-	if (c->cb) c->cb->func(c, 0);
+	MOVE(c->win, W(c) * -2, c->y);
+	if (globalcfg[GLB_FOCUS_OPEN])
+		focus(c);
+	if (c->cb)
+		c->cb->func(c, 0);
 }
 
 void initdesk(xcb_window_t win, xcb_get_geometry_reply_t *g)
@@ -1970,46 +1974,48 @@ int winprop(xcb_window_t win, xcb_atom_t prop, xcb_atom_t *ret)
 
 Client *wintoclient(xcb_window_t win)
 {
+	Client *c;
 	Workspace *ws;
-	Client *c = NULL;
 
 	if (win != XCB_WINDOW_NONE && win != root)
 		FOR_CLIENTS(c, ws)
 			if (c->win == win)
 				return c;
-	return c;
+	return NULL;
 }
 
 Panel *wintopanel(xcb_window_t win)
 {
-	Panel *p = NULL;
+	Panel *p;
 
 	if (win != XCB_WINDOW_NONE && win != root)
 		FOR_EACH(p, panels)
 			if (p->win == win)
 				return p;
-	return p;
+	return NULL;
 }
 
 Desk *wintodesk(xcb_window_t win)
 {
-	Desk *d = NULL;
+	Desk *d;
 
 	if (win != XCB_WINDOW_NONE && win != root)
 		FOR_EACH(d, desks)
 			if (d->win == win)
 				return d;
-	return d;
+	return NULL;
 }
 
 xcb_window_t wintrans(xcb_window_t win)
 {
+	xcb_window_t w;
 	xcb_get_property_cookie_t pc;
 	xcb_generic_error_t *e = NULL;
-	xcb_window_t t = XCB_WINDOW_NONE;
 
 	pc = xcb_icccm_get_wm_transient_for(con, win);
-	if (!xcb_icccm_get_wm_transient_for_reply(con, pc, &t, &e))
+	if (!xcb_icccm_get_wm_transient_for_reply(con, pc, &w, &e)) {
+		w = XCB_WINDOW_NONE;
 		iferr(0, "unable to get wm transient for hint", e);
-	return t;
+	}
+	return w;
 }

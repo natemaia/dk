@@ -21,8 +21,6 @@
 #include "cmd.h"
 #include "layout.h"
 
-/* if you need to include config.h do it last */
-#include "config.h"
 
 int parsebool(char *arg)
 {
@@ -115,7 +113,7 @@ void parsecmd(char *buf)
 		while (j > 0 && *argv) {
 			DBG("parsecmd: outer loop -- args: %d - head: %s", j, *argv)
 			match = 0;
-			for (i = 0; i < LEN(keywords); i++) {
+			for (i = 0; keywords[i].str; i++) {
 				if ((match = !strcmp(keywords[i].str, *argv))) {
 					cmdclient = selws->sel;
 					DBG("parsecmd: inner loop -- matched: %s -- calling function", *argv)

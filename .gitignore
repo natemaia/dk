@@ -3,3 +3,4 @@ dkcmd
 config.h
 src/config.h
 *.o
+*.bak

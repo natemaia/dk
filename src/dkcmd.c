@@ -14,8 +14,8 @@
 #include <string.h>
 #include <err.h>
 
-#include "strl.c"
-#include "util.c"
+#include "strl.h"
+#include "util.h"
 
 #ifndef VERSION
 #define VERSION "0.91"

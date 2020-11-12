@@ -20,7 +20,18 @@
 #include "layout.h"
 #include "event.h"
 
-#include "config.h"
+static void buttonpress(xcb_generic_event_t *ev);
+static void clientmessage(xcb_generic_event_t *ev);
+static void confignotify(xcb_generic_event_t *ev);
+static void configrequest(xcb_generic_event_t *ev);
+static void destroynotify(xcb_generic_event_t *ev);
+static void enternotify(xcb_generic_event_t *ev);
+static void focusin(xcb_generic_event_t *ev);
+static void maprequest(xcb_generic_event_t *ev);
+static void motionnotify(xcb_generic_event_t *ev);
+static void mouse(Client *c, int move, int mx, int my);
+static void propertynotify(xcb_generic_event_t *ev);
+static void unmapnotify(xcb_generic_event_t *ev);
 
 static void (*handlers[XCB_NO_OPERATION + 1])(xcb_generic_event_t *) = {
 	[XCB_BUTTON_PRESS]      = &buttonpress,
@@ -395,7 +406,7 @@ void propertynotify(xcb_generic_event_t *ev)
 			return;
 		default:
 			if (e->atom == XCB_ATOM_WM_NAME || e->atom == netatom[NET_WM_NAME]) {
-				if (clientname(c)) pushstatus();
+				if (clientname(c) && globalcfg[GLB_USE_STATUS]) pushstatus();
 			} else if (e->atom == netatom[NET_WM_TYPE])
 				clienttype(c);
 			return;
@@ -419,7 +430,7 @@ void unmapnotify(xcb_generic_event_t *ev)
 		return;
 	}
 	if (e->response_type & ~0x7f) {
-		setwmwinstate(e->window, XCB_ICCCM_WM_STATE_WITHDRAWN);
+		setwinstate(e->window, XCB_ICCCM_WM_STATE_WITHDRAWN);
 	} else {
 		DBG("unmapnotify: 0x%08x", e->window)
 			unmanage(e->window, 0);

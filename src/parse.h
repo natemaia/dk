@@ -6,6 +6,7 @@
 
 #pragma once
 
+void parsecmd(char *buf);
 int parsebool(char *arg);
 float parsefloat(char *arg, int *rel);
 int parseint(char *arg, int *rel, int allowzero);
@@ -15,5 +16,4 @@ int parseopt(char *arg, char **optarr);
 int parsegeom(char *arg, char type, int *i, int *rel, int *grav);
 Client *parseclient(char *arg, int *ebadwin);
 Workspace *parsewsormon(char *arg, int mon);
-void parsecmd(char *buf);
 char *parsetoken(char **src);

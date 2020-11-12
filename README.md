@@ -384,6 +384,12 @@ set focus_mouse=false
 ```
 ---
 
+`use_status` (boolean) disable information output to status file.
+```
+set use_status=false
+```
+---
+
 `win_minxy` (integer) amount of window (in pixels) to be kept on the screen when moving.
 ```
 set win_minxy=20

@@ -62,6 +62,8 @@ fi
 	# define mouse mod and move/resize buttons
 	dkcmd set mouse mod=alt move=button1 resize=button3
 
+	# change whether to use a status file or not (useful for scripts)
+	dkcmd set use_status=false
 
 	# borders
 	# ---------

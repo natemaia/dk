@@ -92,6 +92,7 @@ enum Gravity {
 	GRAV_CENTER = 3,
 	GRAV_TOP    = 4,
 	GRAV_BOTTOM = 5,
+	GRAV_LAST   = 6,
 };
 
 enum Borders {
@@ -103,6 +104,7 @@ enum Borders {
 	BORD_O_FOCUS   = 5,
 	BORD_O_URGENT  = 6,
 	BORD_O_UNFOCUS = 7,
+	BORD_LAST      = 8,
 };
 
 enum DirOpts {
@@ -120,6 +122,7 @@ enum WMAtoms {
 	WM_PROTO   = 3,
 	WM_STATE   = 4,
 	WM_UTF8STR = 5,
+	WM_LAST    = 6,
 };
 
 enum NetAtoms {
@@ -145,6 +148,7 @@ enum NetAtoms {
 	NET_WM_STRUT    = 19,
 	NET_WM_STRUTP   = 20,
 	NET_WM_TYPE     = 21,
+	NET_LAST        = 22,
 };
 
 enum GlobalCfg {
@@ -159,43 +163,8 @@ enum GlobalCfg {
 	GLB_SMART_GAP    = 8,
 	GLB_TILETOHEAD   = 9,
 	GLB_STATICWS     = 10,
-};
-
-
-static const char *gravities[] = {
-	[GRAV_NONE] = "none",     [GRAV_LEFT] = "left", [GRAV_RIGHT] = "right",
-	[GRAV_CENTER] = "center", [GRAV_TOP] = "top",   [GRAV_BOTTOM] = "bottom",
-};
-
-static const char *wmatoms[] = {
-	[WM_DELETE] = "WM_DELETE_WINDOW", [WM_FOCUS] = "WM_TAKE_FOCUS",
-	[WM_MOTIF] = "_MOTIF_WM_HINTS",   [WM_PROTO] = "WM_PROTOCOLS",
-	[WM_STATE] = "WM_STATE",          [WM_UTF8STR] = "UTF8_STRING",
-};
-
-static const char *netatoms[] = {
-	[NET_ACTIVE] = "_NET_ACTIVE_WINDOW",
-	[NET_CLIENTS] = "_NET_CLIENT_LIST",
-	[NET_CLOSE] = "_NET_CLOSE_WINDOW",
-	[NET_DESK_CUR] = "_NET_CURRENT_DESKTOP",
-	[NET_DESK_GEOM] = "_NET_DESKTOP_GEOMETRY",
-	[NET_DESK_NAMES] = "_NET_DESKTOP_NAMES",
-	[NET_DESK_NUM] = "_NET_NUMBER_OF_DESKTOPS",
-	[NET_DESK_VP] = "_NET_DESKTOP_VIEWPORT",
-	[NET_DESK_WA] = "_NET_WORKAREA",
-	[NET_STATE_FULL] = "_NET_WM_STATE_FULLSCREEN",
-	[NET_SUPPORTED] = "_NET_SUPPORTED",
-	[NET_TYPE_DESK] = "_NET_WM_WINDOW_TYPE_DESKTOP",
-	[NET_TYPE_DIALOG] = "_NET_WM_WINDOW_TYPE_DIALOG",
-	[NET_TYPE_DOCK] = "_NET_WM_WINDOW_TYPE_DOCK",
-	[NET_TYPE_SPLASH] = "_NET_WM_WINDOW_TYPE_SPLASH",
-	[NET_WM_CHECK] = "_NET_SUPPORTING_WM_CHECK",
-	[NET_WM_DESK] = "_NET_WM_DESKTOP",
-	[NET_WM_NAME] = "_NET_WM_NAME",
-	[NET_WM_STATE] = "_NET_WM_STATE",
-	[NET_WM_STRUTP] = "_NET_WM_STRUT_PARTIAL",
-	[NET_WM_STRUT] = "_NET_WM_STRUT",
-	[NET_WM_TYPE] = "_NET_WM_WINDOW_TYPE",
+	GLB_USE_STATUS   = 11,
+	GLB_LAST         = 12,
 };
 
 
@@ -267,6 +236,8 @@ typedef struct WsCmd {
 typedef struct Layout {
 	const char *name;
 	int (*func)(Workspace *);
+	int implements_resize;
+	int invert_split_direction;
 } Layout;
 
 struct Callback {
@@ -287,28 +258,47 @@ struct Workspace {
 };
 
 
+/* dk.c values */
 extern char **environ;
-static FILE *cmdresp;
-static unsigned int lockmask = 0;
-static char *argv0, sock[256], status[256];
-static int scr_h, scr_w, sockfd, running, restart, randrbase, cmdusemon, needsrefresh;
-const char *ebadarg = "invalid argument for";
-const char *enoargs = "command requires additional arguments but none were given";
+extern FILE *cmdresp;
+extern unsigned int lockmask;
+extern char *argv0, sock[256], status[256];
+extern int scr_h, scr_w, sockfd, running, restart, randrbase, cmdusemon, needsrefresh;
 
-Desk *desks;
-Rule *rules;
-Panel *panels;
-Client *cmdclient;
-Monitor *primary, *monitors, *selmon, *lastmon;
-Workspace *setws, *selws, *lastws, *workspaces;
+extern Desk *desks;
+extern Rule *rules;
+extern Panel *panels;
+extern Client *cmdclient;
+extern Monitor *primary, *monitors, *selmon, *lastmon;
+extern Workspace *setws, *selws, *lastws, *workspaces;
 
-static xcb_screen_t *scr;
-static xcb_connection_t *con;
-static xcb_window_t root, wmcheck;
-static xcb_key_symbols_t *keysyms;
-static xcb_cursor_t cursor[CURS_LAST];
-static xcb_atom_t wmatom[LEN(wmatoms)], netatom[LEN(netatoms)];
+extern xcb_screen_t *scr;
+extern xcb_connection_t *con;
+extern xcb_window_t root, wmcheck;
+extern xcb_key_symbols_t *keysyms;
+extern xcb_cursor_t cursor[CURS_LAST];
+extern xcb_atom_t wmatom[WM_LAST], netatom[NET_LAST];
 
+extern const char *ebadarg;
+extern const char *enoargs;
+extern const char *gravities[GRAV_LAST];
+extern const char *wmatoms[WM_LAST];
+extern const char *netatoms[NET_LAST];
+
+
+/* config.h values */
+extern unsigned int border[BORD_LAST];
+extern int globalcfg[GLB_LAST];
+extern char *cursors[CURS_LAST];
+extern xcb_mod_mask_t mousemod;
+extern xcb_button_t mousemove, mouseresize;
+extern Callback callbacks[];
+extern Cmd keywords[];
+extern Cmd setcmds[];
+extern Cmd wincmds[];
+extern Layout layouts[];
+extern WsCmd wscmds[];
+extern Workspace wsdef;
 
 void applypanelstrut(Panel *p);
 int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse);
@@ -358,7 +348,7 @@ void setinputfocus(Client *c);
 void setnetwsnames(void);
 void setstackmode(xcb_window_t win, unsigned int mode);
 void seturgent(Client *c, int urg);
-void setwmwinstate(xcb_window_t win, long state);
+void setwinstate(xcb_window_t win, long state);
 void setworkspace(Client *c, int num, int stacktail);
 void showhide(Client *c);
 void sizehints(Client *c, int uss);

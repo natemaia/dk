@@ -42,7 +42,6 @@ static char *opts[] = {
 	NULL
 };
 
-#include "config.h"
 
 int adjustisetting(int i, int rel, int *val, int other, int border)
 {
@@ -66,7 +65,7 @@ int adjustwsormon(char **argv)
 
 	cmdclient = selws->sel;
 	if (*argv) {
-		for (unsigned int i = 0; i < LEN(wscmds); i++)
+		for (unsigned int i = 0; wscmds[i].str; i++)
 			if (!strcmp(wscmds[i].str, *argv)) {
 				fn = wscmds[i].func;
 				argv++;
@@ -375,7 +374,7 @@ int cmdkill(char **argv)
 
 int cmdlayout(char **argv)
 {
-	for (unsigned int i = 0; i < LEN(layouts); i++)
+	for (unsigned int i = 0; layouts[i].name; i++)
 		if (!strcmp(layouts[i].name, *argv)) {
 			if (&layouts[i] != setws->layout)
 				setws->layout = &layouts[i];
@@ -485,21 +484,21 @@ badvalue:
 int cmdresize(char **argv)
 {
 	Client *c = cmdclient, *t;
+	Workspace *ws = c->ws;
 	float f, *sf;
 	int i, nparsed = 0;
 	int xgrav = GRAV_NONE, ygrav = GRAV_NONE;
 	int x = INT_MIN, y = INT_MIN, w = INT_MIN, h = INT_MIN, bw = INT_MIN;
 	int ohoff, relx = 0, rely = 0, relw = 0, relh = 0, relbw = 0;
 
-#define ARG(val, rel, z)						                       \
-	nparsed++;                                                         \
-	if ((val = parseint(*(++argv), rel, z)) == INT_MIN) goto badvalue; \
+#define ARG(val, rel, allowzero)						                       \
+	nparsed++;                                                                 \
+	if ((val = parseint(*(++argv), rel, allowzero)) == INT_MIN) goto badvalue; \
 
 	if (FULLSCREEN(c)) {
 		respond(cmdresp, "!unable to resize fullscreen windows");
 		return -1;
 	}
-
 	while (*argv) {
 		if (!strcmp("x", *argv)) {
 			nparsed++;
@@ -523,50 +522,62 @@ badvalue:
 		nparsed++;
 	}
 
+	if (bw != INT_MIN) {
+		c->bw = CLAMP(relbw ? c->bw + bw : bw, 0, ws->mon->wh / 6);
+		if (c->bw == 0) c->state |= STATE_NOBORDER;
+		drawborder(c, c == selws->sel);
+	}
+
+	if (!FLOATING(c) && y != INT_MIN)
+		movestack(y > 0 || ygrav == GRAV_BOTTOM ? 1 : -1);
+
+	if (!ws->layout->implements_resize) {
+		if (x != INT_MIN || w != INT_MIN || h != INT_MIN)
+			respond(cmdresp, "!unable to resize windows in %s layout", ws->layout->name);
+		goto end;
+	}
+
 	if (FLOATING(c)) {
 		x = x == INT_MIN || xgrav != GRAV_NONE ? c->x : (relx ? c->x + x : x);
 		y = y == INT_MIN || ygrav != GRAV_NONE ? c->y : (rely ? c->y + y : y);
 		w = w == INT_MIN ? c->w : (relw ? c->w + w : w);
 		h = h == INT_MIN ? c->h : (relh ? c->h + h : h);
-		bw = bw == INT_MIN ? c->bw : (relbw ? c->bw + bw : bw);
-		resizehint(c, x, y, w, h, bw, 1, 0);
+		resizehint(c, x, y, w, h, c->bw, 1, 0);
 		gravitate(c, xgrav, ygrav, 1);
-	} else if (c->ws->layout->func == tile) {
-		if (bw != INT_MIN) {
-			c->bw = relbw ? c->bw + bw : bw;
-			if (y == INT_MIN && w == INT_MIN && h == INT_MIN)
-				drawborder(c, c == selws->sel);
-		}
-		if (y != INT_MIN)
-			movestack(y > 0 || ygrav == GRAV_BOTTOM ? 1 : -1);
+	} else if (ws->layout->func == tile) {
 		if (w != INT_MIN) {
-			sf = &c->ws->ssplit;
-			for (i = 0, t = nexttiled(c->ws->clients); t; t = nexttiled(t->next), i++)
-				if (t == c) {
-					if (c->ws->nmaster && i < c->ws->nmaster + c->ws->nstack)
-						sf = &c->ws->msplit;
-					f = relw ? ((c->ws->mon->ww * *sf) + w) / c->ws->mon->ww : w / c->ws->mon->ww;
-					if (f < 0.05 || f > 0.95) {
-						respond(cmdresp, "!width exceeded limit: %f", c->ws->mon->ww * f);
-					} else {
-						*sf = f;
-						if (h == INT_MIN)
-							c->ws->layout->func(c->ws);
-					}
-					break;
-				}
+			for (i = 0, t = nexttiled(ws->clients); t && t != c; t = nexttiled(t->next), i++)
+				;
+			sf = (ws->nmaster && i < ws->nmaster + ws->nstack) ? &ws->msplit : &ws->ssplit;
+			f = relw ? ((ws->mon->ww * *sf) + w) / ws->mon->ww : w / ws->mon->ww;
+			if (f < 0.05 || f > 0.95) {
+				respond(cmdresp, "!width exceeded limit: %f", ws->mon->ww * f);
+			} else {
+				*sf = f;
+				if (h == INT_MIN) ws->layout->func(ws);
+			}
 		}
 		if (h != INT_MIN) {
 			ohoff = c->hoff;
 			c->hoff = relh ? c->hoff + h : h;
-			if (c->ws->layout->func(c->ws) < 0) {
+			if (ws->layout->func(ws) < 0) {
 				respond(cmdresp, "!height offset exceeded limit: %d", c->hoff);
 				c->hoff = ohoff;
 			}
 		}
-	} else {
-		respond(cmdresp, "!unable to resize windows in %s layout", c->ws->layout->name);
+	} else if (w != INT_MIN || (h != INT_MIN && ws->layout->invert_split_direction)) {
+		if (w != INT_MIN)
+			f = relw ? ((ws->mon->ww * ws->msplit) + w) / ws->mon->ww : w / ws->mon->ww;
+		else
+			f = relh ? ((ws->mon->wh * ws->msplit) + h) / ws->mon->wh : h / ws->mon->wh;
+		if (f < 0.05 || f > 0.95) {
+			respond(cmdresp, "!%s exceeded limit: %f", w != INT_MIN ? "width" : "height", ws->mon->ww * f);
+		} else {
+			ws->msplit = f;
+			ws->layout->func(ws);
+		}
 	}
+end:
 	ignore(XCB_ENTER_NOTIFY);
 	return nparsed;
 #undef ARG
@@ -619,7 +630,7 @@ int cmdrule(char **argv)
 			argv++;
 			nparsed++;
 			match = 0;
-			for (i = 0; i < LEN(callbacks); i++)
+			for (i = 0; callbacks[i].name; i++)
 				if ((match = !strcmp(callbacks[i].name, *argv))) {
 					r.cb = &callbacks[i];
 					break;
@@ -789,6 +800,8 @@ int cmdset(char **argv)
 			BOOL(FOCUS_OPEN);
 		} else if (!strcmp("static_ws", *argv)) {
 			BOOL(STATICWS);
+		} else if (!strcmp("use_status", *argv)) {
+			BOOL(USE_STATUS);
 		} else if (!strcmp("win_minxy", *argv)) {
 			nparsed++;
 			if ((i = parseintclamp(*(++argv), NULL, 10, 1000)) == INT_MIN) goto badvalue;
@@ -799,7 +812,7 @@ int cmdset(char **argv)
 			globalcfg[GLB_MIN_WH] = i;
 		} else {
 			int match = 0;
-			for (j = 0; j < LEN(setcmds); j++)
+			for (j = 0; setcmds[j].str; j++)
 				if ((match = !strcmp(setcmds[j].str, *argv))) {
 					if ((i = setcmds[j].func(argv + 1)) == -1)
 						return -1;
@@ -914,7 +927,7 @@ int cmdwin(char **argv)
 			return -1;
 		} else {
 			int match = 0;
-			for (unsigned int ui = 0; ui < LEN(wincmds); ui++)
+			for (unsigned int ui = 0; wincmds[ui].str; ui++)
 				if ((match = !strcmp(wincmds[ui].str, *argv))) {
 					if ((e = wincmds[ui].func(argv + 1)) == -1) return -1;
 					nparsed += e;
@@ -954,7 +967,7 @@ int cmdws_(char **argv)
 			nparsed++;
 			pad = 0;
 			int match = 0;
-			for (i = 0; i < LEN(layouts); i++)
+			for (i = 0; layouts[i].name; i++)
 				if ((match = !strcmp(layouts[i].name, *argv))) {
 					wsdef.layout = &layouts[i];
 					break;

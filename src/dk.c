@@ -4,6 +4,7 @@
  * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
  */
 
+#define USES_XCB_CONNECTION
 #define _XOPEN_SOURCE 700
 
 #include <sys/un.h>
@@ -27,6 +28,7 @@
 #include <xcb/xcb_cursor.h>
 #include <xcb/xcb_keysyms.h>
 
+
 #include "dk.h"
 #include "strl.h"
 #include "util.h"
@@ -37,12 +39,62 @@
 
 #include "config.h"
 
-#include "strl.c"
-#include "util.c"
-#include "parse.c"
-#include "layout.c"
-#include "event.c"
-#include "cmd.c"
+
+FILE *cmdresp;
+unsigned int lockmask = 0;
+char *argv0, sock[256], status[256];
+int scr_h, scr_w, sockfd, running, restart, randrbase, cmdusemon, needsrefresh;
+
+Desk *desks;
+Rule *rules;
+Panel *panels;
+Client *cmdclient;
+Monitor *primary, *monitors, *selmon, *lastmon;
+Workspace *setws, *selws, *lastws, *workspaces;
+
+xcb_screen_t *scr;
+xcb_connection_t *con;
+xcb_window_t root, wmcheck;
+xcb_key_symbols_t *keysyms;
+xcb_cursor_t cursor[CURS_LAST];
+xcb_atom_t wmatom[WM_LAST], netatom[NET_LAST];
+
+const char *ebadarg = "invalid argument for";
+const char *enoargs = "command requires additional arguments but none were given";
+const char *gravities[] = {
+	[GRAV_NONE] = "none",     [GRAV_LEFT] = "left", [GRAV_RIGHT] = "right",
+	[GRAV_CENTER] = "center", [GRAV_TOP] = "top",   [GRAV_BOTTOM] = "bottom",
+};
+const char *wmatoms[] = {
+	[WM_DELETE] = "WM_DELETE_WINDOW", [WM_FOCUS] = "WM_TAKE_FOCUS",
+	[WM_MOTIF] = "_MOTIF_WM_HINTS",   [WM_PROTO] = "WM_PROTOCOLS",
+	[WM_STATE] = "WM_STATE",          [WM_UTF8STR] = "UTF8_STRING",
+};
+const char *netatoms[] = {
+	[NET_ACTIVE] = "_NET_ACTIVE_WINDOW",
+	[NET_CLIENTS] = "_NET_CLIENT_LIST",
+	[NET_CLOSE] = "_NET_CLOSE_WINDOW",
+	[NET_DESK_CUR] = "_NET_CURRENT_DESKTOP",
+	[NET_DESK_GEOM] = "_NET_DESKTOP_GEOMETRY",
+	[NET_DESK_NAMES] = "_NET_DESKTOP_NAMES",
+	[NET_DESK_NUM] = "_NET_NUMBER_OF_DESKTOPS",
+	[NET_DESK_VP] = "_NET_DESKTOP_VIEWPORT",
+	[NET_DESK_WA] = "_NET_WORKAREA",
+	[NET_STATE_FULL] = "_NET_WM_STATE_FULLSCREEN",
+	[NET_SUPPORTED] = "_NET_SUPPORTED",
+	[NET_TYPE_DESK] = "_NET_WM_WINDOW_TYPE_DESKTOP",
+	[NET_TYPE_DIALOG] = "_NET_WM_WINDOW_TYPE_DIALOG",
+	[NET_TYPE_DOCK] = "_NET_WM_WINDOW_TYPE_DOCK",
+	[NET_TYPE_SPLASH] = "_NET_WM_WINDOW_TYPE_SPLASH",
+	[NET_WM_CHECK] = "_NET_SUPPORTING_WM_CHECK",
+	[NET_WM_DESK] = "_NET_WM_DESKTOP",
+	[NET_WM_NAME] = "_NET_WM_NAME",
+	[NET_WM_STATE] = "_NET_WM_STATE",
+	[NET_WM_STRUTP] = "_NET_WM_STRUT_PARTIAL",
+	[NET_WM_STRUT] = "_NET_WM_STRUT",
+	[NET_WM_TYPE] = "_NET_WM_WINDOW_TYPE",
+};
+
 
 int main(int argc, char *argv[])
 {
@@ -548,11 +600,11 @@ void freewm(void)
 	}
 	while (monitors) freemon(monitors);
 	while (rules) freerule(rules);
+	if (keysyms) xcb_key_symbols_free(keysyms);
 
 	if (con) {
 		for (unsigned int i = 0; i < LEN(cursors); i++)
 			xcb_free_cursor(con, cursor[i]);
-		xcb_key_symbols_free(keysyms);
 		xcb_destroy_window(con, wmcheck);
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT,
 				XCB_INPUT_FOCUS_POINTER_ROOT, XCB_CURRENT_TIME);
@@ -1089,6 +1141,7 @@ void manage(xcb_window_t win, int scan)
 		else if (type != netatom[NET_TYPE_SPLASH] && !wa->override_redirect)
 			goto client;
 	} else if (!wa->override_redirect) {
+
 client:
 		if (scan && !(wa->map_state == XCB_MAP_STATE_VIEWABLE
 					|| (winprop(win, wmatom[WM_STATE], &state)
@@ -1097,8 +1150,9 @@ client:
 		initclient(win, g);
 	}
 	PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &win);
-	setwmwinstate(win, XCB_ICCCM_WM_STATE_NORMAL);
+	setwinstate(win, XCB_ICCCM_WM_STATE_NORMAL);
 	needsrefresh = 1;
+
 end:
 	free(wa);
 	free(g);
@@ -1319,7 +1373,8 @@ void refresh(void)
 	focus(NULL);
 	xcb_aux_sync(con);
 	ignore(XCB_ENTER_NOTIFY);
-	pushstatus();
+	if (globalcfg[GLB_USE_STATUS])
+		pushstatus();
 #undef MAP
 }
 
@@ -1382,6 +1437,7 @@ void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, i
 
 void restack(Workspace *ws)
 {
+	/* see: https://specifications.freedesktop.org/wm-spec/wm-spec-1.3.html#STACKINGORDER */
 	Desk *d;
 	Panel *p;
 	Client *c;
@@ -1528,7 +1584,7 @@ void seturgent(Client *c, int urg)
 	}
 }
 
-void setwmwinstate(xcb_window_t win, long state)
+void setwinstate(xcb_window_t win, long state)
 {
 	long data[] = { state, XCB_ATOM_NONE };
 	PROP(REPLACE, win, wmatom[WM_STATE], wmatom[WM_STATE], 32, 2, (unsigned char *)data);
@@ -1677,7 +1733,7 @@ void unmanage(xcb_window_t win, int destroyed)
 				xcb_delete_property(con, c->win, netatom[NET_WM_DESK]);
 			}
 		}
-		setwmwinstate(win, XCB_ICCCM_WM_STATE_WITHDRAWN);
+		setwinstate(win, XCB_ICCCM_WM_STATE_WITHDRAWN);
 		xcb_aux_sync(con);
 		xcb_ungrab_server(con);
 	} else {

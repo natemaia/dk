@@ -14,6 +14,7 @@
 
 #include "util.h"
 
+
 void check(int i, char *msg)
 {
 	if (i < 0)
@@ -65,6 +66,11 @@ void sighandle(int sig)
 	case SIGINT: /* FALLTHROUGH */
 	case SIGTERM: /* FALLTHROUGH */
 	case SIGHUP:
+#ifdef USES_XCB_CONNECTION
+		/* atexit(3) doesn't call freewm upon delivery of a signal so we do it manually
+		 * this only needs to happen for the window manager (not dkcmd), hence the #ifdef */
+		freewm();
+#endif
 		exit(1);
 		break;
 	case SIGCHLD:

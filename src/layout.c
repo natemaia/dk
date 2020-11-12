@@ -19,7 +19,6 @@
 #include "cmd.h"
 #include "layout.h"
 #include "parse.h"
-#include "config.h"
 
 
 int dwindle(Workspace *ws)
@@ -153,19 +152,18 @@ int tile(Workspace *ws)
 {
 	Monitor *m = ws->mon;
 	Client *c, *prev = NULL;
-	int i, n, remaining, my, sy, ssy, g, ret = 0;
-	int x, *y, wx, wy, ww, wh, mw, ss, sw, ssw, ns = 1;
+	int i, n, x, *y, remaining, ret = 0;
+	int mw, my, sw, sy, ss, ssw, ssy, ns = 1;
 
-	for (n = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), n++)
-		;
+	for (n = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), n++);
 	if (!n) return 1;
 
 	mw = ss = sw = ssw = 0;
-	wx = m->wx + ws->padl;
-	wy = m->wy + ws->padt;
-	ww = m->ww - ws->padl - ws->padr;
-	wh = m->wh - ws->padt - ws->padb;
-	g = !globalcfg[GLB_SMART_GAP] || n > 1 ? ws->gappx : 0;
+	int wx = m->wx + ws->padl;
+	int wy = m->wy + ws->padt;
+	int ww = m->ww - ws->padl - ws->padr;
+	int wh = m->wh - ws->padt - ws->padb;
+	int g = !globalcfg[GLB_SMART_GAP] || n > 1 ? ws->gappx : 0;
 
 	if (n <= ws->nmaster)
 		mw = ww, ss = 1;
@@ -238,7 +236,7 @@ int tile(Workspace *ws)
 		int bw = !globalcfg[GLB_SMART_BORDER] || n > 1 ? c->bw : 0;
 		if (c->h <= MAX(globalcfg[GLB_MIN_WH], c->min_h))
 			ret = -1;
-		if (applysizehints(c, &c->x, &c->y, &c->w, &c->h, c->bw, 0, 0)
+		if (applysizehints(c, &c->x, &c->y, &c->w, &c->h, bw, 0, 0)
 				|| (c->x != c->old_x || c->y != c->old_y || c->w != c->old_w || c->h != c->old_h))
 		{
 			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, bw);

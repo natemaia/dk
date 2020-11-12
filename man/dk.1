@@ -420,8 +420,7 @@ set [WS] gap 10
 \fR
 .fi
 .PP
-\fI\fCtile_hints\fR (boolean) obey size hints in tiled layouts (default
-is false).
+\fI\fCtile_hints\fR (boolean) whether to respect size hints in tiled layouts.
 .IP
 .nf
 \fI\fC
@@ -429,8 +428,8 @@ set tile_hints=true
 \fR
 .fi
 .PP
-\fI\fCtile_tohead\fR (boolean) place new windows at the head of the
-list in tiled layouts (default is false).
+\fI\fCtile_tohead\fR (boolean) whether to place new windows at the head
+or the tail of the list in tiled layouts.
 .IP
 .nf
 \fI\fC
@@ -438,8 +437,8 @@ set tile_tohead=true
 \fR
 .fi
 .PP
-\fI\fCsmart_gap\fR (boolean) remove gaps on workspaces with only one
-tiled window.
+\fI\fCsmart_gap\fR (boolean) whether gaps are disabled on workspaces
+with only one tiled window.
 .IP
 .nf
 \fI\fC
@@ -447,8 +446,8 @@ set smart_gap=true
 \fR
 .fi
 .PP
-\fI\fCsmart_border\fR (boolean) remove borders on workspaces with only
-one tiled window.
+\fI\fCsmart_border\fR (boolean) whether borders are disabled on workspaces
+with only one tiled window.
 .IP
 .nf
 \fI\fC
@@ -456,8 +455,8 @@ set tile_hints=true
 \fR
 .fi
 .PP
-\fI\fCfocus_urgent\fR (boolean) focus windows that request it through
-client messages.
+\fI\fCfocus_urgent\fR (boolean) whether to focus windows that request it
+through client messages.
 .IP
 .nf
 \fI\fC
@@ -465,7 +464,7 @@ set focus_urgent=true
 \fR
 .fi
 .PP
-\fI\fCfocus_open\fR (boolean) disable focus-on-open.
+\fI\fCfocus_open\fR (boolean) whether windows are focused upon first opening.
 .IP
 .nf
 \fI\fC
@@ -473,11 +472,19 @@ set focus_open=false
 \fR
 .fi
 .PP
-\fI\fCfocus_mouse\fR (boolean) disable focus-follows-mouse.
+\fI\fCfocus_mouse\fR (boolean) whether window focus follows the mouse.
 .IP
 .nf
 \fI\fC
 set focus_mouse=false
+\fR
+.fi
+.PP
+\fI\fCuse_status\fR (boolean) whether to output information to a status file.
+.IP
+.nf
+\fI\fC
+set use_status=false
 \fR
 .fi
 .PP
@@ -509,18 +516,25 @@ set ws=_ apply SETTING
 .PP
 \fI\fClayout\fR (string) change the workspace window layout.
 .IP \[bu] 2
-\fI\fCtile\fR default tile layout
+\fI\fCtile\fR windows are grouped a master area on the left and
+up to two vertical stacks.
 .IP \[bu] 2
-\fI\fCmono\fR windows arranged maximized and stacked
+\fI\fCmono\fR windows arranged maximized and stacked on top of one another.
 .IP \[bu] 2
-\fI\fCgrid\fR all windows try to occupy equal space
+\fI\fCgrid\fR all windows try to occupy equal space.
 .IP \[bu] 2
-\fI\fCspiral\fR windows shrink by 1/2 towards the center of the screen
+\fI\fCspiral\fR windows shrink by 1/2 towards the center of the screen.
 .IP \[bu] 2
 \fI\fCdwindle\fR windows shrink by 1/2 towards the bottom right of the
+screen.
+.IP \[bu] 2
+\fI\fCtstack\fR windows are grouped into a master area on the bottom and
+one horizontal stack area on top.
 screen
 .IP \[bu] 2
-\fI\fCnone\fR floating, no layout
+\fI\fCnone\fR floating layout, windows can be freely moved and resized,
+those that don't have a location hint are arranged into a grid like layout
+and attempting to not overlap other windows.
 .IP
 .nf
 \fI\fC

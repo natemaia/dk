@@ -31,6 +31,5 @@ int cmdstick(char **argv);
 int cmdswap(char **argv);
 int cmdview(Workspace *ws);
 int cmdwin(char **argv);
-int cmdwm(char **argv);
 int cmdws(char **argv);
 int cmdws_(char **argv);

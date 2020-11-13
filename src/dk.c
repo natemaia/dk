@@ -225,8 +225,8 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 			*h = MIN(*h, m->wh);
 			*w = MIN(*w, m->ww);
 		}
-		*x = CLAMP(*x, (*w + (2 * bw) - min) * -1, scr_w - min);
-		*y = CLAMP(*y, (*h + (2 * bw) - min) * -1, scr_h - min);
+		*x = CLAMP(*x, (*w - min) * -1, scr_w - min);
+		*y = CLAMP(*y, (*h - min) * -1, scr_h - min);
 	} else {
 		*x = CLAMP(*x, m->wx, m->wx + m->ww - *w + (2 * bw));
 		*y = CLAMP(*y, m->wy, m->wy + m->wh - *h + (2 * bw));
@@ -709,7 +709,7 @@ void gravitate(Client *c, int xgrav, int ygrav, int matchgap)
 	case GRAV_BOTTOM: y = mony + monh - H(c) - gap; break;
 	case GRAV_CENTER: y = (mony + monh - H(c)) / 2; break;
 	}
-	if (c->ws == c->ws->mon->ws)
+	if (c->ws == c->ws->mon->ws && x != c->x && y != c->y)
 		resizehint(c, x, y, c->w, c->h, c->bw, 0, 0);
 }
 

@@ -587,6 +587,7 @@ badvalue:
 		}
 	}
 end:
+	xcb_aux_sync(con);
 	ignore(XCB_ENTER_NOTIFY);
 	return nparsed;
 #undef ARG

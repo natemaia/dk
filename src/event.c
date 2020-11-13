@@ -299,9 +299,13 @@ void mouse(Client *c, int move, int mx, int my)
 
 			if (!move && !(c->state & STATE_FLOATING) && selws->layout->func == tile) {
 				int i = 0;
-				Client *p = nexttiled(selws->clients);
-				for (; p && p != c; p = nexttiled(p->next), i++)
-					;
+				Client *p, *prev = NULL;
+				for (p = nexttiled(selws->clients); p && p != c; p = nexttiled(p->next), i++) {
+					if (i + 1 == selws->nmaster || i + 1 == selws->nstack + selws->nmaster)
+						prev = NULL;
+					else
+						prev = p;
+				}
 				if (i >= selws->nstack + selws->nmaster)
 					selws->ssplit =
 						(double)(ox - selws->mon->x + (e->root_x - mx)
@@ -314,13 +318,17 @@ void mouse(Client *c, int move, int mx, int my)
 					selws->msplit = (double)((ox - selws->mon->x + ow) + (e->root_x - mx))
 						/ (double)selws->mon->ww;
 				int ohoff = c->hoff;
-				if (i + 1 == selws->nmaster || i + 1 == selws->nmaster + selws->nstack
-						|| !nexttiled(c->next))
-					c->hoff = (e->root_y - my) * -1;
-				else
-					c->hoff = e->root_y - my;
-				if (selws->layout->func(selws) < 0)
-					c->hoff = ohoff;
+				if (prev) {
+					if (i + 1 == selws->nmaster || i + 1 == selws->nmaster + selws->nstack
+							|| !nexttiled(c->next))
+						c->hoff = (e->root_y - my) * -1;
+					else
+						c->hoff = e->root_y - my;
+					if (selws->layout->func(selws) < 0)
+						c->hoff = ohoff;
+				} else {
+					selws->layout->func(selws);
+				}
 			} else {
 				if (move) {
 					nx = ox + (e->root_x - mx);

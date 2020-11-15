@@ -190,7 +190,7 @@ void dispatch(xcb_generic_event_t *ev)
 			handlers[type](ev);
 		} else if (ev->response_type == randrbase + XCB_RANDR_SCREEN_CHANGE_NOTIFY) {
 			if (((xcb_randr_screen_change_notify_event_t *)ev)->root == root && updrandr())
-				updworkspaces(globalcfg[GLB_NUMWS]);
+				updworkspaces(globalcfg[GLB_WS_NUM]);
 		}
 	} else {
 		xcb_generic_error_t *e = (xcb_generic_error_t*)ev;
@@ -417,7 +417,7 @@ void propertynotify(xcb_generic_event_t *ev)
 			return;
 		default:
 			if (e->atom == XCB_ATOM_WM_NAME || e->atom == netatom[NET_WM_NAME]) {
-				if (clientname(c) && globalcfg[GLB_USE_STATUS]) needsrefresh = 1;
+				if (clientname(c)) printstatus_all();
 			} else if (e->atom == netatom[NET_WM_TYPE])
 				clienttype(c);
 			return;
@@ -444,6 +444,6 @@ void unmapnotify(xcb_generic_event_t *ev)
 		setwinstate(e->window, XCB_ICCCM_WM_STATE_WITHDRAWN);
 	} else {
 		DBG("unmapnotify: 0x%08x", e->window)
-			unmanage(e->window, 0);
+		unmanage(e->window, 0);
 	}
 }

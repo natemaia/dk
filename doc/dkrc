@@ -21,26 +21,27 @@ fi
 	# initialize 10 workspaces (1-10)
 	dkcmd set numws=10
 
-	# default workspace values used when allocating new workspaces
+	# default workspace (_) values used when allocating new workspaces
 	# can be applied to all existing workspaces when passed 'apply' after ws=_
 	dkcmd set ws=_ apply layout=tile master=1 stack=3 gap=0 msplit=0.5 ssplit=0.5
 
 	# change workspace names
 	dkcmd set ws=1 name="term" ws=2 name="web"
 
-	# change workspace layouts
-	dkcmd set ws=10 layout=grid
+	# use grid layout, padding, and gaps on workspace 10
+	dkcmd set ws=10 \
+		layout=grid \
+		pad left=200 right=200 top=100 bottom=100 \
+		gap width=50
 
 	# # use static workspaces (not default)
 	# dkcmd set static_ws=true
+	#
 	# # assign workspaces to monitors (requires static_ws=true)
 	# mon1='DisplayPort-0'
 	# mon2='HDMI-A-0'
 	# dkcmd set ws=1 mon=$mon1 ws=2 mon=$mon1 ws=3 mon=$mon1 ws=4 mon=$mon1 ws=5 mon=$mon1
 	# dkcmd set ws=6 mon=$mon2 ws=7 mon=$mon2 ws=8 mon=$mon2 ws=9 mon=$mon2 ws=10 mon=$mon2
-
-	# use some padding and gaps on the last workspace
-	dkcmd set ws=10 pad left=200 right=200 top=100 bottom=100 gap width=50
 
 
 	# global settings
@@ -60,8 +61,6 @@ fi
 	# define mouse mod and move/resize buttons
 	dkcmd set mouse mod=alt move=button1 resize=button3
 
-	# change whether to use a status file or not (useful for scripts)
-	dkcmd set use_status=false
 
 	# borders
 	# ---------
@@ -69,9 +68,14 @@ fi
 	# dkcmd set border width=1 colour focus='#6699cc' unfocus='#000000' urgent='#ee5555'
 
 	# alternatively, enable split borders and colours
-	dkcmd set border width=5 outer=3 colour \
-		focus='#6699cc' unfocus='#444444' urgent='#ee5555' \
-		outer_focus='#222222' outer_unfocus='#222222' outer_urgent='#222222'
+	dkcmd set border width=5 outer_width=3 \
+		colour \
+		focus='#6699cc' \
+		unfocus='#444444' \
+		urgent='#ee5555' \
+		outer_focus='#222222' \
+		outer_unfocus='#222222' \
+		outer_urgent='#222222'
 
 
 	# window rules

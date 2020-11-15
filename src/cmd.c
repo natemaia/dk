@@ -61,7 +61,7 @@ static char *opts[] = {
 };
 
 
-int adjustisetting(int i, int rel, int *val, int other, int border)
+static int adjustisetting(int i, int rel, int *val, int other, int border)
 {
 	int n;
 	int max = setws->mon->wh - setws->padb - setws->padt;
@@ -74,7 +74,7 @@ int adjustisetting(int i, int rel, int *val, int other, int border)
 	return 0;
 }
 
-int adjustwsormon(char **argv)
+static int adjustwsormon(char **argv)
 {
 	int opt, nparsed = 0, e = 0;
 	int (*fn)(Workspace *) = cmdview;
@@ -127,7 +127,7 @@ int adjustwsormon(char **argv)
 		} else {
 			int r = 0;
 			Workspace *save = cur;
-			while (!ws && r < globalcfg[GLB_NUMWS]) {
+			while (!ws && r < globalcfg[GLB_WS_NUM]) {
 				if (opt == DIR_NEXTNE) {
 					if (cmdusemon) {
 						if (!(m = nextmon(cm)))
@@ -157,7 +157,7 @@ int adjustwsormon(char **argv)
 		nparsed++;
 		fn(ws);
 	} else {
-		respond(cmdresp, "!invalid value for %s: %s", cmdusemon ? "monitor" : "workspace", *argv);
+		respond(cmdresp, "!invalid value for %s: %s", cmdusemon ? "mon" : "ws", *argv);
 		return -1;
 	}
 	return nparsed;
@@ -208,7 +208,7 @@ int cmdborder(char **argv)
 		} else {
 			break;
 badvalue:
-			respond(cmdresp, "!invalid %s value: %s", *(argv - 1), *argv);
+			respond(cmdresp, "!set border: invalid %s value: %s", *(argv - 1), *argv);
 			return -1;
 		}
 		argv++;
@@ -309,7 +309,7 @@ int cmdfocus(char **argv)
 		return nparsed;
 	}
 	if ((opt = parseopt(*argv, opts)) < 0 && (i = parseint(*argv, NULL, 0)) == INT_MIN) {
-		respond(cmdresp, "!%s focus: %s", ebadarg, *argv);
+		respond(cmdresp, "!%s win focus: %s", ebadarg, *argv);
 		return -1;
 	}
 	nparsed++;
@@ -453,7 +453,7 @@ int cmdmouse(char **argv)
 		} else {
 			break;
 badvalue:
-			respond(cmdresp, "!invalid value for %s: %s", *(argv - 1), *argv);
+			respond(cmdresp, "!set mouse: invalid value for %s: %s", *(argv - 1), *argv);
 			return -1;
 		}
 		argv++;
@@ -486,7 +486,7 @@ int cmdpad(char **argv)
 		} else {
 			break;
 badvalue:
-			respond(cmdresp, "!invalid value for %s: %s", *(argv - 1), *argv);
+			respond(cmdresp, "!set pad: invalid value for %s: %s", *(argv - 1), *argv);
 			return -1;
 		}
 		argv++;
@@ -495,6 +495,20 @@ badvalue:
 	needsrefresh = 1;
 	return nparsed;
 #undef PAD
+}
+
+int cmdquit(char **argv)
+{
+	running = 0;
+	(void)(argv);
+	return 0;
+}
+
+int cmdreload(char **argv)
+{
+	execcfg();
+	(void)(argv);
+	return 0;
 }
 
 int cmdresize(char **argv)
@@ -531,7 +545,7 @@ int cmdresize(char **argv)
 		} else {
 			break;
 badvalue:
-			respond(cmdresp, "!invalid value for %s: %s", *(argv - 1), *argv);
+			respond(cmdresp, "!win resize: invalid value for %s: %s", *(argv - 1), *argv);
 			return -1;
 		}
 		argv++;
@@ -600,6 +614,13 @@ end:
 #undef ARG
 }
 
+int cmdrestart(char **argv)
+{
+	running = 0, restart = 1;
+	(void)(argv);
+	return 0;
+}
+
 int cmdrule(char **argv)
 {
 	Client *c;
@@ -633,7 +654,7 @@ int cmdrule(char **argv)
 			r.mon = *(++argv);
 		} else if (!strcmp(*argv, "ws")) {
 			nparsed++;
-			if ((r.ws = parseintclamp(*(++argv), NULL, 1, globalcfg[GLB_NUMWS])) == INT_MIN) {
+			if ((r.ws = parseintclamp(*(++argv), NULL, 1, globalcfg[GLB_WS_NUM])) == INT_MIN) {
 				r.ws = -1;
 				match = 0;
 				FOR_EACH(ws, workspaces)
@@ -696,7 +717,7 @@ int cmdrule(char **argv)
 		} else {
 			break;
 badvalue:
-			respond(cmdresp, "!invalid value for %s: %s", *(argv - 1), *argv);
+			respond(cmdresp, "!rule: invalid value for %s: %s", *(argv - 1), *argv);
 			return -1;
 		}
 		argv++;
@@ -779,7 +800,7 @@ int cmdset(char **argv)
 		} else if (!strcmp("mon", *argv)) {
 			argv++;
 			nparsed++;
-			if (!globalcfg[GLB_STATICWS]) {
+			if (!globalcfg[GLB_WS_STATIC]) {
 				respond(cmdresp, "!unable to set monitor with dynamic workspaces enabled");
 				break;
 			} else if (!set) {
@@ -794,7 +815,7 @@ int cmdset(char **argv)
 			nparsed++;
 			if ((i = parseintclamp(*(++argv), NULL, 1, 99)) == INT_MIN)
 				goto badvalue;
-			if (i > globalcfg[GLB_NUMWS])
+			if (i > globalcfg[GLB_WS_NUM])
 				updworkspaces(i);
 		} else if (!strcmp("name", *argv)) {
 			nparsed++;
@@ -802,9 +823,9 @@ int cmdset(char **argv)
 			strlcpy(setws->name, *argv, sizeof(setws->name));
 			names = 1;
 		} else if (!strcmp("tile_hints", *argv)) {
-			BOOL(TILEHINTS);
+			BOOL(TILE_HINTS);
 		} else if (!strcmp("tile_tohead", *argv)) {
-			BOOL(TILETOHEAD);
+			BOOL(TILE_TOHEAD);
 		} else if (!strcmp("smart_gap", *argv)) {
 			BOOL(SMART_GAP);
 		} else if (!strcmp("smart_border", *argv)) {
@@ -816,9 +837,7 @@ int cmdset(char **argv)
 		} else if (!strcmp("focus_open", *argv)) {
 			BOOL(FOCUS_OPEN);
 		} else if (!strcmp("static_ws", *argv)) {
-			BOOL(STATICWS);
-		} else if (!strcmp("use_status", *argv)) {
-			BOOL(USE_STATUS);
+			BOOL(WS_STATIC);
 		} else if (!strcmp("win_minxy", *argv)) {
 			nparsed++;
 			if ((i = parseintclamp(*(++argv), NULL, 10, 1000)) == INT_MIN) goto badvalue;
@@ -841,7 +860,7 @@ int cmdset(char **argv)
 				continue;
 			break;
 badvalue:
-			respond(cmdresp, "!invalid value for %s: %s", *(argv - 1), *argv);
+			respond(cmdresp, "!set: invalid value for %s: %s", *(argv - 1), *argv);
 			return -1;
 		}
 		argv++;
@@ -874,10 +893,58 @@ int cmdsplit(char **argv)
 
 int cmdstatus(char **argv)
 {
-	if (cmdresp)
-		printstatus(initstatus(cmdresp, NULL, -1));
-	(void)(argv);
-	return 0;
+	Status *s;
+	char *path = NULL;
+	FILE *file = cmdresp;
+	int i, num = -1, nparsed = 0;
+	unsigned int type = TYPE_WS;
+
+	while (*argv) {
+		if (!strcmp("type", *argv)) {
+			argv++;
+			nparsed++;
+			if (!strcmp("ws", *argv))
+				type = TYPE_WS;
+			else if (!strcmp("full", *argv))
+				type = TYPE_FULL;
+			else
+				goto badvalue;
+		} else if (!strcmp("num", *argv)) {
+			nparsed++;
+			if ((i = parseintclamp(*(++argv), NULL, -1, INT_MAX)) == INT_MIN)
+				goto badvalue;
+			num = i;
+		} else if (!strcmp("file", *argv)) {
+			argv++;
+			nparsed++;
+			if (*argv) {
+				size_t len = strlen(*argv) + 1;
+				path = ecalloc(1, len);
+				strlcpy(path, *argv, len);
+			} else {
+				goto badvalue;
+			}
+		} else {
+			break;
+badvalue:
+			respond(cmdresp, "!status: invalid value for %s: %s", *(argv - 1), *argv);
+			return -1;
+		}
+		argv++;
+		nparsed++;
+	}
+
+	if (path && !(file = fopen(path, "w")))
+		respond(cmdresp, "!unable to open file in write mode: %s: %s", path, strerror(errno));
+	if (file) {
+		status_usingcmdresp = file == cmdresp;
+		printstatus((s = initstatus(file, path, num, type)));
+		if (!s->num) freestatus(s);
+	} else {
+		respond(cmdresp, "!unable to create status: %s", path ? path : "stdout");
+	}
+	free(path);
+	return nparsed;
 }
 
 int cmdstick(char **argv)
@@ -941,8 +1008,8 @@ int cmdswap(char **argv)
 int cmdview(Workspace *ws)
 {
 	if (ws) {
-		changews(ws, globalcfg[GLB_STATICWS] ? 0 : !cmdusemon,
-				cmdusemon || (globalcfg[GLB_STATICWS] && selws->mon != ws->mon));
+		changews(ws, globalcfg[GLB_WS_STATIC] ? 0 : !cmdusemon,
+				cmdusemon || (globalcfg[GLB_WS_STATIC] && selws->mon != ws->mon));
 		needsrefresh = 1;
 	}
 	return 0;
@@ -1055,7 +1122,7 @@ int cmdws_(char **argv)
 		} else {
 			break;
 badvalue:
-			respond(cmdresp, "!invalid value for %s: %s", *(argv - 1), *argv);
+			respond(cmdresp, "!set ws=_: invalid value for %s: %s", *(argv - 1), *argv);
 			return -1;
 		}
 		argv++;

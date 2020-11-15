@@ -18,7 +18,7 @@
 #include "util.h"
 
 #ifndef VERSION
-#define VERSION "0.91"
+#define VERSION "1.0"
 #endif
 
 int main(int argc, char *argv[])

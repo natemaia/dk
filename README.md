@@ -384,12 +384,6 @@ set focus_mouse=false
 ```
 ---
 
-`use_status` (boolean) disable information output to status file.
-```
-set use_status=false
-```
----
-
 `win_minxy` (integer) amount of window (in pixels) to be kept on the screen when moving.
 ```
 set win_minxy=20
@@ -552,6 +546,39 @@ win focus +2      # focus two windows ahead
 win [CLIENT] resize x=100 y=100 w=1280 h=720 bw=1
 win [CLIENT] resize x=center y=center w=1280 h=720 bw=1
 ```
+---
+#### Status
+`status` print status information to a file or stdout.
+
+```
+status [TYPE] [FILE] [NUM]
+```
+
+###### Subcommands
+`type` (string) the type of status info to output.
+
+- `ws` output simple workspace info for parsing and use in bars.
+- `full` output the full wm and managed client state.
+
+```
+status type=ws [FILE] [NUM]
+```
+---
+
+`file` (string) the location of the status file.
+
+```
+status file=/tmp/dk.status [TYPE] [NUM]
+```
+---
+
+`num` (integer) the number of times to output, -1 is infinite and default if not passed.
+
+```
+status [TYPE] [FILE]        # output forever
+status num=1 [TYPE] [FILE]  # output once
+```
+
 
 ### Todo
 

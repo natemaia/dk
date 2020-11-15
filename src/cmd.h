@@ -6,8 +6,6 @@
 
 #pragma once
 
-int adjustisetting(int i, int relative, int *setting, int other, int border);
-int adjustwsormon(char **argv);
 int cmdborder(char **argv);
 int cmdcycle(char **argv);
 int cmdfakefull(char **argv);
@@ -22,7 +20,10 @@ int cmdmon(char **argv);
 int cmdmors(char **argv);
 int cmdmouse(char **argv);
 int cmdpad(char **argv);
+int cmdquit(char **argv);
+int cmdreload(char **argv);
 int cmdresize(char **argv);
+int cmdrestart(char **argv);
 int cmdrule(char **argv);
 int cmdsend(Workspace *ws);
 int cmdset(char **argv);

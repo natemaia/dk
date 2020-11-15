@@ -13,7 +13,7 @@
 #endif
 
 #ifndef VERSION
-#define VERSION "0.91"
+#define VERSION "1.0"
 #endif
 
 #define W(c) (c->w + (2 * c->bw))
@@ -62,6 +62,12 @@
 			(unsigned int[]){(x), (y), MAX((w), globalcfg[GLB_MIN_WH]), \
 			MAX((h), globalcfg[GLB_MIN_WH]), (bw)})
 
+
+
+enum StatusType {
+	TYPE_WS   = 0,
+	TYPE_FULL = 1,
+};
 
 enum States {
 	STATE_NONE         = 0,
@@ -144,19 +150,18 @@ enum NetAtoms {
 };
 
 enum GlobalCfg {
-	GLB_FOCUS_MOUSE  = 0,
-	GLB_FOCUS_OPEN   = 1,
-	GLB_FOCUS_URGENT = 2,
-	GLB_MIN_WH       = 3,
-	GLB_MIN_XY       = 4,
-	GLB_NUMWS        = 5,
-	GLB_TILEHINTS    = 6,
+	GLB_WS_NUM       = 0,
+	GLB_WS_STATIC    = 1,
+	GLB_FOCUS_MOUSE  = 2,
+	GLB_FOCUS_OPEN   = 3,
+	GLB_FOCUS_URGENT = 4,
+	GLB_MIN_WH       = 5,
+	GLB_MIN_XY       = 6,
 	GLB_SMART_BORDER = 7,
 	GLB_SMART_GAP    = 8,
-	GLB_TILETOHEAD   = 9,
-	GLB_STATICWS     = 10,
-	GLB_USE_STATUS   = 11,
-	GLB_LAST         = 12,
+	GLB_TILE_HINTS   = 9,
+	GLB_TILE_TOHEAD  = 10,
+	GLB_LAST         = 11,
 };
 
 
@@ -194,6 +199,7 @@ typedef struct Rule {
 
 typedef struct Status {
 	int num;
+	unsigned int type;
 	FILE *file;
 	char *path;
 	struct Status *next;
@@ -261,8 +267,9 @@ struct Workspace {
 extern char **environ;
 extern FILE *cmdresp;
 extern unsigned int lockmask;
-extern char *argv0, sock[256], status[256];
+extern char *argv0, *sock;
 extern int scr_h, scr_w, sockfd, running, restart, randrbase, cmdusemon, needsrefresh;
+extern int status_usingcmdresp;
 
 extern Desk *desks;
 extern Rule *rules;
@@ -324,7 +331,7 @@ int iferr(int lvl, char *msg, xcb_generic_error_t *e);
 Rule *initrule(Rule *wr);
 void initscan(void);
 void initsock(void);
-Status *initstatus(FILE *file, char *path, int num);
+Status *initstatus(FILE *file, char *path, int num, unsigned int type);
 void initwm(void);
 Monitor *itomon(int num);
 Workspace *itows(int num);
@@ -335,6 +342,7 @@ Client *nexttiled(Client *c);
 Monitor *outputtomon(xcb_randr_output_t id);
 void popfloat(Client *c);
 void printstatus(Status *s);
+void printstatus_all(void);
 void quadrant(Client *c, int *x, int *y, int *w, int *h);
 int refresh(void);
 void relocate(Client *c, Monitor *new, Monitor *old);

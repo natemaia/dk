@@ -89,8 +89,9 @@ char *parsetoken(char **src)
 
 void parsecmd(char *buf)
 {
-	int n = 0, match = 0, max = 32;
 	char **argv, **save, *tok;
+	int n = 0, match = 0, max = 32;
+	status_usingcmdresp = 0;
 
 	DBG("parsecmd: tokenizing buffer: %s", buf)
 	save = argv = ecalloc(max, sizeof(char *));
@@ -107,7 +108,7 @@ void parsecmd(char *buf)
 	}
 	argv[n] = NULL;
 
-	if (n > 1) {
+	if (n) {
 		int j = n;
 		unsigned int i;
 		while (j > 0 && *argv) {
@@ -140,18 +141,7 @@ void parsecmd(char *buf)
 	}
 
 	if (!match && *argv) {
-		int r;
-		if (!strcmp("status", *argv)) {
-			cmdstatus(NULL);
-			free(save);
-			return;
-		} else if (!strcmp("reload", *argv)) {
-			execcfg();
-		} else if ((r = !strcmp("restart", *argv)) || !strcmp("exit", *argv)) {
-			running = 0, restart = r;
-		} else {
-			respond(cmdresp, "!invalid or unknown command: %s", *argv);
-		}
+		respond(cmdresp, "!invalid or unknown command: %s", *argv);
 #ifdef DEBUG
 	} else if (match && !*argv) {
 		fprintf(stderr, "dk: %d: parsecmd: all arguments successfully parsed\n", __LINE__);
@@ -160,7 +150,7 @@ void parsecmd(char *buf)
 	}
 
 end:
-	if (cmdresp) {
+	if (cmdresp && !status_usingcmdresp) {
 		fflush(cmdresp);
 		fclose(cmdresp);
 	}
@@ -284,7 +274,7 @@ Workspace *parsewsormon(char *arg, int mon)
 	if (mon)
 		for (n = 0, m = nextmon(monitors); m; m = nextmon(m->next), n++)
 			;
-	if ((i = parseintclamp(arg, NULL, 1, mon ? n : globalcfg[GLB_NUMWS])) == INT_MIN || i <= 0)
+	if ((i = parseintclamp(arg, NULL, 1, mon ? n : globalcfg[GLB_WS_NUM])) == INT_MIN || i <= 0)
 		return NULL;
 	return mon ? ((m = nextmon(itomon(i - 1))) ? m->ws : cws) : itows(i - 1);
 }

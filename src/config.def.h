@@ -17,18 +17,17 @@ unsigned int border[BORD_LAST] = {
 };
 
 int globalcfg[GLB_LAST] = {
+	[GLB_WS_NUM]       = 0,  /* bool: number of workspaces currently allocated */
+	[GLB_WS_STATIC]    = 0,  /* bool: use static workspace assignment */
 	[GLB_FOCUS_MOUSE]  = 1,  /* bool: enable focus follows mouse */
 	[GLB_FOCUS_OPEN]   = 1,  /* bool: enable focus on open */
 	[GLB_FOCUS_URGENT] = 1,  /* bool: enable focus urgent windows */
 	[GLB_MIN_WH]       = 50, /* int:  minimum window size allowed when resizing */
 	[GLB_MIN_XY]       = 10, /* int:  minimum window area allowed inside the screen when moving */
-	[GLB_NUMWS]        = 0,  /* bool: number of workspaces currently allocated */
-	[GLB_TILEHINTS]    = 0,  /* bool: respect size hints in tiled layouts */
+	[GLB_TILE_HINTS]   = 0,  /* bool: respect size hints in tiled layouts */
+	[GLB_TILE_TOHEAD]  = 0,  /* bool: place new clients at the tail of the stack */
 	[GLB_SMART_BORDER] = 1,  /* bool: disable borders in layouts with only one visible window */
 	[GLB_SMART_GAP]    = 1,  /* bool: disable gaps in layouts with only one visible window */
-	[GLB_TILETOHEAD]   = 0,  /* bool: place new clients at the tail of the stack */
-	[GLB_STATICWS]     = 0,  /* bool: use static workspace assignment */
-	[GLB_USE_STATUS]   = 0,  /* bool: output info to $DKSTAT */
 };
 
 char *cursors[CURS_LAST] = {
@@ -55,15 +54,12 @@ void albumart(Client *c, int closed)
 	 *	remove padding
 	 */
 
-	switch (closed) {
-	case 0: /* opened */
+	if (closed) {
+		c->ws->padr = 0;
+	} else {
 		c->ws->padr = c->w + (2 * c->ws->gappx);
 		gravitate(c, GRAV_RIGHT, GRAV_CENTER, 1);
 		focus(c->snext);
-		break;
-	case 1: /* closed */
-		c->ws->padr = 0;
-		break;
 	}
 }
 
@@ -142,11 +138,15 @@ Callback callbacks[] = {
 
 Cmd keywords[] = {
 	/* command,  function */
-	{ "mon",     cmdmon  },
-	{ "rule",    cmdrule },
-	{ "set",     cmdset  },
-	{ "win",     cmdwin  },
-	{ "ws",      cmdws   },
+	{ "mon",     cmdmon     },
+	{ "quit",    cmdquit    },
+	{ "reload",  cmdreload  },
+	{ "restart", cmdrestart },
+	{ "rule",    cmdrule    },
+	{ "set",     cmdset     },
+	{ "status",  cmdstatus  },
+	{ "win",     cmdwin     },
+	{ "ws",      cmdws      },
 
 	/* don't add below the terminating null */
 	{ NULL,      NULL    }

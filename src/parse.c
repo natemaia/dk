@@ -103,7 +103,7 @@ void parsecmd(char *buf)
 			argv = tmp;
 		}
 		argv[n++] = tok;
-		DBG("parsecmd: token - argv[%d] = %s", n, argv[n - 1])
+		DBG("parsecmd: token - argv[%d] = %s", n - 1, argv[n - 1])
 	}
 	argv[n] = NULL;
 
@@ -141,12 +141,17 @@ void parsecmd(char *buf)
 
 	if (!match && *argv) {
 		int r;
-		if (!strcmp("reload", *argv))
+		if (!strcmp("status", *argv)) {
+			cmdstatus(NULL);
+			free(save);
+			return;
+		} else if (!strcmp("reload", *argv)) {
 			execcfg();
-		else if ((r = !strcmp("restart", *argv)) || !strcmp("exit", *argv))
+		} else if ((r = !strcmp("restart", *argv)) || !strcmp("exit", *argv)) {
 			running = 0, restart = r;
-		else
+		} else {
 			respond(cmdresp, "!invalid or unknown command: %s", *argv);
+		}
 #ifdef DEBUG
 	} else if (match && !*argv) {
 		fprintf(stderr, "dk: %d: parsecmd: all arguments successfully parsed\n", __LINE__);
@@ -155,11 +160,11 @@ void parsecmd(char *buf)
 	}
 
 end:
-	free(save);
 	if (cmdresp) {
 		fflush(cmdresp);
 		fclose(cmdresp);
 	}
+	free(save);
 }
 
 int parsecolour(char *arg, unsigned int *result)

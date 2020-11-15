@@ -192,6 +192,13 @@ typedef struct Rule {
 	struct Rule *next;
 } Rule;
 
+typedef struct Status {
+	int num;
+	FILE *file;
+	char *path;
+	struct Status *next;
+} Status;
+
 typedef struct Panel {
 	int x, y, w, h;
 	int l, r, t, b; /* struts */
@@ -260,6 +267,7 @@ extern int scr_h, scr_w, sockfd, running, restart, randrbase, cmdusemon, needsre
 extern Desk *desks;
 extern Rule *rules;
 extern Panel *panels;
+extern Status *stats;
 extern Client *cmdclient;
 extern Monitor *primary, *monitors, *selmon, *lastmon;
 extern Workspace *setws, *selws, *lastws, *workspaces;
@@ -307,6 +315,7 @@ void execcfg(void);
 void focus(Client *c);
 void freemon(Monitor *m);
 void freerule(Rule *r);
+void freestatus(Status *s);
 void freewm(void);
 void freews(Workspace *ws);
 void grabbuttons(Client *c, int focused);
@@ -315,6 +324,7 @@ int iferr(int lvl, char *msg, xcb_generic_error_t *e);
 Rule *initrule(Rule *wr);
 void initscan(void);
 void initsock(void);
+Status *initstatus(FILE *file, char *path, int num);
 void initwm(void);
 Monitor *itomon(int num);
 Workspace *itows(int num);
@@ -324,9 +334,9 @@ Monitor *nextmon(Monitor *m);
 Client *nexttiled(Client *c);
 Monitor *outputtomon(xcb_randr_output_t id);
 void popfloat(Client *c);
-void pushstatus(void);
+void printstatus(Status *s);
 void quadrant(Client *c, int *x, int *y, int *w, int *h);
-void refresh(void);
+int refresh(void);
 void relocate(Client *c, Monitor *new, Monitor *old);
 void relocatews(Workspace *ws, Monitor *old);
 void resize(Client *c, int x, int y, int w, int h, int bw);

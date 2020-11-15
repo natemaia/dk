@@ -52,12 +52,12 @@ char *itoa(int n, char *s)
 
 void respond(FILE *f, const char *fmt, ...)
 {
-	if (f) {
-		va_list ap;
-		va_start(ap, fmt);
-		vfprintf(f, fmt, ap);
-		va_end(ap);
-	}
+	va_list ap;
+
+	if (!f) return;
+	va_start(ap, fmt);
+	vfprintf(f, fmt, ap);
+	va_end(ap);
 }
 
 void sighandle(int sig)

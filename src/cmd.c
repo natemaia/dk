@@ -16,10 +16,19 @@
  * which should be passed back up the call stack to parsecmd()
  */
 
+#define _XOPEN_SOURCE 700
+
+#include <sys/types.h>
+#include <sys/stat.h>
+
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <unistd.h>
 #include <regex.h>
+#include <err.h>
+#include <errno.h>
 
 #include <xcb/randr.h>
 #include <xcb/xcb_util.h>
@@ -373,9 +382,8 @@ int cmdkill(char **argv)
 		xcb_kill_client(con, cmdclient->win);
 		xcb_aux_sync(con);
 		xcb_ungrab_server(con);
-	} else {
-		xcb_flush(con);
 	}
+	xcb_aux_sync(con);
 	ignore(XCB_ENTER_NOTIFY);
 	(void)(argv);
 	return 0;
@@ -402,6 +410,16 @@ int cmdmon(char **argv)
 		cmdusemon = 0;
 	}
 	return nparsed;
+}
+
+int cmdmors(char **argv)
+{
+	int i, rel = 1;
+
+	if ((i = parseint(*argv, &rel, 1)) == INT_MIN || adjustisetting(i, rel,
+				!strcmp("stack", *(argv - 1)) ? &setws->nstack : &setws->nmaster, 0, 0) == -1)
+		return -1;
+	return 1;
 }
 
 int cmdmouse(char **argv)
@@ -444,17 +462,6 @@ badvalue:
 	if (selws->sel)
 		grabbuttons(selws->sel, 1);
 	return nparsed;
-}
-
-int cmdmors(char **argv)
-{
-	int i, rel = 1;
-
-	if ((i = parseint(*argv, &rel, 1)) == INT_MIN
-			|| adjustisetting(i, rel,
-				!strcmp("stack", *(argv - 1)) ? &setws->nstack : &setws->nmaster, 0, 0) == -1)
-		return -1;
-	return 1;
 }
 
 int cmdpad(char **argv)
@@ -865,6 +872,14 @@ int cmdsplit(char **argv)
 	return -1;
 }
 
+int cmdstatus(char **argv)
+{
+	if (cmdresp)
+		printstatus(initstatus(cmdresp, NULL, -1));
+	(void)(argv);
+	return 0;
+}
+
 int cmdstick(char **argv)
 {
 	Client *c = cmdclient;
@@ -920,6 +935,16 @@ int cmdswap(char **argv)
 	}
 	needsrefresh = 1;
 	(void)(argv);
+	return 0;
+}
+
+int cmdview(Workspace *ws)
+{
+	if (ws) {
+		changews(ws, globalcfg[GLB_STATICWS] ? 0 : !cmdusemon,
+				cmdusemon || (globalcfg[GLB_STATICWS] && selws->mon != ws->mon));
+		needsrefresh = 1;
+	}
 	return 0;
 }
 
@@ -1053,14 +1078,4 @@ badvalue:
 		}
 	}
 	return nparsed;
-}
-
-int cmdview(Workspace *ws)
-{
-	if (ws) {
-		changews(ws, globalcfg[GLB_STATICWS] ? 0 : !cmdusemon,
-				cmdusemon || (globalcfg[GLB_STATICWS] && selws->mon != ws->mon));
-		needsrefresh = 1;
-	}
-	return 0;
 }

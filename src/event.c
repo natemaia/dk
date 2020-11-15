@@ -367,7 +367,10 @@ void mouse(Client *c, int move, int mx, int my)
 			DBG("buttonrelease: ungrabbing pointer - 0x%08x", selws->sel->win)
 				iferr(1, "failed to ungrab pointer",
 						xcb_request_check(con, xcb_ungrab_pointer_checked(con, XCB_CURRENT_TIME)));
-			if (!move) ignore(XCB_ENTER_NOTIFY);
+			if (!move) {
+				xcb_aux_sync(con);
+				ignore(XCB_ENTER_NOTIFY);
+			}
 			break;
 		default: /* handle other event types normally */
 			dispatch(ev);
@@ -414,7 +417,7 @@ void propertynotify(xcb_generic_event_t *ev)
 			return;
 		default:
 			if (e->atom == XCB_ATOM_WM_NAME || e->atom == netatom[NET_WM_NAME]) {
-				if (clientname(c) && globalcfg[GLB_USE_STATUS]) pushstatus();
+				if (clientname(c) && globalcfg[GLB_USE_STATUS]) needsrefresh = 1;
 			} else if (e->atom == netatom[NET_WM_TYPE])
 				clienttype(c);
 			return;

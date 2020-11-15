@@ -32,6 +32,8 @@ nostrip: debug
 .c.o:
 	${CC} ${CFLAGS} ${CPPFLAGS} -c $<
 
+${OBJ}: config.h
+
 config.h:
 	@test -e src/$@ || cp -v src/config.def.h src/$@
 

@@ -81,8 +81,8 @@ alt + {_,shift + ,ctrl + }{comma,period,backslash}
 	dkcmd mon {view,send,follow} {prev,next,last}
 
 # change active workspace layout
-alt + {t,m,g,s,w,f}
-	dkcmd set layout {tile,mono,grid,spiral,dwindle,none}
+alt + {t,m,g,s,w,f,u}
+	dkcmd set layout {tile,mono,grid,spiral,dwindle,none,tstack}
 
 # change number of windows in master or first stack
 alt + {_,shift + }{i,d}

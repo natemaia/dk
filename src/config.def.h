@@ -28,7 +28,7 @@ int globalcfg[GLB_LAST] = {
 	[GLB_SMART_GAP]    = 1,  /* bool: disable gaps in layouts with only one visible window */
 	[GLB_TILETOHEAD]   = 0,  /* bool: place new clients at the tail of the stack */
 	[GLB_STATICWS]     = 0,  /* bool: use static workspace assignment */
-	[GLB_USE_STATUS]   = 1,  /* bool: output info to $DKSTAT */
+	[GLB_USE_STATUS]   = 0,  /* bool: output info to $DKSTAT */
 };
 
 char *cursors[CURS_LAST] = {

@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
 	buf[n - 1] = '\0';
 
 	check(send(fd, buf, n, 0), "unable to send command");
-	while (poll(fds, 2, 1000) > 0) {
+	while (poll(fds, 2, -1) > 0) {
 		if (fds[1].revents & (POLLERR | POLLHUP)) break;
 		if (fds[0].revents & POLLIN) {
 			if ((s = recv(fd, resp, sizeof(resp) - 1, 0)) > 0) {

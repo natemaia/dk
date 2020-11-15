@@ -8,7 +8,11 @@ bg="#111111"
 fg="#666666"
 highlight="#6699ee"
 underline=3
-font="-*-terminus-medium-r-normal--*-200-*-*-*-*-iso10646-1"
+font0="monospace:pixelsize=24"
+font1="Font Awesome 5 Brands:pixelsize=20"
+font2="icomoon:pixelsize=18"
+font3="Anonymice Nerd Font Mono:pixelsize=18"
+
 fifo="/tmp/bar.fifo"
 
 # mimic dwm style layout symbols
@@ -113,7 +117,7 @@ parsefifo()
 			V*) vol="${line#?} " ;;
 			B*) bat="${line#?} " ;;
 			A*) title="${line#?} " ;;
-			W*) # dkcmd status is prefixed with "W"
+			W*) # `dkcmd status` is prefixed with "W"
 				wm=''
 				IFS=':'
 				# shellcheck disable=SC2086
@@ -159,11 +163,11 @@ mkfifo "$fifo"
 # a second argument containing the command
 clock 'T%a %H:%M' > "$fifo" &
 battery 'B%s\n' > "$fifo" &
-volume 'V%s\n' "pavucontrol" > "$fifo" &
+volume 'V%s\n' 'pavucontrol' > "$fifo" &
 title 'A%s\n' > "$fifo" &
 dkcmd status > "$fifo" &
 
 # run the pipeline
-parsefifo < "$fifo" | lemonbar -a 32 -u $underline -B "$bg" -F "$fg" -f "$font" | sh
+parsefifo < "$fifo" | lemonbar -a 32 -u $underline -B "$bg" -F "$fg" -f "$font0" -f "$font1" -f "$font2" -f "$font3" | sh
 
 # vim:ft=sh:fdm=marker:fmr={,}

@@ -40,9 +40,7 @@ fi
 	# dkcmd set ws=6 mon=$mon2 ws=7 mon=$mon2 ws=8 mon=$mon2 ws=9 mon=$mon2 ws=10 mon=$mon2
 
 	# use some padding and gaps on the last workspace
-	last=$(awk '/^numws:/ {print $2}' "$DKSTAT")
-	dkcmd set ws="$last" pad left=200 right=200 top=100 bottom=100
-	dkcmd set ws="$last" gap width=50
+	dkcmd set ws=10 pad left=200 right=200 top=100 bottom=100 gap width=50
 
 
 	# global settings

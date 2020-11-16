@@ -81,9 +81,7 @@ $HOME/.config/dk/dkrc     # default location
 ```
 and to runs it, **it must be executable in order for this to happen**.
 
-Status info is output to a file `$DKSTAT` for use in status bars or scripts.
-
-Advanced changes and configuration like new layouts, callbacks, or new commands  
+Advanced changes and configuration like new layouts, callbacks, or commands  
 can be done by copying the default config header `config.def.h` to `config.h`,  
 editing it and recompiling. This file isn't tracked by git so you can keep your  
 configuration and avoid conflicts when pulling new updates.

@@ -9,10 +9,18 @@ fg="#666666"
 highlight="#6699ee"
 underline=3
 seperator="┃"
-font0="monospace:pixelsize=24"
-font1="Font Awesome 5 Brands:pixelsize=20"
-font2="icomoon:pixelsize=18"
-font3="Anonymice Nerd Font Mono:pixelsize=18"
+
+# xfonts
+font0="-*-terminus-medium-r-normal--*-240-*-*-*-*-iso10646-1"
+font1=""
+font2=""
+font3=""
+
+# xft fonts
+# font0="monospace:pixelsize=24"
+# font1="Font Awesome 5 Brands:pixelsize=20"
+# font2="icomoon:pixelsize=18"
+# font3="Anonymice Nerd Font Mono:pixelsize=18"
 
 fifo="/tmp/bar.fifo"
 
@@ -114,8 +122,8 @@ mkfifo "$fifo"
 
 
 # here we dump info into the FIFO, order does not matter things are parsed
-# out using the first character of the line click commands for left button
-# can be added by passing an argument containing the command
+# out using the first character of the line. Click commands for left button
+# can be added by passing an argument containing the command (like volume below)
 clock '' > "$fifo" &
 battery '' > "$fifo" &
 volume 'pavucontrol' > "$fifo" &

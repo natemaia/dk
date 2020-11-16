@@ -20,7 +20,7 @@ int cmdmon(char **argv);
 int cmdmors(char **argv);
 int cmdmouse(char **argv);
 int cmdpad(char **argv);
-int cmdquit(char **argv);
+int cmdexit(char **argv);
 int cmdreload(char **argv);
 int cmdresize(char **argv);
 int cmdrestart(char **argv);

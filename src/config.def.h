@@ -139,7 +139,8 @@ Callback callbacks[] = {
 Cmd keywords[] = {
 	/* command,  function */
 	{ "mon",     cmdmon     },
-	{ "quit",    cmdquit    },
+	{ "exit",    cmdexit    },
+	{ "quit",    cmdexit    },
 	{ "reload",  cmdreload  },
 	{ "restart", cmdrestart },
 	{ "rule",    cmdrule    },

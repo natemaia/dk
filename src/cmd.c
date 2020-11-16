@@ -497,7 +497,7 @@ badvalue:
 #undef PAD
 }
 
-int cmdquit(char **argv)
+int cmdexit(char **argv)
 {
 	running = 0;
 	(void)(argv);

@@ -37,6 +37,7 @@ if (( $# == 0 )); then
 	exit 2
 fi
 
+
 currentwsgap()
 {
 	awk '{
@@ -52,7 +53,7 @@ currentwsgap()
 			print $7;
 			exit;
 		}
-	}' "$DKSTAT"
+	}' <(dkcmd status type=full num=1)
 }
 
 # store the gap width before and after changing

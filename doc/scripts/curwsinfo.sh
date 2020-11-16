@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 awk '{
 	if (!s && $1 == "workspaces:") {
@@ -14,4 +14,4 @@ awk '{
 		print;
 		exit;
 	}
-}' "$DKSTAT"
+}' <(dkcmd status type=full num=1)

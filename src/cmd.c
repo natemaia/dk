@@ -934,7 +934,7 @@ badvalue:
 		nparsed++;
 	}
 
-	if (path && !(file = fopen(path, "w")))
+	if (path && path[0] && !(file = fopen(path, "w")))
 		respond(cmdresp, "!unable to open file in write mode: %s: %s", path, strerror(errno));
 	if (file) {
 		status_usingcmdresp = file == cmdresp;

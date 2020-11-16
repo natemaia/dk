@@ -602,10 +602,7 @@ void freestatus(Status *s)
 
 	DBG("freestatus: path: %s", s->path)
 	DETACH(s, ss);
-	if (!restart) {
-		fclose(s->file);
-		if (s->path) unlink(s->path);
-	}
+	if (!restart) fclose(s->file);
 	if (s->path) free(s->path);
 	free(s);
 }
@@ -645,6 +642,7 @@ void freewm(void)
 
 	close(sockfd);
 	unlink(sock);
+	free(sock);
 }
 
 void freews(Workspace *ws)
@@ -1298,9 +1296,11 @@ void printstatus(Status *s)
 				fmt[0] = ws->clients ? 'A' : 'I';
 			else
 				fmt[0] = ws->clients ? 'a' : 'i';
+			if (!ws->next)
+				fmt[3] = '\0';
 			fprintf(s->file, fmt, ws->name);
 		}
-		fprintf(s->file, "L%s", selws->layout->name);
+		fprintf(s->file, "\nL%s\nA%s", selws->layout->name, selws->sel ? selws->sel->title : "");
 		break;
 	case TYPE_FULL:
 		fprintf(s->file, "# globals - key: value ...\nnumws: %d\nsmart_border: %d\n"
@@ -1312,7 +1312,7 @@ void printstatus(Status *s)
 				globalcfg[GLB_MIN_XY], globalcfg[GLB_MIN_WH]);
 		fprintf(s->file, "\n\n# width outer_width focus urgent unfocus "
 				"outer_focus outer_urgent outer_unfocus\n"
-				"border: %u %u #%08x #%08x #%08x #%08x #%08x #%08x",
+				"border: %u %u 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x",
 				border[BORD_WIDTH], border[BORD_O_WIDTH],
 				border[BORD_FOCUS], border[BORD_URGENT],
 				border[BORD_UNFOCUS], border[BORD_O_FOCUS],
@@ -1323,7 +1323,7 @@ void printstatus(Status *s)
 		fprintf(s->file, "\n\t# number:name active_window nmaster "
 				"nstack msplit ssplit gappx padl padr padt padb");
 		FOR_EACH(ws, workspaces)
-			fprintf(s->file, "\n\t%d:%s #%08x %d %d %0.2f %0.2f %d %d %d %d %d",
+			fprintf(s->file, "\n\t%d:%s 0x%08x %d %d %0.2f %0.2f %d %d %d %d %d",
 					ws->num + 1, ws->name, ws->sel ? ws->sel->win : 0, ws->nmaster, ws->nstack,
 					ws->msplit, ws->ssplit, ws->gappx, ws->padl, ws->padr, ws->padt, ws->padb);
 		fprintf(s->file, "\n\n# number:name:workspace ...\nmonitors:");
@@ -1333,16 +1333,16 @@ void printstatus(Status *s)
 		fprintf(s->file, "\n\t# number:name active_window x y width height wx wy wwidth wheight");
 		FOR_EACH(m, monitors)
 			if (m->connected)
-				fprintf(s->file, "\n\t%d:%s #%08x %d %d %d %d %d %d %d %d",
+				fprintf(s->file, "\n\t%d:%s 0x%08x %d %d %d %d %d %d %d %d",
 						m->num + 1, m->name, m->ws->sel ? m->ws->sel->win : 0,
 						m->x, m->y, m->w, m->h, m->wx, m->wy, m->ww, m->wh);
 		fprintf(s->file, "\n\n# id:workspace ...\nwindows:");
 		FOR_CLIENTS(c, ws)
-			fprintf(s->file, " %s#%08x:%d", c == selws->sel ? "*" : "", c->win, c->ws->num + 1);
+			fprintf(s->file, " %s0x%08x:%d", c == selws->sel ? "*" : "", c->win, c->ws->num + 1);
 		fprintf(s->file, "\n\t# id title class instance x y width height bw hoff "
 				"float full fakefull fixed stick urgent callback trans_id");
 		FOR_CLIENTS(c, ws)
-			fprintf(s->file, "\n\t#%08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d %d %d %d %d %d %s #%08x",
+			fprintf(s->file, "\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d %d %d %d %d %d %s 0x%08x",
 					c->win, c->title, c->class, c->inst, c->x, c->y, c->w, c->h, c->bw,
 					c->hoff, FLOATING(c), (c->state & STATE_FULLSCREEN) != 0,
 					(c->state & STATE_FAKEFULL) != 0, (c->state & STATE_FIXED) != 0,

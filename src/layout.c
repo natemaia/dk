@@ -40,8 +40,8 @@ int fib(Workspace *ws, int out)
 	g = globalcfg[GLB_SMART_GAP] && n == 1 ? 0 : ws->gappx;
 	x = m->wx + ws->padl;
 	y = m->wy + ws->padt;
-	w = m->ww - ws->padl - ws->padr;
-	h = m->wh - ws->padt - ws->padb;
+	w = m->ww - ws->padl - ws->padr - g;
+	h = m->wh - ws->padt - ws->padb - g;
 
 	for (i = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), i++) {
 		unsigned int ox = x;

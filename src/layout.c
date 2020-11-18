@@ -197,7 +197,6 @@ int tile(Workspace *ws)
 		c->x = wx + x;
 		c->y = wy + *y;
 		int bw = !globalcfg[GLB_SMART_BORDER] || n > 1 ? c->bw : 0;
-
 		if (!prev && remaining == 1) {
 			c->h = wh - *y - g;
 			goto update;

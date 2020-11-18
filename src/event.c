@@ -318,7 +318,7 @@ void mouse(Client *c, int move, int mx, int my)
 					selws->msplit = (double)((ox - selws->mon->x + ow) + (e->root_x - mx))
 						/ (double)selws->mon->ww;
 				int ohoff = c->hoff;
-				if (prev) {
+				if (prev || ((i == selws->nmaster || i == selws->nmaster + selws->nstack) && nexttiled(c->next))) {
 					if (i + 1 == selws->nmaster || i + 1 == selws->nmaster + selws->nstack
 							|| !nexttiled(c->next))
 						c->hoff = (e->root_y - my) * -1;

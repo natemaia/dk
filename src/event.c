@@ -150,10 +150,10 @@ void configrequest(xcb_generic_event_t *ev)
 					c->w = e->width;
 				if (e->value_mask & XCB_CONFIG_WINDOW_HEIGHT)
 					c->h = e->height;
-				if (c->x + c->w > m->wx + m->ww)
-					c->x = m->wx + ((m->ww - W(c)) / 2);
-				if (c->y + c->h > m->wy + m->wh)
-					c->y = m->wy + ((m->wh - H(c)) / 2);
+				if (c->x >= m->wx + m->ww - globalcfg[GLB_MIN_XY])
+					c->x = m->wx + m->ww - W(c);
+				if (c->y >= m->wy + m->wh - globalcfg[GLB_MIN_XY])
+					c->y = m->wy + m->wh - H(c);
 				if (e->value_mask & (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y)
 						&& !(e->value_mask & (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT)))
 					sendconfigure(c);

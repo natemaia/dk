@@ -289,7 +289,7 @@ int cmdfloat(char **argv)
 		if ((c->state ^= STATE_FLOATING) & STATE_FLOATING) {
 			if (c->old_x + c->old_y == c->ws->mon->wx + c->ws->mon->wy)
 				quadrant(c, &c->old_x, &c->old_y, &c->old_w, &c->old_h);
-			resizehint(c, c->old_x, c->old_y, c->old_w, c->old_h, c->bw, 0, 1);
+			resizehint(c, c->old_x, c->old_y, c->old_w, c->old_h, c->bw, 0, 0);
 		} else {
 			c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 		}

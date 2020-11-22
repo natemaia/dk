@@ -16,21 +16,25 @@ OBJ  = ${SRC:.c=.o}
 CSRC = dkcmd.c strl.c util.c
 COBJ = ${CSRC:.c=.o}
 
+
 # compiler and linker flags
+OPTLVL = -Ofast
+
 CPPFLAGS += -D_DEFAULT_SOURCE -D_BSD_SOURCE -DVERSION=\"${VERSION}\"
-CFLAGS   += -std=c99 -O2 -pedantic -Wall -Wextra -I/usr/X11R6/include
-LDFLAGS   = -L/usr/X11R6/lib -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
+CFLAGS   += -std=c99 -pedantic -flto -Wall -Wextra -I/usr/X11R6/include
+LDFLAGS   = -L/usr/X11R6/lib -flto -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
 
 all: dk dkcmd
 
+debug: OPTLVL = -Og
 debug: CPPFLAGS += -DDEBUG
 debug: all
 
-nostrip: CFLAGS += -g -O0
+nostrip: CFLAGS += -g
 nostrip: debug
 
 .c.o:
-	${CC} ${CFLAGS} ${CPPFLAGS} -c $<
+	${CC} ${OPTLVL} ${CFLAGS} ${CPPFLAGS} -c $<
 
 ${OBJ}: config.h
 

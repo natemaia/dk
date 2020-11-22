@@ -376,6 +376,7 @@ int cmdgappx(char **argv)
 
 int cmdkill(char **argv)
 {
+	if (!cmdclient) return 0;
 	if (!sendwmproto(cmdclient, WM_DELETE)) {
 		xcb_grab_server(con);
 		xcb_set_close_down_mode(con, XCB_CLOSE_DOWN_DESTROY_ALL);

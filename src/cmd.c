@@ -155,7 +155,8 @@ static int adjustwsormon(char **argv)
 	}
 	if (ws) {
 		nparsed++;
-		fn(ws);
+		if (ws != selws || selws->mon != ws->mon)
+			fn(ws);
 	} else {
 		respond(cmdresp, "!invalid value for %s: %s", cmdusemon ? "mon" : "ws", *argv);
 		return -1;
@@ -329,6 +330,8 @@ int cmdfocus(char **argv)
 				focus(c);
 				restack(c->ws);
 			}
+			xcb_aux_sync(con);
+			ignore(XCB_ENTER_NOTIFY);
 		}
 	}
 	return nparsed;

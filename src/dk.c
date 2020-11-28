@@ -609,8 +609,15 @@ void freestatus(Status *s)
 
 void freewm(void)
 {
+	Client *c;
+	Workspace *ws;
+
 	while (panels) unmanage(panels->win, 0);
 	while (desks) unmanage(desks->win, 0);
+
+	if (!restart) /* move clients back into visible space when not restarting */
+		FOR_CLIENTS(c, ws)
+			MOVE(c->win, c->x, c->y);
 	while (workspaces) {
 		while (workspaces->stack)
 			unmanage(workspaces->stack->win, 0);
@@ -775,8 +782,8 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	c->trans = wintoclient(wintrans(c->win));
 
 	clientname(c);
-	pc = xcb_icccm_get_wm_class(con, c->win);
-	if (!xcb_icccm_get_wm_class_reply(con, pc, &p, &e)) {
+
+	if (!xcb_icccm_get_wm_class_reply(con, xcb_icccm_get_wm_class(con, c->win), &p, &e)) {
 		iferr(0, "failed to get window class", e);
 		strlcpy(c->class, "broken", sizeof(c->class));
 		strlcpy(c->inst, "broken", sizeof(c->inst));
@@ -806,7 +813,6 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 							| XCB_EVENT_MASK_FOCUS_CHANGE
 							| XCB_EVENT_MASK_PROPERTY_CHANGE
 							| XCB_EVENT_MASK_STRUCTURE_NOTIFY });
-	drawborder(c, 0);
 	grabbuttons(c, 0);
 	if (FLOATING(c) || c->state & STATE_FIXED) {
 		c->w = CLAMP(c->w, globalcfg[GLB_MIN_WH], c->ws->mon->ww);
@@ -821,9 +827,6 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		if (c->x == c->ws->mon->wx && c->y == c->ws->mon->wy)
 			quadrant(c, &c->x, &c->y, &c->w, &c->h);
 	}
-	MOVE(c->win, W(c) * -2, c->y);
-	if (globalcfg[GLB_FOCUS_OPEN])
-		focus(c);
 	if (c->cb)
 		c->cb->func(c, 0);
 }

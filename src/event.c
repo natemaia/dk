@@ -135,7 +135,7 @@ void configrequest(xcb_generic_event_t *ev)
 	xcb_configure_request_event_t *e = (xcb_configure_request_event_t *)ev;
 
 	if ((c = wintoclient(e->window))) {
-		DBG("configrequest: managed %s window 0x%08x",
+		DBG("configrequest: managed %s client 0x%08x",
 			FLOATING(c) ? "floating" : "tiled", e->window)
 			if (e->value_mask & XCB_CONFIG_WINDOW_BORDER_WIDTH) {
 				c->bw = e->border_width;
@@ -165,13 +165,17 @@ void configrequest(xcb_generic_event_t *ev)
 				sendconfigure(c);
 			}
 	} else {
-		DBG("configrequest: unmanaged - 0x%08x", e->window)
-		xcb_params_configure_window_t wc;
-		wc.x = e->x, wc.y = e->y, wc.border_width = e->border_width;
-		wc.width = e->width, wc.height = e->height;
-		wc.sibling = e->sibling;
-		wc.stack_mode = e->stack_mode;
-		xcb_configure_window(con, e->window, e->value_mask, &wc);
+		DBG("configrequest: 0x%08x - %d,%d @ %dx%d", e->window, e->x, e->y, e->width, e->height)
+		xcb_params_configure_window_t wc = {
+			.x = e->x,
+			.y = e->y,
+			.width = e->width,
+			.height = e->height,
+			.sibling = e->sibling,
+			.stack_mode = e->stack_mode,
+			.border_width = e->border_width
+		};
+		xcb_aux_configure_window(con, e->window, e->value_mask, &wc);
 	}
 	xcb_aux_sync(con);
 }
@@ -318,7 +322,9 @@ void mouse(Client *c, int move, int mx, int my)
 					selws->msplit = (double)((ox - selws->mon->x + ow) + (e->root_x - mx))
 						/ (double)selws->mon->ww;
 				int ohoff = c->hoff;
-				if (prev || ((i == selws->nmaster || i == selws->nmaster + selws->nstack) && nexttiled(c->next))) {
+				if (prev || ((i == selws->nmaster || i == selws->nmaster + selws->nstack)
+							&& nexttiled(c->next)))
+				{
 					if (i + 1 == selws->nmaster || i + 1 == selws->nmaster + selws->nstack
 							|| !nexttiled(c->next))
 						c->hoff = (e->root_y - my) * -1;
@@ -417,7 +423,7 @@ void propertynotify(xcb_generic_event_t *ev)
 			return;
 		default:
 			if (e->atom == XCB_ATOM_WM_NAME || e->atom == netatom[NET_WM_NAME]) {
-				if (clientname(c)) printstatus_all();
+				if (clientname(c)) printstatus(NULL);
 			} else if (e->atom == netatom[NET_WM_TYPE])
 				clienttype(c);
 			return;

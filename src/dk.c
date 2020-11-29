@@ -41,10 +41,10 @@
 
 
 FILE *cmdresp;
-unsigned int lockmask = 0;
 char *argv0, *sock = NULL;
-int status_usingcmdresp;
-int scr_h, scr_w, sockfd, running, restart, randrbase, cmdusemon, needsrefresh;
+unsigned int lockmask = 0;
+int scr_h, scr_w, sockfd, randrbase, cmdusemon;
+int running, restart, needsrefresh, status_usingcmdresp;
 
 Desk *desks;
 Rule *rules;
@@ -840,17 +840,13 @@ void initdesk(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	d->win = win;
 	if (!(d->mon = coordtomon(g->x, g->y)))
 		d->mon = selws->mon;
-	d->x = d->mon->wx;
-	d->y = d->mon->wy;
-	d->w = d->mon->ww;
-	d->h = d->mon->wh;
 	d->state |= STATE_NEEDSMAP;
 	ATTACH(d, desks);
 	xcb_change_window_attributes(con, d->win, XCB_CW_EVENT_MASK,
 			(unsigned int[]){ XCB_EVENT_MASK_PROPERTY_CHANGE
 							| XCB_EVENT_MASK_STRUCTURE_NOTIFY });
-	MOVERESIZE(d->win, d->x, d->y, d->w, d->h, 0);
 	setstackmode(d->win, XCB_STACK_MODE_BELOW);
+	needsrefresh = 1;
 }
 
 void initmon(int num, char *name, xcb_randr_output_t id, int x, int y, int w, int h)
@@ -886,12 +882,8 @@ void initpanel(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	rc = xcb_get_property(con, 0, win, netatom[NET_WM_STRUTP], XCB_ATOM_CARDINAL, 0, 4);
 	p = ecalloc(1, sizeof(Panel));
 	p->win = win;
-	p->x = g->x;
-	p->y = g->y;
-	p->w = g->width;
-	p->h = g->height;
 	p->state |= STATE_NEEDSMAP;
-	if (!(p->mon = coordtomon(p->x, p->y)))
+	if (!(p->mon = coordtomon(g->x, g->y)))
 		p->mon = selws->mon;
 	if (!(prop = xcb_get_property_reply(con, rc, &e)) || prop->type == XCB_NONE) {
 		iferr(0, "unable to get _NET_WM_STRUT_PARTIAL reply from window", e);
@@ -921,38 +913,23 @@ Rule *initrule(Rule *wr)
 	size_t len;
 	char buf[NAME_MAX];
 
-#define INITREG(str, wstr, reg)                                                \
-	if (wstr) {                                                                \
-		str = ecalloc(1, (len = strlen(wstr) + 1));                            \
-		strlcpy(str, wstr, len);                                               \
-		if ((i = regcomp(reg, str, REG_NOSUB|REG_EXTENDED|REG_ICASE))) {       \
-			regerror(i, reg, buf, sizeof(buf));                                \
-			respond(cmdresp, "!invalid regex %s: %s", str, buf);                        \
-			goto error;                                                        \
-		}                                                                      \
+#define CPYSTR(dst, src)                           \
+		dst = ecalloc(1, (len = strlen(src) + 1)); \
+		strlcpy(dst, src, len)
+#define INITREG(str, reg)                                            \
+	if ((i = regcomp(reg, str, REG_NOSUB|REG_EXTENDED|REG_ICASE))) { \
+		regerror(i, reg, buf, sizeof(buf));                          \
+		respond(cmdresp, "!invalid regex %s: %s", str, buf);         \
+		goto error;                                                  \
 	}
-#define FREEREG(str, wstr, reg)                                                \
-	if (wstr) { regfree(reg); free(str); }
+#define FREEREG(str, wstr, reg) if (wstr) { regfree(reg); free(str); }
 
 	r = ecalloc(1, sizeof(Rule));
-	r->x = wr->x;
-	r->y = wr->y;
-	r->w = wr->w;
-	r->h = wr->h;
-	r->bw = wr->bw;
-	r->xgrav = wr->xgrav;
-	r->ygrav = wr->ygrav;
-	r->focus = wr->focus;
-	r->state = wr->state;
-	r->ws = wr->ws;
-	r->cb = wr->cb;
-	if (wr->mon) {
-		r->mon = ecalloc(1, (len = strlen(wr->mon) + 1));
-		strlcpy(r->mon, wr->mon, len);
-	}
-	INITREG(r->title, wr->title, &(r->titlereg))
-	INITREG(r->class, wr->class, &(r->classreg))
-	INITREG(r->inst, wr->inst, &(r->instreg))
+	memcpy(r, wr, sizeof(Rule)); // NOLINT
+	if (wr->mon) { CPYSTR(r->mon, wr->mon); }
+	if (wr->title) { CPYSTR(r->title, wr->title); INITREG(r->title, &(r->titlereg)) }
+	if (wr->class) { CPYSTR(r->class, wr->class); INITREG(r->class, &(r->classreg)) }
+	if (wr->inst) { CPYSTR(r->inst, wr->inst); INITREG(r->inst, &(r->instreg)) }
 	ATTACH(r, rules);
 	return r;
 
@@ -960,11 +937,13 @@ error:
 	FREEREG(r->title, wr->title, &(r->titlereg))
 	FREEREG(r->class, wr->class, &(r->classreg))
 	FREEREG(r->inst, wr->inst, &(r->instreg))
-	free(r->mon);
+	if (wr->mon) free(r->mon);
 	free(r);
 	return NULL;
+
 #undef INITREG
 #undef FREEREG
+#undef CPYSTR
 }
 
 void initscan(void)
@@ -1269,100 +1248,98 @@ void popfloat(Client *c)
 	xcb_aux_sync(con);
 }
 
-void printstatus_all(void)
-{
-	Status *s = stats, *next;
-	
-	while (s) {
-		next = s->next;
-		printstatus(s);
-		if (!s->num) freestatus(s);
-		s = next;
-	}
-}
-
 void printstatus(Status *s)
 {
 	Rule *r;
 	Client *c;
 	Monitor *m;
+	Status *next;
 	Workspace *ws;
+	int single = 1;
 
-	if (!s->file) return;
-
-	switch (s->type) {
-	case TYPE_WS:
-		fprintf(s->file, "W");
-		FOR_EACH(ws, workspaces) {
-			char fmt[5] = "i%s:";
-			if (ws == selws)
-				fmt[0] = ws->clients ? 'A' : 'I';
-			else
-				fmt[0] = ws->clients ? 'a' : 'i';
-			if (!ws->next)
-				fmt[3] = '\0';
-			fprintf(s->file, fmt, ws->name);
-		}
-		fprintf(s->file, "\nL%s\nA%s", selws->layout->name, selws->sel ? selws->sel->title : "");
-		break;
-	case TYPE_FULL:
-		fprintf(s->file, "# globals - key: value ...\nnumws: %d\nsmart_border: %d\n"
-				"smart_gap: %d\nfocus_urgent: %d\nfocus_mouse: %d\n"
-				"tile_hints: %d\nwin_minxy: %d\nwin_minwh: %d",
-				globalcfg[GLB_WS_NUM], globalcfg[GLB_SMART_BORDER],
-				globalcfg[GLB_SMART_GAP], globalcfg[GLB_FOCUS_URGENT],
-				globalcfg[GLB_FOCUS_MOUSE], globalcfg[GLB_TILE_HINTS],
-				globalcfg[GLB_MIN_XY], globalcfg[GLB_MIN_WH]);
-		fprintf(s->file, "\n\n# width outer_width focus urgent unfocus "
-				"outer_focus outer_urgent outer_unfocus\n"
-				"border: %u %u 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x",
-				border[BORD_WIDTH], border[BORD_O_WIDTH],
-				border[BORD_FOCUS], border[BORD_URGENT],
-				border[BORD_UNFOCUS], border[BORD_O_FOCUS],
-				border[BORD_O_URGENT], border[BORD_O_UNFOCUS]);
-		fprintf(s->file, "\n\n# number:name:layout ...\nworkspaces:");
-		FOR_EACH(ws, workspaces)
-			fprintf(s->file, " %s%d:%s:%s", ws == selws ? "*" : "", ws->num + 1, ws->name, ws->layout->name);
-		fprintf(s->file, "\n\t# number:name active_window nmaster "
-				"nstack msplit ssplit gappx padl padr padt padb");
-		FOR_EACH(ws, workspaces)
-			fprintf(s->file, "\n\t%d:%s 0x%08x %d %d %0.2f %0.2f %d %d %d %d %d",
-					ws->num + 1, ws->name, ws->sel ? ws->sel->win : 0, ws->nmaster, ws->nstack,
-					ws->msplit, ws->ssplit, ws->gappx, ws->padl, ws->padr, ws->padt, ws->padb);
-		fprintf(s->file, "\n\n# number:name:workspace ...\nmonitors:");
-		FOR_EACH(m, monitors)
-			if (m->connected)
-				fprintf(s->file, " %s%d:%s:%d", m->ws == selws ? "*" : "", m->num + 1, m->name, m->ws->num + 1);
-		fprintf(s->file, "\n\t# number:name active_window x y width height wx wy wwidth wheight");
-		FOR_EACH(m, monitors)
-			if (m->connected)
-				fprintf(s->file, "\n\t%d:%s 0x%08x %d %d %d %d %d %d %d %d",
-						m->num + 1, m->name, m->ws->sel ? m->ws->sel->win : 0,
-						m->x, m->y, m->w, m->h, m->wx, m->wy, m->ww, m->wh);
-		fprintf(s->file, "\n\n# id:workspace ...\nwindows:");
-		FOR_CLIENTS(c, ws)
-			fprintf(s->file, " %s0x%08x:%d", c == selws->sel ? "*" : "", c->win, c->ws->num + 1);
-		fprintf(s->file, "\n\t# id title class instance x y width height bw hoff "
-				"float full fakefull fixed stick urgent callback trans_id");
-		FOR_CLIENTS(c, ws)
-			fprintf(s->file, "\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d %d %d %d %d %d %s 0x%08x",
-					c->win, c->title, c->class, c->inst, c->x, c->y, c->w, c->h, c->bw,
-					c->hoff, FLOATING(c), (c->state & STATE_FULLSCREEN) != 0,
-					(c->state & STATE_FAKEFULL) != 0, (c->state & STATE_FIXED) != 0,
-					(c->state & STATE_STICKY) != 0, (c->state & STATE_URGENT) != 0,
-					c->cb ? c->cb->name : "", c->trans ? c->trans->win : 0);
-		fprintf(s->file, "\n\n# title class instance workspace monitor float "
-				"stick focus callback x y width height xgrav ygrav");
-		FOR_EACH(r, rules)
-			fprintf(s->file, "\nrule: \"%s\" \"%s\" \"%s\" %d %s %d %d %d %s %d %d %d %d %s %s",
-					r->title, r->class, r->inst, r->ws, r->mon, (r->state & STATE_FLOATING) != 0,
-					(r->state & STATE_STICKY) != 0, r->focus, r->cb ? r->cb->name : "",
-					r->x, r->y, r->w, r->h, gravities[r->xgrav], gravities[r->ygrav]);
-		fprintf(s->file, "\n");
-		break;
+	if (!s) {
+		s = stats;
+		single = 0;
 	}
-	fflush(s->file);
-	s->num -= s->num > 0 ? 1 : 0;
+	while (s) {
+		next = s->next;
+		switch (s->type) {
+		case TYPE_WS:
+			fprintf(s->file, "W");
+			FOR_EACH(ws, workspaces) {
+				char fmt[5] = "i%s:";
+				if (ws == selws)
+					fmt[0] = ws->clients ? 'A' : 'I';
+				else
+					fmt[0] = ws->clients ? 'a' : 'i';
+				if (!ws->next)
+					fmt[3] = '\0';
+				fprintf(s->file, fmt, ws->name);
+			}
+			fprintf(s->file, "\nL%s\nA%s", selws->layout->name, selws->sel ? selws->sel->title : "");
+			break;
+		case TYPE_FULL:
+			fprintf(s->file, "# globals - key: value ...\nnumws: %d\nsmart_border: %d\n"
+					"smart_gap: %d\nfocus_urgent: %d\nfocus_mouse: %d\n"
+					"tile_hints: %d\nwin_minxy: %d\nwin_minwh: %d",
+					globalcfg[GLB_WS_NUM], globalcfg[GLB_SMART_BORDER],
+					globalcfg[GLB_SMART_GAP], globalcfg[GLB_FOCUS_URGENT],
+					globalcfg[GLB_FOCUS_MOUSE], globalcfg[GLB_TILE_HINTS],
+					globalcfg[GLB_MIN_XY], globalcfg[GLB_MIN_WH]);
+			fprintf(s->file, "\n\n# width outer_width focus urgent unfocus "
+					"outer_focus outer_urgent outer_unfocus\n"
+					"border: %u %u 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x",
+					border[BORD_WIDTH], border[BORD_O_WIDTH],
+					border[BORD_FOCUS], border[BORD_URGENT],
+					border[BORD_UNFOCUS], border[BORD_O_FOCUS],
+					border[BORD_O_URGENT], border[BORD_O_UNFOCUS]);
+			fprintf(s->file, "\n\n# number:name:layout ...\nworkspaces:");
+			FOR_EACH(ws, workspaces)
+				fprintf(s->file, " %s%d:%s:%s", ws == selws ? "*" : "", ws->num + 1, ws->name, ws->layout->name);
+			fprintf(s->file, "\n\t# number:name active_window nmaster "
+					"nstack msplit ssplit gappx padl padr padt padb");
+			FOR_EACH(ws, workspaces)
+				fprintf(s->file, "\n\t%d:%s 0x%08x %d %d %0.2f %0.2f %d %d %d %d %d",
+						ws->num + 1, ws->name, ws->sel ? ws->sel->win : 0, ws->nmaster, ws->nstack,
+						ws->msplit, ws->ssplit, ws->gappx, ws->padl, ws->padr, ws->padt, ws->padb);
+			fprintf(s->file, "\n\n# number:name:workspace ...\nmonitors:");
+			FOR_EACH(m, monitors)
+				if (m->connected)
+					fprintf(s->file, " %s%d:%s:%d", m->ws == selws ? "*" : "", m->num + 1, m->name, m->ws->num + 1);
+			fprintf(s->file, "\n\t# number:name active_window x y width height wx wy wwidth wheight");
+			FOR_EACH(m, monitors)
+				if (m->connected)
+					fprintf(s->file, "\n\t%d:%s 0x%08x %d %d %d %d %d %d %d %d",
+							m->num + 1, m->name, m->ws->sel ? m->ws->sel->win : 0,
+							m->x, m->y, m->w, m->h, m->wx, m->wy, m->ww, m->wh);
+			fprintf(s->file, "\n\n# id:workspace ...\nwindows:");
+			FOR_CLIENTS(c, ws)
+				fprintf(s->file, " %s0x%08x:%d", c == selws->sel ? "*" : "", c->win, c->ws->num + 1);
+			fprintf(s->file, "\n\t# id title class instance x y width height bw hoff "
+					"float full fakefull fixed stick urgent callback trans_id");
+			FOR_CLIENTS(c, ws)
+				fprintf(s->file, "\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d %d %d %d %d %d %s 0x%08x",
+						c->win, c->title, c->class, c->inst, c->x, c->y, c->w, c->h, c->bw,
+						c->hoff, FLOATING(c), (c->state & STATE_FULLSCREEN) != 0,
+						(c->state & STATE_FAKEFULL) != 0, (c->state & STATE_FIXED) != 0,
+						(c->state & STATE_STICKY) != 0, (c->state & STATE_URGENT) != 0,
+						c->cb ? c->cb->name : "", c->trans ? c->trans->win : 0);
+			fprintf(s->file, "\n\n# title class instance workspace monitor float "
+					"stick focus callback x y width height xgrav ygrav");
+			FOR_EACH(r, rules)
+				fprintf(s->file, "\nrule: \"%s\" \"%s\" \"%s\" %d %s %d %d %d %s %d %d %d %d %s %s",
+						r->title, r->class, r->inst, r->ws, r->mon, (r->state & STATE_FLOATING) != 0,
+						(r->state & STATE_STICKY) != 0, r->focus, r->cb ? r->cb->name : "",
+						r->x, r->y, r->w, r->h, gravities[r->xgrav], gravities[r->ygrav]);
+			fprintf(s->file, "\n");
+			break;
+		}
+		fflush(s->file);
+		if (!(s->num -= s->num > 0 ? 1 : 0))
+			freestatus(s);
+		if (single) break;
+		s = next;
+	}
 }
 
 void quadrant(Client *c, int *x, int *y, int *w, int *h)
@@ -1434,12 +1411,12 @@ int refresh(void)
 			ws->layout->func(ws);
 		MAP(c, ws->clients);
 	}
+	focus(NULL);
 	for (m = nextmon(monitors); m; m = nextmon(m->next))
 		restack(m->ws);
-	focus(NULL);
 	xcb_aux_sync(con);
 	ignore(XCB_ENTER_NOTIFY);
-	printstatus_all();
+	printstatus(NULL);
 
 	return 0;
 #undef MAP
@@ -1504,21 +1481,19 @@ void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, i
 
 void restack(Workspace *ws)
 {
-	/* see: https://specifications.freedesktop.org/wm-spec/wm-spec-1.3.html#STACKINGORDER */
 	Desk *d;
 	Panel *p;
 	Client *c;
 
-	if (!ws || !(ws = selws) || !(c = ws->sel)) return;
+	if (!ws || !(c = ws->sel)) return;
 	FOR_EACH(p, panels)
 		if (p->mon == ws->mon)
 			setstackmode(p->win, XCB_STACK_MODE_ABOVE);
 	if (FLOATING(c))
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-	if (ws->layout->func)
-		for (c = ws->stack; c; c = c->snext)
-			if (!(c->state & STATE_FLOATING) && ws == ws->mon->ws)
-				setstackmode(c->win, XCB_STACK_MODE_BELOW);
+	if (ws->layout->func && ws == ws->mon->ws)
+		for (c = nexttiled(ws->stack); c; c = nexttiled(c->snext))
+			setstackmode(c->win, XCB_STACK_MODE_BELOW);
 	FOR_EACH(d, desks)
 		if (d->mon == ws->mon)
 			setstackmode(d->win, XCB_STACK_MODE_BELOW);
@@ -1954,7 +1929,6 @@ void updnetworkspaces(void)
 void updworkspaces(int needed)
 {
 	int n;
-	Desk *d;
 	Client *c;
 	Monitor *m;
 	Workspace *ws;
@@ -1980,8 +1954,8 @@ void updworkspaces(int needed)
 	}
 
 	FOR_CLIENTS(c, ws)
-		if (c->state & STATE_FULLSCREEN && c->w == c->ws->mon->w && c->h == c->ws->mon->h)
-			resize(c, ws->mon->x, ws->mon->y, ws->mon->w, ws->mon->h, c->bw);
+		if (c->state & STATE_FULLSCREEN && ws == ws->mon->ws)
+				resize(c, ws->mon->x, ws->mon->y, ws->mon->w, ws->mon->h, c->bw);
 	if (!panels) {
 		updnetworkspaces();
 	} else {
@@ -1989,11 +1963,6 @@ void updworkspaces(int needed)
 		FOR_EACH(p, panels)
 			updstruts(p, 1);
 	}
-	FOR_EACH(d, desks)
-		if (d->x != d->mon->wx || d->y != d->mon->wy || d->w != d->mon->ww || d->h != d->mon->wh) {
-			d->x = d->mon->wx, d->y = d->mon->wy, d->w = d->mon->ww, d->h = d->mon->wh;
-			MOVERESIZE(d->win, d->x, d->y, d->w, d->h, 0);
-		}
 	setnetwsnames();
 	needsrefresh = 1;
 }

@@ -897,7 +897,6 @@ int cmdsplit(char **argv)
 
 int cmdstatus(char **argv)
 {
-	Status *s;
 	char *path = NULL;
 	FILE *file = cmdresp;
 	int i, num = -1, nparsed = 0;
@@ -942,8 +941,7 @@ badvalue:
 		respond(cmdresp, "!unable to open file in write mode: %s: %s", path, strerror(errno));
 	if (file) {
 		status_usingcmdresp = file == cmdresp;
-		printstatus((s = initstatus(file, path, num, type)));
-		if (!s->num) freestatus(s);
+		printstatus(initstatus(file, path, num, type));
 	} else {
 		respond(cmdresp, "!unable to create status: %s", path ? path : "stdout");
 	}

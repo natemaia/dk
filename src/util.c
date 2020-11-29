@@ -21,13 +21,22 @@ void check(int i, char *msg)
 		err(1, "%s", msg);
 }
 
-void *ecalloc(size_t elems, size_t size)
+void *ecalloc(size_t elems, size_t elemsize)
 {
 	void *p;
 
-	if (!(p = calloc(elems, size)))
+	if (!(p = calloc(elems, elemsize)))
 		err(1, "unable to allocate space");
 	return p;
+}
+
+void *erealloc(void *p, size_t size)
+{
+	void *np;
+
+	if (!(np = realloc(p, size)))
+		err(1, "unable to reallocate space");
+	return np;
 }
 
 char *itoa(int n, char *s)

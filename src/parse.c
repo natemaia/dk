@@ -93,18 +93,11 @@ void parsecmd(char *buf)
 	int n = 0, match = 0, max = 32;
 	status_usingcmdresp = 0;
 
-	DBG("parsecmd: tokenizing buffer: %s", buf)
 	save = argv = ecalloc(max, sizeof(char *));
 	while ((tok = parsetoken(&buf))) {
-		if (n + 1 >= max) {
-			char **tmp;
-			max *= 2;
-			if (!(tmp = realloc(argv, max * sizeof(char *))))
-				err(1, "unable to reallocate space");
-			argv = tmp;
-		}
+		if (n + 1 >= max)
+			argv = erealloc(argv, (max *= 2) * sizeof(char *));
 		argv[n++] = tok;
-		DBG("parsecmd: token - argv[%d] = %s", n - 1, argv[n - 1])
 	}
 	argv[n] = NULL;
 
@@ -112,26 +105,12 @@ void parsecmd(char *buf)
 		int j = n;
 		unsigned int i;
 		while (j > 0 && *argv) {
-			DBG("parsecmd: outer loop -- args: %d - head: %s", j, *argv)
-			match = 0;
-			for (i = 0; keywords[i].str; i++) {
+			for (i = 0, match = 0; keywords[i].str; i++) {
 				if ((match = !strcmp(keywords[i].str, *argv))) {
 					cmdclient = selws->sel;
-					DBG("parsecmd: inner loop -- matched: %s -- calling function", *argv)
-					if ((n = keywords[i].func(argv + 1)) == -1)
-						goto end;
+					if ((n = keywords[i].func(argv + 1)) == -1) goto end;
 					argv += ++n;
 					j -= n;
-#ifdef DEBUG
-					warnx("%d: parsecmd: inner loop -- parsed: %d -- remaining: %d", __LINE__, n, j);
-					if (j - 1 > 0) {
-						int p;
-						char **s;
-						for (p = 0, s = argv; *s; p++, s++)
-							warnx("%d: parsecmd: remaining after call: argv[%d] = %s", __LINE__, p, *s);
-					}
-					fflush(stderr);
-#endif
 					break;
 				}
 			}
@@ -139,16 +118,8 @@ void parsecmd(char *buf)
 				break;
 		}
 	}
-
-	if (!match && *argv) {
+	if (!match && *argv)
 		respond(cmdresp, "!invalid or unknown command: %s", *argv);
-#ifdef DEBUG
-	} else if (match && !*argv) {
-		fprintf(stderr, "dk: %d: parsecmd: all arguments successfully parsed\n", __LINE__);
-		fflush(stderr);
-#endif
-	}
-
 end:
 	if (cmdresp && !status_usingcmdresp) {
 		fflush(cmdresp);

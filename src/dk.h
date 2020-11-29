@@ -168,6 +168,11 @@ enum GlobalCfg {
 typedef struct Callback Callback;
 typedef struct Workspace Workspace;
 
+
+typedef struct Geom {
+	int x, y, w, h;
+} Geom;
+
 typedef struct Monitor {
 	char name[64];
 	int num, connected;
@@ -179,7 +184,6 @@ typedef struct Monitor {
 } Monitor;
 
 typedef struct Desk {
-	int x, y, w, h;
 	unsigned int state;
 	xcb_window_t win;
 	struct Desk *next;
@@ -206,7 +210,6 @@ typedef struct Status {
 } Status;
 
 typedef struct Panel {
-	int x, y, w, h;
 	int l, r, t, b; /* struts */
 	unsigned int state;
 	xcb_window_t win;
@@ -264,12 +267,11 @@ struct Workspace {
 
 
 /* dk.c values */
-extern char **environ;
 extern FILE *cmdresp;
 extern unsigned int lockmask;
-extern char *argv0, *sock;
-extern int scr_h, scr_w, sockfd, running, restart, randrbase, cmdusemon, needsrefresh;
-extern int status_usingcmdresp;
+extern char *argv0, *sock, **environ;
+extern int scr_h, scr_w, sockfd, randrbase, cmdusemon;
+extern int running, restart, needsrefresh, status_usingcmdresp;
 
 extern Desk *desks;
 extern Rule *rules;

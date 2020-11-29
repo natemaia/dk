@@ -995,7 +995,7 @@ void initsock(void)
 	addr.sun_family = AF_UNIX;
 	strlcpy(addr.sun_path, sock, sizeof(addr.sun_path));
 	check((sockfd = socket(AF_UNIX, SOCK_STREAM, 0)), "unable to create socket");
-	unlink(sock); // NOLINT  -- fuck off you shit linter, this will NEVER be NULL
+	unlink(sock); // NOLINT  -- shit linter, this will NEVER be NULL
 	check(bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)), "unable to bind socket");
 	check(listen(sockfd, SOMAXCONN), "unable to listen on socket");
 }
@@ -1349,17 +1349,17 @@ void quadrant(Client *c, int *x, int *y, int *w, int *h)
 	static int index = 0;
 	static Workspace *ws = NULL;
 	unsigned int i = 0;
-	int thirdw = m->ww / 3, thirdh = m->wh / 3;
-	int quadrants[][3] = {
-		{ 1, m->wx + thirdw,       m->wy + thirdh       },
-		{ 1, m->wx + (thirdw * 2), m->wy + thirdh       },
-		{ 1, m->wx,                m->wy + thirdh       },
-		{ 1, m->wx + thirdw,       m->wy,               },
-		{ 1, m->wx + (thirdw * 2), m->wy,               },
-		{ 1, m->wx,                m->wy,               },
-		{ 1, m->wx + thirdw,       m->wy + (2 * thirdh) },
-		{ 1, m->wx + (thirdw * 2), m->wy + (2 * thirdh) },
-		{ 1, m->wx,                m->wy + (2 * thirdh) }
+	int tw = m->ww / 3, th = m->wh / 3;
+	int q[][3] = {
+		{ 1, m->wx + tw,       m->wy + th },
+		{ 1, m->wx + (tw * 2), m->wy + th },
+		{ 1, m->wx,            m->wy + th },
+		{ 1, m->wx + tw,       m->wy, },
+		{ 1, m->wx + (tw * 2), m->wy, },
+		{ 1, m->wx,            m->wy, },
+		{ 1, m->wx + tw,       m->wy + (2 * th) },
+		{ 1, m->wx + (tw * 2), m->wy + (2 * th) },
+		{ 1, m->wx,            m->wy + (2 * th) }
 	};
 
 	if (ws != c->ws) {
@@ -1368,22 +1368,22 @@ void quadrant(Client *c, int *x, int *y, int *w, int *h)
 	}
 	FOR_EACH(t, c->ws->clients)
 		if (FLOATING(t) && t != c)
-			for (i = 0; i < LEN(quadrants); i++)
-				if (quadrants[i][0] && (t->x >= quadrants[i][1] && t->y >= quadrants[i][2]
-							&& t->x < quadrants[i][1] + thirdw && t->y < quadrants[i][2] + thirdh))
+			for (i = 0; i < LEN(q); i++)
+				if (q[i][0] && (t->x >= q[i][1] && t->y >= q[i][2]
+							&& t->x < q[i][1] + tw && t->y < q[i][2] + th))
 				{
-					quadrants[i][0] = 0;
+					q[i][0] = 0;
 					break;
 				}
-	for (i = 0; i < LEN(quadrants); i++)
-		if (quadrants[i][0])
+	for (i = 0; i < LEN(q); i++)
+		if (q[i][0])
 			break;
-	if (i == LEN(quadrants)) {
+	if (i == LEN(q)) {
 		i = index;
-		index = (index + 1) % LEN(quadrants);
+		index = (index + 1) % LEN(q);
 	}
-	*x = quadrants[i][1] + (((*w - thirdw) * -1) / 2);
-	*y = quadrants[i][2] + (((*h - thirdh) * -1) / 2);
+	*x = q[i][1] + (((*w - tw) * -1) / 2);
+	*y = q[i][2] + (((*h - th) * -1) / 2);
 }
 
 int refresh(void)
@@ -1508,18 +1508,18 @@ int rulecmp(Client *c, Rule *r)
 
 void sendconfigure(Client *c)
 {
-	xcb_configure_notify_event_t e;
-
-	e.event = c->win;
-	e.window = c->win;
-	e.response_type = XCB_CONFIGURE_NOTIFY;
-	e.x = c->x;
-	e.y = c->y;
-	e.width = c->w;
-	e.height = c->h;
-	e.border_width = c->bw;
-	e.above_sibling = XCB_NONE;
-	e.override_redirect = 0;
+	xcb_configure_notify_event_t e = {
+		.event = c->win,
+		.window = c->win,
+		.response_type = XCB_CONFIGURE_NOTIFY,
+		.x = c->x,
+		.y = c->y,
+		.width = c->w,
+		.height = c->h,
+		.border_width = c->bw,
+		.above_sibling = XCB_NONE,
+		.override_redirect = 0
+	};
 	xcb_send_event(con, 0, c->win, XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char *)&e);
 }
 
@@ -1528,25 +1528,25 @@ int sendwmproto(Client *c, int wmproto)
 	int exists = 0;
 	xcb_generic_error_t *er;
 	xcb_get_property_cookie_t rpc;
-	xcb_client_message_event_t e;
 	xcb_icccm_get_wm_protocols_reply_t proto;
 
 	rpc = xcb_icccm_get_wm_protocols(con, c->win, wmatom[WM_PROTO]);
 	if (xcb_icccm_get_wm_protocols_reply(con, rpc, &proto, &er)) {
 		int n = proto.atoms_len;
-		while (!exists && n--)
-			exists = proto.atoms[n] == wmatom[wmproto];
+		while (!exists && n--) exists = proto.atoms[n] == wmatom[wmproto];
 		xcb_icccm_get_wm_protocols_reply_wipe(&proto);
 	} else {
 		iferr(0, "unable to get requested wm protocol", er);
 	}
 	if (exists) {
-		e.response_type = XCB_CLIENT_MESSAGE;
-		e.window = c->win;
-		e.type = wmatom[WM_PROTO];
-		e.format = 32;
-		e.data.data32[0] = wmatom[wmproto];
-		e.data.data32[1] = XCB_TIME_CURRENT_TIME;
+		xcb_client_message_event_t e = {
+			.response_type = XCB_CLIENT_MESSAGE,
+			.window = c->win,
+			.type = wmatom[WM_PROTO],
+			.format = 32,
+			.data.data32[0] = wmatom[wmproto],
+			.data.data32[1] = XCB_TIME_CURRENT_TIME
+		};
 		iferr(0, "unable to send client message event", xcb_request_check(con,
 					xcb_send_event_checked(con, 0, c->win, XCB_EVENT_MASK_NO_EVENT, (char *)&e)));
 	}
@@ -1593,8 +1593,7 @@ void setnetwsnames(void)
 	names = ecalloc(1, len);
 	len = 0;
 	FOR_EACH(ws, workspaces)
-		for (unsigned int i = 0; (names[len++] = ws->name[i]); i++)
-			;
+		for (unsigned int i = 0; (names[len++] = ws->name[i]); i++);
 	PROP(REPLACE, root, netatom[NET_DESK_NAMES], wmatom[WM_UTF8STR], 8, --len, names);
 	free(names);
 }
@@ -1612,13 +1611,12 @@ void seturgent(Client *c, int urg)
 
 	DBG("seturgent: 0x%08x -> %d", c->win, urg)
 	pc = xcb_icccm_get_wm_hints(con, c->win);
-	if (c != selws->sel && urg) {
+	if (urg && c != selws->sel)
 		c->state |= STATE_URGENT;
-		drawborder(c, 0);
-	}
+	else if (!urg)
+		c->state &= ~STATE_URGENT;
 	if (xcb_icccm_get_wm_hints_reply(con, pc, &wmh, &e)) {
-		wmh.flags = urg
-			? (wmh.flags | XCB_ICCCM_WM_HINT_X_URGENCY)
+		wmh.flags = urg ? (wmh.flags | XCB_ICCCM_WM_HINT_X_URGENCY)
 			: (wmh.flags & ~XCB_ICCCM_WM_HINT_X_URGENCY);
 		xcb_icccm_set_wm_hints(con, c->win, &wmh);
 	} else {
@@ -1696,8 +1694,8 @@ void sizehints(Client *c, int uss)
 	xcb_generic_error_t *e;
 	xcb_get_property_cookie_t pc;
 
-	pc = xcb_icccm_get_wm_normal_hints(con, c->win);
 	DBG("sizehints: getting size hints - 0x%08x", c->win)
+	pc = xcb_icccm_get_wm_normal_hints(con, c->win);
 	c->inc_w = c->inc_h = 0;
 	c->max_aspect = c->min_aspect = 0.0;
 	c->min_w = c->min_h = c->max_w = c->max_h = c->base_w = c->base_h = 0;

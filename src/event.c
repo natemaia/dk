@@ -284,52 +284,64 @@ void motionnotify(xcb_generic_event_t *ev)
 void mouse(Client *c, int move, int mx, int my)
 {
 	Monitor *m;
+	Client *p, *prev = NULL;
 	xcb_timestamp_t last = 0;
 	xcb_motion_notify_event_t *e;
 	xcb_generic_event_t *ev = NULL;
-	int ox, oy, ow, oh, nw, nh, nx, ny, released = 0;
+	int i, ox, oy, ow, oh, nw, nh, nx, ny, released = 0, first = 1;
 
 	ox = nx = c->x;
 	oy = ny = c->y;
 	ow = nw = c->w;
 	oh = nh = c->h;
+	for (i = 0, p = nexttiled(selws->clients); p && p != c; p = nexttiled(p->next), i++)
+		if (nexttiled(p->next) == c) {
+			prev = (i + 1 == selws->nmaster || i + 1 == selws->nstack + selws->nmaster) ? NULL : p;
+			break;
+		}
 	while (running && !released && (ev = xcb_wait_for_event(con))) {
 		switch (ev->response_type & 0x7f) {
 		case XCB_MOTION_NOTIFY:
 			e = (xcb_motion_notify_event_t *)ev;
-			if ((e->time - last) < (1000 / 60))
-				break;
+			if (e->time - last < 1000 / 60) break;
 			last = e->time;
-
 			if (!move && !(c->state & STATE_FLOATING) && selws->layout->func == tile) {
-				int i = 0;
-				Client *p, *prev = NULL;
-				for (p = nexttiled(selws->clients); p && p != c; p = nexttiled(p->next), i++) {
-					if (i + 1 == selws->nmaster || i + 1 == selws->nstack + selws->nmaster)
-						prev = NULL;
-					else
-						prev = p;
+				if (i >= selws->nstack + selws->nmaster) {
+					selws->ssplit = (float)(ox - selws->mon->x + (e->root_x - mx)
+							- (selws->mon->ww * selws->msplit))
+						/ (float)(selws->mon->ww - (selws->mon->ww * selws->msplit));
+					selws->ssplit = CLAMP(selws->ssplit, 0.05, 0.95);
+				} else if (i >= selws->nmaster) {
+					selws->msplit = (float)(ox - selws->mon->x + (e->root_x - mx))
+						/ (float)selws->mon->ww;
+					selws->msplit = CLAMP(selws->msplit, 0.05, 0.95);
+				} else {
+					selws->msplit = (float)((ox - selws->mon->x + ow) + (e->root_x - mx))
+						/ (float)selws->mon->ww;
+					selws->msplit = CLAMP(selws->msplit, 0.05, 0.95);
 				}
-				if (i >= selws->nstack + selws->nmaster)
-					selws->ssplit =
-						(double)(ox - selws->mon->x + (e->root_x - mx)
-								- (selws->mon->ww * selws->msplit))
-						/ (double)(selws->mon->ww - (selws->mon->ww * selws->msplit));
-				else if (i >= selws->nmaster)
-					selws->msplit = (double)(ox - selws->mon->x + (e->root_x - mx))
-						/ (double)selws->mon->ww;
-				else
-					selws->msplit = (double)((ox - selws->mon->x + ow) + (e->root_x - mx))
-						/ (double)selws->mon->ww;
-				int ohoff = c->hoff;
 				if (prev || ((i == selws->nmaster || i == selws->nmaster + selws->nstack)
 							&& nexttiled(c->next)))
 				{
-					if (i + 1 == selws->nmaster || i + 1 == selws->nmaster + selws->nstack
-							|| !nexttiled(c->next))
-						c->hoff = (e->root_y - my) * -1;
-					else
-						c->hoff = e->root_y - my;
+					int ohoff = c->hoff;
+					if (first) {
+						first = 0;
+						if (i + 1 == selws->nmaster || i + 1 == selws->nmaster + selws->nstack
+								|| !nexttiled(c->next))
+						{
+							my += ohoff;
+							c->hoff = (e->root_y - my) * -1;
+						} else {
+							my -= ohoff;
+							c->hoff = e->root_y - my;
+						}
+					} else {
+						if (i + 1 == selws->nmaster || i + 1 == selws->nmaster + selws->nstack
+								|| !nexttiled(c->next))
+							c->hoff = ((e->root_y - my) * -1);
+						else
+							c->hoff = (e->root_y - my);
+					}
 					if (selws->layout->func(selws) < 0)
 						c->hoff = ohoff;
 				} else {

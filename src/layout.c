@@ -154,6 +154,7 @@ int tile(Workspace *ws)
 	Client *c, *prev = NULL;
 	int i, n, x, *y, remaining, ret = 0;
 	int mw, my, sw, sy, ss, ssw, ssy, ns = 1;
+	int minh = globalcfg[GLB_MIN_WH];
 
 	for (n = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), n++);
 	if (!n) return 1;
@@ -203,24 +204,26 @@ int tile(Workspace *ws)
 		} else {
 			c->h = ((wh - *y) / MAX(1, remaining)) - g + c->hoff;
 		}
-		int minh = MAX(globalcfg[GLB_MIN_WH], c->min_h);
 		int available = wh - (*y + c->h + g);
 		if (!c->hoff && c->h - (2 * bw) < minh) {
 			popfloat(c);
 			continue;
-		} else if (remaining > 1 && (remaining - 1) * (minh + g) > available) {
-			c->h += available - ((remaining - 1) * (minh + g));
+		} else if (remaining > 1 && (remaining - 1) * (minh + g + (2 * bw)) > available) {
+			c->h += available - ((remaining - 1) * (minh + g + (2 * bw)));
+			ret = -1;
 		} else if (remaining == 1 && *y + c->h != wh - g) {
 			if (prev) {
 				prev->old_h = prev->h;
-				if (prev->h + available < minh) {
-					prev->h = MAX(globalcfg[GLB_MIN_WH], prev->min_h);
-					c->y = prev->y + prev->h + g;
-					c->h = (wh - (2 * g)) - (prev->y + prev->h);
+				if (prev->h + available < minh + (2 * bw)) {
+					prev->h = minh + (2 * prev->bw);
+					c->y = prev->y + prev->h + g + (2 * prev->bw);
+					c->h = (wh - (2 * g)) - (prev->y + prev->h) - (2 * prev->bw);
+					ret = -1;
 				} else if (c->h <= minh) {
-					prev->h -= minh - c->h;
+					prev->h -= minh - c->h + (2 * bw);
 					c->y = prev->y + prev->h + g;
-					c->h = minh;
+					c->h = minh + (2 * bw);
+					ret = -1;
 				} else {
 					prev->h += available;
 					c->y += available;
@@ -229,7 +232,8 @@ int tile(Workspace *ws)
 				c->h = available;
 			}
 		} else if (c->h - (2 * bw) < minh) {
-			c->h = remaining == 1 ? wh - (2 * g) : minh;
+			c->h = remaining == 1 ? wh - (2 * g) : minh + (2 * bw);
+			ret = -1;
 		}
 update:
 		*y += c->h + g;
@@ -240,7 +244,7 @@ update:
 
 	for (c = nexttiled(ws->clients); c; c = nexttiled(c->next)) {
 		int bw = !globalcfg[GLB_SMART_BORDER] || n > 1 ? c->bw : 0;
-		if (c->h <= MAX(globalcfg[GLB_MIN_WH], c->min_h))
+		if (c->h <= globalcfg[GLB_MIN_WH])
 			ret = -1;
 		if (applysizehints(c, &c->x, &c->y, &c->w, &c->h, bw, 0, 0)
 				|| (c->x != c->old_x || c->y != c->old_y || c->w != c->old_w || c->h != c->old_h))
@@ -250,7 +254,6 @@ update:
 			sendconfigure(c);
 		}
 	}
-
 	xcb_aux_sync(con);
 	return ret;
 }

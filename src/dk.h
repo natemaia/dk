@@ -161,17 +161,14 @@ enum GlobalCfg {
 	GLB_SMART_GAP    = 8,
 	GLB_TILE_HINTS   = 9,
 	GLB_TILE_TOHEAD  = 10,
-	GLB_LAST         = 11,
+	GLB_TILE_RMASTER = 11,
+	GLB_LAST         = 12,
 };
 
 
 typedef struct Callback Callback;
 typedef struct Workspace Workspace;
 
-
-typedef struct Geom {
-	int x, y, w, h;
-} Geom;
 
 typedef struct Monitor {
 	char name[64];

@@ -181,17 +181,17 @@ int tile(Workspace *ws)
 		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 		if (i < ws->nmaster) {
 			remaining = MIN(n, ws->nmaster) - i;
-			x = g;
+			x = globalcfg[GLB_TILE_RMASTER] ? sw + ssw + (g / ns) : g;
 			y = &my;
 			c->w = mw - g * (5 - ns) / 2;
 		} else if (i - ws->nmaster < ws->nstack) {
 			remaining = MIN(n - ws->nmaster, ws->nstack) - (i - ws->nmaster);
-			x = mw + (g / ns);
+			x = globalcfg[GLB_TILE_RMASTER] ? ssw + (g / ns) : mw + (g / ns);
 			y = &sy;
 			c->w = sw - g * (5 - ns - ss) / 2;
 		} else {
 			remaining = n - i;
-			x = mw + sw + (g / ns);
+			x = globalcfg[GLB_TILE_RMASTER] ? g : mw + sw + (g / ns);
 			y = &ssy;
 			c->w = ssw - g * (5 - ns) / 2;
 		}

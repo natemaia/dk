@@ -295,10 +295,8 @@ void mouse(Client *c, int move, int mx, int my)
 	ow = nw = c->w;
 	oh = nh = c->h;
 	for (i = 0, p = nexttiled(selws->clients); p && p != c; p = nexttiled(p->next), i++)
-		if (nexttiled(p->next) == c) {
+		if (nexttiled(p->next) == c)
 			prev = (i + 1 == selws->nmaster || i + 1 == selws->nstack + selws->nmaster) ? NULL : p;
-			break;
-		}
 	while (running && !released && (ev = xcb_wait_for_event(con))) {
 		switch (ev->response_type & 0x7f) {
 		case XCB_MOTION_NOTIFY:
@@ -307,17 +305,29 @@ void mouse(Client *c, int move, int mx, int my)
 			last = e->time;
 			if (!move && !(c->state & STATE_FLOATING) && selws->layout->func == tile) {
 				if (i >= selws->nstack + selws->nmaster) {
-					selws->ssplit = (float)(ox - selws->mon->x + (e->root_x - mx)
-							- (selws->mon->ww * selws->msplit))
-						/ (float)(selws->mon->ww - (selws->mon->ww * selws->msplit));
+					if (globalcfg[GLB_TILE_RMASTER])
+						selws->ssplit = (float)(ox - selws->mon->x + ow - (e->root_x - mx))
+							/ (float)(selws->mon->w - (selws->mon->w * selws->msplit));
+					else
+						selws->ssplit = (float)(ox - selws->mon->x + (e->root_x - mx)
+								- (selws->mon->w * selws->msplit))
+							/ (float)(selws->mon->w - (selws->mon->w * selws->msplit));
 					selws->ssplit = CLAMP(selws->ssplit, 0.05, 0.95);
 				} else if (i >= selws->nmaster) {
-					selws->msplit = (float)(ox - selws->mon->x + (e->root_x - mx))
-						/ (float)selws->mon->ww;
+					if (globalcfg[GLB_TILE_RMASTER])
+						selws->msplit = (float)(ox - selws->mon->x + ow - (e->root_x - mx))
+							/ (float)selws->mon->w;
+					else
+						selws->msplit = (float)(ox - selws->mon->x + (e->root_x - mx))
+							/ (float)selws->mon->w;
 					selws->msplit = CLAMP(selws->msplit, 0.05, 0.95);
 				} else {
-					selws->msplit = (float)((ox - selws->mon->x + ow) + (e->root_x - mx))
-						/ (float)selws->mon->ww;
+					if (globalcfg[GLB_TILE_RMASTER])
+						selws->msplit = (float)(ox - selws->mon->x - (e->root_x - mx))
+							/ (float)selws->mon->w;
+					else
+						selws->msplit = (float)((ox - selws->mon->x + ow) + (e->root_x - mx))
+							/ (float)selws->mon->w;
 					selws->msplit = CLAMP(selws->msplit, 0.05, 0.95);
 				}
 				if (prev || ((i == selws->nmaster || i == selws->nmaster + selws->nstack)
@@ -329,11 +339,11 @@ void mouse(Client *c, int move, int mx, int my)
 						if (i + 1 == selws->nmaster || i + 1 == selws->nmaster + selws->nstack
 								|| !nexttiled(c->next))
 						{
+							c->hoff = ((e->root_y - my) * -1) + ohoff;
 							my += ohoff;
-							c->hoff = (e->root_y - my) * -1;
 						} else {
+							c->hoff = (e->root_y - my) + ohoff;
 							my -= ohoff;
-							c->hoff = e->root_y - my;
 						}
 					} else {
 						if (i + 1 == selws->nmaster || i + 1 == selws->nmaster + selws->nstack

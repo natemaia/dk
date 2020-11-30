@@ -830,6 +830,8 @@ int cmdset(char **argv)
 			BOOL(TILE_HINTS);
 		} else if (!strcmp("tile_tohead", *argv)) {
 			BOOL(TILE_TOHEAD);
+		} else if (!strcmp("tile_rmaster", *argv)) {
+			BOOL(TILE_RMASTER);
 		} else if (!strcmp("smart_gap", *argv)) {
 			BOOL(SMART_GAP);
 		} else if (!strcmp("smart_border", *argv)) {

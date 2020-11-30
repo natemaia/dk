@@ -26,6 +26,7 @@ int globalcfg[GLB_LAST] = {
 	[GLB_MIN_XY]       = 10, /* int:  minimum window area allowed inside the screen when moving */
 	[GLB_TILE_HINTS]   = 0,  /* bool: respect size hints in tiled layouts */
 	[GLB_TILE_TOHEAD]  = 0,  /* bool: place new clients at the tail of the stack */
+	[GLB_TILE_RMASTER] = 0,  /* bool: place master area on the right */
 	[GLB_SMART_BORDER] = 1,  /* bool: disable borders in layouts with only one visible window */
 	[GLB_SMART_GAP]    = 1,  /* bool: disable gaps in layouts with only one visible window */
 };
@@ -139,8 +140,8 @@ Callback callbacks[] = {
 Cmd keywords[] = {
 	/* command,  function */
 	{ "mon",     cmdmon     },
-	{ "exit",    cmdexit    },
 	{ "quit",    cmdexit    },
+	{ "exit",    cmdexit    },
 	{ "reload",  cmdreload  },
 	{ "restart", cmdrestart },
 	{ "rule",    cmdrule    },

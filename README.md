@@ -340,15 +340,21 @@ set [WS] gap 10
 ```
 ---
 
-`tile_hints` (boolean) obey size hints in tiled layouts (default is false).
+`tile_hints` (boolean) obey size hints in tiled layouts.
 ```
 set tile_hints=true
 ```
 ---
 
-`tile_tohead` (boolean) place new windows at the head of the list in tiled layouts (default is false).
+`tile_tohead` (boolean) place new windows at the head of the list in tiled layouts.
 ```
 set tile_tohead=true
+```
+---
+
+`tile_rmaster` (boolean) place the master area on the right in tile layout.
+```
+set tile_rmaster=true
 ```
 ---
 

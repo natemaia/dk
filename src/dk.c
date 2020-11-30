@@ -1280,12 +1280,14 @@ void printstatus(Status *s)
 			break;
 		case TYPE_FULL:
 			fprintf(s->file, "# globals - key: value ...\nnumws: %d\nsmart_border: %d\n"
-					"smart_gap: %d\nfocus_urgent: %d\nfocus_mouse: %d\n"
-					"tile_hints: %d\nwin_minxy: %d\nwin_minwh: %d",
+					"smart_gap: %d\nfocus_urgent: %d\nfocus_mouse: %d\nfocus_open: %d\n"
+					"tile_hints: %d\ntile_tohead: %d\ntile_rmaster: %d\n"
+					"win_minxy: %d\nwin_minwh: %d",
 					globalcfg[GLB_WS_NUM], globalcfg[GLB_SMART_BORDER],
 					globalcfg[GLB_SMART_GAP], globalcfg[GLB_FOCUS_URGENT],
-					globalcfg[GLB_FOCUS_MOUSE], globalcfg[GLB_TILE_HINTS],
-					globalcfg[GLB_MIN_XY], globalcfg[GLB_MIN_WH]);
+					globalcfg[GLB_FOCUS_MOUSE], globalcfg[GLB_FOCUS_OPEN],
+					globalcfg[GLB_TILE_HINTS], globalcfg[GLB_TILE_TOHEAD],
+					globalcfg[GLB_TILE_RMASTER], globalcfg[GLB_MIN_XY], globalcfg[GLB_MIN_WH]);
 			fprintf(s->file, "\n\n# width outer_width focus urgent unfocus "
 					"outer_focus outer_urgent outer_unfocus\n"
 					"border: %u %u 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x",

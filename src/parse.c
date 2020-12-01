@@ -96,7 +96,7 @@ void parsecmd(char *buf)
 	save = argv = ecalloc(max, sizeof(char *));
 	while ((tok = parsetoken(&buf))) {
 		if (n + 1 >= max)
-			argv = erealloc(argv, (max *= 2) * sizeof(char *));
+			save = argv = erealloc(argv, (max *= 2) * sizeof(char *));
 		argv[n++] = tok;
 	}
 	argv[n] = NULL;

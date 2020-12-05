@@ -27,7 +27,17 @@ fi
 	dkcmd set ws=_ apply layout=tile master=1 stack=3 gap=0 msplit=0.5 ssplit=0.5
 
 	# change workspace names
-	dkcmd set ws=1 name="1" ws=2 name="2"
+	dkcmd set \
+		ws=1  name="1" \
+		ws=2  name="2" \
+		ws=3  name="3" \
+		ws=4  name="4" \
+		ws=5  name="5" \
+		ws=6  name="6" \
+		ws=7  name="7" \
+		ws=8  name="8" \
+		ws=9  name="9" \
+		ws=10 name="10"
 
 	# use grid layout, padding, and gaps on workspace 10
 	dkcmd set ws=10 layout=grid pad left=200 right=200 top=100 bottom=100 gap width=50

@@ -33,10 +33,10 @@ int main(int argc, char *argv[])
 		{ STDOUT_FILENO, POLLHUP, 0 },
 	};
 
-	if (!strcmp(argv[1], "-v") || !strcmp(argv[1], "-h"))
-		return usage(argv[0], VERSION, 0, argv[1][1], "[-hv] <COMMAND>");
-	else if (argc == 1)
+	if (argc == 1)
 		return usage(argv[0], VERSION, 1, 'h', "[-hv] <COMMAND>");
+	else if (!strcmp(argv[1], "-v") || !strcmp(argv[1], "-h"))
+		return usage(argv[0], VERSION, 0, argv[1][1], "[-hv] <COMMAND>");
 
 #ifdef __OpenBSD__
 	if (pledge("stdio rpath wpath cpath tmppath flock unix", NULL) == -1)

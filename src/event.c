@@ -54,7 +54,6 @@ void buttonpress(xcb_generic_event_t *ev)
 	Client *c;
 	xcb_generic_error_t *er;
 	xcb_grab_pointer_cookie_t pc;
-	xcb_grab_pointer_reply_t *p = NULL;
 	xcb_button_press_event_t *e = (xcb_button_press_event_t *)ev;
 
 	if (!(c = wintoclient(e->event))) return;
@@ -69,6 +68,8 @@ void buttonpress(xcb_generic_event_t *ev)
 		if (FULLSCREEN(c) || ((c->state & STATE_FIXED) && !move))
 			return;
 		DBG("buttonpress: grabbing pointer for move/resize - 0x%08x", e->event)
+
+		xcb_grab_pointer_reply_t *p;
 		pc = xcb_grab_pointer(con, 0, root, XCB_EVENT_MASK_BUTTON_RELEASE
 				| XCB_EVENT_MASK_BUTTON_MOTION | XCB_EVENT_MASK_POINTER_MOTION,
 				XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC, root,
@@ -438,40 +439,40 @@ void propertynotify(xcb_generic_event_t *ev)
 	xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ev;
 
 #ifdef DEBUG
-	if (e->window != root) {
-		for (unsigned int i = 0; i < LEN(netatom); i++)
-			if (netatom[i] == e->atom) {
-				DBG("propertynotify: atom: %s - 0x%08x", netatoms[i], e->window)
-				break;
-			}
-		for (unsigned int i = 0; i < LEN(wmatom); i++)
-			if (wmatom[i] == e->atom) {
-				DBG("propertynotify: atom: %s - 0x%08x", wmatoms[i], e->window)
-				break;
-			}
-	}
+	for (unsigned int i = 0; i < LEN(netatom); i++)
+		if (netatom[i] == e->atom) {
+			DBG("propertynotify: atom: %s - 0x%08x", netatoms[i], e->window)
+			break;
+		}
+	for (unsigned int i = 0; i < LEN(wmatom); i++)
+		if (wmatom[i] == e->atom) {
+			DBG("propertynotify: atom: %s - 0x%08x", wmatoms[i], e->window)
+			break;
+		}
 #endif
 
-	if (e->state == XCB_PROPERTY_DELETE)
+	if (e->state == XCB_PROPERTY_DELETE) {
+		DBGEXIT("propertynotify")
 		return;
+	}
 	if ((c = wintoclient(e->window))) {
 		switch (e->atom) {
 		case XCB_ATOM_WM_HINTS:
-			clienthints(c); return;
+			clienthints(c); break;
 		case XCB_ATOM_WM_NORMAL_HINTS:
-			sizehints(c, 0); return;
+			sizehints(c, 0); break;
 		case XCB_ATOM_WM_TRANSIENT_FOR:
 			if ((c->trans = wintoclient(wintrans(c->win))) && !FLOATING(c)) {
 				c->state |= STATE_FLOATING;
 				needsrefresh = 1;
 			}
-			return;
+			break;
 		default:
 			if (e->atom == XCB_ATOM_WM_NAME || e->atom == netatom[NET_WM_NAME]) {
 				if (clientname(c)) printstatus(NULL);
 			} else if (e->atom == netatom[NET_WM_TYPE])
 				clienttype(c);
-			return;
+			break;
 		}
 	} else if ((e->atom == netatom[NET_WM_STRUTP] || e->atom == netatom[NET_WM_STRUT])
 			&& (p = wintopanel(e->window)))

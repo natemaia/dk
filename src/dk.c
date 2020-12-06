@@ -105,7 +105,6 @@ int main(int argc, char *argv[])
 	Status *s, *next;
 	fd_set read_fds;
 	xcb_window_t sel;
-	struct timeval tv;
 	xcb_generic_event_t *ev;
 	char *end, buf[PIPE_BUF];
 	int cmdfd, confd, nfds;
@@ -163,15 +162,13 @@ int main(int argc, char *argv[])
 	confd = xcb_get_file_descriptor(con);
 	nfds = MAX(confd, sockfd) + 1;
 	while (running) {
-		if (xcb_connection_has_error(con)) break;
-		tv.tv_sec = 2;
-		tv.tv_usec = 0;
 		xcb_flush(con);
+		if (xcb_connection_has_error(con)) break;
 		if (needsrefresh) needsrefresh = refresh();
 		FD_ZERO(&read_fds);
 		FD_SET(sockfd, &read_fds);
 		FD_SET(confd, &read_fds);
-		if (select(nfds, &read_fds, NULL, NULL, &tv) > 0) {
+		if (select(nfds, &read_fds, NULL, NULL, NULL) > 0) {
 			if (FD_ISSET(sockfd, &read_fds)) {
 				cmdfd = accept(sockfd, NULL, 0);
 				if (cmdfd > 0 && (n = recv(cmdfd, buf, sizeof(buf) - 1, 0)) > 0) {
@@ -191,7 +188,6 @@ int main(int argc, char *argv[])
 				}
 		}
 
-		/* clean up dead status files */
 		s = stats;
 		while (s) {
 			next = s->next;
@@ -372,6 +368,7 @@ void clienthints(Client *c)
 	} else {
 		iferr(0, "unable to get window wm hints reply", e);
 	}
+	DBGEXIT("clienthints")
 }
 
 int clientname(Client *c)
@@ -389,6 +386,7 @@ int clientname(Client *c)
 		{
 			iferr(0, "unable to get WM_NAME text property reply", e);
 			strlcpy(c->title, "broken", sizeof(c->title));
+			DBGEXIT("clientname")
 			return 0;
 		}
 	}
@@ -580,7 +578,7 @@ void execcfg(void)
 void focus(Client *c)
 {
 	DBGENTER("focus")
-	if (!c || c->ws != selws)
+	if (!c)
 		c = selws->stack;
 	if (selws->sel && selws->sel != c)
 		unfocus(selws->sel, 0);
@@ -723,19 +721,19 @@ void grabbuttons(Client *c, int focused)
 	xcb_ungrab_button(con, XCB_BUTTON_INDEX_ANY, c->win, XCB_BUTTON_MASK_ANY);
 	if (!focused)
 		xcb_grab_button(con, 0, c->win,
-				XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE,
+				XCB_EVENT_MASK_BUTTON_PRESS,
 				XCB_GRAB_MODE_SYNC, XCB_GRAB_MODE_SYNC, XCB_NONE, XCB_NONE,
 				XCB_BUTTON_INDEX_ANY, XCB_BUTTON_MASK_ANY);
-	for (unsigned int i = 0; i < LEN(mods); i++) {
+	else for (unsigned int i = 0; i < LEN(mods); i++) {
 			xcb_grab_button(con, 0, c->win,
-					XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE,
+					XCB_EVENT_MASK_BUTTON_PRESS,
 					XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_SYNC, XCB_NONE, XCB_NONE,
 					mousemove, mousemod | mods[i]);
 			xcb_grab_button(con, 0, c->win,
-					XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE,
+					XCB_EVENT_MASK_BUTTON_PRESS,
 					XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_SYNC, XCB_NONE, XCB_NONE,
 					mouseresize, mousemod | mods[i]);
-	}
+		}
 	DBGEXIT("grabbuttons")
 }
 
@@ -778,7 +776,6 @@ int iferr(int lvl, char *msg, xcb_generic_error_t *e)
 	warn("%s", msg);
 	free(e);
 	if (lvl) exit(lvl);
-	DBGEXIT("iferr")
 	return 0;
 }
 
@@ -1135,7 +1132,7 @@ void initwm(void)
 			xcb_request_check(con,
 				xcb_change_window_attributes_checked(
 					con, root, XCB_CW_EVENT_MASK | XCB_CW_CURSOR,
-					(unsigned int[]){XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT
+					(unsigned int[]){ XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT
 									| XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY
 									| XCB_EVENT_MASK_BUTTON_PRESS
 									| XCB_EVENT_MASK_POINTER_MOTION
@@ -1580,7 +1577,7 @@ void restack(Workspace *ws)
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	if (ws->layout->func && ws == ws->mon->ws)
 		for (c = ws->stack; c; c = c->snext)
-			if (!FLOATING(c))
+			if (!(c->state & STATE_FLOATING))
 				setstackmode(c->win, XCB_STACK_MODE_BELOW);
 	FOR_EACH(d, desks)
 		if (d->mon == ws->mon)
@@ -2139,55 +2136,62 @@ int winprop(xcb_window_t win, xcb_atom_t prop, xcb_atom_t *ret)
 Client *wintoclient(xcb_window_t win)
 {
 	DBGENTER("wintoclient")
-	Client *c = NULL;
+	Client *c;
 	Workspace *ws;
 
 	if (win != XCB_WINDOW_NONE && win != root)
 		FOR_CLIENTS(c, ws)
-			if (c->win == win)
-				break;
-	DBGEXIT("wintoclient")
-	return c;
+			if (c->win == win) {
+				DBGEXIT("wintoclient (SUCCESS)")
+				return c;
+			}
+	DBGEXIT("wintoclient (FAILED)")
+	return NULL;
 }
 
 Panel *wintopanel(xcb_window_t win)
 {
 	DBGENTER("wintopanel")
-	Panel *p = NULL;
+	Panel *p;
 
 	if (win != XCB_WINDOW_NONE && win != root)
 		FOR_EACH(p, panels)
-			if (p->win == win)
-				break;
-	DBGEXIT("wintopanel")
-	return p;
+			if (p->win == win) {
+				DBGEXIT("wintopanel (SUCCESS)")
+				return p;
+			}
+	DBGEXIT("wintopanel (FAILED)")
+	return NULL;
 }
 
 Desk *wintodesk(xcb_window_t win)
 {
 	DBGENTER("wintodesk")
-	Desk *d = NULL;
+	Desk *d;
 
 	if (win != XCB_WINDOW_NONE && win != root)
 		FOR_EACH(d, desks)
-			if (d->win == win)
-				break;
-	DBGEXIT("wintodesk")
-	return d;
+			if (d->win == win) {
+				DBGEXIT("wintodesk (SUCCESS)")
+				return d;
+			}
+	DBGEXIT("wintodesk (FAILED)")
+	return NULL;
 }
 
 xcb_window_t wintrans(xcb_window_t win)
 {
 	DBGENTER("wintrans")
 	xcb_window_t w;
-	xcb_get_property_cookie_t pc;
-	xcb_generic_error_t *e = NULL;
+	xcb_generic_error_t *e;
 
-	pc = xcb_icccm_get_wm_transient_for(con, win);
-	if (!xcb_icccm_get_wm_transient_for_reply(con, pc, &w, &e)) {
-		w = XCB_WINDOW_NONE;
+	if (!xcb_icccm_get_wm_transient_for_reply(con,
+				xcb_icccm_get_wm_transient_for(con, win), &w, &e))
+	{
 		iferr(0, "unable to get wm transient for hint", e);
+		DBGEXIT("wintrans (FAILED)")
+		return XCB_WINDOW_NONE;
 	}
-	DBGEXIT("wintrans")
+	DBGEXIT("wintrans (SUCCESS)")
 	return w;
 }

@@ -8,7 +8,7 @@ VPATH   = src
 PREFIX ?= /usr/local
 MAN    ?= ${PREFIX}/share/man
 DOC    ?= ${PREFIX}/share/doc
-SES    ?= ${PREFIX}/share/xsessions
+SES    ?= /usr/share/xsessions
 
 # source and object files
 SRC  = dk.c cmd.c event.c layout.c parse.c strl.c util.c

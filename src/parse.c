@@ -159,11 +159,10 @@ float parsefloat(char *arg, int *rel)
 	char *end;
 
 	if ((f = strtof(arg, &end)) && *end == '\0' && f >= -0.95 && f <= 0.95) {
-		if (rel)
-			*rel = arg[0] == '-' || arg[0] == '+';
+		if (rel) *rel = arg[0] == '-' || arg[0] == '+';
 		return f;
 	}
-	return -1.0;
+	return NAN;
 }
 
 int parseint(char *arg, int *rel, int allowzero)

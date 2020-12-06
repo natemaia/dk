@@ -30,6 +30,9 @@ all: dk dkcmd
 debug: CPPFLAGS += -DDEBUG
 debug: all
 
+funcdebug: CPPFLAGS += -DFUNCDEBUG
+funcdebug: debug
+
 nostrip: CFLAGS += -g
 nostrip: debug
 
@@ -65,4 +68,4 @@ uninstall:
 	rm -rf ${DESTDIR}${DOC}/dk
 	rm -f ${DESTDIR}${SES}/dk.desktop
 
-.PHONY: all debug nostrip clean install uninstall
+.PHONY: all debug funcdebug nostrip clean install uninstall

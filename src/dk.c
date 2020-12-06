@@ -163,14 +163,11 @@ int main(int argc, char *argv[])
 	confd = xcb_get_file_descriptor(con);
 	nfds = MAX(confd, sockfd) + 1;
 	while (running) {
-		if (xcb_connection_has_error(con)) {
-			break;
-		}
+		if (xcb_connection_has_error(con)) break;
 		tv.tv_sec = 2;
 		tv.tv_usec = 0;
 		xcb_flush(con);
-		if (needsrefresh)
-			needsrefresh = refresh();
+		if (needsrefresh) needsrefresh = refresh();
 		FD_ZERO(&read_fds);
 		FD_SET(sockfd, &read_fds);
 		FD_SET(confd, &read_fds);
@@ -207,6 +204,7 @@ int main(int argc, char *argv[])
 
 void applypanelstrut(Panel *p)
 {
+	DBGENTER("applypanelstrut")
 	if (p->mon->x + p->l > p->mon->wx)          p->mon->wx = p->l;
 	if (p->mon->y + p->t > p->mon->wy)          p->mon->wy = p->t;
 	if (p->mon->w - (p->r + p->l) < p->mon->ww) p->mon->ww = p->mon->w - (p->r + p->l);
@@ -214,10 +212,12 @@ void applypanelstrut(Panel *p)
 	DBG("applypanelstrut: %s - %d,%d @ %dx%d -> %d,%d @ %dx%d",
 			p->mon->name, p->mon->x, p->mon->y, p->mon->w, p->mon->h,
 			p->mon->wx, p->mon->wy, p->mon->ww, p->mon->wh)
+	DBGEXIT("applypanelstrut")
 }
 
 int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse)
 {
+	DBGENTER("applysizehints")
 	Monitor *m = c->ws->mon;
 	int min = globalcfg[GLB_MIN_XY];
 
@@ -264,11 +264,13 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 		if (c->max_w) *w = MIN(*w, c->max_w);
 		if (c->max_h) *h = MIN(*h, c->max_h);
 	}
+	DBGEXIT("applysizehints")
 	return *x != c->x || *y != c->y || *w != c->w || *h != c->h || bw != c->bw;
 }
 
 void attach(Client *c, int tohead)
 {
+	DBGENTER("attach")
 	Client *tail = NULL;
 
 	if (!tohead)
@@ -277,10 +279,12 @@ void attach(Client *c, int tohead)
 		ATTACH(c, tail->next);
 	else
 		ATTACH(c, c->ws->clients);
+	DBGEXIT("attach")
 }
 
 int assignws(Workspace *ws, Monitor *new)
 {
+	DBGENTER("assignws")
 	int n;
 	Workspace *ows;
 
@@ -307,11 +311,13 @@ int assignws(Workspace *ws, Monitor *new)
 		respond(cmdresp, "!unable to assign last/only workspace on monitor");
 		return 0;
 	}
+	DBGEXIT("assignws")
 	return 1;
 }
 
 void changews(Workspace *ws, int swap, int warp)
 {
+	DBGENTER("changews")
 	Monitor *m;
 	int dowarp;
 
@@ -345,16 +351,16 @@ void changews(Workspace *ws, int swap, int warp)
 				ws->sel ? ws->sel->y + (ws->sel->h / 2) : ws->mon->y + (ws->mon->h / 2));
 	PROP(REPLACE, root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1, &ws->num);
 	needsrefresh = 1;
+	DBGEXIT("changews")
 }
 
 void clienthints(Client *c)
 {
+	DBGENTER("clienthints")
 	xcb_generic_error_t *e;
 	xcb_icccm_wm_hints_t wmh;
-	xcb_get_property_cookie_t pc;
 
-	pc = xcb_icccm_get_wm_hints(con, c->win);
-	if (xcb_icccm_get_wm_hints_reply(con, pc, &wmh, &e)) {
+	if (xcb_icccm_get_wm_hints_reply(con, xcb_icccm_get_wm_hints(con, c->win), &wmh, &e)) {
 		if (c == selws->sel && wmh.flags & XCB_ICCCM_WM_HINT_X_URGENCY) {
 			wmh.flags &= ~XCB_ICCCM_WM_HINT_X_URGENCY;
 			xcb_icccm_set_wm_hints(con, c->win, &wmh);
@@ -370,15 +376,17 @@ void clienthints(Client *c)
 
 int clientname(Client *c)
 {
+	DBGENTER("clientname")
 	xcb_generic_error_t *e;
-	xcb_get_property_cookie_t pc;
 	xcb_icccm_get_text_property_reply_t r;
 
-	pc = xcb_icccm_get_text_property(con, c->win, netatom[NET_WM_NAME]);
-	if (!xcb_icccm_get_text_property_reply(con, pc, &r, &e)) {
+	if (!xcb_icccm_get_text_property_reply(con,
+				xcb_icccm_get_text_property(con, c->win, netatom[NET_WM_NAME]), &r, &e))
+	{
 		iferr(0, "unable to get NET_WM_NAME text property reply", e);
-		pc = xcb_icccm_get_text_property(con, c->win, XCB_ATOM_WM_NAME);
-		if (!xcb_icccm_get_text_property_reply(con, pc, &r, &e)) {
+		if (!xcb_icccm_get_text_property_reply(con,
+					xcb_icccm_get_text_property(con, c->win, XCB_ATOM_WM_NAME), &r, &e))
+		{
 			iferr(0, "unable to get WM_NAME text property reply", e);
 			strlcpy(c->title, "broken", sizeof(c->title));
 			return 0;
@@ -386,11 +394,13 @@ int clientname(Client *c)
 	}
 	strlcpy(c->title, r.name, sizeof(c->title));
 	xcb_icccm_get_text_property_reply_wipe(&r);
+	DBGEXIT("clientname")
 	return 1;
 }
 
 void clientrule(Client *c, Rule *wr, int nofocus)
 {
+	DBGENTER("clientrule")
 	Monitor *m;
 	Rule *r = wr;
 	int ws, dofocus = 0;
@@ -443,10 +453,12 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 	if (r)
 		gravitate(c, r->xgrav, r->ygrav, 1);
 	cmdusemon = 0;
+	DBGEXIT("clientrule")
 }
 
 void clienttype(Client *c)
 {
+	DBGENTER("clienttype")
 	xcb_atom_t type, state;
 
 	if (winprop(c->win, netatom[NET_WM_STATE], &state) && state == netatom[NET_STATE_FULL])
@@ -454,18 +466,20 @@ void clienttype(Client *c)
 	if ((winprop(c->win, netatom[NET_WM_TYPE], &type) && type == netatom[NET_TYPE_DIALOG])
 			|| c->trans || (c->trans = wintoclient(wintrans(c->win))))
 		c->state |= STATE_FLOATING;
+	DBGEXIT("clienttype")
 }
 
 void drawborder(Client *c, int focused)
 { /* modified from swm/wmutils */
-	if (c->state & STATE_NOBORDER || !c->bw) return;
-
+	DBGENTER("drawborder")
 	xcb_gcontext_t gc;
 	xcb_pixmap_t pmap;
 	int b = c->bw;
 	int o = border[BORD_O_WIDTH];
-	unsigned int in = border[focused ? BORD_FOCUS : ((c->state & STATE_URGENT) ? BORD_URGENT : BORD_UNFOCUS)];
+	unsigned int in = border[focused ? BORD_FOCUS : ((c->state & STATE_URGENT)
+			? BORD_URGENT : BORD_UNFOCUS)];
 
+	if (c->state & STATE_NOBORDER || !c->bw) return;
 	if (b - o > 0) {
 		unsigned int out = border[focused ? BORD_O_FOCUS : ((c->state & STATE_URGENT)
 				? BORD_O_URGENT : BORD_O_UNFOCUS)];
@@ -497,29 +511,35 @@ void drawborder(Client *c, int focused)
 	} else {
 		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, &in);
 	}
+	DBGEXIT("drawborder")
 }
 
 Monitor *coordtomon(int x, int y)
 {
+	DBGENTER("coordtomon")
 	Monitor *m = NULL;
 
 	FOR_EACH(m, monitors)
 		if (m->connected && x >= m->x && x < m->x + m->w && y >= m->y && y < m->y + m->h)
-			return m;
+			break;
+	DBGEXIT("coordtomon")
 	return m;
 }
 
 void detach(Client *c, int reattach)
 {
+	DBGENTER("detach")
 	Client **cc = &c->ws->clients;
 
 	DETACH(c, cc);
 	if (reattach)
 		ATTACH(c, c->ws->clients);
+	DBGEXIT("detach")
 }
 
 void detachstack(Client *c)
 {
+	DBGENTER("detachstack")
 	Client **cc = &c->ws->stack;
 
 	while (*cc && *cc != c)
@@ -527,10 +547,12 @@ void detachstack(Client *c)
 	*cc = c->snext;
 	if (c == c->ws->sel)
 		c->ws->sel = c->ws->stack;
+	DBGEXIT("detachstack")
 }
 
 void execcfg(void)
 {
+	DBGENTER("execcfg")
 	char *cfg;
 	char path[PATH_MAX];
 
@@ -552,10 +574,12 @@ void execcfg(void)
 		warn("unable to execute config file: %s", cfg);
 		exit(0);
 	}
+	DBGEXIT("execcfg")
 }
 
 void focus(Client *c)
 {
+	DBGENTER("focus")
 	if (!c || c->ws != selws)
 		c = selws->stack;
 	if (selws->sel && selws->sel != c)
@@ -574,18 +598,22 @@ void focus(Client *c)
 	}
 	selws->sel = c;
 	cmdclient = c;
+	DBGEXIT("focus")
 }
 
 void freemon(Monitor *m)
 {
+	DBGENTER("freemon")
 	Monitor **mm = &monitors;
 
 	DETACH(m, mm);
 	free(m);
+	DBGEXIT("freemon")
 }
 
 void freerule(Rule *r)
 {
+	DBGENTER("freerule")
 	Rule **rr = &rules;
 
 	DETACH(r, rr);
@@ -594,10 +622,12 @@ void freerule(Rule *r)
 	if (r->title) { regfree(&(r->titlereg)); free(r->title); }
 	free(r->mon);
 	free(r);
+	DBGEXIT("freerule")
 }
 
 void freestatus(Status *s)
 {
+	DBGENTER("freestatus")
 	Status **ss = &stats;
 
 	DBG("freestatus: path: %s", s->path)
@@ -605,10 +635,12 @@ void freestatus(Status *s)
 	if (!restart) fclose(s->file);
 	if (s->path) free(s->path);
 	free(s);
+	DBGEXIT("freestatus")
 }
 
 void freewm(void)
 {
+	DBGENTER("freewm")
 	Client *c;
 	Workspace *ws;
 
@@ -650,18 +682,22 @@ void freewm(void)
 	close(sockfd);
 	unlink(sock);
 	free(sock);
+	DBGEXIT("freewm")
 }
 
 void freews(Workspace *ws)
 {
+	DBGENTER("freews")
 	Workspace **wws = &workspaces;
 
 	DETACH(ws, wws);
 	free(ws);
+	DBGEXIT("freews")
 }
 
 void grabbuttons(Client *c, int focused)
 {
+	DBGENTER("grabbuttons")
 	xcb_generic_error_t *e;
 	xcb_get_modifier_mapping_reply_t *m = NULL;
 	unsigned int mods[] = { 0, XCB_MOD_MASK_LOCK, 0, XCB_MOD_MASK_LOCK };
@@ -700,10 +736,12 @@ void grabbuttons(Client *c, int focused)
 					XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_SYNC, XCB_NONE, XCB_NONE,
 					mouseresize, mousemod | mods[i]);
 	}
+	DBGEXIT("grabbuttons")
 }
 
 void gravitate(Client *c, int xgrav, int ygrav, int matchgap)
 {
+	DBGENTER("gravitate")
 	int x, y, gap;
 	int monx, mony, monw, monh;
 
@@ -730,19 +768,23 @@ void gravitate(Client *c, int xgrav, int ygrav, int matchgap)
 	}
 	if (c->ws == c->ws->mon->ws && x != c->x && y != c->y)
 		resizehint(c, x, y, c->w, c->h, c->bw, 0, 0);
+	DBGEXIT("gravitate")
 }
 
 int iferr(int lvl, char *msg, xcb_generic_error_t *e)
 {
+	DBGENTER("iferr")
 	if (!e) return 1;
 	warn("%s", msg);
 	free(e);
 	if (lvl) exit(lvl);
+	DBGEXIT("iferr")
 	return 0;
 }
 
 void initatoms(xcb_atom_t *atoms, const char **names, int num)
 {
+	DBGENTER("initatoms")
 	int i;
 	xcb_generic_error_t *e;
 	xcb_intern_atom_reply_t *r;
@@ -758,10 +800,12 @@ void initatoms(xcb_atom_t *atoms, const char **names, int num)
 			iferr(0, "unable to initialize atom", e);
 		}
 	}
+	DBGEXIT("initatoms")
 }
 
 void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 {
+	DBGENTER("initclient")
 	Client *c;
 	xcb_generic_error_t *e;
 	xcb_get_property_cookie_t pc;
@@ -780,9 +824,7 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	c->state = STATE_NEEDSMAP;
 	c->old_state = STATE_NONE;
 	c->trans = wintoclient(wintrans(c->win));
-
 	clientname(c);
-
 	if (!xcb_icccm_get_wm_class_reply(con, xcb_icccm_get_wm_class(con, c->win), &p, &e)) {
 		iferr(0, "failed to get window class", e);
 		strlcpy(c->class, "broken", sizeof(c->class));
@@ -827,12 +869,13 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		if (c->x == c->ws->mon->wx && c->y == c->ws->mon->wy)
 			quadrant(c, &c->x, &c->y, &c->w, &c->h);
 	}
-	if (c->cb)
-		c->cb->func(c, 0);
+	if (c->cb) c->cb->func(c, 0);
+	DBGEXIT("initclient")
 }
 
 void initdesk(xcb_window_t win, xcb_get_geometry_reply_t *g)
 {
+	DBGENTER("initdesk")
 	Desk *d;
 
 	DBG("initdesk: 0x%08x", win)
@@ -846,11 +889,12 @@ void initdesk(xcb_window_t win, xcb_get_geometry_reply_t *g)
 			(unsigned int[]){ XCB_EVENT_MASK_PROPERTY_CHANGE
 							| XCB_EVENT_MASK_STRUCTURE_NOTIFY });
 	setstackmode(d->win, XCB_STACK_MODE_BELOW);
-	needsrefresh = 1;
+	DBGEXIT("initdesk")
 }
 
 void initmon(int num, char *name, xcb_randr_output_t id, int x, int y, int w, int h)
 {
+	DBGENTER("initmon")
 	Monitor *m, *tail;
 
 	DBG("initmon: %d:%s - %d,%d @ %dx%d", num, name, x, y, w, h)
@@ -868,10 +912,12 @@ void initmon(int num, char *name, xcb_randr_output_t id, int x, int y, int w, in
 		tail->next = m;
 	else
 		monitors = m;
+	DBGEXIT("initmon")
 }
 
 void initpanel(xcb_window_t win, xcb_get_geometry_reply_t *g)
 {
+	DBGENTER("initpanel")
 	int *s;
 	Panel *p;
 	xcb_generic_error_t *e;
@@ -904,10 +950,12 @@ void initpanel(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	xcb_change_window_attributes(con, p->win, XCB_CW_EVENT_MASK,
 			(unsigned int[]){ XCB_EVENT_MASK_PROPERTY_CHANGE
 							| XCB_EVENT_MASK_STRUCTURE_NOTIFY });
+	DBGEXIT("initpanel")
 }
 
 Rule *initrule(Rule *wr)
 {
+	DBGENTER("initrule")
 	int i;
 	Rule *r;
 	size_t len;
@@ -931,6 +979,7 @@ Rule *initrule(Rule *wr)
 	if (wr->class) { CPYSTR(r->class, wr->class); INITREG(r->class, &(r->classreg)) }
 	if (wr->inst) { CPYSTR(r->inst, wr->inst); INITREG(r->inst, &(r->instreg)) }
 	ATTACH(r, rules);
+	DBGEXIT("initrule (SUCCESS)")
 	return r;
 
 error:
@@ -939,6 +988,7 @@ error:
 	FREEREG(r->inst, wr->inst, &(r->instreg))
 	if (wr->mon) free(r->mon);
 	free(r);
+	DBGEXIT("initrule (FAIL)")
 	return NULL;
 
 #undef INITREG
@@ -948,6 +998,7 @@ error:
 
 void initscan(void)
 {
+	DBGENTER("initscan")
 	unsigned int i;
 	xcb_generic_error_t *e;
 	xcb_query_tree_reply_t *rt;
@@ -966,42 +1017,41 @@ void initscan(void)
 				manage(w[i], 1);
 	}
 	free(rt);
+	DBGEXIT("initscan")
 }
 
 void initsock(void)
 {
+	DBGENTER("initsock")
 	ssize_t len;
-	char *env, *hostname = NULL;
+	char *hostname = NULL;
 	int display = 0, screen = 0;
 	static struct sockaddr_un addr;
 
 	if (sockfd > 0) return;
-	if (!(env = getenv("DKSOCK"))) {
-		if (xcb_parse_display(NULL, &hostname, &display, &screen)) {
-			len = snprintf(NULL, 0, "/tmp/dk_%s_%i_%i.socket", hostname, display, screen) + 1; // NOLINT
-			sock = ecalloc(1, len);
-			snprintf(sock, len, "/tmp/dk_%s_%i_%i.socket", hostname, display, screen); // NOLINT
-			free(hostname);
-		} else {
-			sock = ecalloc(1, (len = 15));
-			strlcpy(sock, "/tmp/dk.socket", len);
-		}
-		if (setenv("DKSOCK", sock, 0) < 0)
-			warn("unable to set DKSOCK environment variable");
+	if (xcb_parse_display(NULL, &hostname, &display, &screen)) {
+		len = snprintf(NULL, 0, "/tmp/dk_%s_%i_%i.socket", hostname, display, screen) + 1; // NOLINT
+		sock = ecalloc(1, len);
+		snprintf(sock, len, "/tmp/dk_%s_%i_%i.socket", hostname, display, screen); // NOLINT
+		free(hostname);
 	} else {
-		sock = ecalloc(1, (len = strlen(env) + 1));
-		strlcpy(sock, env, len);
+		sock = ecalloc(1, (len = 15));
+		strlcpy(sock, "/tmp/dk.socket", len);
 	}
+	if (setenv("DKSOCK", sock, 0) < 0)
+		warn("unable to set DKSOCK environment variable");
 	addr.sun_family = AF_UNIX;
 	strlcpy(addr.sun_path, sock, sizeof(addr.sun_path));
 	check((sockfd = socket(AF_UNIX, SOCK_STREAM, 0)), "unable to create socket");
 	unlink(sock); // NOLINT  -- shit linter, this will NEVER be NULL
 	check(bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)), "unable to bind socket");
 	check(listen(sockfd, SOMAXCONN), "unable to listen on socket");
+	DBGEXIT("initsock")
 }
 
 Status *initstatus(FILE *file, char *path, int num, unsigned int type)
 {
+	DBGENTER("initstatus")
 	Status *s, *tail;
 
 	DBG("initstatus: path: %s, num: %d, type: %d", path, num, type)
@@ -1020,11 +1070,13 @@ Status *initstatus(FILE *file, char *path, int num, unsigned int type)
 		tail->next = s;
 	else
 		stats = s;
+	DBGEXIT("initstatus")
 	return s;
 }
 
 void initwm(void)
 {
+	DBGENTER("initwm")
 	int cws;
 	xcb_atom_t r;
 	Workspace *ws;
@@ -1095,10 +1147,12 @@ void initwm(void)
 
 	if (!(keysyms = xcb_key_symbols_alloc(con)))
 		err(1, "unable to get keysyms from X connection");
+	DBGEXIT("initwm")
 }
 
 Workspace *initws(int num)
 {
+	DBGENTER("initws")
 	Workspace *ws, *tail;
 
 	DBG("initws: %d", num)
@@ -1120,29 +1174,35 @@ Workspace *initws(int num)
 		tail->next = ws;
 	else
 		workspaces = ws;
+	DBGEXIT("initws")
 	return ws;
 }
 
 Monitor *itomon(int num)
 {
+	DBGENTER("itomon")
 	Monitor *mon = monitors;
 
 	while (mon && mon->num != num)
 		mon = mon->next;
+	DBGEXIT("itomon")
 	return mon;
 }
 
 Workspace *itows(int num)
 {
+	DBGENTER("itows")
 	Workspace *ws = workspaces;
 
 	while (ws && ws->num != num)
 		ws = ws->next;
+	DBGEXIT("itows")
 	return ws;
 }
 
 void manage(xcb_window_t win, int scan)
 {
+	DBGENTER("manage")
 	xcb_atom_t type, state;
 
 	if (wintoclient(win) || wintopanel(win) || wintodesk(win))
@@ -1160,12 +1220,12 @@ void manage(xcb_window_t win, int scan)
 		else if (type != netatom[NET_TYPE_SPLASH] && !wa->override_redirect)
 			goto client;
 	} else if (!wa->override_redirect) {
-
 client:
-		if (scan && !(wa->map_state == XCB_MAP_STATE_VIEWABLE
-					|| (winprop(win, wmatom[WM_STATE], &state)
-						&& state == XCB_ICCCM_WM_STATE_ICONIC)))
-			goto end;
+		if (scan)
+			if (!(wa->map_state == XCB_MAP_STATE_VIEWABLE
+						|| (winprop(win, wmatom[WM_STATE], &state)
+							&& state == XCB_ICCCM_WM_STATE_ICONIC)))
+				goto end;
 		initclient(win, g);
 	}
 	PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &win);
@@ -1175,10 +1235,12 @@ client:
 end:
 	free(wa);
 	free(g);
+	DBGEXIT("manage")
 }
 
 void movestack(int direction)
 {
+	DBGENTER("movestack")
 	int i;
 	Client *c = cmdclient, *t;
 
@@ -1208,34 +1270,42 @@ void movestack(int direction)
 		}
 	}
 	needsrefresh = 1;
+	DBGEXIT("movestack")
 }
 
 Monitor *nextmon(Monitor *m)
 {
+	DBGENTER("nextmon")
 	while (m && !m->connected)
 		m = m->next;
+	DBGEXIT("nextmon")
 	return m;
 }
 
 Client *nexttiled(Client *c)
 {
+	DBGENTER("nexttiled")
 	while (c && FLOATING(c))
 		c = c->next;
+	DBGEXIT("nexttiled")
 	return c;
 }
 
 Monitor *outputtomon(xcb_randr_output_t id)
 {
+	DBGENTER("outputtomon")
 	Monitor *m = NULL;
 
 	FOR_EACH(m, monitors)
 		if (m->id == id)
 			return m;
+	DBGEXIT("outputtomon")
 	return m;
 }
 
 void popfloat(Client *c)
 {
+	DBGENTER("popfloat")
 	int x, y, w, h;
 
 	c->state |= STATE_FLOATING;
@@ -1246,10 +1316,12 @@ void popfloat(Client *c)
 	setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	resizehint(c, x, y, w, h, c->bw, 0, 0);
 	xcb_aux_sync(con);
+	DBGEXIT("popfloat")
 }
 
 void printstatus(Status *s)
 {
+	DBGENTER("printstatus")
 	Rule *r;
 	Client *c;
 	Monitor *m;
@@ -1342,10 +1414,12 @@ void printstatus(Status *s)
 		if (single) break;
 		s = next;
 	}
+	DBGEXIT("printstatus")
 }
 
 void quadrant(Client *c, int *x, int *y, int *w, int *h)
 {
+	DBGENTER("quadrant")
 	Client *t;
 	Monitor *m = c->ws->mon;
 	static int index = 0;
@@ -1386,10 +1460,12 @@ void quadrant(Client *c, int *x, int *y, int *w, int *h)
 	}
 	*x = q[i][1] + (((*w - tw) * -1) / 2);
 	*y = q[i][2] + (((*h - th) * -1) / 2);
+	DBGEXIT("quadrant")
 }
 
 int refresh(void)
 {
+	DBGENTER("refresh")
 	Desk *d;
 	Panel *p;
 	Client *c;
@@ -1420,12 +1496,14 @@ int refresh(void)
 	ignore(XCB_ENTER_NOTIFY);
 	printstatus(NULL);
 
+	DBGEXIT("refresh")
 	return 0;
 #undef MAP
 }
 
 void relocate(Client *c, Monitor *new, Monitor *old)
 {
+	DBGENTER("relocate")
 #define RELOC(val, opposed, offset, min, max, wmin, wmax, oldmin, oldmax, oldwmin, oldwmax) \
 	if (val - oldwmin > 0 && (offset = oldwmax / (val - oldwmin)) != 0.0) {             \
 		if (val + (opposed) == oldmin + oldmax) {                                       \
@@ -1452,37 +1530,44 @@ void relocate(Client *c, Monitor *new, Monitor *old)
 		RELOC(c->y, H(c), f, new->wy, new->wh, new->y, new->h, old->wy, old->wh, old->y, old->h)
 	}
 	DBG("relocate: 0x%08x - new geom: %d,%d %dx%d", c->win, c->x, c->y, c->w, c->h)
-
+	DBGEXIT("relocate")
 #undef RELOC
 }
 
 void relocatews(Workspace *ws, Monitor *old)
 {
+	DBGENTER("relocatews")
 	Client *c;
 	Monitor *new;
 
 	if (!(new = ws->mon) || new == old) return;
 	DBG("relocatews: %d:%s -> %d:%s", old->ws->num, old->name, new->ws->num, new->name)
 	FOR_EACH(c, ws->clients) relocate(c, new, old);
+	DBGEXIT("relocatews")
 }
 
 void resize(Client *c, int x, int y, int w, int h, int bw)
 {
+	DBGENTER("resize")
 	c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 	c->x = x, c->y = y, c->w = w, c->h = h;
 	MOVERESIZE(c->win, x, y, w, h, bw);
 	drawborder(c, c == selws->sel);
 	sendconfigure(c);
+	DBGEXIT("resize")
 }
 
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, int mouse)
 {
+	DBGENTER("resizehint")
 	if (applysizehints(c, &x, &y, &w, &h, bw, usermotion, mouse))
 		resize(c, x, y, w, h, bw);
+	DBGEXIT("resizehint")
 }
 
 void restack(Workspace *ws)
 {
+	DBGENTER("restack")
 	Desk *d;
 	Panel *p;
 	Client *c;
@@ -1490,19 +1575,23 @@ void restack(Workspace *ws)
 	if (!ws || !(c = ws->sel)) return;
 	FOR_EACH(p, panels)
 		if (p->mon == ws->mon)
-			setstackmode(p->win, XCB_STACK_MODE_ABOVE);
+			setstackmode(p->win, XCB_STACK_MODE_BELOW);
 	if (FLOATING(c))
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	if (ws->layout->func && ws == ws->mon->ws)
-		for (c = nexttiled(ws->stack); c; c = nexttiled(c->snext))
-			setstackmode(c->win, XCB_STACK_MODE_BELOW);
+		for (c = ws->stack; c; c = c->snext)
+			if (!FLOATING(c))
+				setstackmode(c->win, XCB_STACK_MODE_BELOW);
 	FOR_EACH(d, desks)
 		if (d->mon == ws->mon)
 			setstackmode(d->win, XCB_STACK_MODE_BELOW);
+	DBGEXIT("restack")
 }
 
 int rulecmp(Client *c, Rule *r)
 {
+	DBGENTER("rulecmp")
+	DBGEXIT("rulecmp")
 	return !((r->class && regexec(&(r->classreg), c->class, 0, NULL, 0))
 			|| (r->inst && regexec(&(r->instreg), c->inst, 0, NULL, 0))
 			|| (r->title && regexec(&(r->titlereg), c->title, 0, NULL, 0)));
@@ -1510,6 +1599,7 @@ int rulecmp(Client *c, Rule *r)
 
 void sendconfigure(Client *c)
 {
+	DBGENTER("sendconfigure")
 	xcb_configure_notify_event_t e = {
 		.event = c->win,
 		.window = c->win,
@@ -1523,10 +1613,12 @@ void sendconfigure(Client *c)
 		.override_redirect = 0
 	};
 	xcb_send_event(con, 0, c->win, XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char *)&e);
+	DBGEXIT("sendconfigure")
 }
 
 int sendwmproto(Client *c, int wmproto)
 {
+	DBGENTER("sendwmproto")
 	int exists = 0;
 	xcb_generic_error_t *er;
 	xcb_get_property_cookie_t rpc;
@@ -1552,11 +1644,13 @@ int sendwmproto(Client *c, int wmproto)
 		iferr(0, "unable to send client message event", xcb_request_check(con,
 					xcb_send_event_checked(con, 0, c->win, XCB_EVENT_MASK_NO_EVENT, (char *)&e)));
 	}
+	DBGEXIT("sendwmproto")
 	return exists;
 }
 
 void setfullscreen(Client *c, int fullscreen)
 {
+	DBGENTER("setfullscreen")
 	Monitor *m;
 
 	if (!c->ws || !(m = c->ws->mon))
@@ -1573,19 +1667,23 @@ void setfullscreen(Client *c, int fullscreen)
 		resize(c, c->old_x, c->old_y, c->old_w, c->old_h, c->bw);
 		needsrefresh = 1;
 	}
+	DBGEXIT("setfullscreen")
 }
 
 void setinputfocus(Client *c)
 {
+	DBGENTER("setinputfocus")
 	if (!(c->state & STATE_NOINPUT)) {
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, c->win, XCB_CURRENT_TIME);
 		PROP(REPLACE, root, netatom[NET_ACTIVE], XCB_ATOM_WINDOW, 32, 1, &c->win);
 	}
 	sendwmproto(c, WM_FOCUS);
+	DBGEXIT("setinputfocus")
 }
 
 void setnetwsnames(void)
 {
+	DBGENTER("setnetwsnames")
 	char *names;
 	Workspace *ws;
 	size_t len = 1;
@@ -1598,15 +1696,19 @@ void setnetwsnames(void)
 		for (unsigned int i = 0; (names[len++] = ws->name[i]); i++);
 	PROP(REPLACE, root, netatom[NET_DESK_NAMES], wmatom[WM_UTF8STR], 8, --len, names);
 	free(names);
+	DBGEXIT("setnetwsnames")
 }
 
 void setstackmode(xcb_window_t win, unsigned int mode)
 {
+	DBGENTER("setstackmode")
 	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_STACK_MODE, &mode);
+	DBGEXIT("setstackmode")
 }
 
 void seturgent(Client *c, int urg)
 {
+	DBGENTER("seturgent")
 	xcb_generic_error_t *e;
 	xcb_icccm_wm_hints_t wmh;
 	xcb_get_property_cookie_t pc;
@@ -1624,16 +1726,20 @@ void seturgent(Client *c, int urg)
 	} else {
 		iferr(0, "unable to get wm window hints", e);
 	}
+	DBGEXIT("seturgent")
 }
 
 void setwinstate(xcb_window_t win, long state)
 {
+	DBGENTER("setwinstate")
 	long data[] = { state, XCB_ATOM_NONE };
 	PROP(REPLACE, win, wmatom[WM_STATE], wmatom[WM_STATE], 32, 2, (unsigned char *)data);
+	DBGEXIT("setwinstate")
 }
 
 void setworkspace(Client *c, int num, int stacktail)
 {
+	DBGENTER("setworkspace")
 	Workspace *ws;
 	Client *tail = NULL;
 
@@ -1656,10 +1762,12 @@ void setworkspace(Client *c, int num, int stacktail)
 		c->snext = c->ws->stack;
 		c->ws->stack = c;
 	}
+	DBGEXIT("setworkspace")
 }
 
 void showhide(Client *c)
 {
+	DBGENTER("showhide")
 	Monitor *m;
 
 	if (!c) return;
@@ -1688,10 +1796,12 @@ void showhide(Client *c)
 			focus(sel);
 		}
 	}
+	DBGEXIT("showhide")
 }
 
 void sizehints(Client *c, int uss)
 {
+	DBGENTER("sizehints")
 	xcb_size_hints_t s;
 	xcb_generic_error_t *e;
 	xcb_get_property_cookie_t pc;
@@ -1727,10 +1837,12 @@ void sizehints(Client *c, int uss)
 	}
 	if (c->max_w && c->max_h && c->max_w == c->min_w && c->max_h == c->min_h)
 		c->state |= STATE_FIXED | STATE_FLOATING;
+	DBGEXIT("sizehints")
 }
 
 void unfocus(Client *c, int focusroot)
 {
+	DBGENTER("unfocus")
 	if (c) {
 		grabbuttons(c, 0);
 		drawborder(c, 0);
@@ -1739,10 +1851,12 @@ void unfocus(Client *c, int focusroot)
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, root, XCB_CURRENT_TIME);
 		xcb_delete_property(con, root, netatom[NET_ACTIVE]);
 	}
+	DBGEXIT("unfocus")
 }
 
 void unmanage(xcb_window_t win, int destroyed)
 {
+	DBGENTER("unmanage")
 	Desk *d;
 	Panel *p;
 	Client *c;
@@ -1794,10 +1908,12 @@ void unmanage(xcb_window_t win, int destroyed)
 			PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &d->win);
 		needsrefresh = 1;
 	}
+	DBGEXIT("unmanage")
 }
 
 int updoutputs(xcb_randr_output_t *outs, int nouts, xcb_timestamp_t t)
 {
+	DBGENTER("updoutputs")
 	Monitor *m;
 	unsigned int n;
 	char name[64];
@@ -1865,11 +1981,13 @@ next:
 			primary = nextmon(monitors);
 		free(po);
 	}
+	DBGEXIT("updoutputs")
 	return changed;
 }
 
 int updrandr(void)
 {
+	DBGENTER("updrandr")
 	int changed = 0;
 	xcb_generic_error_t *e;
 	xcb_randr_get_screen_resources_reply_t *r;
@@ -1886,11 +2004,13 @@ int updrandr(void)
 	} else {
 		iferr(0, "unable to get screen resources", e);
 	}
+	DBGEXIT("updrandr")
 	return changed;
 }
 
 void updstruts(Panel *p, int apply)
 {
+	DBGENTER("updstruts")
 	Panel *n;
 	Monitor *m;
 
@@ -1904,10 +2024,12 @@ void updstruts(Panel *p, int apply)
 				applypanelstrut(p);
 	}
 	updnetworkspaces();
+	DBGEXIT("updstruts")
 }
 
 void updnetworkspaces(void)
 {
+	DBGENTER("updnetworkspaces")
 	int v[4];
 	Workspace *ws;
 
@@ -1924,10 +2046,12 @@ void updnetworkspaces(void)
 		v[0] = ws->mon->wx, v[1] = ws->mon->wy, v[2] = ws->mon->ww, v[3] = ws->mon->wh;
 		PROP(APPEND, root, netatom[NET_DESK_WA], XCB_ATOM_CARDINAL, 32, 4, &v);
 	}
+	DBGEXIT("updnetworkspaces")
 }
 
 void updworkspaces(int needed)
 {
+	DBGENTER("updworkspaces")
 	int n;
 	Client *c;
 	Monitor *m;
@@ -1965,30 +2089,36 @@ void updworkspaces(int needed)
 	}
 	setnetwsnames();
 	needsrefresh = 1;
+	DBGEXIT("updworkspaces")
 }
 
 xcb_get_window_attributes_reply_t *winattr(xcb_window_t win)
 {
+	DBGENTER("winattr")
 	xcb_get_window_attributes_reply_t *wa = NULL;
 	xcb_generic_error_t *e;
 	xcb_get_window_attributes_cookie_t wc;
 
 	GET(win, wa, wc, e, "attributes", window_attributes);
+	DBGEXIT("winattr")
 	return wa;
 }
 
 xcb_get_geometry_reply_t *wingeom(xcb_window_t win)
 {
+	DBGENTER("wingeom")
 	xcb_get_geometry_reply_t *g = NULL;
 	xcb_generic_error_t *e;
 	xcb_get_geometry_cookie_t gc;
 
 	GET(win, g, gc, e, "geometry", geometry);
+	DBGEXIT("wingeom")
 	return g;
 }
 
 int winprop(xcb_window_t win, xcb_atom_t prop, xcb_atom_t *ret)
 {
+	DBGENTER("winprop")
 	int i = 0;
 	xcb_generic_error_t *e;
 	xcb_get_property_cookie_t c;
@@ -2002,45 +2132,53 @@ int winprop(xcb_window_t win, xcb_atom_t prop, xcb_atom_t *ret)
 		iferr(0, "unable to get window property reply", e);
 	}
 	free(r);
+	DBGEXIT("winprop")
 	return i;
 }
 
 Client *wintoclient(xcb_window_t win)
 {
-	Client *c;
+	DBGENTER("wintoclient")
+	Client *c = NULL;
 	Workspace *ws;
 
 	if (win != XCB_WINDOW_NONE && win != root)
 		FOR_CLIENTS(c, ws)
 			if (c->win == win)
-				return c;
-	return NULL;
+				break;
+	DBGEXIT("wintoclient")
+	return c;
 }
 
 Panel *wintopanel(xcb_window_t win)
 {
-	Panel *p;
+	DBGENTER("wintopanel")
+	Panel *p = NULL;
 
 	if (win != XCB_WINDOW_NONE && win != root)
 		FOR_EACH(p, panels)
 			if (p->win == win)
-				return p;
-	return NULL;
+				break;
+	DBGEXIT("wintopanel")
+	return p;
 }
 
 Desk *wintodesk(xcb_window_t win)
 {
-	Desk *d;
+	DBGENTER("wintodesk")
+	Desk *d = NULL;
 
 	if (win != XCB_WINDOW_NONE && win != root)
 		FOR_EACH(d, desks)
 			if (d->win == win)
-				return d;
-	return NULL;
+				break;
+	DBGEXIT("wintodesk")
+	return d;
 }
 
 xcb_window_t wintrans(xcb_window_t win)
 {
+	DBGENTER("wintrans")
 	xcb_window_t w;
 	xcb_get_property_cookie_t pc;
 	xcb_generic_error_t *e = NULL;
@@ -2050,5 +2188,6 @@ xcb_window_t wintrans(xcb_window_t win)
 		w = XCB_WINDOW_NONE;
 		iferr(0, "unable to get wm transient for hint", e);
 	}
+	DBGEXIT("wintrans")
 	return w;
 }

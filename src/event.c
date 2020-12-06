@@ -50,6 +50,7 @@ static void (*handlers[XCB_NO_OPERATION + 1])(xcb_generic_event_t *) = {
 
 void buttonpress(xcb_generic_event_t *ev)
 {
+	DBGENTER("buttonpress")
 	Client *c;
 	xcb_generic_error_t *er;
 	xcb_grab_pointer_cookie_t pc;
@@ -78,10 +79,12 @@ void buttonpress(xcb_generic_event_t *ev)
 			iferr(0, "unable to grab pointer", er);
 		free(p);
 	}
+	DBGEXIT("buttonpress")
 }
 
 void clientmessage(xcb_generic_event_t *ev)
 {
+	DBGENTER("clientmessage")
 	Client *c;
 	xcb_client_message_event_t *e = (xcb_client_message_event_t *)ev;
 	unsigned int *d = e->data.data32;
@@ -116,19 +119,23 @@ void clientmessage(xcb_generic_event_t *ev)
 			}
 		}
 	}
+	DBGEXIT("clientmessage")
 }
 
 void confignotify(xcb_generic_event_t *ev)
 {
+	DBGENTER("confignotify")
 	xcb_configure_notify_event_t *e = (xcb_configure_notify_event_t *)ev;
 
 	if (e->window != root) return;
 	scr_w = e->width;
 	scr_h = e->height;
+	DBGEXIT("confignotify")
 }
 
 void configrequest(xcb_generic_event_t *ev)
 {
+	DBGENTER("configrequest")
 	Client *c;
 	Monitor *m;
 	xcb_configure_request_event_t *e = (xcb_configure_request_event_t *)ev;
@@ -177,15 +184,19 @@ void configrequest(xcb_generic_event_t *ev)
 		xcb_aux_configure_window(con, e->window, e->value_mask, &wc);
 	}
 	xcb_aux_sync(con);
+	DBGEXIT("configrequest")
 }
 
 void destroynotify(xcb_generic_event_t *ev)
 {
+	DBGENTER("destroynotify")
 	unmanage(((xcb_destroy_notify_event_t *)ev)->window, 1);
+	DBGEXIT("destroynotify")
 }
 
 void dispatch(xcb_generic_event_t *ev)
 {
+	DBGENTER("dispatch")
 	short type;
 
 	if ((type = ev->response_type & 0x7f)) {
@@ -210,10 +221,12 @@ void dispatch(xcb_generic_event_t *ev)
 				(uint32_t) e->major_code, (uint32_t) e->minor_code,
 				(uint32_t) e->resource_id, (uint32_t) e->sequence);
 	}
+	DBGEXIT("dispatch")
 }
 
 void enternotify(xcb_generic_event_t *ev)
 {
+	DBGENTER("enternotify")
 	Client *c;
 	Monitor *m;
 	Workspace *ws;
@@ -232,10 +245,12 @@ void enternotify(xcb_generic_event_t *ev)
 		changews(ws, 0, 0);
 	if (c && globalcfg[GLB_FOCUS_MOUSE])
 		focus(c);
+	DBGEXIT("enternotify")
 }
 
 void focusin(xcb_generic_event_t *ev)
 {
+	DBGENTER("focusin")
 	xcb_focus_in_event_t *e = (xcb_focus_in_event_t *)ev;
 
 	if (e->mode == XCB_NOTIFY_MODE_GRAB
@@ -248,10 +263,12 @@ void focusin(xcb_generic_event_t *ev)
 		DBG("focusin: 0x%08x", e->event)
 		setinputfocus(selws->sel);
 	}
+	DBGEXIT("focusin")
 }
 
 void ignore(uint8_t type)
 {
+	DBGENTER("ignore")
 	xcb_generic_event_t *ev = NULL;
 
 	xcb_flush(con);
@@ -260,15 +277,19 @@ void ignore(uint8_t type)
 			dispatch(ev);
 		free(ev);
 	}
+	DBGEXIT("ignore")
 }
 
 void maprequest(xcb_generic_event_t *ev)
 {
+	DBGENTER("maprequest")
 	manage(((xcb_map_request_event_t *)ev)->window, 0);
+	DBGEXIT("maprequest")
 }
 
 void motionnotify(xcb_generic_event_t *ev)
 {
+	DBGENTER("motionnotify")
 	Monitor *m;
 	xcb_motion_notify_event_t *e = (xcb_motion_notify_event_t *)ev;
 
@@ -282,6 +303,7 @@ void motionnotify(xcb_generic_event_t *ev)
 
 void mouse(Client *c, int move, int mx, int my)
 {
+	DBGENTER("mouse")
 	Monitor *m;
 	Client *p, *prev = NULL;
 	xcb_timestamp_t last = 0;
@@ -405,10 +427,12 @@ void mouse(Client *c, int move, int mx, int my)
 		}
 		free(ev);
 	}
+	DBGEXIT("mouse")
 }
 
 void propertynotify(xcb_generic_event_t *ev)
 {
+	DBGENTER("propertynotify")
 	Panel *p;
 	Client *c;
 	xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ev;
@@ -455,10 +479,12 @@ void propertynotify(xcb_generic_event_t *ev)
 		updstruts(p, 1);
 		needsrefresh = 1;
 	}
+	DBGEXIT("propertynotify")
 }
 
 void unmapnotify(xcb_generic_event_t *ev)
 {
+	DBGENTER("unmapnotify")
 	xcb_generic_error_t *er;
 	xcb_unmap_notify_event_t *e = (xcb_unmap_notify_event_t *)ev;
 
@@ -473,4 +499,5 @@ void unmapnotify(xcb_generic_event_t *ev)
 		DBG("unmapnotify: 0x%08x", e->window)
 		unmanage(e->window, 0);
 	}
+	DBGEXIT("unmapnotify")
 }

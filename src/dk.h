@@ -7,13 +7,27 @@
 #pragma once
 
 #ifdef DEBUG
-#define DBG(fmt, ...) warnx("%d: " fmt, __LINE__, ##__VA_ARGS__); fflush(stderr);
+#define DBG(fmt, ...)  warnx("%d: " fmt, __LINE__, ##__VA_ARGS__);
 #else
 #define DBG(fmt, ...)
 #endif
 
+#ifdef FUNCDEBUG
+#define DBGENTER(func) warnx("%d: ---> " func, __LINE__);
+#define DBGEXIT(func)  warnx("%d: <--- " func, __LINE__);
+#else
+#define DBGENTER(func)
+#define DBGEXIT(func)
+#endif
+
 #ifndef VERSION
 #define VERSION "1.0"
+#endif
+
+#if __GNUC_PREREQ (3, 3)
+#define NAN (__builtin_nanf (""))
+#else
+#define NAN (0.0f / 0.0f)
 #endif
 
 #define W(c) (c->w + (2 * c->bw))

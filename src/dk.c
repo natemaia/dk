@@ -859,10 +859,9 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		if (c->trans) {
 			c->x = c->trans->x + ((W(c->trans) - W(c)) / 2);
 			c->y = c->trans->y + ((H(c->trans) - H(c)) / 2);
-		} else {
-			c->x = CLAMP(c->x, c->ws->mon->wx, c->ws->mon->wx + c->ws->mon->ww - W(c));
-			c->y = CLAMP(c->y, c->ws->mon->wy, c->ws->mon->wy + c->ws->mon->wh - H(c));
 		}
+		c->x = CLAMP(c->x, c->ws->mon->wx, c->ws->mon->wx + c->ws->mon->ww - W(c));
+		c->y = CLAMP(c->y, c->ws->mon->wy, c->ws->mon->wy + c->ws->mon->wh - H(c));
 		if (c->x == c->ws->mon->wx && c->y == c->ws->mon->wy)
 			quadrant(c, &c->x, &c->y, &c->w, &c->h);
 	}

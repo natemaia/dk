@@ -310,7 +310,9 @@ void mouse(Client *c, int move, int mx, int my)
 	xcb_timestamp_t last = 0;
 	xcb_motion_notify_event_t *e;
 	xcb_generic_event_t *ev = NULL;
+	int (*lyt)(Workspace *) = selws->layout->func;
 	int i, ox, oy, ow, oh, nw, nh, nx, ny, released = 0, first = 1;
+	int left = lyt == ltile;
 
 	ox = nx = c->x;
 	oy = ny = c->y;
@@ -325,9 +327,13 @@ void mouse(Client *c, int move, int mx, int my)
 			e = (xcb_motion_notify_event_t *)ev;
 			if (e->time - last < 1000 / 60) break;
 			last = e->time;
-			if (!move && !(c->state & STATE_FLOATING) && selws->layout->func == tile) {
-				if (i >= selws->nstack + selws->nmaster) {
-					if (globalcfg[GLB_TILE_RMASTER])
+
+			if (!move && !(c->state & STATE_FLOATING) && ISTILE(selws)) {
+				/* TODO: fix this shit, surely there's a better way that I'm not seeing
+				 * this whole block is just calculating the split ratio and height
+				 * offset of the current tiled client based on mouse movement (a resize) */
+				if (selws->nstack && i >= selws->nstack + selws->nmaster) {
+					if (left)
 						selws->ssplit = (float)(ox - selws->mon->x + ow - (e->root_x - mx))
 							/ (float)(selws->mon->w - (selws->mon->w * selws->msplit));
 					else
@@ -335,8 +341,8 @@ void mouse(Client *c, int move, int mx, int my)
 								- (selws->mon->w * selws->msplit))
 							/ (float)(selws->mon->w - (selws->mon->w * selws->msplit));
 					selws->ssplit = CLAMP(selws->ssplit, 0.05, 0.95);
-				} else if (i >= selws->nmaster) {
-					if (globalcfg[GLB_TILE_RMASTER])
+				} else if (selws->nmaster && i >= selws->nmaster) {
+					if (left)
 						selws->msplit = (float)(ox - selws->mon->x + ow - (e->root_x - mx))
 							/ (float)selws->mon->w;
 					else
@@ -344,7 +350,7 @@ void mouse(Client *c, int move, int mx, int my)
 							/ (float)selws->mon->w;
 					selws->msplit = CLAMP(selws->msplit, 0.05, 0.95);
 				} else {
-					if (globalcfg[GLB_TILE_RMASTER])
+					if (left)
 						selws->msplit = (float)(ox - selws->mon->x - (e->root_x - mx))
 							/ (float)selws->mon->w;
 					else
@@ -352,6 +358,7 @@ void mouse(Client *c, int move, int mx, int my)
 							/ (float)selws->mon->w;
 					selws->msplit = CLAMP(selws->msplit, 0.05, 0.95);
 				}
+
 				if (prev || ((i == selws->nmaster || i == selws->nmaster + selws->nstack)
 							&& nexttiled(c->next)))
 				{
@@ -379,6 +386,7 @@ void mouse(Client *c, int move, int mx, int my)
 				} else {
 					selws->layout->func(selws);
 				}
+
 			} else {
 				if (move) {
 					nx = ox + (e->root_x - mx);
@@ -489,6 +497,8 @@ void unmapnotify(xcb_generic_event_t *ev)
 	xcb_generic_error_t *er;
 	xcb_unmap_notify_event_t *e = (xcb_unmap_notify_event_t *)ev;
 
+	if (e->event == root)
+		return;
 	free(xcb_query_tree_reply(con, xcb_query_tree(con, e->window), &er));
 	if (er) {
 		free(er);

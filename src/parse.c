@@ -27,8 +27,8 @@ int parsebool(char *arg)
 	int i;
 	char *end;
 
-	if (((i = !strcmp("true", arg)) || !strcmp("false", arg))
-			|| (((i = strtoul(arg, &end, 0)) > 0 || !strcmp("0", arg)) && *end == '\0'))
+	if (arg && (((i = !strcmp("true", arg)) || !strcmp("false", arg))
+				|| (((i = strtoul(arg, &end, 0)) > 0 || !strcmp("0", arg)) && *end == '\0')))
 		return (i ? 1 : 0);
 	return -1;
 }
@@ -158,7 +158,7 @@ float parsefloat(char *arg, int *rel)
 	float f;
 	char *end;
 
-	if ((f = strtof(arg, &end)) && *end == '\0' && f >= -0.95 && f <= 0.95) {
+	if (arg && (f = strtof(arg, &end)) && *end == '\0' && f >= -0.95 && f <= 0.95) {
 		if (rel) *rel = arg[0] == '-' || arg[0] == '+';
 		return f;
 	}
@@ -170,7 +170,7 @@ int parseint(char *arg, int *rel, int allowzero)
 	int i;
 	char *end;
 
-	if (((i = strtol(arg, &end, 0)) || (allowzero && !strcmp("0", arg))) && *end == '\0') {
+	if (arg && ((i = strtol(arg, &end, 0)) || (allowzero && !strcmp("0", arg))) && *end == '\0') {
 		if (rel)
 			*rel = arg[0] == '-' || arg[0] == '+';
 		return i;
@@ -191,9 +191,10 @@ int parseopt(char *arg, char **optarr)
 {
 	char **s = optarr;
 
-	for (int i = 0; s && *s; s++, i++)
-		if (!strcmp(*s, arg))
-			return i;
+	if (arg)
+		for (int i = 0; s && *s; s++, i++)
+			if (!strcmp(*s, arg))
+				return i;
 	return -1;
 }
 
@@ -201,6 +202,7 @@ int parsegeom(char *arg, char type, int *i, int *rel, int *grav)
 {
 	int j;
 
+	if (!arg) return 0;
 	if ((j = parseint(arg, rel, type == 'x' || type == 'y' ? 1 : 0)) != INT_MIN) {
 		*i = j;
 	} else if (grav) {
@@ -232,6 +234,7 @@ Workspace *parsewsormon(char *arg, int mon)
 	Monitor *m;
 	Workspace *cws = selws, *ws;
 
+	if (!arg) return NULL;
 	if (mon) {
 		for (m = nextmon(monitors); m; m = nextmon(m->next))
 			if (!strcmp(m->name, arg))

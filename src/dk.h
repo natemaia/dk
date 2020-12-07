@@ -37,6 +37,8 @@
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define CLAMP(x, min, max) (MIN(MAX((x), (min)), (max)))
 
+#define ISTILE(ws) (ws->layout->func == ltile || ws->layout->func == rtile)
+
 #define FLOATING(c) (c->state & STATE_FLOATING || !c->ws->layout->func)
 #define FULLSCREEN(c) (c->state & STATE_FULLSCREEN && !(c->state & STATE_FAKEFULL))
 
@@ -175,8 +177,7 @@ enum GlobalCfg {
 	GLB_SMART_GAP    = 8,
 	GLB_TILE_HINTS   = 9,
 	GLB_TILE_TOHEAD  = 10,
-	GLB_TILE_RMASTER = 11,
-	GLB_LAST         = 12,
+	GLB_LAST         = 11,
 };
 
 
@@ -375,6 +376,7 @@ void setwinstate(xcb_window_t win, long state);
 void setworkspace(Client *c, int num, int stacktail);
 void showhide(Client *c);
 void sizehints(Client *c, int uss);
+int tilecount(Workspace *ws);
 void unfocus(Client *c, int focusroot);
 void unmanage(xcb_window_t win, int destroyed);
 void updnetworkspaces(void);

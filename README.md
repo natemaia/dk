@@ -352,12 +352,6 @@ set tile_tohead=true
 ```
 ---
 
-`tile_rmaster` (boolean) place the master area on the right in tile layout.
-```
-set tile_rmaster=true
-```
----
-
 `smart_gap` (boolean) remove gaps on workspaces with only one tiled window.
 ```
 set smart_gap=true
@@ -409,6 +403,7 @@ set ws=_ apply SETTING
 `layout` (string) change the workspace window layout.
 
 - `tile` default tile layout
+- `rtile` tile layout with master area on the right
 - `mono` windows arranged maximized and stacked
 - `grid` all windows try to occupy equal space
 - `spiral` windows shrink by 1/2 towards the center of the screen

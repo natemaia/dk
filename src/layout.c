@@ -21,6 +21,9 @@
 #include "parse.h"
 
 
+static int fib(Workspace *ws, int out);
+static int tile(Workspace *ws, int left);
+
 int dwindle(Workspace *ws)
 {
 	return fib(ws, 1);
@@ -126,6 +129,11 @@ int grid(Workspace *ws)
 	return 1;
 }
 
+int ltile(Workspace *ws)
+{
+	return tile(ws, 0);
+}
+
 int mono(Workspace *ws)
 {
 	int g;
@@ -143,12 +151,17 @@ int mono(Workspace *ws)
 	return 1;
 }
 
+int rtile(Workspace *ws)
+{
+	return tile(ws, 1);
+}
+
 int spiral(Workspace *ws)
 {
 	return fib(ws, 0);
 }
 
-int tile(Workspace *ws)
+int tile(Workspace *ws, int left)
 {
 	Monitor *m = ws->mon;
 	Client *c, *prev = NULL;
@@ -181,17 +194,17 @@ int tile(Workspace *ws)
 		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 		if (i < ws->nmaster) {
 			remaining = MIN(n, ws->nmaster) - i;
-			x = globalcfg[GLB_TILE_RMASTER] ? sw + ssw + (g / ns) : g;
+			x = left ? sw + ssw + (g / ns) : g;
 			y = &my;
 			c->w = mw - g * (5 - ns) / 2;
 		} else if (i - ws->nmaster < ws->nstack) {
 			remaining = MIN(n - ws->nmaster, ws->nstack) - (i - ws->nmaster);
-			x = globalcfg[GLB_TILE_RMASTER] ? ssw + (g / ns) : mw + (g / ns);
+			x = left ? ssw + (g / ns) : mw + (g / ns);
 			y = &sy;
 			c->w = sw - g * (5 - ns - ss) / 2;
 		} else {
 			remaining = n - i;
-			x = globalcfg[GLB_TILE_RMASTER] ? g : mw + sw + (g / ns);
+			x = left ? g : mw + sw + (g / ns);
 			y = &ssy;
 			c->w = ssw - g * (5 - ns) / 2;
 		}

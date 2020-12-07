@@ -141,10 +141,10 @@ int main(int argc, char *argv[])
 				xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK,
 					(unsigned int[]){XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT})));
 
-#ifdef __OpenBSD__
-	if (pledge("stdio rpath wpath cpath tmppath flock unix proc exec", NULL) == -1)
-		err(1, "pledge");
-#endif
+/* #ifdef __OpenBSD__ */
+/* 	if (pledge("stdio rpath wpath cpath tmppath flock unix proc exec", NULL) == -1) */
+/* 		err(1, "pledge"); */
+/* #endif */
 
 	initwm();
 	initsock();
@@ -928,8 +928,8 @@ void initpanel(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	if (!(p->mon = coordtomon(g->x, g->y)))
 		p->mon = selws->mon;
 	if (!(prop = xcb_get_property_reply(con, rc, &e)) || prop->type == XCB_NONE) {
-		iferr(0, "unable to get _NET_WM_STRUT_PARTIAL reply from window", e);
 		rc = xcb_get_property(con, 0, p->win, netatom[NET_WM_STRUT], XCB_ATOM_CARDINAL, 0, 4);
+		iferr(0, "unable to get _NET_WM_STRUT_PARTIAL reply from window", e);
 		if (!(prop = xcb_get_property_reply(con, rc, &e)))
 			iferr(0, "unable to get _NET_WM_STRUT reply from window", e);
 	}
@@ -999,7 +999,9 @@ void initscan(void)
 	xcb_generic_error_t *e;
 	xcb_query_tree_reply_t *rt;
 
-	if (!(rt = xcb_query_tree_reply(con, xcb_query_tree(con, root), &e))) {
+	xcb_grab_server(con);
+	xcb_query_tree_cookie_t rc = xcb_query_tree(con, root);
+	if (!(rt = xcb_query_tree_reply(con, rc, &e))) {
 		iferr(1, "unable to query tree from root window", e);
 	} else if (rt->children_len) {
 		xcb_window_t *w = xcb_query_tree_children(rt);
@@ -1012,6 +1014,7 @@ void initscan(void)
 			if (w[i] != XCB_WINDOW_NONE)
 				manage(w[i], 1);
 	}
+	xcb_ungrab_server(con);
 	free(rt);
 	DBGEXIT("initscan")
 }
@@ -1049,9 +1052,7 @@ Status *initstatus(FILE *file, char *path, int num, unsigned int type)
 {
 	DBGENTER("initstatus")
 	Status *s, *tail;
-
 	DBG("initstatus: path: %s, num: %d, type: %d", path, num, type)
-
 	s = ecalloc(1, sizeof(Status));
 	if (path) {
 		size_t len = strlen(path) + 1;
@@ -1199,10 +1200,17 @@ Workspace *itows(int num)
 void manage(xcb_window_t win, int scan)
 {
 	DBGENTER("manage")
+	Desk *d;
+	Panel *p;
+	Client *c;
+	Workspace *ws;
 	xcb_atom_t type, state;
 
-	if (wintoclient(win) || wintopanel(win) || wintodesk(win))
-		return;
+	if (win == XCB_WINDOW_NONE || win == root) return;
+	FOR_CLIENTS(c, ws)  if (c->win == win) return;
+	FOR_EACH(p, panels) if (p->win == win) return;
+	FOR_EACH(d, desks)  if (d->win == win) return;
+
 	xcb_get_geometry_reply_t *g = wingeom(win);
 	xcb_get_window_attributes_reply_t *wa = winattr(win);
 	if (!wa || !g) goto end;
@@ -1349,13 +1357,12 @@ void printstatus(Status *s)
 		case TYPE_FULL:
 			fprintf(s->file, "# globals - key: value ...\nnumws: %d\nsmart_border: %d\n"
 					"smart_gap: %d\nfocus_urgent: %d\nfocus_mouse: %d\nfocus_open: %d\n"
-					"tile_hints: %d\ntile_tohead: %d\ntile_rmaster: %d\n"
-					"win_minxy: %d\nwin_minwh: %d",
+					"tile_hints: %d\ntile_tohead: %d\nwin_minxy: %d\nwin_minwh: %d",
 					globalcfg[GLB_WS_NUM], globalcfg[GLB_SMART_BORDER],
 					globalcfg[GLB_SMART_GAP], globalcfg[GLB_FOCUS_URGENT],
 					globalcfg[GLB_FOCUS_MOUSE], globalcfg[GLB_FOCUS_OPEN],
 					globalcfg[GLB_TILE_HINTS], globalcfg[GLB_TILE_TOHEAD],
-					globalcfg[GLB_TILE_RMASTER], globalcfg[GLB_MIN_XY], globalcfg[GLB_MIN_WH]);
+					globalcfg[GLB_MIN_XY], globalcfg[GLB_MIN_WH]);
 			fprintf(s->file, "\n\n# width outer_width focus urgent unfocus "
 					"outer_focus outer_urgent outer_unfocus\n"
 					"border: %u %u 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x",
@@ -1836,6 +1843,15 @@ void sizehints(Client *c, int uss)
 	DBGEXIT("sizehints")
 }
 
+int tilecount(Workspace *ws)
+{
+	int i;
+	Client *c;
+
+	for (i = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), i++);
+	return i;
+}
+
 void unfocus(Client *c, int focusroot)
 {
 	DBGENTER("unfocus")
@@ -1919,7 +1935,8 @@ int updoutputs(xcb_randr_output_t *outs, int nouts, xcb_timestamp_t t)
 	xcb_randr_get_crtc_info_reply_t *crtc;
 	xcb_randr_get_output_info_reply_t *o;
 	xcb_randr_get_output_info_cookie_t oc[nouts];
-	xcb_randr_get_output_primary_reply_t *po = NULL;
+	xcb_randr_get_output_primary_cookie_t pc;
+	xcb_randr_get_output_primary_reply_t *po;
 
 	DBG("updoutputs: checking %d outputs for changes", nouts)
 	for (i = 0; i < nouts; i++)
@@ -1963,17 +1980,19 @@ int updoutputs(xcb_randr_output_t *outs, int nouts, xcb_timestamp_t t)
 next:
 			free(crtc);
 		} else if (o->connection == XCB_RANDR_CONNECTION_DISCONNECTED
-				&& (m = outputtomon(outs[i])))
+				&& (m = outputtomon(outs[i])) && m->connected)
 		{
-			if (m->connected)
-				changed = 1, m->connected = 0, m->num = -1;
+			changed = 1;
+			m->num = -1;
+			m->connected = 0;
 		}
 		free(o);
 	}
 
 	if (changed) {
-		po = xcb_randr_get_output_primary_reply(con, xcb_randr_get_output_primary(con, root), NULL);
-		if (!po || !(primary = outputtomon(po->output)))
+		pc = xcb_randr_get_output_primary(con, root);
+		if (!(po = xcb_randr_get_output_primary_reply(con, pc, NULL))
+				|| !(primary = outputtomon(po->output)))
 			primary = nextmon(monitors);
 		free(po);
 	}
@@ -2091,9 +2110,9 @@ void updworkspaces(int needed)
 xcb_get_window_attributes_reply_t *winattr(xcb_window_t win)
 {
 	DBGENTER("winattr")
-	xcb_get_window_attributes_reply_t *wa = NULL;
 	xcb_generic_error_t *e;
 	xcb_get_window_attributes_cookie_t wc;
+	xcb_get_window_attributes_reply_t *wa = NULL;
 
 	GET(win, wa, wc, e, "attributes", window_attributes);
 	DBGEXIT("winattr")
@@ -2103,9 +2122,9 @@ xcb_get_window_attributes_reply_t *winattr(xcb_window_t win)
 xcb_get_geometry_reply_t *wingeom(xcb_window_t win)
 {
 	DBGENTER("wingeom")
-	xcb_get_geometry_reply_t *g = NULL;
 	xcb_generic_error_t *e;
 	xcb_get_geometry_cookie_t gc;
+	xcb_get_geometry_reply_t *g = NULL;
 
 	GET(win, g, gc, e, "geometry", geometry);
 	DBGEXIT("wingeom")

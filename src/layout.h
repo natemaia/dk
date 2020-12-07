@@ -7,8 +7,8 @@
 #pragma once
 
 int dwindle(Workspace *ws);
-int fib(Workspace *ws, int out);
 int grid(Workspace *ws);
 int mono(Workspace *ws);
 int spiral(Workspace *ws);
-int tile(Workspace *ws);
+int ltile(Workspace *ws);
+int rtile(Workspace *ws);

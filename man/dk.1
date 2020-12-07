@@ -435,15 +435,6 @@ set tile_tohead=true
 \fR
 .fi
 .PP
-\fI\fCtile_tohead\fR (boolean) whether to place the master area at the right
-in tile layout.
-.IP
-.nf
-\fI\fC
-set tile_rmaster=true
-\fR
-.fi
-.PP
 \fI\fCsmart_gap\fR (boolean) whether gaps are disabled on workspaces
 with only one tiled window.
 .IP
@@ -458,7 +449,7 @@ with only one tiled window.
 .IP
 .nf
 \fI\fC
-set tile_hints=true
+set smart_border=true
 \fR
 .fi
 .PP
@@ -515,8 +506,9 @@ set ws=_ apply SETTING
 .PP
 \fI\fClayout\fR (string) change the workspace window layout.
 .IP \[bu] 2
-\fI\fCtile\fR windows are grouped a master area on the left and
-up to two vertical stacks.
+\fI\fCtile\fR windows are grouped into master and stack areas.
+.IP \[bu] 2
+\fI\fCrtile\fR tile layout with master area on the right
 .IP \[bu] 2
 \fI\fCmono\fR windows arranged maximized and stacked on top of one another.
 .IP \[bu] 2

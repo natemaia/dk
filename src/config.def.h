@@ -26,7 +26,6 @@ int globalcfg[GLB_LAST] = {
 	[GLB_MIN_XY]       = 10, /* int:  minimum window area allowed inside the screen when moving */
 	[GLB_TILE_HINTS]   = 0,  /* bool: respect size hints in tiled layouts */
 	[GLB_TILE_TOHEAD]  = 0,  /* bool: place new clients at the tail of the stack */
-	[GLB_TILE_RMASTER] = 0,  /* bool: place master area on the right */
 	[GLB_SMART_BORDER] = 1,  /* bool: disable borders in layouts with only one visible window */
 	[GLB_SMART_GAP]    = 1,  /* bool: disable gaps in layouts with only one visible window */
 };
@@ -88,10 +87,9 @@ int tstack(Workspace *ws)
 	 */
 
 	Client *c;
-	int i, n, w, mh, mx, sx, sw;
+	int i, n, mh, mw, mx, sx, sw;
 
-	for (n = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), n++);
-	if (!n) return 1;
+	if (!(n = tilecount(ws))) return 1;
 
 	/* apply the workspace padding */
 	int wx = ws->mon->wx + ws->padl;
@@ -101,6 +99,7 @@ int tstack(Workspace *ws)
 
 	/* apply smart gap */
 	int g = !globalcfg[GLB_SMART_GAP] || n > 1 ? ws->gappx : 0;
+	mw = (ww - g) / MAX(1, ws->nmaster);
 
 	/* adjust sizes for master-less instances */
 	if (n > ws->nmaster) {
@@ -114,10 +113,8 @@ int tstack(Workspace *ws)
 	for (i = 0, mx = sx = wx + g, c = nexttiled(ws->clients); c; c = nexttiled(c->next), i++) {
 		/* apply smart border */
 		int bw = !globalcfg[GLB_SMART_BORDER] || n > 1 ? c->bw : 0;
-
 		if (i < ws->nmaster) { /* master windows */
-			w = (ww - mx) / MAX(1, (MIN(n, ws->nmaster) - i));
-			resizehint(c, mx, (wy + wh) - mh, w - g - (2 * bw), mh - g - (2 * bw), bw, 0, 0);
+			resizehint(c, mx, (wy + wh) - mh, mw - g - (2 * bw), mh - g - (2 * bw), bw, 0, 0);
 			mx += W(c) + g;
 		} else { /* stack windows */
 			resizehint(c, sx, wy + g, sw - g - (2 * bw), wh - (mh + (2 * g)) - (2 * bw), bw, 0, 0);
@@ -189,13 +186,15 @@ Cmd wincmds[] = {
 
 Layout layouts[] = {
 	/* command,   function,  implements_resize,  invert_split_direction */
-	{ "tile",      tile,           1,                      0 }, /* first is default */
+	{ "tile",      ltile,          1,                      0 }, /* first is default */
+	{ "rtile",     rtile,          1,                      0 },
 	{ "mono",      mono,           0,                      0 },
 	{ "grid",      grid,           0,                      0 },
 	{ "spiral",    spiral,         1,                      0 },
 	{ "dwindle",   dwindle,        1,                      0 },
 	{ "tstack",    tstack,         1,                      1 },
-	{ "none",      NULL,           1,                      0 }, /* no layout means floating */
+	{ "none",      NULL,           1,                      0 }, /* NULL layout function is floating */
+	{ "float",     NULL,           1,                      0 },
 
 	/* don't add below the terminating null */
 	{ NULL,        NULL,           0,                      0 }

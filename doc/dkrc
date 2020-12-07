@@ -70,9 +70,6 @@ fi
 	# place clients at the tail and ignore size hints on tiled windows
 	dkcmd set tile_tohead=0 tile_hints=false
 
-	# place master area on the right or left in tile layout
-	dkcmd set tile_rmaster=0
-
 	# minimum width/height for resizing, and minimum allowed on-screen when moving
 	dkcmd set win_minwh=50 win_minxy=10
 

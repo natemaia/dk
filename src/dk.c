@@ -2049,15 +2049,20 @@ xcb_window_t wintrans(xcb_window_t win)
 #ifdef FUNCDEBUG
 void __cyg_profile_func_enter(void *fn, void *caller)
 {
+	int i;
 	Dl_info info;
 
+	fprintf(stderr, "dk:");
+	for (i = 0; i < depth; i += 2)
+		fprintf(stderr, " |");
+
 	if (dladdr(fn, &info))
-		fprintf(stderr, "dk:%*s ---> %s (%p)", depth, " ", info.dli_sname, fn);
+		fprintf(stderr, " --> %s (%p)", info.dli_sname ? info.dli_sname : "unknown", fn);
 	else
-		fprintf(stderr, "dk:%*s ---> (%p)", depth, " ", fn);
+		fprintf(stderr, " --> (%p)", fn);
 
 	if (dladdr(caller, &info))
-		fprintf(stderr, " :: %s (%p)\n", info.dli_sname, caller);
+		fprintf(stderr, " :: %s (%p)\n", info.dli_sname ? info.dli_sname : "unknown", caller);
 	else
 		fprintf(stderr, " :: (%p)\n", caller);
 	depth += 2;
@@ -2065,18 +2070,23 @@ void __cyg_profile_func_enter(void *fn, void *caller)
 
 void __cyg_profile_func_exit(void *fn, void *caller)
 {
+	int i;
 	Dl_info info;
 
+	depth -= 2;
+	fprintf(stderr, "dk:");
+	for (i = depth; i > 0; i -= 2)
+		fprintf(stderr, " |");
+
 	if (dladdr(fn, &info))
-		fprintf(stderr, "dk:%*s <--- %s (%p)", depth, " ", info.dli_sname, fn);
+		fprintf(stderr, " <-- %s (%p)", info.dli_sname, fn);
 	else
-		fprintf(stderr, "dk:%*s <--- (%p)", depth, " ", fn);
+		fprintf(stderr, " <-- (%p)", fn);
 
 	if (dladdr(caller, &info))
 		fprintf(stderr, " :: %s (%p)\n", info.dli_sname, caller);
 	else
 		fprintf(stderr, " :: (%p)\n", caller);
-	depth -= 2;
 }
 #endif
 

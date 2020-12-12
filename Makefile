@@ -26,10 +26,11 @@ LDFLAGS   = -flto -L/usr/X11R6/lib -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -
 
 all: dk dkcmd
 
-# debug: OPTLVL = -Og
 debug: CPPFLAGS += -DDEBUG
 debug: all
 
+funcdebug: CFLAGS += -finstrument-functions -export-dynamic
+funcdebug: LDFLAGS += -ldl -Wl,--export-dynamic
 funcdebug: CPPFLAGS += -DFUNCDEBUG
 funcdebug: debug
 

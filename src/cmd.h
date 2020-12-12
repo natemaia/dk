@@ -6,6 +6,8 @@
 
 #pragma once
 
+int adjustisetting(int i, int rel, int *val, int other, int border);
+int adjustwsormon(char **argv);
 int cmdborder(char **argv);
 int cmdcycle(char **argv);
 int cmdfakefull(char **argv);

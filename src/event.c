@@ -20,18 +20,6 @@
 #include "layout.h"
 #include "event.h"
 
-static void buttonpress(xcb_generic_event_t *ev);
-static void clientmessage(xcb_generic_event_t *ev);
-static void confignotify(xcb_generic_event_t *ev);
-static void configrequest(xcb_generic_event_t *ev);
-static void destroynotify(xcb_generic_event_t *ev);
-static void enternotify(xcb_generic_event_t *ev);
-static void focusin(xcb_generic_event_t *ev);
-static void maprequest(xcb_generic_event_t *ev);
-static void motionnotify(xcb_generic_event_t *ev);
-static void mouse(Client *c, int move, int mx, int my);
-static void propertynotify(xcb_generic_event_t *ev);
-static void unmapnotify(xcb_generic_event_t *ev);
 
 static void (*handlers[XCB_NO_OPERATION + 1])(xcb_generic_event_t *) = {
 	[XCB_BUTTON_PRESS]      = &buttonpress,
@@ -41,6 +29,7 @@ static void (*handlers[XCB_NO_OPERATION + 1])(xcb_generic_event_t *) = {
 	[XCB_DESTROY_NOTIFY]    = &destroynotify,
 	[XCB_ENTER_NOTIFY]      = &enternotify,
 	[XCB_FOCUS_IN]          = &focusin,
+	[XCB_MAPPING_NOTIFY]    = &mappingnotify,
 	[XCB_MAP_REQUEST]       = &maprequest,
 	[XCB_MOTION_NOTIFY]     = &motionnotify,
 	[XCB_PROPERTY_NOTIFY]   = &propertynotify,
@@ -50,14 +39,12 @@ static void (*handlers[XCB_NO_OPERATION + 1])(xcb_generic_event_t *) = {
 
 void buttonpress(xcb_generic_event_t *ev)
 {
-	DBGENTER("buttonpress")
 	Client *c;
 	xcb_generic_error_t *er;
 	xcb_grab_pointer_cookie_t pc;
 	xcb_button_press_event_t *e = (xcb_button_press_event_t *)ev;
 
 	if (!(c = wintoclient(e->event))) return;
-	DBG("buttonpress: 0x%08x - button: %d", e->event, e->detail)
 	focus(c);
 	restack(c->ws);
 	xcb_allow_events(con, XCB_ALLOW_REPLAY_POINTER, XCB_CURRENT_TIME);
@@ -68,7 +55,6 @@ void buttonpress(xcb_generic_event_t *ev)
 		if (FULLSCREEN(c) || ((c->state & STATE_FIXED) && !move))
 			return;
 		DBG("buttonpress: grabbing pointer for move/resize - 0x%08x", e->event)
-
 		xcb_grab_pointer_reply_t *p;
 		pc = xcb_grab_pointer(con, 0, root, XCB_EVENT_MASK_BUTTON_RELEASE
 				| XCB_EVENT_MASK_BUTTON_MOTION | XCB_EVENT_MASK_POINTER_MOTION,
@@ -80,12 +66,10 @@ void buttonpress(xcb_generic_event_t *ev)
 			iferr(0, "unable to grab pointer", er);
 		free(p);
 	}
-	DBGEXIT("buttonpress")
 }
 
 void clientmessage(xcb_generic_event_t *ev)
 {
-	DBGENTER("clientmessage")
 	Client *c;
 	xcb_client_message_event_t *e = (xcb_client_message_event_t *)ev;
 	unsigned int *d = e->data.data32;
@@ -120,57 +104,61 @@ void clientmessage(xcb_generic_event_t *ev)
 			}
 		}
 	}
-	DBGEXIT("clientmessage")
 }
 
 void confignotify(xcb_generic_event_t *ev)
 {
-	DBGENTER("confignotify")
 	xcb_configure_notify_event_t *e = (xcb_configure_notify_event_t *)ev;
 
 	if (e->window != root) return;
 	scr_w = e->width;
 	scr_h = e->height;
-	DBGEXIT("confignotify")
+}
+
+void mappingnotify(xcb_generic_event_t *ev)
+{
+	xcb_mapping_notify_event_t *e = (xcb_mapping_notify_event_t *)ev;
+
+	if (e->request == XCB_MAPPING_KEYBOARD || e->request == XCB_MAPPING_MODIFIER)
+		xcb_refresh_keyboard_mapping(keysyms, e);
 }
 
 void configrequest(xcb_generic_event_t *ev)
 {
-	DBGENTER("configrequest")
 	Client *c;
 	Monitor *m;
 	xcb_configure_request_event_t *e = (xcb_configure_request_event_t *)ev;
 
 	if ((c = wintoclient(e->window))) {
 		DBG("configrequest: managed %s client 0x%08x",
-			FLOATING(c) ? "floating" : "tiled", e->window)
-			if (e->value_mask & XCB_CONFIG_WINDOW_BORDER_WIDTH) {
-				c->bw = e->border_width;
-			} else if (FLOATING(c)) {
-				m = c->ws->mon;
-				c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
-				if (e->value_mask & XCB_CONFIG_WINDOW_X && e->x != W(c) * -2)
-					c->x = m->x + e->x - c->bw;
-				if (e->value_mask & XCB_CONFIG_WINDOW_Y && e->x != W(c) * -2)
-					c->y = m->y + e->y - c->bw;
-				if (e->value_mask & XCB_CONFIG_WINDOW_WIDTH)
-					c->w = e->width;
-				if (e->value_mask & XCB_CONFIG_WINDOW_HEIGHT)
-					c->h = e->height;
-				if (c->x >= m->wx + m->ww - globalcfg[GLB_MIN_XY])
-					c->x = m->wx + m->ww - W(c);
-				if (c->y >= m->wy + m->wh - globalcfg[GLB_MIN_XY])
-					c->y = m->wy + m->wh - H(c);
-				if (e->value_mask & (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y)
-						&& !(e->value_mask & (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT)))
-					sendconfigure(c);
-				if (c->ws == m->ws && e->x != W(c) * -2)
-					resize(c, c->x, c->y, c->w, c->h, c->bw);
-				else
-					c->state |= STATE_NEEDSRESIZE;
-			} else {
+				FLOATING(c) ? "floating" : "tiled", e->window)
+		if (e->value_mask & XCB_CONFIG_WINDOW_BORDER_WIDTH) {
+			c->bw = e->border_width;
+		} else if (FLOATING(c)) {
+			m = c->ws->mon;
+			c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
+			if (e->value_mask & XCB_CONFIG_WINDOW_X && e->x != W(c) * -2)
+				c->x = m->x + e->x - c->bw;
+			if (e->value_mask & XCB_CONFIG_WINDOW_Y && e->x != W(c) * -2)
+				c->y = m->y + e->y - c->bw;
+			if (e->value_mask & XCB_CONFIG_WINDOW_WIDTH)
+				c->w = e->width;
+			if (e->value_mask & XCB_CONFIG_WINDOW_HEIGHT)
+				c->h = e->height;
+			if (c->x >= m->wx + m->ww - globalcfg[GLB_MIN_XY])
+				c->x = m->wx + m->ww - W(c);
+			if (c->y >= m->wy + m->wh - globalcfg[GLB_MIN_XY])
+				c->y = m->wy + m->wh - H(c);
+			if (e->value_mask & (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y)
+					&& !(e->value_mask & (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT)))
 				sendconfigure(c);
-			}
+			if (c->ws == m->ws && e->x != W(c) * -2)
+				resize(c, c->x, c->y, c->w, c->h, c->bw);
+			else
+				c->state |= STATE_NEEDSRESIZE;
+		} else {
+			sendconfigure(c);
+		}
 	} else {
 		DBG("configrequest: 0x%08x - %d,%d @ %dx%d", e->window, e->x, e->y, e->width, e->height)
 		xcb_params_configure_window_t wc = {
@@ -185,19 +173,15 @@ void configrequest(xcb_generic_event_t *ev)
 		xcb_aux_configure_window(con, e->window, e->value_mask, &wc);
 	}
 	xcb_aux_sync(con);
-	DBGEXIT("configrequest")
 }
 
 void destroynotify(xcb_generic_event_t *ev)
 {
-	DBGENTER("destroynotify")
 	unmanage(((xcb_destroy_notify_event_t *)ev)->window, 1);
-	DBGEXIT("destroynotify")
 }
 
 void dispatch(xcb_generic_event_t *ev)
 {
-	DBGENTER("dispatch")
 	short type;
 
 	if ((type = ev->response_type & 0x7f)) {
@@ -222,12 +206,10 @@ void dispatch(xcb_generic_event_t *ev)
 				(uint32_t) e->major_code, (uint32_t) e->minor_code,
 				(uint32_t) e->resource_id, (uint32_t) e->sequence);
 	}
-	DBGEXIT("dispatch")
 }
 
 void enternotify(xcb_generic_event_t *ev)
 {
-	DBGENTER("enternotify")
 	Client *c;
 	Monitor *m;
 	Workspace *ws;
@@ -246,12 +228,10 @@ void enternotify(xcb_generic_event_t *ev)
 		changews(ws, 0, 0);
 	if (c && globalcfg[GLB_FOCUS_MOUSE])
 		focus(c);
-	DBGEXIT("enternotify")
 }
 
 void focusin(xcb_generic_event_t *ev)
 {
-	DBGENTER("focusin")
 	xcb_focus_in_event_t *e = (xcb_focus_in_event_t *)ev;
 
 	if (e->mode == XCB_NOTIFY_MODE_GRAB
@@ -264,12 +244,10 @@ void focusin(xcb_generic_event_t *ev)
 		DBG("focusin: 0x%08x", e->event)
 		setinputfocus(selws->sel);
 	}
-	DBGEXIT("focusin")
 }
 
 void ignore(uint8_t type)
 {
-	DBGENTER("ignore")
 	xcb_generic_event_t *ev = NULL;
 
 	xcb_flush(con);
@@ -278,24 +256,19 @@ void ignore(uint8_t type)
 			dispatch(ev);
 		free(ev);
 	}
-	DBGEXIT("ignore")
 }
 
 void maprequest(xcb_generic_event_t *ev)
 {
-	DBGENTER("maprequest")
 	manage(((xcb_map_request_event_t *)ev)->window, 0);
-	DBGEXIT("maprequest")
 }
 
 void motionnotify(xcb_generic_event_t *ev)
 {
-	DBGENTER("motionnotify")
 	Monitor *m;
 	xcb_motion_notify_event_t *e = (xcb_motion_notify_event_t *)ev;
 
-	if (e->event != root) return;
-	if ((m = coordtomon(e->root_x, e->root_y)) && m->ws != selws) {
+	if (e->event == root && (m = coordtomon(e->root_x, e->root_y)) && m->ws != selws) {
 		DBG("motionnotify: updating active monitor - 0x%08x", e->event)
 		changews(m->ws, 0, 0);
 		focus(NULL);
@@ -304,7 +277,6 @@ void motionnotify(xcb_generic_event_t *ev)
 
 void mouse(Client *c, int move, int mx, int my)
 {
-	DBGENTER("mouse")
 	Monitor *m;
 	Client *p, *prev = NULL;
 	xcb_timestamp_t last = 0;
@@ -423,8 +395,8 @@ void mouse(Client *c, int move, int mx, int my)
 		case XCB_BUTTON_RELEASE:
 			released = 1;
 			DBG("buttonrelease: ungrabbing pointer - 0x%08x", selws->sel->win)
-				iferr(1, "failed to ungrab pointer",
-						xcb_request_check(con, xcb_ungrab_pointer_checked(con, XCB_CURRENT_TIME)));
+			iferr(1, "failed to ungrab pointer",
+					xcb_request_check(con, xcb_ungrab_pointer_checked(con, XCB_CURRENT_TIME)));
 			if (!move) {
 				xcb_aux_sync(con);
 				ignore(XCB_ENTER_NOTIFY);
@@ -436,12 +408,10 @@ void mouse(Client *c, int move, int mx, int my)
 		}
 		free(ev);
 	}
-	DBGEXIT("mouse")
 }
 
 void propertynotify(xcb_generic_event_t *ev)
 {
-	DBGENTER("propertynotify")
 	Panel *p;
 	Client *c;
 	xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ev;
@@ -459,10 +429,8 @@ void propertynotify(xcb_generic_event_t *ev)
 		}
 #endif
 
-	if (e->state == XCB_PROPERTY_DELETE) {
-		DBGEXIT("propertynotify")
+	if (e->state == XCB_PROPERTY_DELETE)
 		return;
-	}
 	if ((c = wintoclient(e->window))) {
 		switch (e->atom) {
 		case XCB_ATOM_WM_HINTS:
@@ -488,12 +456,10 @@ void propertynotify(xcb_generic_event_t *ev)
 		updstruts(p, 1);
 		needsrefresh = 1;
 	}
-	DBGEXIT("propertynotify")
 }
 
 void unmapnotify(xcb_generic_event_t *ev)
 {
-	DBGENTER("unmapnotify")
 	xcb_generic_error_t *er;
 	xcb_unmap_notify_event_t *e = (xcb_unmap_notify_event_t *)ev;
 
@@ -508,7 +474,6 @@ void unmapnotify(xcb_generic_event_t *ev)
 		setwinstate(e->window, XCB_ICCCM_WM_STATE_WITHDRAWN);
 	} else {
 		DBG("unmapnotify: 0x%08x", e->window)
-		unmanage(e->window, 0);
+			unmanage(e->window, 0);
 	}
-	DBGEXIT("unmapnotify")
 }

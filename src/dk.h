@@ -12,20 +12,12 @@
 #define DBG(fmt, ...)
 #endif
 
-#ifdef FUNCDEBUG
-#define DBGENTER(func) warnx("%d: ---> " func, __LINE__);
-#define DBGEXIT(func)  warnx("%d: <--- " func, __LINE__);
-#else
-#define DBGENTER(func)
-#define DBGEXIT(func)
-#endif
-
 #ifndef VERSION
 #define VERSION "1.0"
 #endif
 
 #if __GNUC_PREREQ (3, 3)
-#define NAN (__builtin_nanf (""))
+#define NAN (__builtin_nanf(""))
 #else
 #define NAN (0.0f / 0.0f)
 #endif
@@ -283,7 +275,7 @@ extern FILE *cmdresp;
 extern unsigned int lockmask;
 extern char *argv0, *sock, **environ;
 extern int scr_h, scr_w, sockfd, randrbase, cmdusemon;
-extern int running, restart, needsrefresh, status_usingcmdresp;
+extern int running, restart, needsrefresh, status_usingcmdresp, depth;
 
 extern Desk *desks;
 extern Rule *rules;
@@ -391,3 +383,9 @@ Client *wintoclient(xcb_window_t win);
 Desk *wintodesk(xcb_window_t win);
 Panel *wintopanel(xcb_window_t win);
 xcb_window_t wintrans(xcb_window_t win);
+
+#ifdef FUNCDEBUG
+void __cyg_profile_func_enter(void *fn, void *caller) __attribute__((no_instrument_function));
+void __cyg_profile_func_exit(void *fn, void *caller) __attribute__((no_instrument_function));
+#endif
+

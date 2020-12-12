@@ -21,9 +21,6 @@
 #include "parse.h"
 
 
-static int fib(Workspace *ws, int out);
-static int tile(Workspace *ws, int left);
-
 int dwindle(Workspace *ws)
 {
 	return fib(ws, 1);

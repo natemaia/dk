@@ -61,7 +61,7 @@ static char *opts[] = {
 };
 
 
-static int adjustisetting(int i, int rel, int *val, int other, int border)
+int adjustisetting(int i, int rel, int *val, int other, int border)
 {
 	int n;
 	int max = setws->mon->wh - setws->padb - setws->padt;
@@ -74,7 +74,7 @@ static int adjustisetting(int i, int rel, int *val, int other, int border)
 	return 0;
 }
 
-static int adjustwsormon(char **argv)
+int adjustwsormon(char **argv)
 {
 	int opt, nparsed = 0, e = 0;
 	int (*fn)(Workspace *) = cmdview;
@@ -166,7 +166,6 @@ static int adjustwsormon(char **argv)
 
 int cmdborder(char **argv)
 {
-	DBGENTER("cmdborder")
 	Client *c;
 	Workspace *ws;
 	int i, nparsed = 0, rel, col = 0, first;
@@ -230,7 +229,6 @@ badvalue:
 			drawborder(c, c == selws->sel);
 		}
 	}
-	DBGEXIT("cmdborder")
 	return nparsed;
 
 #undef COLOUR
@@ -238,7 +236,6 @@ badvalue:
 
 int cmdcycle(char **argv)
 {
-	DBGENTER("cmdcycle")
 	Client *c = cmdclient, *first;
 
 	if (FLOATING(c) || FULLSCREEN(c)) {
@@ -253,13 +250,11 @@ int cmdcycle(char **argv)
 	movestack(-1);
 	focus(c);
 	(void)(argv);
-	DBGEXIT("cmdcycle")
 	return 0;
 }
 
 int cmdfakefull(char **argv)
 {
-	DBGENTER("cmdfakefull")
 	Client *c = cmdclient;
 
 	if ((c->state ^= STATE_FAKEFULL) & STATE_FULLSCREEN) {
@@ -270,13 +265,11 @@ int cmdfakefull(char **argv)
 		needsrefresh = 1;
 	}
 	(void)(argv);
-	DBGEXIT("cmdfakefull")
 	return 0;
 }
 
 int cmdfloat(char **argv)
 {
-	DBGENTER("cmdfloat")
 	int nparsed = 0;
 	Client *c = cmdclient;
 
@@ -307,13 +300,11 @@ int cmdfloat(char **argv)
 		}
 		needsrefresh = 1;
 	}
-	DBGEXIT("cmdfloat")
 	return nparsed;
 }
 
 int cmdfocus(char **argv)
 {
-	DBGENTER("cmdfocus")
 	int i = 0, nparsed = 0, opt;
 	Client *c = cmdclient;
 
@@ -347,33 +338,27 @@ int cmdfocus(char **argv)
 			ignore(XCB_ENTER_NOTIFY);
 		}
 	}
-	DBGEXIT("cmdfocus")
 	return nparsed;
 }
 
 int cmdfollow(Workspace *ws)
 {
-	DBGENTER("cmdfollow")
 	if (ws && cmdclient && ws != cmdclient->ws) {
 		cmdsend(ws);
 		cmdview(ws);
 	}
-	DBGEXIT("cmdfollow")
 	return 0;
 }
 
 int cmdfull(char **argv)
 {
-	DBGENTER("cmdfull")
 	setfullscreen(cmdclient, !(cmdclient->state & STATE_FULLSCREEN));
 	(void)(argv);
-	DBGEXIT("cmdfull")
 	return 0;
 }
 
 int cmdgappx(char **argv)
 {
-	DBGENTER("cmdgappx")
 	int i, ng, rel, nparsed = 0;
 
 	if (!strcmp(*argv, "width")) {
@@ -393,13 +378,11 @@ int cmdgappx(char **argv)
 		if (ng != setws->gappx)
 			setws->gappx = ng;
 	}
-	DBGEXIT("cmdgappx")
 	return nparsed;
 }
 
 int cmdkill(char **argv)
 {
-	DBGENTER("cmdkill")
 	if (!cmdclient) return 0;
 	if (!sendwmproto(cmdclient, WM_DELETE)) {
 		xcb_grab_server(con);
@@ -411,56 +394,46 @@ int cmdkill(char **argv)
 	xcb_aux_sync(con);
 	ignore(XCB_ENTER_NOTIFY);
 	(void)(argv);
-	DBGEXIT("cmdkill")
 	return 0;
 }
 
 int cmdlayout(char **argv)
 {
-	DBGENTER("cmdlayout")
 	for (unsigned int i = 0; layouts[i].name; i++)
 		if (!strcmp(layouts[i].name, *argv)) {
 			if (&layouts[i] != setws->layout)
 				setws->layout = &layouts[i];
-			DBGEXIT("cmdlayout")
 			return 1;
 		}
 	respond(cmdresp, "!invalid layout name: %s", *argv);
-	DBGEXIT("cmdlayout")
 	return -1;
 }
 
 int cmdmon(char **argv)
 {
-	DBGENTER("cmdmon")
 	int nparsed = 0;
 	if (monitors && nextmon(monitors)) {
 		cmdusemon = 1;
 		nparsed = adjustwsormon(argv);
 		cmdusemon = 0;
 	}
-	DBGEXIT("cmdmon")
 	return nparsed;
 }
 
 int cmdmors(char **argv)
 {
-	DBGENTER("cmdmors")
 	int i, rel = 1;
 
 	if ((i = parseint(*argv, &rel, 1)) == INT_MIN || adjustisetting(i, rel,
 				!strcmp("stack", *(argv - 1)) ? &setws->nstack : &setws->nmaster, 0, 0) == -1)
 	{
-		DBGEXIT("cmdmors")
 		return -1;
 	}
-	DBGEXIT("cmdmors")
 	return 1;
 }
 
 int cmdmouse(char **argv)
 {
-	DBGENTER("cmdmouse")
 	int arg, nparsed = 0;
 
 	while (*argv) {
@@ -498,13 +471,11 @@ badvalue:
 	}
 	if (selws->sel)
 		grabbuttons(selws->sel, 1);
-	DBGEXIT("cmdmouse")
 	return nparsed;
 }
 
 int cmdpad(char **argv)
 {
-	DBGENTER("cmdpad")
 	int i, rel, nparsed = 0;
 
 #define PAD(v, o)                                                                           \
@@ -532,32 +503,26 @@ badvalue:
 		nparsed++;
 	}
 	needsrefresh = 1;
-	DBGEXIT("cmdpad")
 	return nparsed;
 #undef PAD
 }
 
 int cmdexit(char **argv)
 {
-	DBGENTER("cmdexit")
 	running = 0;
 	(void)(argv);
-	DBGEXIT("cmdexit")
 	return 0;
 }
 
 int cmdreload(char **argv)
 {
-	DBGENTER("cmdreload")
 	execcfg();
 	(void)(argv);
-	DBGEXIT("cmdreload")
 	return 0;
 }
 
 int cmdresize(char **argv)
 {
-	DBGENTER("cmdresize")
 	Client *c = cmdclient, *t;
 	Workspace *ws = c->ws;
 	float f, *sf;
@@ -657,23 +622,19 @@ badvalue:
 end:
 	xcb_aux_sync(con);
 	ignore(XCB_ENTER_NOTIFY);
-	DBGEXIT("cmdresize")
 	return nparsed;
 #undef ARG
 }
 
 int cmdrestart(char **argv)
 {
-	DBGENTER("cmdrestart")
 	running = 0, restart = 1;
 	(void)(argv);
-	DBGEXIT("cmdrestart")
 	return 0;
 }
 
 int cmdrule(char **argv)
 {
-	DBGENTER("cmdrule")
 	Client *c;
 	Workspace *ws;
 	Rule *pr, *nr = NULL;
@@ -799,7 +760,6 @@ applyall:
 			}
 		}
 	}
-	DBGEXIT("cmdrule")
 	return nparsed;
 #undef ARG
 #undef STR
@@ -808,7 +768,6 @@ applyall:
 
 int cmdsend(Workspace *ws)
 {
-	DBGENTER("cmdsend")
 	Client *c = cmdclient;
 
 	if (ws && c && ws != c->ws) {
@@ -819,13 +778,11 @@ int cmdsend(Workspace *ws)
 			relocate(c, ws->mon, old);
 		needsrefresh = 1;
 	}
-	DBGEXIT("cmdsend")
 	return 0;
 }
 
 int cmdset(char **argv)
 {
-	DBGENTER("cmdset")
 	Workspace *ws = NULL;
 	unsigned int j;
 	int i, nparsed = 0, names = 0, set = 0;
@@ -934,13 +891,11 @@ badvalue:
 	needsrefresh = 1;
 	if (names)
 		setnetwsnames();
-	DBGEXIT("cmdset")
 	return nparsed;
 }
 
 int cmdsplit(char **argv)
 {
-	DBGENTER("cmdsplit")
 	int rel = 1;
 	float f = 0.0;
 
@@ -951,16 +906,13 @@ int cmdsplit(char **argv)
 			if ((nf = CLAMP(f < 1.0 ? f + *ff : f - 1.0, 0.05, 0.95)) != *ff)
 				*ff = nf;
 		}
-		DBGEXIT("cmdsplit")
 		return 1;
 	}
-	DBGEXIT("cmdsplit")
 	return -1;
 }
 
 int cmdstatus(char **argv)
 {
-	DBGENTER("cmdstatus")
 	char *path = NULL;
 	FILE *file = cmdresp;
 	int i, num = -1, nparsed = 0;
@@ -1010,13 +962,11 @@ badvalue:
 		respond(cmdresp, "!unable to create status: %s", path ? path : "stdout");
 	}
 	free(path);
-	DBGEXIT("cmdstatus")
 	return nparsed;
 }
 
 int cmdstick(char **argv)
 {
-	DBGENTER("cmdstick")
 	Client *c = cmdclient;
 	unsigned int all = 0xffffffff;
 
@@ -1033,13 +983,11 @@ int cmdstick(char **argv)
 		PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL, 32, 1, &all);
 	}
 	(void)(argv);
-	DBGEXIT("cmdstick")
 	return 0;
 }
 
 int cmdswap(char **argv)
 {
-	DBGENTER("cmdswap")
 	static Client *last = NULL;
 	Client *c = cmdclient, *old, *cur = NULL, *prev = NULL;
 
@@ -1072,25 +1020,21 @@ int cmdswap(char **argv)
 	}
 	needsrefresh = 1;
 	(void)(argv);
-	DBGEXIT("cmdswap")
 	return 0;
 }
 
 int cmdview(Workspace *ws)
 {
-	DBGENTER("cmdview")
 	if (ws) {
 		changews(ws, globalcfg[GLB_WS_STATIC] ? 0 : !cmdusemon,
 				cmdusemon || (globalcfg[GLB_WS_STATIC] && selws->mon != ws->mon));
 		needsrefresh = 1;
 	}
-	DBGEXIT("cmdview")
 	return 0;
 }
 
 int cmdwin(char **argv)
 {
-	DBGENTER("cmdwin")
 	Client *c;
 	int e = 0, nparsed = 0;
 
@@ -1115,24 +1059,20 @@ int cmdwin(char **argv)
 		argv++;
 		nparsed++;
 	}
-	DBGEXIT("cmdwin")
 	return nparsed;
 }
 
 int cmdws(char **argv)
 {
-	DBGENTER("cmdws")
 	int nparsed = 0;
 
 	if (workspaces && workspaces->next)
 		nparsed = adjustwsormon(argv);
-	DBGEXIT("cmdws")
 	return nparsed;
 }
 
 int cmdws_(char **argv)
 {
-	DBGENTER("cmdws_")
 	float f;
 	unsigned int i;
 	int j, nparsed = 0, pad = 0, first, apply = 0;
@@ -1223,7 +1163,6 @@ badvalue:
 			ws->padb = wsdef.padb;
 		}
 	}
-	DBGEXIT("cmdws_")
 	return nparsed;
 
 #undef PAD

@@ -51,20 +51,34 @@ void buttonpress(xcb_generic_event_t *ev)
 	if ((e->state & ~(lockmask | XCB_MOD_MASK_LOCK)) == (mousemod & ~(lockmask | XCB_MOD_MASK_LOCK))
 			&& (e->detail == mousemove || e->detail == mouseresize))
 	{
-		int move = e->detail == mousemove;
-		if (FULLSCREEN(c) || ((c->state & STATE_FIXED) && !move))
+		if (FULLSCREEN(c) || ((c->state & STATE_FIXED) && e->detail != mousemove))
 			return;
-		DBG("buttonpress: grabbing pointer for move/resize - 0x%08x", e->event)
+		DBG("buttonpress: grabbing pointer for %s - 0x%08x", e->detail == mousemove ? "move" : "resize", e->event)
 		xcb_grab_pointer_reply_t *p;
 		pc = xcb_grab_pointer(con, 0, root, XCB_EVENT_MASK_BUTTON_RELEASE
 				| XCB_EVENT_MASK_BUTTON_MOTION | XCB_EVENT_MASK_POINTER_MOTION,
 				XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC, root,
-				cursor[move ? CURS_MOVE : CURS_RESIZE], XCB_CURRENT_TIME);
-		if ((p = xcb_grab_pointer_reply(con, pc, &er)) && p->status == XCB_GRAB_STATUS_SUCCESS)
-			mouse(c, move, e->root_x, e->root_y);
-		else
+				cursor[e->detail == mousemove ? CURS_MOVE : CURS_RESIZE], XCB_CURRENT_TIME);
+		if ((p = xcb_grab_pointer_reply(con, pc, &er)) && p->status == XCB_GRAB_STATUS_SUCCESS) {
+			if (e->detail == mousemove)
+				motionmove(c, e->root_x, e->root_y);
+			else
+				motionresize(c, e->root_x, e->root_y);
+		} else {
 			iferr(0, "unable to grab pointer", er);
+		}
 		free(p);
+	}
+}
+
+void buttonrelease(int move)
+{
+	DBG("buttonrelease: ungrabbing pointer - 0x%08x", selws->sel->win)
+	iferr(1, "failed to ungrab pointer",
+			xcb_request_check(con, xcb_ungrab_pointer_checked(con, XCB_CURRENT_TIME)));
+	if (!move) {
+		xcb_aux_sync(con);
+		ignore(XCB_ENTER_NOTIFY);
 	}
 }
 
@@ -113,14 +127,6 @@ void confignotify(xcb_generic_event_t *ev)
 	if (e->window != root) return;
 	scr_w = e->width;
 	scr_h = e->height;
-}
-
-void mappingnotify(xcb_generic_event_t *ev)
-{
-	xcb_mapping_notify_event_t *e = (xcb_mapping_notify_event_t *)ev;
-
-	if (e->request == XCB_MAPPING_KEYBOARD || e->request == XCB_MAPPING_MODIFIER)
-		xcb_refresh_keyboard_mapping(keysyms, e);
 }
 
 void configrequest(xcb_generic_event_t *ev)
@@ -258,6 +264,14 @@ void ignore(uint8_t type)
 	}
 }
 
+void mappingnotify(xcb_generic_event_t *ev)
+{
+	xcb_mapping_notify_event_t *e = (xcb_mapping_notify_event_t *)ev;
+
+	if (e->request == XCB_MAPPING_KEYBOARD || e->request == XCB_MAPPING_MODIFIER)
+		xcb_refresh_keyboard_mapping(keysyms, e);
+}
+
 void maprequest(xcb_generic_event_t *ev)
 {
 	manage(((xcb_map_request_event_t *)ev)->window, 0);
@@ -275,21 +289,71 @@ void motionnotify(xcb_generic_event_t *ev)
 	}
 }
 
-void mouse(Client *c, int move, int mx, int my)
+void motionmove(Client *c, int mx, int my)
 {
 	Monitor *m;
+	xcb_timestamp_t last = 0;
+	xcb_motion_notify_event_t *e;
+	xcb_generic_event_t *ev = NULL;
+	int ox, oy, nx, ny, released = 0;
+
+	ox = c->x, oy = c->y;
+	while (running && !released && (ev = xcb_wait_for_event(con))) {
+		switch (ev->response_type & 0x7f) {
+		case XCB_MOTION_NOTIFY:
+			e = (xcb_motion_notify_event_t *)ev;
+			if (e->time - last < 1000 / 60)
+				break;
+			last = e->time;
+			nx = ox + (e->root_x - mx);
+			ny = oy + (e->root_y - my);
+			if (nx == c->x && ny == c->y)
+				break;
+			if (!FLOATING(c) || (c->state & STATE_FULLSCREEN
+						&& c->state & STATE_FAKEFULL && !(c->old_state & STATE_FLOATING)))
+			{
+				c->state |= STATE_FLOATING;
+				c->old_state |= STATE_FLOATING;
+				if (c->max_w) c->w = MIN(c->w, c->max_w);
+				if (c->max_h) c->h = MIN(c->h, c->max_h);
+				c->x = CLAMP(c->x, selws->mon->wx, selws->mon->wx + selws->mon->ww - W(c));
+				c->y = CLAMP(c->y, selws->mon->wy, selws->mon->wy + selws->mon->wh - H(c));
+				resizehint(c, c->x, c->y, c->w, c->h, c->bw, 1, 1);
+				if (selws->layout->func)
+					selws->layout->func(selws);
+				restack(selws);
+			}
+			if ((m = coordtomon(e->root_x, e->root_y)) && m->ws != c->ws) {
+				setworkspace(c, m->ws->num, 0);
+				changews(m->ws, 0, 0);
+				focus(c);
+			}
+			resizehint(c, nx, ny, c->w, c->h, c->bw, 1, 1);
+			xcb_flush(con);
+			break;
+		case XCB_BUTTON_RELEASE:
+			released = 1;
+			buttonrelease(1);
+			break;
+		default: /* handle other event types normally */
+			dispatch(ev);
+			break;
+		}
+		free(ev);
+	}
+}
+
+void motionresize(Client *c, int mx, int my)
+{
 	Client *p, *prev = NULL;
 	xcb_timestamp_t last = 0;
 	xcb_motion_notify_event_t *e;
 	xcb_generic_event_t *ev = NULL;
 	int (*lyt)(Workspace *) = selws->layout->func;
-	int i, ox, oy, ow, oh, nw, nh, nx, ny, released = 0, first = 1;
+	int i, ow, oh, nw, nh, released = 0, first = 1;
 	int left = lyt == ltile;
 
-	ox = nx = c->x;
-	oy = ny = c->y;
-	ow = nw = c->w;
-	oh = nh = c->h;
+	ow = c->w, oh = c->h;
 	for (i = 0, p = nexttiled(selws->clients); p && p != c; p = nexttiled(p->next), i++)
 		if (nexttiled(p->next) == c)
 			prev = (i + 1 == selws->nmaster || i + 1 == selws->nstack + selws->nmaster) ? NULL : p;
@@ -300,33 +364,33 @@ void mouse(Client *c, int move, int mx, int my)
 			if (e->time - last < 1000 / 60) break;
 			last = e->time;
 
-			if (!move && !(c->state & STATE_FLOATING) && ISTILE(selws)) {
+			if (!(c->state & STATE_FLOATING) && ISTILE(selws)) {
 				/* TODO: fix this shit, surely there's a better way that I'm not seeing
 				 * this whole block is just calculating the split ratio and height
 				 * offset of the current tiled client based on mouse movement (a resize) */
 				if (selws->nstack && i >= selws->nstack + selws->nmaster) {
 					if (left)
-						selws->ssplit = (float)(ox - selws->mon->x + ow - (e->root_x - mx))
+						selws->ssplit = (float)(c->x - selws->mon->x + ow - (e->root_x - mx))
 							/ (float)(selws->mon->w - (selws->mon->w * selws->msplit));
 					else
-						selws->ssplit = (float)(ox - selws->mon->x + (e->root_x - mx)
+						selws->ssplit = (float)(c->x - selws->mon->x + (e->root_x - mx)
 								- (selws->mon->w * selws->msplit))
 							/ (float)(selws->mon->w - (selws->mon->w * selws->msplit));
 					selws->ssplit = CLAMP(selws->ssplit, 0.05, 0.95);
 				} else if (selws->nmaster && i >= selws->nmaster) {
 					if (left)
-						selws->msplit = (float)(ox - selws->mon->x + ow - (e->root_x - mx))
+						selws->msplit = (float)(c->x - selws->mon->x + ow - (e->root_x - mx))
 							/ (float)selws->mon->w;
 					else
-						selws->msplit = (float)(ox - selws->mon->x + (e->root_x - mx))
+						selws->msplit = (float)(c->x - selws->mon->x + (e->root_x - mx))
 							/ (float)selws->mon->w;
 					selws->msplit = CLAMP(selws->msplit, 0.05, 0.95);
 				} else {
 					if (left)
-						selws->msplit = (float)(ox - selws->mon->x - (e->root_x - mx))
+						selws->msplit = (float)(c->x - selws->mon->x - (e->root_x - mx))
 							/ (float)selws->mon->w;
 					else
-						selws->msplit = (float)((ox - selws->mon->x + ow) + (e->root_x - mx))
+						selws->msplit = (float)((c->x - selws->mon->x + ow) + (e->root_x - mx))
 							/ (float)selws->mon->w;
 					selws->msplit = CLAMP(selws->msplit, 0.05, 0.95);
 				}
@@ -360,47 +424,26 @@ void mouse(Client *c, int move, int mx, int my)
 				}
 
 			} else {
-				if (move) {
-					nx = ox + (e->root_x - mx);
-					ny = oy + (e->root_y - my);
-				} else {
-					nw = ow + (e->root_x - mx);
-					nh = oh + (e->root_y - my);
+				nw = ow + (e->root_x - mx);
+				nh = oh + (e->root_y - my);
+				if (nw == c->w && nh == c->h)
+					break;
+				if (!FLOATING(c) || (c->state & STATE_FULLSCREEN
+							&& c->state & STATE_FAKEFULL && !(c->old_state & STATE_FLOATING)))
+				{
+					c->state |= STATE_FLOATING;
+					c->old_state |= STATE_FLOATING;
+					if (selws->layout->func)
+						selws->layout->func(selws);
+					restack(selws);
 				}
-				if ((nw != c->w || nh != c->h || nx != c->x || ny != c->y)) {
-					if (!FLOATING(c) || (c->state & STATE_FULLSCREEN
-								&& c->state & STATE_FAKEFULL && !(c->old_state & STATE_FLOATING)))
-					{
-						c->state |= STATE_FLOATING;
-						c->old_state |= STATE_FLOATING;
-						if (c->max_w) c->w = MIN(c->w, c->max_w);
-						if (c->max_h) c->h = MIN(c->h, c->max_h);
-						c->x = CLAMP(c->x, selws->mon->wx, selws->mon->wx + selws->mon->ww - W(c));
-						c->y = CLAMP(c->y, selws->mon->wy, selws->mon->wy + selws->mon->wh - H(c));
-						resizehint(c, c->x, c->y, c->w, c->h, c->bw, 1, 1);
-						if (selws->layout->func)
-							selws->layout->func(selws);
-						restack(selws);
-					}
-					if (move && (m = coordtomon(e->root_x, e->root_y)) && m->ws != c->ws) {
-						setworkspace(c, m->ws->num, 0);
-						changews(m->ws, 0, 0);
-						focus(c);
-					}
-					resizehint(c, nx, ny, nw, nh, c->bw, 1, 1);
-					xcb_flush(con);
-				}
+				resizehint(c, c->x, c->y, nw, nh, c->bw, 1, 1);
+				xcb_flush(con);
 			}
 			break;
 		case XCB_BUTTON_RELEASE:
 			released = 1;
-			DBG("buttonrelease: ungrabbing pointer - 0x%08x", selws->sel->win)
-			iferr(1, "failed to ungrab pointer",
-					xcb_request_check(con, xcb_ungrab_pointer_checked(con, XCB_CURRENT_TIME)));
-			if (!move) {
-				xcb_aux_sync(con);
-				ignore(XCB_ENTER_NOTIFY);
-			}
+			buttonrelease(0);
 			break;
 		default: /* handle other event types normally */
 			dispatch(ev);
@@ -474,6 +517,6 @@ void unmapnotify(xcb_generic_event_t *ev)
 		setwinstate(e->window, XCB_ICCCM_WM_STATE_WITHDRAWN);
 	} else {
 		DBG("unmapnotify: 0x%08x", e->window)
-			unmanage(e->window, 0);
+		unmanage(e->window, 0);
 	}
 }

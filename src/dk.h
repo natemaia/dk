@@ -40,6 +40,11 @@
 #define FIND_TAIL(v, list) for (v = list; v && v->next; v = v->next)
 #define FIND_PREV(v, cur, list) for (v = list; v && v->next && v->next != cur; v = v->next)
 
+#define WINTO(for_macro, win, ptr, arr)                     \
+	if (win != XCB_WINDOW_NONE && win != root)              \
+		for_macro(ptr, arr) if (ptr->win == win) return ptr;\
+	return NULL
+
 #define ATTACH(v, list) do { v->next = list; list = v; } while (0)
 #define DETACH(v, listptr)                    \
 	do {                                      \

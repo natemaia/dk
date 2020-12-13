@@ -29,13 +29,14 @@ all: dk dkcmd
 debug: CPPFLAGS += -DDEBUG
 debug: all
 
-funcdebug: CFLAGS += -finstrument-functions -export-dynamic
-funcdebug: LDFLAGS += -ldl -Wl,--export-dynamic
-funcdebug: CPPFLAGS += -DFUNCDEBUG
-funcdebug: debug
+fdebug: CFLAGS += -finstrument-functions -export-dynamic
+fdebug: LDFLAGS += -ldl -Wl,--export-dynamic
+fdebug: CPPFLAGS += -DFUNCDEBUG
+fdebug: debug
 
-nostrip: CFLAGS += -g
-nostrip: debug
+leak: OPTLVL = -Og
+leak: CFLAGS += -ggdb3
+leak: all
 
 .c.o:
 	${CC} ${OPTLVL} ${CFLAGS} ${CPPFLAGS} -c $<
@@ -69,4 +70,4 @@ uninstall:
 	rm -rf ${DESTDIR}${DOC}/dk
 	rm -f ${DESTDIR}${SES}/dk.desktop
 
-.PHONY: all debug funcdebug nostrip clean install uninstall
+.PHONY: all debug fdebug leak clean install uninstall

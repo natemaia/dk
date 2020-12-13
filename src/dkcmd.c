@@ -60,8 +60,6 @@ int main(int argc, char *argv[])
 			offs++;
 		}
 		while (n + offs + 1 < sizeof(buf) && argv[i][j]) {
-			if (argv[i][j] == '"' && offs > 1)
-				buf[n++] = '\\';
 			buf[n++] = argv[i][j++];
 			if (equal && space > equal && buf[n - 1] == '=') {
 				buf[n++] = '"';

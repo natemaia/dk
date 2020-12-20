@@ -16,25 +16,19 @@ unsigned int border[BORD_LAST] = {
 	[BORD_O_UNFOCUS] = 0xFF222222, /* hex: unfocused window border colour (outer) */
 };
 
-int globalcfg[GLB_LAST] = {
-	[GLB_WS_NUM]       = 0,  /* bool: number of workspaces currently allocated */
-	[GLB_WS_STATIC]    = 0,  /* bool: use static workspace assignment */
-	[GLB_FOCUS_MOUSE]  = 1,  /* bool: enable focus follows mouse */
-	[GLB_FOCUS_OPEN]   = 1,  /* bool: enable focus on open */
-	[GLB_FOCUS_URGENT] = 1,  /* bool: enable focus urgent windows */
-	[GLB_MIN_WH]       = 50, /* int:  minimum window size allowed when resizing */
-	[GLB_MIN_XY]       = 10, /* int:  minimum window area allowed inside the screen when moving */
-	[GLB_TILE_HINTS]   = 0,  /* bool: respect size hints in tiled layouts */
-	[GLB_TILE_TOHEAD]  = 0,  /* bool: place new clients at the tail of the stack */
-	[GLB_SMART_BORDER] = 1,  /* bool: disable borders in layouts with only one visible window */
-	[GLB_SMART_GAP]    = 1,  /* bool: disable gaps in layouts with only one visible window */
-};
-
-char *cursors[CURS_LAST] = {
-	/* see: https://tronche.com/gui/x/xlib/appendix/b/ */
-	[CURS_MOVE]   = "fleur",
-	[CURS_NORMAL] = "arrow",
-	[CURS_RESIZE] = "sizing",
+GlobalCfg globalcfg[GLB_LAST] = {
+	/* setting           value,  type,       string */
+	[GLB_FOCUS_MOUSE]  = { 1,   TYPE_BOOL,  "focus_mouse"  }, /* enable focus follows mouse */
+	[GLB_FOCUS_OPEN]   = { 1,   TYPE_BOOL,  "focus_open"   }, /* enable focus on open */
+	[GLB_FOCUS_URGENT] = { 1,   TYPE_BOOL,  "focus_urgent" }, /* enable focus urgent windows */
+	[GLB_MIN_WH]       = { 50,  TYPE_INT,   "win_minwh"    }, /* minimum window size allowed when resizing */
+	[GLB_MIN_XY]       = { 10,  TYPE_INT,   "win_minxy"    }, /* minimum window area allowed inside the screen when moving */
+	[GLB_SMART_BORDER] = { 1,   TYPE_BOOL,  "smart_border" }, /* disable borders in layouts with only one visible window */
+	[GLB_SMART_GAP]    = { 1,   TYPE_BOOL,  "smart_gap"    }, /* disable gaps in layouts with only one visible window */
+	[GLB_TILE_HINTS]   = { 0,   TYPE_BOOL,  "tile_hints"   }, /* respect size hints in tiled layouts */
+	[GLB_TILE_TOHEAD]  = { 0,   TYPE_BOOL,  "tile_tohead"  }, /* place new clients at the tail of the stack */
+	[GLB_WS_NUM]       = { 0,   TYPE_NUMWS, "numws"        }, /* number of workspaces currently allocated */
+	[GLB_WS_STATIC]    = { 0,   TYPE_BOOL,  "static_ws"    }, /* use static workspace assignment */
 };
 
 /* default modifier and buttons for mouse move/resize */
@@ -98,7 +92,7 @@ int tstack(Workspace *ws)
 	int wh = ws->mon->wh - ws->padt - ws->padb;
 
 	/* apply smart gap */
-	int g = !globalcfg[GLB_SMART_GAP] || n > 1 ? ws->gappx : 0;
+	int g = !globalcfg[GLB_SMART_GAP].val || n > 1 ? ws->gappx : 0;
 	mw = (ww - g) / MAX(1, ws->nmaster);
 
 	/* adjust sizes for master-less instances */
@@ -112,7 +106,7 @@ int tstack(Workspace *ws)
 
 	for (i = 0, mx = sx = wx + g, c = nexttiled(ws->clients); c; c = nexttiled(c->next), i++) {
 		/* apply smart border */
-		int bw = !globalcfg[GLB_SMART_BORDER] || n > 1 ? c->bw : 0;
+		int bw = !globalcfg[GLB_SMART_BORDER].val || n > 1 ? c->bw : 0;
 		if (i < ws->nmaster) { /* master windows */
 			resizehint(c, mx, (wy + wh) - mh, mw - g - (2 * bw), mh - g - (2 * bw), bw, 0, 0);
 			mx += W(c) + g;

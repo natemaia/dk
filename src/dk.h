@@ -1,4 +1,4 @@
-/* dk - /dəˈkā/ window manager
+/* dk window manager
  *
  * see license file for copyright and license details
  * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
@@ -67,20 +67,14 @@
 #define MOVE(win, x, y)                                                       \
 	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, \
 			(unsigned int[]){(x), (y)})
-#define MOVERESIZE(win, x, y, w, h, bw)                                 \
-	xcb_configure_window(con, win,                                      \
-			XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y                   \
-			| XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT        \
-			| XCB_CONFIG_WINDOW_BORDER_WIDTH,                           \
-			(unsigned int[]){(x), (y), MAX((w), globalcfg[GLB_MIN_WH]), \
-			MAX((h), globalcfg[GLB_MIN_WH]), (bw)})
+#define MOVERESIZE(win, x, y, w, h, bw)                                     \
+	xcb_configure_window(con, win,                                          \
+			XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y                       \
+			| XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT            \
+			| XCB_CONFIG_WINDOW_BORDER_WIDTH,                               \
+			(unsigned int[]){(x), (y), MAX((w), globalcfg[GLB_MIN_WH].val), \
+			MAX((h), globalcfg[GLB_MIN_WH].val), (bw)})
 
-
-
-enum StatusType {
-	TYPE_WS   = 0,
-	TYPE_FULL = 1,
-};
 
 enum States {
 	STATE_NONE         = 0,
@@ -104,16 +98,6 @@ enum Cursors {
 	CURS_LAST   = 3,
 };
 
-enum Gravities {
-	GRAV_NONE   = 0,
-	GRAV_LEFT   = 1,
-	GRAV_RIGHT  = 2,
-	GRAV_CENTER = 3,
-	GRAV_TOP    = 4,
-	GRAV_BOTTOM = 5,
-	GRAV_LAST   = 6,
-};
-
 enum Borders {
 	BORD_WIDTH     = 0,
 	BORD_FOCUS     = 1,
@@ -124,6 +108,15 @@ enum Borders {
 	BORD_O_URGENT  = 6,
 	BORD_O_UNFOCUS = 7,
 	BORD_LAST      = 8,
+};
+
+enum DirOpts {
+	DIR_NEXT   = 0,
+	DIR_PREV   = 1,
+	DIR_LAST   = 2,
+	DIR_NEXTNE = 3,
+	DIR_PREVNE = 4,
+	DIR_END    = 5
 };
 
 enum WMAtoms {
@@ -162,7 +155,28 @@ enum NetAtoms {
 	NET_LAST        = 22,
 };
 
-enum GlobalCfg {
+enum Gravities {
+	GRAV_NONE   = 0,
+	GRAV_LEFT   = 1,
+	GRAV_RIGHT  = 2,
+	GRAV_CENTER = 3,
+	GRAV_TOP    = 4,
+	GRAV_BOTTOM = 5,
+	GRAV_LAST   = 6,
+};
+
+enum StatusType {
+	STAT_WS   = 0,
+	STAT_FULL = 1,
+};
+
+enum CfgType {
+	TYPE_BOOL  = 0,
+	TYPE_NUMWS = 1,
+	TYPE_INT   = 2,
+};
+
+enum GlobalSettings {
 	GLB_WS_NUM       = 0,
 	GLB_WS_STATIC    = 1,
 	GLB_FOCUS_MOUSE  = 2,
@@ -210,14 +224,6 @@ typedef struct Rule {
 	struct Rule *next;
 } Rule;
 
-typedef struct Status {
-	int num;
-	unsigned int type;
-	FILE *file;
-	char *path;
-	struct Status *next;
-} Status;
-
 typedef struct Panel {
 	int l, r, t, b; /* struts */
 	unsigned int state;
@@ -225,6 +231,14 @@ typedef struct Panel {
 	struct Panel *next;
 	Monitor *mon;
 } Panel;
+
+typedef struct Status {
+	int num;
+	unsigned int type;
+	FILE *file;
+	char *path;
+	struct Status *next;
+} Status;
 
 typedef struct Client {
 	char title[256], class[64], inst[64];
@@ -256,6 +270,12 @@ typedef struct Layout {
 	int implements_resize;
 	int invert_split_direction;
 } Layout;
+
+typedef struct GlobalCfg {
+	int val;
+	enum CfgType type;
+	char *str;
+} GlobalCfg;
 
 struct Callback {
 	const char *name;
@@ -302,12 +322,12 @@ extern const char *enoargs;
 extern const char *gravities[GRAV_LAST];
 extern const char *wmatoms[WM_LAST];
 extern const char *netatoms[NET_LAST];
-
+extern const char *cursors[CURS_LAST];
+extern const char *directionopts[DIR_END];
 
 /* config.h values */
 extern unsigned int border[BORD_LAST];
-extern int globalcfg[GLB_LAST];
-extern char *cursors[CURS_LAST];
+extern GlobalCfg globalcfg[GLB_LAST];
 extern xcb_mod_mask_t mousemod;
 extern xcb_button_t mousemove, mouseresize;
 extern Callback callbacks[];
@@ -322,13 +342,13 @@ void applypanelstrut(Panel *p);
 int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse);
 int assignws(Workspace *ws, Monitor *new);
 void changews(Workspace *ws, int swap, int warp);
+void clientborder(Client *c, int focused);
 void clienthints(Client *c);
 int clientname(Client *c);
 void clientrule(Client *c, Rule *wr, int nofocus);
 void clienttype(Client *c);
 Monitor *coordtomon(int x, int y);
 void detach(Client *c, int reattach);
-void drawborder(Client *c, int focused);
 void execcfg(void);
 void focus(Client *c);
 void freemon(Monitor *m);
@@ -352,8 +372,8 @@ Monitor *nextmon(Monitor *m);
 Client *nexttiled(Client *c);
 Monitor *outputtomon(xcb_randr_output_t id);
 void popfloat(Client *c);
-void printstatus(Status *s);
 void printstatus_all(void);
+void printstatus(Status *s);
 void quadrant(Client *c, int *x, int *y, int *w, int *h);
 int refresh(void);
 void relocate(Client *c, Monitor *new, Monitor *old);

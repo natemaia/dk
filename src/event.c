@@ -1,4 +1,4 @@
-/* dk - /dəˈkā/ window manager
+/* dk window manager
  *
  * see license file for copyright and license details
  * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
@@ -59,14 +59,10 @@ void buttonpress(xcb_generic_event_t *ev)
 				| XCB_EVENT_MASK_BUTTON_MOTION | XCB_EVENT_MASK_POINTER_MOTION,
 				XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC, root,
 				cursor[e->detail == mousemove ? CURS_MOVE : CURS_RESIZE], XCB_CURRENT_TIME);
-		if ((p = xcb_grab_pointer_reply(con, pc, &er)) && p->status == XCB_GRAB_STATUS_SUCCESS) {
-			if (e->detail == mousemove)
-				motionmove(c, e->root_x, e->root_y);
-			else
-				motionresize(c, e->root_x, e->root_y);
-		} else {
+		if ((p = xcb_grab_pointer_reply(con, pc, &er)) && p->status == XCB_GRAB_STATUS_SUCCESS)
+			mousemotion(c, e->detail, e->root_x, e->root_y);
+		else
 			iferr(0, "unable to grab pointer", er);
-		}
 		free(p);
 	}
 }
@@ -107,7 +103,7 @@ void clientmessage(xcb_generic_event_t *ev)
 		{
 			setfullscreen(c, (d[0] == 1 || (d[0] == 2 && !(c->state & STATE_FULLSCREEN))));
 		} else if (e->type == netatom[NET_ACTIVE] && c != selws->sel) {
-			if (globalcfg[GLB_FOCUS_URGENT]) {
+			if (globalcfg[GLB_FOCUS_URGENT].val) {
 				if (c->ws != selws) {
 					unfocus(selws->sel, 1);
 					cmdview(c->ws);
@@ -136,8 +132,7 @@ void configrequest(xcb_generic_event_t *ev)
 	xcb_configure_request_event_t *e = (xcb_configure_request_event_t *)ev;
 
 	if ((c = wintoclient(e->window))) {
-		DBG("configrequest: managed %s client 0x%08x",
-				FLOATING(c) ? "floating" : "tiled", e->window)
+		DBG("configrequest: managed %s client 0x%08x", FLOATING(c) ?"floating":"tiled", e->window)
 		if (e->value_mask & XCB_CONFIG_WINDOW_BORDER_WIDTH) {
 			c->bw = e->border_width;
 		} else if (FLOATING(c)) {
@@ -151,9 +146,9 @@ void configrequest(xcb_generic_event_t *ev)
 				c->w = e->width;
 			if (e->value_mask & XCB_CONFIG_WINDOW_HEIGHT)
 				c->h = e->height;
-			if (c->x >= m->wx + m->ww - globalcfg[GLB_MIN_XY])
+			if (c->x >= m->wx + m->ww - globalcfg[GLB_MIN_XY].val)
 				c->x = m->wx + m->ww - W(c);
-			if (c->y >= m->wy + m->wh - globalcfg[GLB_MIN_XY])
+			if (c->y >= m->wy + m->wh - globalcfg[GLB_MIN_XY].val)
 				c->y = m->wy + m->wh - H(c);
 			if (e->value_mask & (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y)
 					&& !(e->value_mask & (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT)))
@@ -195,7 +190,7 @@ void dispatch(xcb_generic_event_t *ev)
 			handlers[type](ev);
 		} else if (ev->response_type == randrbase + XCB_RANDR_SCREEN_CHANGE_NOTIFY) {
 			if (((xcb_randr_screen_change_notify_event_t *)ev)->root == root && updrandr())
-				updworkspaces(globalcfg[GLB_WS_NUM]);
+				updworkspaces(globalcfg[GLB_WS_NUM].val);
 		}
 	} else {
 		xcb_generic_error_t *e = (xcb_generic_error_t*)ev;
@@ -232,7 +227,7 @@ void enternotify(xcb_generic_event_t *ev)
 		ws = m->ws;
 	if (ws && ws != selws)
 		changews(ws, 0, 0);
-	if (c && globalcfg[GLB_FOCUS_MOUSE])
+	if (c && globalcfg[GLB_FOCUS_MOUSE].val)
 		focus(c);
 }
 
@@ -289,167 +284,159 @@ void motionnotify(xcb_generic_event_t *ev)
 	}
 }
 
-void motionmove(Client *c, int mx, int my)
+void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 {
-	Monitor *m;
+	int released = 0;
+	Monitor *m = selws->mon;
 	xcb_timestamp_t last = 0;
 	xcb_motion_notify_event_t *e;
 	xcb_generic_event_t *ev = NULL;
-	int ox, oy, nx, ny, released = 0;
+	int ox = c->x, oy = c->y;
 
-	ox = c->x, oy = c->y;
-	while (running && !released && (ev = xcb_wait_for_event(con))) {
-		switch (ev->response_type & 0x7f) {
-		case XCB_MOTION_NOTIFY:
-			e = (xcb_motion_notify_event_t *)ev;
-			if (e->time - last < 1000 / 60)
-				break;
-			last = e->time;
-			nx = ox + (e->root_x - mx);
-			ny = oy + (e->root_y - my);
-			if (nx == c->x && ny == c->y)
-				break;
-			if (!FLOATING(c) || (c->state & STATE_FULLSCREEN
-						&& c->state & STATE_FAKEFULL && !(c->old_state & STATE_FLOATING)))
-			{
-				c->state |= STATE_FLOATING;
-				c->old_state |= STATE_FLOATING;
-				if (c->max_w) c->w = MIN(c->w, c->max_w);
-				if (c->max_h) c->h = MIN(c->h, c->max_h);
-				c->x = CLAMP(c->x, selws->mon->wx, selws->mon->wx + selws->mon->ww - W(c));
-				c->y = CLAMP(c->y, selws->mon->wy, selws->mon->wy + selws->mon->wh - H(c));
-				resizehint(c, c->x, c->y, c->w, c->h, c->bw, 1, 1);
-				if (selws->layout->func)
-					selws->layout->func(selws);
-				restack(selws);
-			}
-			if ((m = coordtomon(e->root_x, e->root_y)) && m->ws != c->ws) {
-				setworkspace(c, m->ws->num, 0);
-				changews(m->ws, 0, 0);
-				focus(c);
-			}
-			resizehint(c, nx, ny, c->w, c->h, c->bw, 1, 1);
-			xcb_flush(con);
-			break;
-		case XCB_BUTTON_RELEASE:
-			released = 1;
-			buttonrelease(1);
-			break;
-		default: /* handle other event types normally */
-			dispatch(ev);
-			break;
-		}
-		free(ev);
-	}
-}
+	if (button == mousemove) {
+		int nx, ny;
 
-void motionresize(Client *c, int mx, int my)
-{
-	Client *p, *prev = NULL;
-	xcb_timestamp_t last = 0;
-	xcb_motion_notify_event_t *e;
-	xcb_generic_event_t *ev = NULL;
-	int (*lyt)(Workspace *) = selws->layout->func;
-	int i, ow, oh, nw, nh, released = 0, first = 1;
-	int left = lyt == ltile;
-
-	ow = c->w, oh = c->h;
-	for (i = 0, p = nexttiled(selws->clients); p && p != c; p = nexttiled(p->next), i++)
-		if (nexttiled(p->next) == c)
-			prev = (i + 1 == selws->nmaster || i + 1 == selws->nstack + selws->nmaster) ? NULL : p;
-	while (running && !released && (ev = xcb_wait_for_event(con))) {
-		switch (ev->response_type & 0x7f) {
-		case XCB_MOTION_NOTIFY:
-			e = (xcb_motion_notify_event_t *)ev;
-			if (e->time - last < 1000 / 60) break;
-			last = e->time;
-
-			if (!(c->state & STATE_FLOATING) && ISTILE(selws)) {
-				/* TODO: fix this shit, surely there's a better way that I'm not seeing
-				 * this whole block is just calculating the split ratio and height
-				 * offset of the current tiled client based on mouse movement (a resize) */
-				if (selws->nstack && i >= selws->nstack + selws->nmaster) {
-					if (left)
-						selws->ssplit = (float)(c->x - selws->mon->x + ow - (e->root_x - mx))
-							/ (float)(selws->mon->w - (selws->mon->w * selws->msplit));
-					else
-						selws->ssplit = (float)(c->x - selws->mon->x + (e->root_x - mx)
-								- (selws->mon->w * selws->msplit))
-							/ (float)(selws->mon->w - (selws->mon->w * selws->msplit));
-					selws->ssplit = CLAMP(selws->ssplit, 0.05, 0.95);
-				} else if (selws->nmaster && i >= selws->nmaster) {
-					if (left)
-						selws->msplit = (float)(c->x - selws->mon->x + ow - (e->root_x - mx))
-							/ (float)selws->mon->w;
-					else
-						selws->msplit = (float)(c->x - selws->mon->x + (e->root_x - mx))
-							/ (float)selws->mon->w;
-					selws->msplit = CLAMP(selws->msplit, 0.05, 0.95);
-				} else {
-					if (left)
-						selws->msplit = (float)(c->x - selws->mon->x - (e->root_x - mx))
-							/ (float)selws->mon->w;
-					else
-						selws->msplit = (float)((c->x - selws->mon->x + ow) + (e->root_x - mx))
-							/ (float)selws->mon->w;
-					selws->msplit = CLAMP(selws->msplit, 0.05, 0.95);
-				}
-
-				if (prev || ((i == selws->nmaster || i == selws->nmaster + selws->nstack)
-							&& nexttiled(c->next)))
-				{
-					int ohoff = c->hoff;
-					if (first) {
-						first = 0;
-						if (i + 1 == selws->nmaster || i + 1 == selws->nmaster + selws->nstack
-								|| !nexttiled(c->next))
-						{
-							c->hoff = ((e->root_y - my) * -1) + ohoff;
-							my += ohoff;
-						} else {
-							c->hoff = (e->root_y - my) + ohoff;
-							my -= ohoff;
-						}
-					} else {
-						if (i + 1 == selws->nmaster || i + 1 == selws->nmaster + selws->nstack
-								|| !nexttiled(c->next))
-							c->hoff = ((e->root_y - my) * -1);
-						else
-							c->hoff = (e->root_y - my);
-					}
-					if (selws->layout->func(selws) < 0)
-						c->hoff = ohoff;
-				} else {
-					selws->layout->func(selws);
-				}
-
-			} else {
-				nw = ow + (e->root_x - mx);
-				nh = oh + (e->root_y - my);
-				if (nw == c->w && nh == c->h)
+		while (running && !released && (ev = xcb_wait_for_event(con))) {
+			switch (ev->response_type & 0x7f) {
+			case XCB_MOTION_NOTIFY:
+				e = (xcb_motion_notify_event_t *)ev;
+				if (e->time - last < 1000 / 60)
+					break;
+				last = e->time;
+				nx = ox + (e->root_x - mx);
+				ny = oy + (e->root_y - my);
+				if (nx == c->x && ny == c->y)
 					break;
 				if (!FLOATING(c) || (c->state & STATE_FULLSCREEN
 							&& c->state & STATE_FAKEFULL && !(c->old_state & STATE_FLOATING)))
 				{
 					c->state |= STATE_FLOATING;
 					c->old_state |= STATE_FLOATING;
+					if (c->max_w) c->w = MIN(c->w, c->max_w);
+					if (c->max_h) c->h = MIN(c->h, c->max_h);
+					c->x = CLAMP(c->x, selws->mon->wx, selws->mon->wx + selws->mon->ww - W(c));
+					c->y = CLAMP(c->y, selws->mon->wy, selws->mon->wy + selws->mon->wh - H(c));
+					resizehint(c, c->x, c->y, c->w, c->h, c->bw, 1, 1);
 					if (selws->layout->func)
 						selws->layout->func(selws);
 					restack(selws);
 				}
-				resizehint(c, c->x, c->y, nw, nh, c->bw, 1, 1);
+				if ((m = coordtomon(e->root_x, e->root_y)) && m->ws != c->ws) {
+					setworkspace(c, m->ws->num, 0);
+					changews(m->ws, 0, 0);
+					focus(c);
+				}
+				resizehint(c, nx, ny, c->w, c->h, c->bw, 1, 1);
 				xcb_flush(con);
+				break;
+			case XCB_BUTTON_RELEASE:
+				released = 1;
+				buttonrelease(1);
+				break;
+			default: /* handle other event types normally */
+				dispatch(ev);
+				break;
 			}
-			break;
-		case XCB_BUTTON_RELEASE:
-			released = 1;
-			buttonrelease(0);
-			break;
-		default: /* handle other event types normally */
-			dispatch(ev);
-			break;
+			free(ev);
 		}
-		free(ev);
+	} else {
+		Client *p, *prev = NULL;
+		int (*lyt)(Workspace *) = selws->layout->func;
+		int i, nw, nh, first = 1, left = lyt == ltile, ow = c->w, oh = c->h;
+
+		for (i = 0, p = nexttiled(selws->clients); p && p != c; p = nexttiled(p->next), i++)
+			if (nexttiled(p->next) == c)
+				prev = (i + 1 == selws->nmaster || i + 1 == selws->nstack + selws->nmaster) ? NULL : p;
+		while (running && !released && (ev = xcb_wait_for_event(con))) {
+			switch (ev->response_type & 0x7f) {
+			case XCB_MOTION_NOTIFY:
+				e = (xcb_motion_notify_event_t *)ev;
+				if (e->time - last < 1000 / 60) break;
+				last = e->time;
+
+				if (!(c->state & STATE_FLOATING) && ISTILE(selws)) {
+					/* TODO: fix this shit, surely there's a better way that I'm not seeing
+					 * this whole block is just calculating the split ratio and height
+					 * offset of the current tiled client based on mouse movement (a resize) */
+					if (selws->nstack && i >= selws->nstack + selws->nmaster) {
+						if (left)
+							selws->ssplit = (float)(ox - m->x + (e->root_x - mx)
+									- (m->w * selws->msplit)) / (float)(m->w - (m->w * selws->msplit));
+						else
+							selws->ssplit = (float)(ox - m->x + ow - (e->root_x - mx))
+								/ (float)(m->w - (m->w * selws->msplit));
+						selws->ssplit = CLAMP(selws->ssplit, 0.05, 0.95);
+					} else if (selws->nmaster && i >= selws->nmaster) {
+						if (left)
+							selws->msplit = (float)(ox - m->x + (e->root_x - mx)) / (float)m->w;
+						else
+							selws->msplit = (float)(ox - m->x + ow - (e->root_x - mx)) / (float)m->w;
+						DBG("mousemotion: %f, %f", selws->msplit, selws->ssplit)
+						selws->msplit = CLAMP(selws->msplit, 0.05, 0.95);
+					} else {
+						if (left)
+							selws->msplit = (float)(ox - m->x + ow + (e->root_x - mx)) / (float)m->w;
+						else
+							selws->msplit = (float)(ox - m->x - (e->root_x - mx)) / (float)m->w;
+						selws->msplit = CLAMP(selws->msplit, 0.05, 0.95);
+					}
+
+					if (prev || ((i == selws->nmaster || i == selws->nmaster + selws->nstack)
+								&& nexttiled(c->next)))
+					{
+						int ohoff = c->hoff;
+						if (first) {
+							first = 0;
+							if (i + 1 == selws->nmaster || i + 1 == selws->nmaster + selws->nstack
+									|| !nexttiled(c->next))
+							{
+								c->hoff = ((e->root_y - my) * -1) + ohoff;
+								my += ohoff;
+							} else {
+								c->hoff = (e->root_y - my) + ohoff;
+								my -= ohoff;
+							}
+						} else {
+							if (i + 1 == selws->nmaster || i + 1 == selws->nmaster + selws->nstack
+									|| !nexttiled(c->next))
+								c->hoff = ((e->root_y - my) * -1);
+							else
+								c->hoff = (e->root_y - my);
+						}
+						if (selws->layout->func(selws) < 0)
+							c->hoff = ohoff;
+					} else {
+						selws->layout->func(selws);
+					}
+
+				} else {
+					nw = ow + (e->root_x - mx);
+					nh = oh + (e->root_y - my);
+					if (nw == c->w && nh == c->h)
+						break;
+					if (!FLOATING(c) || (c->state & STATE_FULLSCREEN
+								&& c->state & STATE_FAKEFULL && !(c->old_state & STATE_FLOATING)))
+					{
+						c->state |= STATE_FLOATING;
+						c->old_state |= STATE_FLOATING;
+						if (selws->layout->func)
+							selws->layout->func(selws);
+						restack(selws);
+					}
+					resizehint(c, c->x, c->y, nw, nh, c->bw, 1, 1);
+					xcb_flush(con);
+				}
+				break;
+			case XCB_BUTTON_RELEASE:
+				released = 1;
+				buttonrelease(0);
+				break;
+			default: /* handle other event types normally */
+				dispatch(ev);
+				break;
+			}
+			free(ev);
+		}
 	}
 }
 

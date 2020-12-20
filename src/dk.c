@@ -1,4 +1,4 @@
-/* dk - /dəˈkā/ window manager
+/* dk window manager
  *
  * see license file for copyright and license details
  * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
@@ -11,7 +11,6 @@
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #endif
-
 
 #include <sys/un.h>
 #include <sys/select.h>
@@ -41,7 +40,6 @@
 #include "layout.h"
 #include "event.h"
 #include "cmd.h"
-
 #include "config.h"
 
 
@@ -69,37 +67,45 @@ xcb_atom_t wmatom[WM_LAST], netatom[NET_LAST];
 const char *ebadarg = "invalid argument for";
 const char *enoargs = "command requires additional arguments but none were given";
 const char *gravities[] = {
-	[GRAV_NONE] = "none",     [GRAV_LEFT] = "left", [GRAV_RIGHT] = "right",
-	[GRAV_CENTER] = "center", [GRAV_TOP] = "top",   [GRAV_BOTTOM] = "bottom",
+	[GRAV_NONE]   = "none",   [GRAV_LEFT] = "left", [GRAV_RIGHT]  = "right",
+	[GRAV_CENTER] = "center", [GRAV_TOP]  = "top",  [GRAV_BOTTOM] = "bottom",
 };
 const char *wmatoms[] = {
-	[WM_DELETE] = "WM_DELETE_WINDOW", [WM_FOCUS] = "WM_TAKE_FOCUS",
-	[WM_MOTIF] = "_MOTIF_WM_HINTS",   [WM_PROTO] = "WM_PROTOCOLS",
-	[WM_STATE] = "WM_STATE",          [WM_UTF8STR] = "UTF8_STRING",
+	[WM_DELETE] = "WM_DELETE_WINDOW", [WM_FOCUS]   = "WM_TAKE_FOCUS",
+	[WM_MOTIF]  = "_MOTIF_WM_HINTS",  [WM_PROTO]   = "WM_PROTOCOLS",
+	[WM_STATE]  = "WM_STATE",         [WM_UTF8STR] = "UTF8_STRING",
+};
+const char *cursors[] = {
+	/* see: https://tronche.com/gui/x/xlib/appendix/b/ */
+	[CURS_MOVE] = "fleur", [CURS_NORMAL] = "arrow", [CURS_RESIZE] = "sizing",
+};
+const char *directionopts[] = {
+	[DIR_NEXT]   = "next",   [DIR_PREV]   = "prev", [DIR_LAST] = "last",
+	[DIR_NEXTNE] = "nextne", [DIR_PREVNE] = "prevne",
 };
 const char *netatoms[] = {
-	[NET_ACTIVE] = "_NET_ACTIVE_WINDOW",
-	[NET_CLIENTS] = "_NET_CLIENT_LIST",
-	[NET_CLOSE] = "_NET_CLOSE_WINDOW",
-	[NET_DESK_CUR] = "_NET_CURRENT_DESKTOP",
-	[NET_DESK_GEOM] = "_NET_DESKTOP_GEOMETRY",
-	[NET_DESK_NAMES] = "_NET_DESKTOP_NAMES",
-	[NET_DESK_NUM] = "_NET_NUMBER_OF_DESKTOPS",
-	[NET_DESK_VP] = "_NET_DESKTOP_VIEWPORT",
-	[NET_DESK_WA] = "_NET_WORKAREA",
-	[NET_STATE_FULL] = "_NET_WM_STATE_FULLSCREEN",
-	[NET_SUPPORTED] = "_NET_SUPPORTED",
-	[NET_TYPE_DESK] = "_NET_WM_WINDOW_TYPE_DESKTOP",
+	[NET_ACTIVE]      = "_NET_ACTIVE_WINDOW",
+	[NET_CLIENTS]     = "_NET_CLIENT_LIST",
+	[NET_CLOSE]       = "_NET_CLOSE_WINDOW",
+	[NET_DESK_CUR]    = "_NET_CURRENT_DESKTOP",
+	[NET_DESK_GEOM]   = "_NET_DESKTOP_GEOMETRY",
+	[NET_DESK_NAMES]  = "_NET_DESKTOP_NAMES",
+	[NET_DESK_NUM]    = "_NET_NUMBER_OF_DESKTOPS",
+	[NET_DESK_VP]     = "_NET_DESKTOP_VIEWPORT",
+	[NET_DESK_WA]     = "_NET_WORKAREA",
+	[NET_STATE_FULL]  = "_NET_WM_STATE_FULLSCREEN",
+	[NET_SUPPORTED]   = "_NET_SUPPORTED",
+	[NET_TYPE_DESK]   = "_NET_WM_WINDOW_TYPE_DESKTOP",
 	[NET_TYPE_DIALOG] = "_NET_WM_WINDOW_TYPE_DIALOG",
-	[NET_TYPE_DOCK] = "_NET_WM_WINDOW_TYPE_DOCK",
+	[NET_TYPE_DOCK]   = "_NET_WM_WINDOW_TYPE_DOCK",
 	[NET_TYPE_SPLASH] = "_NET_WM_WINDOW_TYPE_SPLASH",
-	[NET_WM_CHECK] = "_NET_SUPPORTING_WM_CHECK",
-	[NET_WM_DESK] = "_NET_WM_DESKTOP",
-	[NET_WM_NAME] = "_NET_WM_NAME",
-	[NET_WM_STATE] = "_NET_WM_STATE",
-	[NET_WM_STRUTP] = "_NET_WM_STRUT_PARTIAL",
-	[NET_WM_STRUT] = "_NET_WM_STRUT",
-	[NET_WM_TYPE] = "_NET_WM_WINDOW_TYPE",
+	[NET_WM_CHECK]    = "_NET_SUPPORTING_WM_CHECK",
+	[NET_WM_DESK]     = "_NET_WM_DESKTOP",
+	[NET_WM_NAME]     = "_NET_WM_NAME",
+	[NET_WM_STATE]    = "_NET_WM_STATE",
+	[NET_WM_STRUTP]   = "_NET_WM_STRUT_PARTIAL",
+	[NET_WM_STRUT]    = "_NET_WM_STRUT",
+	[NET_WM_TYPE]     = "_NET_WM_WINDOW_TYPE",
 };
 
 
@@ -168,9 +174,8 @@ int main(int argc, char *argv[])
 	confd = xcb_get_file_descriptor(con);
 	nfds = MAX(confd, sockfd) + 1;
 	while (running) {
-		xcb_flush(con);
 		if (xcb_connection_has_error(con)) break;
-		if (needsrefresh) needsrefresh = refresh();
+		xcb_flush(con);
 		FD_ZERO(&read_fds);
 		FD_SET(sockfd, &read_fds);
 		FD_SET(confd, &read_fds);
@@ -193,7 +198,7 @@ int main(int argc, char *argv[])
 					free(ev);
 				}
 		}
-
+		if (needsrefresh) needsrefresh = refresh();
 		s = stats;
 		while (s) {
 			next = s->next;
@@ -215,7 +220,7 @@ void applypanelstrut(Panel *p)
 int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse)
 {
 	Monitor *m = c->ws->mon;
-	int min = globalcfg[GLB_MIN_XY];
+	int min = globalcfg[GLB_MIN_XY].val;
 
 	*w = MAX(1, *w);
 	*h = MAX(1, *h);
@@ -239,7 +244,7 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 		*y = CLAMP(*y, m->wy, m->wy + m->wh - *h + (2 * bw));
 	}
 
-	if (FLOATING(c) || globalcfg[GLB_TILE_HINTS]) {
+	if (FLOATING(c) || globalcfg[GLB_TILE_HINTS].val) {
 		int baseismin;
 		if (!(baseismin = (c->base_w == c->min_w && c->base_h == c->min_h)))
 			*w -= c->base_w, *h -= c->base_h;
@@ -379,7 +384,7 @@ int clientname(Client *c)
 			return 0;
 		}
 	}
-	if (r.name && r.name_len > 0)
+	if (r.name && r.name[0] && strlen(r.name))
 		strlcpy(c->title, r.name, sizeof(c->title));
 	else
 		strlcpy(c->title, "broken", sizeof(c->title));
@@ -426,15 +431,15 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 						break;
 					}
 				}
-			} else if (r->ws > 0 && r->ws <= globalcfg[GLB_WS_NUM]) {
+			} else if (r->ws > 0 && r->ws <= globalcfg[GLB_WS_NUM].val) {
 				ws = r->ws - 1;
 			}
 		}
 	}
 
-	if (ws + 1 > globalcfg[GLB_WS_NUM] && ws <= 99)
+	if (ws + 1 > globalcfg[GLB_WS_NUM].val && ws <= 99)
 		updworkspaces(ws + 1);
-	setworkspace(c, MIN(ws, globalcfg[GLB_WS_NUM]), nofocus);
+	setworkspace(c, MIN(ws, globalcfg[GLB_WS_NUM].val), nofocus);
 	if (dofocus && c->ws != selws)
 		cmdview(c->ws);
 	if (r)
@@ -453,7 +458,7 @@ void clienttype(Client *c)
 		c->state |= STATE_FLOATING;
 }
 
-void drawborder(Client *c, int focused)
+void clientborder(Client *c, int focused)
 { /* modified from swm/wmutils */
 	xcb_gcontext_t gc;
 	xcb_pixmap_t pmap;
@@ -482,8 +487,8 @@ void drawborder(Client *c, int focused)
 		};
 
 		pmap = xcb_generate_id(con);
-		xcb_create_pixmap(con, c->depth, pmap, c->win, W(c), H(c));
 		gc = xcb_generate_id(con);
+		xcb_create_pixmap(con, c->depth, pmap, c->win, W(c), H(c));
 		xcb_create_gc(con, gc, pmap, XCB_GC_FOREGROUND, &in);
 		xcb_poly_fill_rectangle(con, pmap, gc, LEN(inner), inner);
 		xcb_change_gc(con, gc, XCB_GC_FOREGROUND, &out);
@@ -553,9 +558,9 @@ void execcfg(void)
 
 void focus(Client *c)
 {
-	if (!c)
-		c = selws->stack;
-	if (selws->sel && selws->sel != c)
+	if (!selws) selws = workspaces;
+	if (!c) c = selws->stack;
+	if (selws && selws->sel && selws->sel != c)
 		unfocus(selws->sel, 0);
 	if (c) {
 		if (c->state & STATE_URGENT)
@@ -564,7 +569,7 @@ void focus(Client *c)
 		c->snext = c->ws->stack;
 		c->ws->stack = c;
 		grabbuttons(c, 1);
-		drawborder(c, 1);
+		clientborder(c, 1);
 		setinputfocus(c);
 	} else {
 		unfocus(c, 1);
@@ -802,7 +807,7 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	/* apply rules and set the client's workspace, when focus_open is false
 	 * the new client is attached to the end of the stack, otherwise the head
 	 * later in refresh(), focus(NULL) is called to focus the right client */
-	clientrule(c, NULL, !globalcfg[GLB_FOCUS_OPEN]);
+	clientrule(c, NULL, !globalcfg[GLB_FOCUS_OPEN].val);
 	clienttype(c);
 	clienthints(c);
 	sizehints(c, 1);
@@ -813,8 +818,8 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 							| XCB_EVENT_MASK_STRUCTURE_NOTIFY });
 	grabbuttons(c, 0);
 	if (FLOATING(c) || c->state & STATE_FIXED) {
-		c->w = CLAMP(c->w, globalcfg[GLB_MIN_WH], c->ws->mon->ww);
-		c->h = CLAMP(c->h, globalcfg[GLB_MIN_WH], c->ws->mon->wh);
+		c->w = CLAMP(c->w, globalcfg[GLB_MIN_WH].val, c->ws->mon->ww);
+		c->h = CLAMP(c->h, globalcfg[GLB_MIN_WH].val, c->ws->mon->wh);
 		if (c->trans) {
 			c->x = c->trans->x + ((W(c->trans) - W(c)) / 2);
 			c->y = c->trans->y + ((H(c->trans) - H(c)) / 2);
@@ -1046,10 +1051,10 @@ void initwm(void)
 		initmon(0, "default", 0, 0, 0, scr_w, scr_h);
 
 	cws = winprop(root, netatom[NET_DESK_CUR], &r) && r < 100 ? r : 0;
-	updworkspaces(MAX(cws + 1, globalcfg[GLB_WS_NUM]));
+	updworkspaces(MAX(cws + 1, globalcfg[GLB_WS_NUM].val));
 	selws = workspaces;
 	selmon = selws->mon;
-	changews((ws = itows(cws)) ? ws : workspaces, globalcfg[GLB_WS_STATIC], 1);
+	changews((ws = itows(cws)) ? ws : workspaces, globalcfg[GLB_WS_STATIC].val, 1);
 
 	wmcheck = xcb_generate_id(con);
 	xcb_create_window(con, XCB_COPY_FROM_PARENT, wmcheck, root, -1, -1, 1, 1, 0,
@@ -1240,7 +1245,7 @@ void printstatus(Status *s)
 	while (s) {
 		next = s->next;
 		switch (s->type) {
-		case TYPE_WS:
+		case STAT_WS:
 			fprintf(s->file, "W");
 			FOR_EACH(ws, workspaces) {
 				char fmt[5] = "i%s:";
@@ -1254,15 +1259,15 @@ void printstatus(Status *s)
 			}
 			fprintf(s->file, "\nL%s\nA%s", selws->layout->name, selws->sel ? selws->sel->title : "");
 			break;
-		case TYPE_FULL:
+		case STAT_FULL:
 			fprintf(s->file, "# globals - key: value ...\nnumws: %d\nsmart_border: %d\n"
 					"smart_gap: %d\nfocus_urgent: %d\nfocus_mouse: %d\nfocus_open: %d\n"
 					"tile_hints: %d\ntile_tohead: %d\nwin_minxy: %d\nwin_minwh: %d",
-					globalcfg[GLB_WS_NUM], globalcfg[GLB_SMART_BORDER],
-					globalcfg[GLB_SMART_GAP], globalcfg[GLB_FOCUS_URGENT],
-					globalcfg[GLB_FOCUS_MOUSE], globalcfg[GLB_FOCUS_OPEN],
-					globalcfg[GLB_TILE_HINTS], globalcfg[GLB_TILE_TOHEAD],
-					globalcfg[GLB_MIN_XY], globalcfg[GLB_MIN_WH]);
+					globalcfg[GLB_WS_NUM].val, globalcfg[GLB_SMART_BORDER].val,
+					globalcfg[GLB_SMART_GAP].val, globalcfg[GLB_FOCUS_URGENT].val,
+					globalcfg[GLB_FOCUS_MOUSE].val, globalcfg[GLB_FOCUS_OPEN].val,
+					globalcfg[GLB_TILE_HINTS].val, globalcfg[GLB_TILE_TOHEAD].val,
+					globalcfg[GLB_MIN_XY].val, globalcfg[GLB_MIN_WH].val);
 			fprintf(s->file, "\n\n# width outer_width focus urgent unfocus "
 					"outer_focus outer_urgent outer_unfocus\n"
 					"border: %u %u 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x",
@@ -1401,19 +1406,19 @@ int refresh(void)
 
 void relocate(Client *c, Monitor *new, Monitor *old)
 {
-#define RELOC(val, opposed, offset, min, max, wmin, wmax, oldmin, oldmax, oldwmin, oldwmax) \
-	if (val - oldwmin > 0 && (offset = oldwmax / (val - oldwmin)) != 0.0) {             \
-		if (val + (opposed) == oldmin + oldmax) {                                       \
-			val = min + max - (opposed);                                                \
-		} else if (val + ((opposed) / 2) == oldmin + (oldmax / 2)) {                    \
-			val = (min + max - (opposed)) / 2;                                          \
-		} else {                                                                        \
-			val = CLAMP(min + (max / offset), min - ((opposed) - globalcfg[GLB_MIN_XY]),\
-					min + max - globalcfg[GLB_MIN_XY]);                                 \
-		}                                                                               \
-	} else {                                                                            \
-		val = CLAMP(val, min - ((opposed) - globalcfg[GLB_MIN_XY]),                     \
-				wmin + wmax - globalcfg[GLB_MIN_XY]);                                   \
+#define RELOC(x, opposed, offset, min, max, wmin, wmax, oldmin, oldmax, oldwmin, oldwmax)  \
+	if (x - oldwmin > 0 && (offset = oldwmax / (x - oldwmin)) != 0.0) {                    \
+		if (x + (opposed) == oldmin + oldmax) {                                            \
+			x = min + max - (opposed);                                                     \
+		} else if (x + ((opposed) / 2) == oldmin + (oldmax / 2)) {                         \
+			x = (min + max - (opposed)) / 2;                                               \
+		} else {                                                                           \
+			x = CLAMP(min + (max / offset), min - ((opposed) - globalcfg[GLB_MIN_XY].val), \
+					min + max - globalcfg[GLB_MIN_XY].val);                                \
+		}                                                                                  \
+	} else {                                                                               \
+		x = CLAMP(x, min - ((opposed) - globalcfg[GLB_MIN_XY].val),                        \
+				wmin + wmax - globalcfg[GLB_MIN_XY].val);                                  \
 	}
 
 	if (!FLOATING(c))
@@ -1445,7 +1450,7 @@ void resize(Client *c, int x, int y, int w, int h, int bw)
 	c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 	c->x = x, c->y = y, c->w = w, c->h = h;
 	MOVERESIZE(c->win, x, y, w, h, bw);
-	drawborder(c, c == selws->sel);
+	clientborder(c, c == selws->sel);
 	sendconfigure(c);
 }
 
@@ -1619,10 +1624,9 @@ void setworkspace(Client *c, int num, int stacktail)
 	}
 	c->ws = ws;
 	PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL, 32, 1, &c->ws->num);
-	attach(c, globalcfg[GLB_TILE_TOHEAD]);
+	attach(c, globalcfg[GLB_TILE_TOHEAD].val);
 	if (stacktail)
-		for (tail = ws->stack; tail && tail->snext; tail = tail->snext)
-			;
+		for (tail = ws->stack; tail && tail->snext; tail = tail->snext);
 	if (tail) {
 		tail->snext = c;
 		c->snext = NULL;
@@ -1715,7 +1719,7 @@ void unfocus(Client *c, int focusroot)
 {
 	if (c) {
 		grabbuttons(c, 0);
-		drawborder(c, 0);
+		clientborder(c, 0);
 	}
 	if (focusroot) {
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, root, XCB_CURRENT_TIME);
@@ -1902,8 +1906,7 @@ void updnetworkspaces(void)
 	PROP(REPLACE, root, netatom[NET_DESK_GEOM], XCB_ATOM_CARDINAL, 32, 2, &v);
 	PROP(REPLACE, root, netatom[NET_DESK_NUM], XCB_ATOM_CARDINAL, 32, 1, &globalcfg[GLB_WS_NUM]);
 	FOR_EACH(ws, workspaces) {
-		if (!ws->mon)
-			ws->mon = primary;
+		if (!ws->mon) ws->mon = primary;
 		v[0] = ws->mon->x, v[1] = ws->mon->y;
 		PROP(APPEND, root, netatom[NET_DESK_VP], XCB_ATOM_CARDINAL, 32, 2, &v);
 		v[0] = ws->mon->wx, v[1] = ws->mon->wy, v[2] = ws->mon->ww, v[3] = ws->mon->wh;
@@ -1924,9 +1927,9 @@ void updworkspaces(int needed)
 		warnx(n < 1 ? "no connected monitors" : "allocating too many workspaces: max 99");
 		return;
 	}
-	while (n > globalcfg[GLB_WS_NUM] || needed > globalcfg[GLB_WS_NUM]) {
-		initws(globalcfg[GLB_WS_NUM]);
-		globalcfg[GLB_WS_NUM]++;
+	while (n > globalcfg[GLB_WS_NUM].val || needed > globalcfg[GLB_WS_NUM].val) {
+		initws(globalcfg[GLB_WS_NUM].val);
+		globalcfg[GLB_WS_NUM].val++;
 	}
 
 	m = nextmon(monitors);

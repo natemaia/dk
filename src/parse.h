@@ -1,4 +1,4 @@
-/* dk - /dəˈkā/ window manager
+/* dk window manager
  *
  * see license file for copyright and license details
  * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
@@ -6,14 +6,14 @@
 
 #pragma once
 
-void parsecmd(char *buf);
 int parsebool(char *arg);
+Client *parseclient(char *arg, int *ebadwin);
+void parsecmd(char *buf);
+int parsecolour(char *arg, unsigned int *result);
 float parsefloat(char *arg, int *rel);
+int parsegeom(char *arg, char type, int *i, int *rel, int *grav);
 int parseint(char *arg, int *rel, int allowzero);
 int parseintclamp(char *arg, int *rel, int min, int max);
-int parsecolour(char *arg, unsigned int *result);
-int parseopt(char *arg, char **optarr);
-int parsegeom(char *arg, char type, int *i, int *rel, int *grav);
-Client *parseclient(char *arg, int *ebadwin);
-Workspace *parsewsormon(char *arg, int mon);
+int parseopt(char *arg, const char **optarr);
 char *parsetoken(char **src);
+Workspace *parsewsormon(char *arg, int mon);

@@ -1,4 +1,4 @@
-/* dk - /dəˈkā/ window manager
+/* dk window manager
  *
  * see license file for copyright and license details
  * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
@@ -187,14 +187,13 @@ int parseintclamp(char *arg, int *rel, int min, int max)
 	return INT_MIN;
 }
 
-int parseopt(char *arg, char **optarr)
+int parseopt(char *arg, const char **optarr)
 {
-	char **s = optarr;
-
-	if (arg)
-		for (int i = 0; s && *s; s++, i++)
-			if (!strcmp(*s, arg))
+	if (arg) {
+		for (int i = 0; optarr && *optarr; optarr++, i++)
+			if (!strcmp(*optarr, arg))
 				return i;
+	}
 	return -1;
 }
 
@@ -247,7 +246,7 @@ Workspace *parsewsormon(char *arg, int mon)
 	if (mon)
 		for (n = 0, m = nextmon(monitors); m; m = nextmon(m->next), n++)
 			;
-	if ((i = parseintclamp(arg, NULL, 1, mon ? n : globalcfg[GLB_WS_NUM])) == INT_MIN || i <= 0)
+	if ((i = parseintclamp(arg, NULL, 1, mon ? n : globalcfg[GLB_WS_NUM].val)) == INT_MIN || i <= 0)
 		return NULL;
 	return mon ? ((m = nextmon(itomon(i - 1))) ? m->ws : cws) : itows(i - 1);
 }

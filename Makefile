@@ -1,4 +1,4 @@
-# dk /dəˈkā/ window manager
+# dk window manager
 # see license file for copyright and license details
 
 VERSION = 1.0

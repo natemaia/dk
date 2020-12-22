@@ -76,7 +76,6 @@ const char *wmatoms[] = {
 	[WM_STATE]  = "WM_STATE",         [WM_UTF8STR] = "UTF8_STRING",
 };
 const char *cursors[] = {
-	/* see: https://tronche.com/gui/x/xlib/appendix/b/ */
 	[CURS_MOVE] = "fleur", [CURS_NORMAL] = "arrow", [CURS_RESIZE] = "sizing",
 };
 const char *directionopts[] = {
@@ -384,10 +383,7 @@ int clientname(Client *c)
 			return 0;
 		}
 	}
-	if (r.name && r.name[0] && strlen(r.name))
-		strlcpy(c->title, r.name, sizeof(c->title));
-	else
-		strlcpy(c->title, "broken", sizeof(c->title));
+	strlcpy(c->title, strlen(r.name) ? r.name : "broken", sizeof(c->title));
 	xcb_icccm_get_text_property_reply_wipe(&r);
 	return 1;
 }
@@ -559,23 +555,23 @@ void execcfg(void)
 void focus(Client *c)
 {
 	if (!selws) selws = workspaces;
-	if (!c) c = selws->stack;
+	if (!c) c = selws ? selws->stack : NULL;
 	if (selws && selws->sel && selws->sel != c)
 		unfocus(selws->sel, 0);
 	if (c) {
-		if (c->state & STATE_URGENT)
-			seturgent(c, 0);
+		if (c->state & STATE_URGENT) seturgent(c, 0);
 		detachstack(c);
 		c->snext = c->ws->stack;
 		c->ws->stack = c;
 		grabbuttons(c, 1);
 		clientborder(c, 1);
 		setinputfocus(c);
+		selws->sel = c;
+		cmdclient = c;
 	} else {
-		unfocus(c, 1);
+		unfocus(NULL, 1);
+		if (selws) selws->sel = NULL;
 	}
-	selws->sel = c;
-	cmdclient = c;
 }
 
 void freemon(Monitor *m)
@@ -619,10 +615,9 @@ void freewm(void)
 	if (!restart) /* move clients back into visible space when not restarting */
 		FOR_CLIENTS(c, ws)
 			MOVE(c->win, c->x, c->y);
-	while (workspaces) {
-		while (workspaces->stack)
-			unmanage(workspaces->stack->win, 0);
-		freews(workspaces);
+	while ((ws = workspaces)) {
+		while (ws->stack) unmanage(ws->stack->win, 0);
+		freews(ws);
 	}
 	while (monitors) freemon(monitors);
 	while (rules) freerule(rules);
@@ -657,6 +652,11 @@ void freews(Workspace *ws)
 {
 	Workspace **wws = &workspaces;
 
+	if (ws == selws) {
+		selws = ws->next ? ws->next : workspaces;
+		selmon = selws->mon;
+		selmon->ws = selws;
+	}
 	DETACH(ws, wws);
 	free(ws);
 }
@@ -665,7 +665,6 @@ void grabbuttons(Client *c, int focused)
 {
 	xcb_generic_error_t *e;
 	xcb_get_modifier_mapping_reply_t *m = NULL;
-	unsigned int mods[] = { 0, XCB_MOD_MASK_LOCK, 0, XCB_MOD_MASK_LOCK };
 
 	lockmask = 0;
 	if ((m = xcb_get_modifier_mapping_reply(con, xcb_get_modifier_mapping(con), &e))) {
@@ -684,22 +683,22 @@ void grabbuttons(Client *c, int focused)
 	}
 	free(m);
 
-	mods[2] |= lockmask, mods[3] |= lockmask;
 	xcb_ungrab_button(con, XCB_BUTTON_INDEX_ANY, c->win, XCB_BUTTON_MASK_ANY);
-	if (!focused)
-		xcb_grab_button(con, 0, c->win,
-				XCB_EVENT_MASK_BUTTON_PRESS,
-				XCB_GRAB_MODE_SYNC, XCB_GRAB_MODE_SYNC, XCB_NONE, XCB_NONE,
-				XCB_BUTTON_INDEX_ANY, XCB_BUTTON_MASK_ANY);
-	else for (unsigned int i = 0; i < LEN(mods); i++) {
-		xcb_grab_button(con, 0, c->win,
-				XCB_EVENT_MASK_BUTTON_PRESS,
-				XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_SYNC, XCB_NONE, XCB_NONE,
-				mousemove, mousemod | mods[i]);
-		xcb_grab_button(con, 0, c->win,
-				XCB_EVENT_MASK_BUTTON_PRESS,
-				XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_SYNC, XCB_NONE, XCB_NONE,
-				mouseresize, mousemod | mods[i]);
+	xcb_grab_button(con, 0, c->win,
+			XCB_EVENT_MASK_BUTTON_PRESS, XCB_GRAB_MODE_SYNC, XCB_GRAB_MODE_SYNC,
+			XCB_NONE, XCB_NONE, XCB_BUTTON_INDEX_ANY, XCB_BUTTON_MASK_ANY);
+	if (focused) {
+		unsigned int mods[] = { 0, XCB_MOD_MASK_LOCK, lockmask, lockmask | XCB_MOD_MASK_LOCK };
+		for (unsigned int i = 0; i < LEN(mods); i++) {
+			xcb_grab_button(con, 0, c->win,
+					XCB_EVENT_MASK_BUTTON_PRESS,
+					XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_SYNC, XCB_NONE, XCB_NONE,
+					mousemove, mousemod | mods[i]);
+			xcb_grab_button(con, 0, c->win,
+					XCB_EVENT_MASK_BUTTON_PRESS,
+					XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_SYNC, XCB_NONE, XCB_NONE,
+					mouseresize, mousemod | mods[i]);
+		}
 	}
 }
 
@@ -2029,7 +2028,6 @@ xcb_window_t wintrans(xcb_window_t win)
 	return w;
 }
 
-
 #ifdef FUNCDEBUG
 void __cyg_profile_func_enter(void *fn, void *caller)
 {
@@ -2073,4 +2071,3 @@ void __cyg_profile_func_exit(void *fn, void *caller)
 		fprintf(stderr, " :: (%p)\n", caller);
 }
 #endif
-

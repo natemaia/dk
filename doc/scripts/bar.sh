@@ -11,7 +11,7 @@ underline=3
 seperator="┃"
 
 # xfonts
-font0="-*-terminus-medium-r-normal--*-240-*-*-*-*-iso10646-1"
+font0="-xos4-terminus-medium-r-normal--24-240-72-72-c-120-iso10646-1"
 font1=""
 font2=""
 font3=""

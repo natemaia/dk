@@ -45,15 +45,15 @@ void buttonpress(xcb_generic_event_t *ev)
 	xcb_button_press_event_t *e = (xcb_button_press_event_t *)ev;
 
 	if (!(c = wintoclient(e->event))) return;
-	focus(c);
-	restack(c->ws);
-	xcb_allow_events(con, XCB_ALLOW_REPLAY_POINTER, XCB_CURRENT_TIME);
+	if (c != selws->sel) focus(c);
+	if (FLOATING(c)) setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+	xcb_allow_events(con, XCB_ALLOW_REPLAY_POINTER, e->time);
 	if ((e->state & ~(lockmask | XCB_MOD_MASK_LOCK)) == (mousemod & ~(lockmask | XCB_MOD_MASK_LOCK))
 			&& (e->detail == mousemove || e->detail == mouseresize))
 	{
 		if (FULLSCREEN(c) || ((c->state & STATE_FIXED) && e->detail != mousemove))
 			return;
-		DBG("buttonpress: grabbing pointer for %s - 0x%08x", e->detail == mousemove ? "move" : "resize", e->event)
+		DBG("buttonpress: %s - 0x%08x", e->detail == mousemove ? "move" : "resize", e->event)
 		xcb_grab_pointer_reply_t *p;
 		pc = xcb_grab_pointer(con, 0, root, XCB_EVENT_MASK_BUTTON_RELEASE
 				| XCB_EVENT_MASK_BUTTON_MOTION | XCB_EVENT_MASK_POINTER_MOTION,
@@ -263,8 +263,9 @@ void mappingnotify(xcb_generic_event_t *ev)
 {
 	xcb_mapping_notify_event_t *e = (xcb_mapping_notify_event_t *)ev;
 
-	if (e->request == XCB_MAPPING_KEYBOARD || e->request == XCB_MAPPING_MODIFIER)
+	if (e->request == XCB_MAPPING_KEYBOARD || e->request == XCB_MAPPING_MODIFIER) {
 		xcb_refresh_keyboard_mapping(keysyms, e);
+	}
 }
 
 void maprequest(xcb_generic_event_t *ev)
@@ -476,8 +477,9 @@ void propertynotify(xcb_generic_event_t *ev)
 		default:
 			if (e->atom == XCB_ATOM_WM_NAME || e->atom == netatom[NET_WM_NAME]) {
 				if (clientname(c)) printstatus(NULL);
-			} else if (e->atom == netatom[NET_WM_TYPE])
+			} else if (e->atom == netatom[NET_WM_TYPE]) {
 				clienttype(c);
+			}
 			break;
 		}
 	} else if ((e->atom == netatom[NET_WM_STRUTP] || e->atom == netatom[NET_WM_STRUT])

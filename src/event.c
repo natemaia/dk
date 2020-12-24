@@ -263,9 +263,8 @@ void mappingnotify(xcb_generic_event_t *ev)
 {
 	xcb_mapping_notify_event_t *e = (xcb_mapping_notify_event_t *)ev;
 
-	if (e->request == XCB_MAPPING_KEYBOARD || e->request == XCB_MAPPING_MODIFIER) {
+	if (e->request == XCB_MAPPING_KEYBOARD || e->request == XCB_MAPPING_MODIFIER)
 		xcb_refresh_keyboard_mapping(keysyms, e);
-	}
 }
 
 void maprequest(xcb_generic_event_t *ev)
@@ -450,12 +449,12 @@ void propertynotify(xcb_generic_event_t *ev)
 #ifdef DEBUG
 	for (unsigned int i = 0; i < LEN(netatom); i++)
 		if (netatom[i] == e->atom) {
-			DBG("propertynotify: atom: %s - 0x%08x", netatoms[i], e->window)
+			DBG("propertynotify: atom: %s - 0x%08x%s", netatoms[i], e->window, e->window == root ? " (root)" : "")
 			break;
 		}
 	for (unsigned int i = 0; i < LEN(wmatom); i++)
 		if (wmatom[i] == e->atom) {
-			DBG("propertynotify: atom: %s - 0x%08x", wmatoms[i], e->window)
+			DBG("propertynotify: atom: %s - 0x%08x%s", wmatoms[i], e->window, e->window == root ? " (root)" : "")
 			break;
 		}
 #endif
@@ -495,8 +494,7 @@ void unmapnotify(xcb_generic_event_t *ev)
 	xcb_generic_error_t *er;
 	xcb_unmap_notify_event_t *e = (xcb_unmap_notify_event_t *)ev;
 
-	if (e->event == root)
-		return;
+	if (e->event == root) return;
 	free(xcb_query_tree_reply(con, xcb_query_tree(con, e->window), &er));
 	if (er) {
 		free(er);

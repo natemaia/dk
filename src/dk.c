@@ -82,6 +82,7 @@ const char *directionopts[] = {
 	[DIR_NEXT]   = "next",   [DIR_PREV]   = "prev", [DIR_LAST] = "last",
 	[DIR_NEXTNE] = "nextne", [DIR_PREVNE] = "prevne",
 };
+
 const char *netatoms[] = {
 	[NET_ACTIVE]      = "_NET_ACTIVE_WINDOW",
 	[NET_CLIENTS]     = "_NET_CLIENT_LIST",
@@ -97,7 +98,11 @@ const char *netatoms[] = {
 	[NET_TYPE_DESK]   = "_NET_WM_WINDOW_TYPE_DESKTOP",
 	[NET_TYPE_DIALOG] = "_NET_WM_WINDOW_TYPE_DIALOG",
 	[NET_TYPE_DOCK]   = "_NET_WM_WINDOW_TYPE_DOCK",
+	[NET_TYPE_MENU]   = "_NET_WM_WINDOW_TYPE_MENU",
+	[NET_TYPE_NORMAL] = "_NET_WM_WINDOW_TYPE_NORMAL",
 	[NET_TYPE_SPLASH] = "_NET_WM_WINDOW_TYPE_SPLASH",
+	[NET_TYPE_TOOL]   = "_NET_WM_WINDOW_TYPE_TOOLBAR",
+	[NET_TYPE_UTIL]   = "_NET_WM_WINDOW_TYPE_UTILITY",
 	[NET_WM_CHECK]    = "_NET_SUPPORTING_WM_CHECK",
 	[NET_WM_DESK]     = "_NET_WM_DESKTOP",
 	[NET_WM_NAME]     = "_NET_WM_NAME",
@@ -449,7 +454,8 @@ void clienttype(Client *c)
 
 	if (winprop(c->win, netatom[NET_WM_STATE], &state) && state == netatom[NET_STATE_FULL])
 		setfullscreen(c, 1);
-	if ((winprop(c->win, netatom[NET_WM_TYPE], &type) && type == netatom[NET_TYPE_DIALOG])
+	if ((winprop(c->win, netatom[NET_WM_TYPE], &type) && (type == netatom[NET_TYPE_DIALOG]
+					|| type == netatom[NET_TYPE_UTIL] || type == netatom[NET_TYPE_TOOL]))
 			|| c->trans || (c->trans = wintoclient(wintrans(c->win))))
 		c->state |= STATE_FLOATING;
 }
@@ -1375,22 +1381,20 @@ int refresh(void)
 	Monitor *m;
 	Workspace *ws;
 
-#define MAP(v, list)                         \
-	do {                                     \
-		FOR_EACH(v, list)                    \
+#define MAP(v, list)                     \
+	FOR_EACH(v, list)                    \
 		if (v->state & STATE_NEEDSMAP) { \
 			v->state &= ~STATE_NEEDSMAP; \
 			xcb_map_window(con, v->win); \
 		}                                \
-	} while (0)
 
-	MAP(p, panels);
-	MAP(d, desks);
+	MAP(p, panels)
+	MAP(d, desks)
 	FOR_EACH(ws, workspaces) {
 		showhide(ws->stack);
 		if (ws == ws->mon->ws && ws->layout->func)
 			ws->layout->func(ws);
-		MAP(c, ws->clients);
+		MAP(c, ws->clients)
 	}
 	focus(NULL);
 	for (m = nextmon(monitors); m; m = nextmon(m->next))

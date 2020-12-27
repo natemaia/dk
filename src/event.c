@@ -261,10 +261,15 @@ void ignore(uint8_t type)
 
 void mappingnotify(xcb_generic_event_t *ev)
 {
+	Client *c;
+	Workspace *ws;
 	xcb_mapping_notify_event_t *e = (xcb_mapping_notify_event_t *)ev;
 
-	if (e->request == XCB_MAPPING_KEYBOARD || e->request == XCB_MAPPING_MODIFIER)
+	if (e->request == XCB_MAPPING_KEYBOARD || e->request == XCB_MAPPING_MODIFIER) {
 		xcb_refresh_keyboard_mapping(keysyms, e);
+		FOR_CLIENTS(c, ws)
+			grabbuttons(c);
+	}
 }
 
 void maprequest(xcb_generic_event_t *ev)

@@ -360,7 +360,7 @@ void freerule(Rule *r);
 void freestatus(Status *s);
 void freewm(void);
 void freews(Workspace *ws);
-void grabbuttons(Client *c, int focused);
+void grabbuttons(Client *c);
 void gravitate(Client *c, int horz, int vert, int matchgap);
 int iferr(int lvl, char *msg, xcb_generic_error_t *e);
 Rule *initrule(Rule *wr);

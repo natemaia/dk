@@ -293,6 +293,7 @@ int cmdfocus(char **argv)
 	if (FULLSCREEN(c) || !c->ws->clients->next) return nparsed;
 	if (c != selws->sel) {
 		focus(c);
+		if (FLOATING(c)) setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 		return nparsed;
 	}
 	if ((opt = parseopt(*argv, directionopts)) < 0 && (i = parseint(*argv, NULL, 0)) == INT_MIN) {
@@ -300,26 +301,22 @@ int cmdfocus(char **argv)
 		return -1;
 	}
 	nparsed++;
-	if (opt == DIR_LAST) {
-		focus(c->snext);
-	} else {
-		int direction = opt == -1 ? i : opt == DIR_NEXT ? 1 : -1;
-		while (direction) {
-			if (direction > 0) {
-				c = selws->sel->next ? selws->sel->next : selws->clients;
-				direction--;
-			} else {
-				FIND_PREV(c, selws->sel, selws->clients);
-				direction++;
-			}
-			if (c) {
-				focus(c);
-				restack(c->ws);
-			}
-			xcb_aux_sync(con);
-			ignore(XCB_ENTER_NOTIFY);
+	int direction = opt == -1 ? i : opt == DIR_NEXT ? 1 : -1;
+	while (direction) {
+		if (direction > 0) {
+			c = selws->sel->next ? selws->sel->next : selws->clients;
+			direction--;
+		} else {
+			FIND_PREV(c, selws->sel, selws->clients);
+			direction++;
+		}
+		if (c) {
+			focus(c);
+			if (FLOATING(c)) setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 		}
 	}
+	xcb_aux_sync(con);
+	ignore(XCB_ENTER_NOTIFY);
 	return nparsed;
 }
 
@@ -417,6 +414,8 @@ int cmdmors(char **argv)
 int cmdmouse(char **argv)
 {
 	int arg, nparsed = 0;
+	xcb_mod_mask_t oldmod = mousemod;
+	xcb_button_t oldmove = mousemove, oldresize = mouseresize;
 
 	while (*argv) {
 		if (!strcmp("mod", *argv)) {
@@ -451,8 +450,9 @@ badvalue:
 		argv++;
 		nparsed++;
 	}
-	if (selws->sel)
-		grabbuttons(selws->sel, 1);
+	if (selws && selws->sel && (oldmove != mousemove
+				|| oldresize != mouseresize || oldmod != mousemod))
+		grabbuttons(selws->sel);
 	return nparsed;
 }
 

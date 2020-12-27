@@ -6,9 +6,9 @@ VERSION = 1.1
 # install paths
 VPATH   = src
 PREFIX ?= /usr/local
-MAN    ?= ${PREFIX}/share/man
-DOC    ?= ${PREFIX}/share/doc
-SES    ?= /usr/share/xsessions
+MAN     = ${PREFIX}/share/man
+DOC     = ${PREFIX}/share/doc
+SES     = /usr/share/xsessions
 
 # source and object files
 SRC  = dk.c cmd.c event.c layout.c parse.c strl.c util.c

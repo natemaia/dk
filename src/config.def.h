@@ -100,7 +100,7 @@ int tstack(Workspace *ws)
 		mh = ws->nmaster ? (ws->msplit * wh) - (g / 2) : 0;
 		sw = (ww - g) / (n - ws->nmaster);
 	} else {
-		mh = wh;
+		mh = wh - g;
 		sw = ww;
 	}
 

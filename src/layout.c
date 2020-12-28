@@ -79,8 +79,7 @@ int fib(Workspace *ws, int out)
 			f = 1;
 			ret = -1;
 		}
-		resizehint(c, x + g, y + g, w - (2 * b) - (n > 1 ? g : (2 * g)),
-				h - (2 * b) - (n > 1 ? g : (2 * g)), b, 0, 0);
+		resizehint(c, x + g, y + g, w - (2 * b) - g, h - (2 * b) - g, b, 0, 0);
 	}
 	xcb_aux_sync(con);
 	return ret;

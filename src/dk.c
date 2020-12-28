@@ -784,6 +784,8 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	c->old_state = STATE_NONE;
 	c->trans = wintoclient(wintrans(c->win));
 
+	DBG("initclient: initial size: %d, %d - %dx%d", c->x, c->y, c->w, c->h)
+
 	if (!xcb_icccm_get_wm_class_reply(con, xcb_icccm_get_wm_class(con, c->win), &p, &e)) {
 		iferr(0, "failed to get window class", e);
 		strlcpy(c->class, "broken", sizeof(c->class));
@@ -820,6 +822,7 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 							| XCB_EVENT_MASK_PROPERTY_CHANGE
 							| XCB_EVENT_MASK_STRUCTURE_NOTIFY });
 	grabbuttons(c);
+	DBG("initclient: mid size: %d, %d - %dx%d", c->x, c->y, c->w, c->h)
 	if (FLOATING(c) || c->state & STATE_FIXED) {
 		c->w = CLAMP(c->w, globalcfg[GLB_MIN_WH].val, c->ws->mon->ww);
 		c->h = CLAMP(c->h, globalcfg[GLB_MIN_WH].val, c->ws->mon->wh);
@@ -829,9 +832,11 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		}
 		c->x = CLAMP(c->x, c->ws->mon->wx, c->ws->mon->wx + c->ws->mon->ww - W(c));
 		c->y = CLAMP(c->y, c->ws->mon->wy, c->ws->mon->wy + c->ws->mon->wh - H(c));
+		DBG("initclient: floating mid size: %d, %d - %dx%d", c->x, c->y, c->w, c->h)
 		if (c->x == c->ws->mon->wx && c->y == c->ws->mon->wy)
 			quadrant(c, &c->x, &c->y, &c->w, &c->h);
 	}
+	DBG("initclient: final size: %d, %d - %dx%d", c->x, c->y, c->w, c->h)
 	if (c->cb) c->cb->func(c, 0);
 }
 
@@ -1354,22 +1359,24 @@ void quadrant(Client *c, int *x, int *y, int *w, int *h)
 	}
 	FOR_EACH(t, c->ws->clients)
 		if (FLOATING(t) && t != c)
-			for (i = 0; i < LEN(q); i++)
-				if (q[i][0] && (t->x >= q[i][1] && t->y >= q[i][2]
-							&& t->x < q[i][1] + tw && t->y < q[i][2] + th))
-				{
+			for (i = 0; i < LEN(q); i++) {
+				int cx = t->x + (t->w / 2), cy = t->y + (t->h / 2);
+				if (!q[i][0]) continue;
+				if ((cx > q[i][1] && cy > q[i][2] && cx < q[i][1] + tw && cy < q[i][2] + th)) {
 					q[i][0] = 0;
 					break;
 				}
+			}
 	for (i = 0; i < LEN(q); i++)
-		if (q[i][0])
-			break;
+		if (q[i][0]) break;
 	if (i == LEN(q)) {
 		i = index;
 		index = (index + 1) % LEN(q);
 	}
 	*x = q[i][1] + (((*w - tw) * -1) / 2);
 	*y = q[i][2] + (((*h - th) * -1) / 2);
+	*x = CLAMP(*x, m->wx, m->wx + m->ww - (*w + (2 * c->bw)));
+	*y = CLAMP(*y, m->wy, m->wy + m->wh - (*h + (2 * c->bw)));
 }
 
 int refresh(void)

@@ -380,8 +380,16 @@ int cmdlayout(char **argv)
 {
 	for (unsigned int i = 0; layouts[i].name; i++)
 		if (!strcmp(layouts[i].name, *argv)) {
-			if (&layouts[i] != setws->layout)
-				setws->layout = &layouts[i];
+			if (&layouts[i] != setws->layout && (setws->layout = &layouts[i])->func == NULL) {
+				Client *c = setws->clients;
+				if (c->x == c->ws->mon->wx && c->y == c->ws->mon->wy
+						&& c->w == c->ws->mon->ww && c->h == c->ws->mon->wh)
+				{
+					c->w = c->ws->mon->ww / 1.5;
+					c->h = c->ws->mon->wh / 1.3;
+					gravitate(c, GRAV_CENTER, GRAV_CENTER, 0);
+				}
+			}
 			return 1;
 		}
 	respond(cmdresp, "!invalid layout name: %s", *argv);

@@ -155,7 +155,7 @@ int spiral(Workspace *ws)
 	return fib(ws, 0);
 }
 
-int tile(Workspace *ws, int left)
+int tile(Workspace *ws, int right)
 {
 	Client *c;
 	Monitor *m = ws->mon;
@@ -188,17 +188,17 @@ int tile(Workspace *ws, int left)
 	for (i = 0, my = sy = ssy = g, c = nexttiled(ws->clients); c; c = nexttiled(c->next), ++i) {
 		if (i < ws->nmaster) {
 			remain = MIN(n, ws->nmaster) - i;
-			x = left ? sw + ssw + (g / ns) : g;
+			x = right ? sw + ssw + (g / ns) : g;
 			y = &my;
 			geo[i][2] = mw - g * (5 - ns) / 2;
 		} else if (i - ws->nmaster < ws->nstack) {
 			remain = MIN(n - ws->nmaster, ws->nstack) - (i - ws->nmaster);
-			x = left ? ssw + (g / ns) : mw + (g / ns);
+			x = right ? ssw + (n > ws->nmaster + ws->nstack ? g / ns : g) : mw + (g / ns);
 			y = &sy;
 			geo[i][2] = sw - g * (5 - ns - ss) / 2;
 		} else {
 			remain = n - i;
-			x = left ? g : mw + sw + (g / ns);
+			x = right ? g : mw + sw + (g / ns);
 			y = &ssy;
 			geo[i][2] = ssw - g * (5 - ns) / 2;
 		}

@@ -795,7 +795,10 @@ int cmdset(char **argv)
 			argv++, nparsed++;
 			if (!argv) goto badvalue;
 			if (!strcmp("_", *argv)) {
+				setws = &wsdef;
+				wsdef.mon = selmon;
 				if ((i = cmdws_(argv + 1)) == -1) return -1;
+				setws = selws;
 				argv += i + 1, nparsed += i + 1;
 				continue;
 			} else if (!(ws = parsewsormon(*argv, 0))) {

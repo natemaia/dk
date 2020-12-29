@@ -1335,7 +1335,6 @@ void printstatus(Status *s)
 
 void quadrant(Client *c, int *x, int *y, int *w, int *h)
 {
-	Client *t;
 	Monitor *m = c->ws->mon;
 	static int index = 0;
 	static Workspace *ws = NULL;
@@ -1357,22 +1356,8 @@ void quadrant(Client *c, int *x, int *y, int *w, int *h)
 		ws = c->ws;
 		index = 0;
 	}
-	FOR_EACH(t, c->ws->clients)
-		if (FLOATING(t) && t != c)
-			for (i = 0; i < LEN(q); i++) {
-				int cx = t->x + (t->w / 2), cy = t->y + (t->h / 2);
-				if (!q[i][0]) continue;
-				if ((cx > q[i][1] && cy > q[i][2] && cx < q[i][1] + tw && cy < q[i][2] + th)) {
-					q[i][0] = 0;
-					break;
-				}
-			}
-	for (i = 0; i < LEN(q); i++)
-		if (q[i][0]) break;
-	if (i == LEN(q)) {
-		i = index;
-		index = (index + 1) % LEN(q);
-	}
+	i = index;
+	index = (index + 1) % LEN(q);
 	*x = q[i][1] + (((*w - tw) * -1) / 2);
 	*y = q[i][2] + (((*h - th) * -1) / 2);
 	*x = CLAMP(*x, m->wx, m->wx + m->ww - (*w + (2 * c->bw)));

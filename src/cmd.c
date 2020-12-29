@@ -380,9 +380,10 @@ int cmdlayout(char **argv)
 {
 	for (unsigned int i = 0; layouts[i].name; i++)
 		if (!strcmp(layouts[i].name, *argv)) {
+			Client *c = NULL;
+			if (tilecount(setws) == 1) c = nexttiled(setws->clients);
 			if (&layouts[i] != setws->layout && (setws->layout = &layouts[i])->func == NULL) {
-				Client *c = setws->clients;
-				if (c->x == c->ws->mon->wx && c->y == c->ws->mon->wy
+				if (c && c->x == c->ws->mon->wx && c->y == c->ws->mon->wy
 						&& c->w == c->ws->mon->ww && c->h == c->ws->mon->wh)
 				{
 					c->w = c->ws->mon->ww / 1.5;

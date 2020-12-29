@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
+#undef NAN
 
 #ifdef DEBUG
 #include <err.h>
@@ -38,17 +40,18 @@ int fib(Workspace *ws, int out)
 	if (!(n = tilecount(ws))) return 1;
 
 	g = globalcfg[GLB_SMART_GAP].val && n == 1 ? 0 : ws->gappx;
-	x = m->wx + ws->padl;
-	y = m->wy + ws->padt;
+	x = m->wx + ws->padl + g;
+	y = m->wy + ws->padt + g;
 	w = m->ww - ws->padl - ws->padr - g;
 	h = m->wh - ws->padt - ws->padb - g;
 
 	for (i = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), i++) {
-		unsigned int ox = x;
+		unsigned int ox = x, oy = y;
 		int *p = (i % 2) ? &h : &w;
 		int b = globalcfg[GLB_SMART_BORDER].val && n == 1 ? 0 : c->bw;
 		if (i < n - 1) {
-			*p /= 2;
+			double d = *p;
+			*p = ceil(d / 2.0); /* sometimes rounding errors can occur leaving 1px gaps */
 			if (!out) {
 				if (i % 4 == 2)
 					x += w;
@@ -64,22 +67,27 @@ int fib(Workspace *ws, int out)
 		}
 		if (!i) {
 			if (n > 1)
-				w = ((m->ww - ws->padl - ws->padr) * ws->msplit) - g;
-			y = m->wy - ws->padt;
+				w = ((m->ww - ws->padl - ws->padr) * ws->msplit);
+			y = m->wy + ws->padt + g;
 		} else if (i == 1) {
 			w = m->ww - ws->padl - ws->padr - w - g;
 		}
 		if (f || *p - (2 * b) - (n > 1 ? g : (2 * g)) < globalcfg[GLB_MIN_WH].val) {
 			*p *= 2;
-			x = (i % 2) ? x : ox;
+			if (!f) {
+				if (i % 2)
+					y = oy;
+				else
+					x = ox;
+			}
+			ret = -1;
 			if (f) {
 				popfloat(c);
 				continue;
 			}
 			f = 1;
-			ret = -1;
 		}
-		resizehint(c, x + g, y + g, w - (2 * b) - g, h - (2 * b) - g, b, 0, 0);
+		resizehint(c, x, y, w - (2 * b) - g, h - (2 * b) - g, b, 0, 0);
 	}
 	xcb_aux_sync(con);
 	return ret;

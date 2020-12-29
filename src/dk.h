@@ -24,10 +24,13 @@
 
 #define W(c) (c->w + (2 * c->bw))
 #define H(c) (c->h + (2 * c->bw))
-#define LEN(x) (sizeof(x) / sizeof(x[0]))
+#define LEN(x) (sizeof(x) / sizeof(*x))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define CLAMP(x, min, max) (MIN(MAX((x), (min)), (max)))
+
+#define OVERLAP(a0, a1, b0, b1) (MIN(a0, a1) <= MAX(b0, b1) && MIN(b0, b1) <= MAX(a0, a1))
+#define INRECT(x, y, w, h, ox, oy, ow, oh) (OVERLAP(x, x + w, ox, ox + ow) && OVERLAP(y, y + h, oy, oy + oh))
 
 #define ISTILE(ws) (ws->layout->func == ltile || ws->layout->func == rtile)
 

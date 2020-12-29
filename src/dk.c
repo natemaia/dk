@@ -75,15 +75,10 @@ const char *wmatoms[] = {
 	[WM_MOTIF]  = "_MOTIF_WM_HINTS",  [WM_PROTO]   = "WM_PROTOCOLS",
 	[WM_STATE]  = "WM_STATE",         [WM_UTF8STR] = "UTF8_STRING",
 };
-const char *cursors[] = {
-	/* see: https://tronche.com/gui/x/xlib/appendix/b/ */
-	[CURS_MOVE] = "fleur", [CURS_NORMAL] = "left_ptr", [CURS_RESIZE] = "sizing",
-};
 const char *directionopts[] = {
 	[DIR_NEXT]   = "next",   [DIR_PREV]   = "prev", [DIR_LAST] = "last",
 	[DIR_NEXTNE] = "nextne", [DIR_PREVNE] = "prevne",
 };
-
 const char *netatoms[] = {
 	[NET_ACTIVE]      = "_NET_ACTIVE_WINDOW",
 	[NET_CLIENTS]     = "_NET_CLIENT_LIST",

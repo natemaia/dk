@@ -36,6 +36,12 @@ xcb_mod_mask_t mousemod = XCB_MOD_MASK_1;
 xcb_button_t mousemove = XCB_BUTTON_INDEX_1;
 xcb_button_t mouseresize = XCB_BUTTON_INDEX_3;
 
+const char *cursors[] = {
+	/* see: https://tronche.com/gui/x/xlib/appendix/b/ */
+	[CURS_MOVE] = "fleur",
+	[CURS_NORMAL] = "left_ptr",
+	[CURS_RESIZE] = "sizing",
+};
 
 void albumart(Client *c, int closed)
 {

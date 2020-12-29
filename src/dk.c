@@ -76,7 +76,8 @@ const char *wmatoms[] = {
 	[WM_STATE]  = "WM_STATE",         [WM_UTF8STR] = "UTF8_STRING",
 };
 const char *cursors[] = {
-	[CURS_MOVE] = "fleur", [CURS_NORMAL] = "arrow", [CURS_RESIZE] = "sizing",
+	/* see: https://tronche.com/gui/x/xlib/appendix/b/ */
+	[CURS_MOVE] = "fleur", [CURS_NORMAL] = "left_ptr", [CURS_RESIZE] = "sizing",
 };
 const char *directionopts[] = {
 	[DIR_NEXT]   = "next",   [DIR_PREV]   = "prev", [DIR_LAST] = "last",

@@ -192,6 +192,8 @@ int tile(Workspace *ws, int right)
 		sw = (ww - mw) * ws->ssplit;
 	if (n - ws->nmaster > ws->nstack)
 		ss = 1, ssw = ww - mw - sw;
+	if (!ws->nmaster)
+		ss = 0;
 
 	for (i = 0, my = sy = ssy = g, c = nexttiled(ws->clients); c; c = nexttiled(c->next), ++i) {
 		if (i < ws->nmaster) {
@@ -201,14 +203,19 @@ int tile(Workspace *ws, int right)
 			geo[i][2] = mw - g * (5 - ns) / 2;
 		} else if (i - ws->nmaster < ws->nstack) {
 			remain = MIN(n - ws->nmaster, ws->nstack) - (i - ws->nmaster);
-			x = right ? ssw + (n > ws->nmaster + ws->nstack ? g / ns : g) : mw + (g / ns);
+			if (right && n <= ws->nmaster + ws->nstack)
+				x = g;
+			else
+				x = right ? (ssw + g / ns) - (!ws->nmaster ? g / 2 : 0) : mw + (g / ns);
 			y = &sy;
-			geo[i][2] = sw - g * (5 - ns - ss) / 2;
+			geo[i][2] = (sw - g * (5 - ns - ss) / 2) + (!ws->nmaster ? g / 2 : 0);
 		} else {
 			remain = n - i;
-			x = right ? g : mw + sw + (g / ns);
+			x = right ? g : mw + sw + (g / ns) - (!ws->nmaster ? g / 2 : 0);
 			y = &ssy;
 			geo[i][2] = ssw - g * (5 - ns) / 2;
+			if (right && !ws->nmaster)
+				geo[i][2] += g / 2;
 		}
 		geo[i][0] = wx + x;
 		geo[i][1] = wy + *y;

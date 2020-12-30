@@ -152,12 +152,13 @@ int ltile(Workspace *ws)
 			remain = MIN(n - ws->nmaster, ws->nstack) - (i - ws->nmaster);
 			x = mw + (g / ns);
 			y = &sy;
-			geo[i][2] = (sw - g * (5 - ns - ss) / 2) + (!ws->nmaster ? g / 2 : 0);
+			geo[i][2] = (sw - g * (5 - ns - ss) / 2)
+				+ (!ws->nmaster && n > ws->nmaster + ws->nstack ? g / 2 : 0);
 		} else {
 			remain = n - i;
 			x = mw + sw + (g / ns) - (!ws->nmaster ? g / 2 : 0);
 			y = &ssy;
-			geo[i][2] = ssw - g * (5 - ns) / 2;
+			geo[i][2] = (ssw - g * (5 - ns) / 2) + (!ws->nmaster ? g / 2 : 0);
 		}
 		geo[i][0] = wx + x;
 		geo[i][1] = wy + *y;
@@ -276,9 +277,12 @@ int rtile(Workspace *ws)
 			geo[i][2] = mw - g * (5 - ns) / 2;
 		} else if (i - ws->nmaster < ws->nstack) {
 			remain = MIN(n - ws->nmaster, ws->nstack) - (i - ws->nmaster);
-			x = n <= ws->nmaster + ws->nstack ? g : (ssw + g / ns) - (!ws->nmaster ? g / 2 : 0);
+			x = n <= ws->nmaster + ws->nstack
+				? g
+				: (ssw + g / ns) - (!ws->nmaster && n > ws->nmaster + ws->nstack ? g / 2 : 0);
 			y = &sy;
-			geo[i][2] = (sw - g * (5 - ns - ss) / 2) + (!ws->nmaster ? g / 2 : 0);
+			geo[i][2] = (sw - g * (5 - ns - ss) / 2)
+				+ (!ws->nmaster && n > ws->nmaster + ws->nstack ? g / 2 : 0);
 		} else {
 			remain = n - i;
 			x = g;

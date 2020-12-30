@@ -51,7 +51,7 @@ int dwindle(Workspace *ws)
 		case 3: x += w; break;
 		}
 		if (!i) {
-			if (n > 1) w = (ww * ws->msplit) - g / 2;
+			w = n > 1 ? (ww * ws->msplit) - g / 2 : ww - g;
 			h -= g;
 			y = m->wy + ws->padt;
 		} else if (i == 1) {
@@ -379,7 +379,7 @@ int spiral(Workspace *ws)
 		case 3: x -= w; break;
 		}
 		if (!i) {
-			if (n > 1) w = (ww * ws->msplit) - g / 2;
+			w = n > 1 ? (ww * ws->msplit) - g / 2 : ww - g;
 			h -= g;
 			y = m->wy + ws->padt;
 		} else if (i == 1) {

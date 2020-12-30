@@ -383,9 +383,7 @@ int cmdlayout(char **argv)
 			Client *c = NULL;
 			if (tilecount(setws) == 1) c = nexttiled(setws->clients);
 			if (&layouts[i] != setws->layout && (setws->layout = &layouts[i])->func == NULL) {
-				if (c && c->x == c->ws->mon->wx && c->y == c->ws->mon->wy
-						&& c->w == c->ws->mon->ww && c->h == c->ws->mon->wh)
-				{
+				if (c) {
 					c->w = c->ws->mon->ww / 1.5;
 					c->h = c->ws->mon->wh / 1.3;
 					gravitate(c, GRAV_CENTER, GRAV_CENTER, 0);

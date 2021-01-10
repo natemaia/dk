@@ -808,7 +808,8 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	/* apply rules and set the client's workspace, when focus_open is false
 	 * the new client is attached to the end of the stack, otherwise the head
 	 * later in refresh(), focus(NULL) is called to focus the right client */
-	clientrule(c, NULL, !globalcfg[GLB_FOCUS_OPEN].val);
+	clientrule(c, NULL, !globalcfg[GLB_FOCUS_OPEN].val || (selws->sel && selws->sel->state & STATE_FULLSCREEN
+				&& selws->sel->w == selws->mon->w && selws->sel->h == selws->mon->h));
 	clienttype(c);
 	clienthints(c);
 	sizehints(c, 1);

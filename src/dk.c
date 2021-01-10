@@ -1956,39 +1956,37 @@ void updworkspaces(int needed)
 xcb_get_window_attributes_reply_t *winattr(xcb_window_t win)
 {
 	xcb_generic_error_t *e;
-	xcb_get_window_attributes_cookie_t wc;
 	xcb_get_window_attributes_reply_t *wa = NULL;
 
-	GET(win, wa, wc, e, "attributes", window_attributes);
+	GET(win, wa, e, "attributes", window_attributes);
 	return wa;
 }
 
 xcb_get_geometry_reply_t *wingeom(xcb_window_t win)
 {
 	xcb_generic_error_t *e;
-	xcb_get_geometry_cookie_t gc;
 	xcb_get_geometry_reply_t *g = NULL;
 
-	GET(win, g, gc, e, "geometry", geometry);
+	GET(win, g, e, "geometry", geometry);
 	return g;
 }
 
 int winprop(xcb_window_t win, xcb_atom_t prop, xcb_atom_t *ret)
 {
-	int i = 0;
 	xcb_generic_error_t *e;
 	xcb_get_property_cookie_t c;
 	xcb_get_property_reply_t *r = NULL;
 
 	c = xcb_get_property(con, 0, win, prop, XCB_ATOM_ANY, 0, 1);
 	if ((r = xcb_get_property_reply(con, c, &e)) && xcb_get_property_value_length(r)) {
-		i = 1;
 		*ret = *(xcb_atom_t *)xcb_get_property_value(r);
+		free(r);
+		return 1;
 	} else {
 		iferr(0, "unable to get window property reply", e);
 	}
 	free(r);
-	return i;
+	return 0;
 }
 
 Client *wintoclient(xcb_window_t win)

@@ -6,9 +6,9 @@ VERSION = 1.1
 # install paths
 VPATH   = src
 PREFIX ?= /usr/local
-MAN     = ${PREFIX}/share/man
-DOC     = ${PREFIX}/share/doc
-SES     = /usr/share/xsessions
+MAN    ?= ${PREFIX}/share/man
+DOC    ?= ${PREFIX}/share/doc/dk
+SES    ?= /usr/share/xsessions
 
 # source and object files
 SRC  = dk.c cmd.c event.c layout.c parse.c strl.c util.c
@@ -22,19 +22,19 @@ OPTLVL = -O2
 
 CPPFLAGS += -D_DEFAULT_SOURCE -D_BSD_SOURCE -DVERSION=\"${VERSION}\"
 CFLAGS   += -flto -std=c99 -pedantic -Wall -Wextra -I/usr/X11R6/include
-LDFLAGS   = -flto -L/usr/X11R6/lib -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
+LDFLAGS  += -flto -L/usr/X11R6/lib -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
 
 all: dk dkcmd
 
 debug: CPPFLAGS += -DDEBUG
 debug: all
 
-fdebug: CFLAGS += -finstrument-functions -export-dynamic
-fdebug: LDFLAGS += -ldl -Wl,--export-dynamic
+fdebug: CFLAGS   += -finstrument-functions -export-dynamic
+fdebug: LDFLAGS  += -ldl -Wl,--export-dynamic
 fdebug: CPPFLAGS += -DFUNCDEBUG
 fdebug: debug
 
-leak: OPTLVL = -Og
+leak: OPTLVL  = -Og
 leak: CFLAGS += -ggdb3
 leak: all
 
@@ -56,18 +56,18 @@ clean:
 	rm -f *.o dk dkcmd
 
 install: all
-	mkdir -p ${DESTDIR}${PREFIX}/bin ${DESTDIR}${SES} ${DESTDIR}${MAN}/man1 ${DESTDIR}${DOC}/dk
+	mkdir -p ${DESTDIR}${PREFIX}/bin ${DESTDIR}${SES} ${DESTDIR}${MAN}/man1 ${DESTDIR}${DOC}
 	install -Dm755 dk dkcmd ${DESTDIR}${PREFIX}/bin/
 	sed "s/VERSION/${VERSION}/g" man/dk.1 > ${DESTDIR}${MAN}/man1/dk.1
 	cp -rfp man/dkcmd.1 ${DESTDIR}${MAN}/man1/dkcmd.1
 	chmod 644 ${DESTDIR}${MAN}/man1/dk.1 ${DESTDIR}${MAN}/man1/dkcmd.1
-	cp -rf doc/* ${DESTDIR}${DOC}/dk
+	cp -rf doc/* ${DESTDIR}${DOC}
 	install -Dm644 dk.desktop ${DESTDIR}${SES}/
 
 uninstall:
 	rm -f ${DESTDIR}${PREFIX}/bin/dk ${DESTDIR}${PREFIX}/bin/dkcmd
 	rm -f ${DESTDIR}${MAN}/man1/dk.1 ${DESTDIR}${MAN}/man1/dkcmd.1
-	rm -rf ${DESTDIR}${DOC}/dk
+	rm -rf ${DESTDIR}${DOC}
 	rm -f ${DESTDIR}${SES}/dk.desktop
 
 .PHONY: all debug fdebug leak clean install uninstall

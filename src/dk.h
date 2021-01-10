@@ -7,19 +7,21 @@
 #pragma once
 
 #ifdef DEBUG
-#define DBG(fmt, ...)  warnx("%d: " fmt, __LINE__, ##__VA_ARGS__);
+	#define DBG(fmt, ...)  warnx("%d: " fmt, __LINE__, ##__VA_ARGS__);
 #else
-#define DBG(fmt, ...)
+	#define DBG(fmt, ...)
 #endif
 
 #ifndef VERSION
-#define VERSION "1.0"
+	#define VERSION "1.0"
 #endif
 
-#if __GNUC_PREREQ (3, 3)
-#define NAN (__builtin_nanf(""))
-#else
-#define NAN (0.0f / 0.0f)
+#ifndef NAN
+	#if __GNUC_PREREQ (3, 3)
+		#define NAN (__builtin_nanf(""))
+	#else
+		#define NAN (0.0f / 0.0f)
+	#endif
 #endif
 
 #define W(c) (c->w + (2 * c->bw))
@@ -49,23 +51,16 @@
 	return NULL
 
 #define ATTACH(v, list) do { v->next = list; list = v; } while (0)
-#define DETACH(v, listptr)                    \
-	do {                                      \
-		while (*(listptr) && *(listptr) != v) \
-			(listptr) = &(*(listptr))->next;  \
-		*(listptr) = v->next;                 \
-	} while (0)
+#define DETACH(v, listptr)                                                 \
+	while (*(listptr) && *(listptr) != v) (listptr) = &(*(listptr))->next; \
+	*(listptr) = v->next
 
 #define PROP(mode, win, atom, type, membsize, nmemb, value) \
 	xcb_change_property(con, XCB_PROP_MODE_##mode, win, atom, type, (membsize), (nmemb), value)
-#define GET(win, val, vc, error, type, functtype)                       \
-	do {                                                                \
-		if (win != XCB_WINDOW_NONE && win != root) {                    \
-			vc = xcb_get_##functtype(con, win);                         \
-			if (!(val = xcb_get_##functtype##_reply(con, vc, &error)))  \
-				iferr(0, "unable to get window " type " reply", error); \
-		}                                                               \
-	} while (0)
+#define GET(win, val, error, type, functtype)                                             \
+		if (win == XCB_WINDOW_NONE || win == root) return val;                                \
+		if (!(val = xcb_get_##functtype##_reply(con, xcb_get_##functtype(con, win), &error))) \
+			iferr(0, "unable to get window " type " reply", error)
 
 #define MOVE(win, x, y)                                                       \
 	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, \

@@ -117,9 +117,7 @@ int ltile(Workspace *ws)
 	int i, n, x, *y, remain, ret = 0, p = -1, pbw;
 	int mw, my, sw, sy, ss, ssw, ssy, ns = 1;
 	int minh = globalcfg[GLB_MIN_WH].val;
-#ifdef DEBUG
-	clock_t t = clock();
-#endif
+
 	if (!(n = tilecount(ws))) return 1;
 	mw = ss = sw = ssw = 0;
 	int geo[n + 1][4];
@@ -213,11 +211,6 @@ update:
 				!globalcfg[GLB_SMART_BORDER].val || n > 1 ? c->bw : 0, 0, 0);
 	}
 	xcb_aux_sync(con);
-#ifdef DEBUG
-	t = clock() - t;
-	double taken = ((double)t) / CLOCKS_PER_SEC;
-	fprintf(stderr, "dk: ltile() with %d clients took %f seconds\n", n, taken);
-#endif
 	return ret;
 }
 
@@ -244,9 +237,7 @@ int rtile(Workspace *ws)
 	int i, n, x, *y, remain, ret = 0, p = -1, pbw;
 	int mw, my, sw, sy, ss, ssw, ssy, ns = 1;
 	int minh = globalcfg[GLB_MIN_WH].val;
-#ifdef DEBUG
-	clock_t t = clock();
-#endif
+
 	if (!(n = tilecount(ws))) return 1;
 	mw = ss = sw = ssw = 0;
 	int geo[n + 1][4];
@@ -343,11 +334,6 @@ update:
 				!globalcfg[GLB_SMART_BORDER].val || n > 1 ? c->bw : 0, 0, 0);
 	}
 	xcb_aux_sync(con);
-#ifdef DEBUG
-	t = clock() - t;
-	double taken = ((double)t) / CLOCKS_PER_SEC;
-	fprintf(stderr, "dk: rtile() with %d clients took %f seconds\n", n, taken);
-#endif
 	return ret;
 }
 

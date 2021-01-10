@@ -741,8 +741,7 @@ badvalue:
 applyall:
 				FOR_CLIENTS(c, ws) {
 					clientrule(c, nr, 0);
-					if (c->cb)
-						c->cb->func(c, 0);
+					if (c->cb) c->cb->func(c, 0);
 				}
 			}
 		}

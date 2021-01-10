@@ -153,11 +153,6 @@ int main(int argc, char *argv[])
 				xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK,
 					(unsigned int[]){XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT})));
 
-	/* #ifdef __OpenBSD__ */
-	/* 	if (pledge("stdio rpath wpath cpath tmppath flock unix proc exec", NULL) == -1) */
-	/* 		err(1, "pledge"); */
-	/* #endif */
-
 	initwm();
 	initsock();
 	initscan();
@@ -1369,19 +1364,19 @@ int refresh(void)
 	Monitor *m;
 	Workspace *ws;
 
-#define MAP(v, list)                     \
-	FOR_EACH(v, list)                    \
-		if (v->state & STATE_NEEDSMAP) { \
-			v->state &= ~STATE_NEEDSMAP; \
-			xcb_map_window(con, v->win); \
-		}                                \
+#define MAP(v, list)                                    \
+	FOR_EACH(v, list)                                   \
+		if (v->state & STATE_NEEDSMAP) {                \
+			v->state &= ~STATE_NEEDSMAP;                \
+			setstackmode(v->win, XCB_STACK_MODE_BELOW); \
+			xcb_map_window(con, v->win);                \
+		}
 
 	MAP(p, panels)
 	MAP(d, desks)
 	FOR_EACH(ws, workspaces) {
 		showhide(ws->stack);
-		if (ws == ws->mon->ws && ws->layout->func)
-			ws->layout->func(ws);
+		if (ws == ws->mon->ws && ws->layout->func) ws->layout->func(ws);
 		MAP(c, ws->clients)
 	}
 	focus(NULL);
@@ -1443,6 +1438,7 @@ void resize(Client *c, int x, int y, int w, int h, int bw)
 	MOVERESIZE(c->win, x, y, w, h, bw);
 	clientborder(c, c == selws->sel);
 	sendconfigure(c);
+	xcb_flush(con);
 }
 
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, int mouse)

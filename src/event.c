@@ -376,7 +376,6 @@ void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 							selws->msplit = (float)(ox - m->x + (e->root_x - mx)) / (float)m->w;
 						else
 							selws->msplit = (float)(ox - m->x + ow - (e->root_x - mx)) / (float)m->w;
-						DBG("mousemotion: %f, %f", selws->msplit, selws->ssplit)
 						selws->msplit = CLAMP(selws->msplit, 0.05, 0.95);
 					} else {
 						if (left)
@@ -501,10 +500,7 @@ void unmapnotify(xcb_generic_event_t *ev)
 
 	if (e->event == root) return;
 	free(xcb_query_tree_reply(con, xcb_query_tree(con, e->window), &er));
-	if (er) {
-		free(er);
-		return;
-	}
+	if (er) { free(er); return; }
 	if (e->response_type & ~0x7f) {
 		setwinstate(e->window, XCB_ICCCM_WM_STATE_WITHDRAWN);
 	} else {

@@ -100,14 +100,12 @@ int tstack(Workspace *ws)
 	/* apply smart gap */
 	int g = !globalcfg[GLB_SMART_GAP].val || n > 1 ? ws->gappx : 0;
 	mw = (ww - g) / MAX(1, ws->nmaster);
+	mh = wh - g;
 
-	/* adjust sizes for master-less instances */
+	/* adjust sizes for master instances */
 	if (n > ws->nmaster) {
 		mh = ws->nmaster ? (ws->msplit * wh) - (g / 2) : 0;
 		sw = (ww - g) / (n - ws->nmaster);
-	} else {
-		mh = wh - g;
-		sw = ww;
 	}
 
 	for (i = 0, mx = sx = wx + g, c = nexttiled(ws->clients); c; c = nexttiled(c->next), i++) {
@@ -117,6 +115,7 @@ int tstack(Workspace *ws)
 			resizehint(c, mx, (wy + wh) - mh, mw - g - (2 * bw), mh - g - (2 * bw), bw, 0, 0);
 			mx += W(c) + g;
 		} else { /* stack windows */
+			sw += (i + 1 == n && sx + sw != ww) ? ww - (sx + sw) : 0;
 			resizehint(c, sx, wy + g, sw - g - (2 * bw), wh - (mh + (2 * g)) - (2 * bw), bw, 0, 0);
 			sx += W(c) + g;
 		}

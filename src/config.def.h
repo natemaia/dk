@@ -48,10 +48,8 @@ void albumart(Client *c, int closed)
 	/*
 	 * basic example of a user-defined callback
 	 *
-	 * on open:
-	 *	apply padding, gravitate the window to the right-center, and avoid focus grab
-	 * on close:
-	 *	remove padding
+	 * on open: apply padding, gravitate the window to the right-center, and avoid focus grab
+	 * on close: remove padding
 	 */
 
 	if (closed) {
@@ -63,7 +61,20 @@ void albumart(Client *c, int closed)
 	}
 }
 
-int focusmaster(char **argv)
+void popfull(__attribute__((unused)) Client *c, int closed)
+{
+	/*
+	 * basic example of a user-defined callback
+	 *
+	 * on open: disable active window fullscreen
+	 * on close: nothing
+	 */
+
+	if (!closed && selws->sel)
+		setfullscreen(selws->sel, 0);
+}
+
+int focusmaster(__attribute__((unused)) char **argv)
 {
 	/*
 	 * basic example of a new win command
@@ -71,7 +82,6 @@ int focusmaster(char **argv)
 	 * focus the master window on the current workspace
 	 */
 	focus(nexttiled(selws->clients));
-	(void)(argv);
 	return 0;
 }
 
@@ -125,9 +135,12 @@ int tstack(Workspace *ws)
 }
 
 
+/* New commands and callbacks must be added to the below arrays if you want to use them */
+
 Callback callbacks[] = {
 	/* command,    function */
 	{ "albumart",  albumart },
+	{ "popfull",   popfull  },
 
 	/* don't add below the terminating null */
 	{ NULL,        NULL     }

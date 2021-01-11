@@ -390,6 +390,36 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 	Rule *r = wr;
 	int ws, dofocus = 0;
 	xcb_atom_t cur = selws->num;
+	int xgrav = GRAV_NONE, ygrav = GRAV_NONE;
+
+#define APPLY() \
+	do { \
+		c->cb = r->cb; \
+		dofocus = r->focus; \
+		c->state |= r->state; \
+		xgrav = r->xgrav; \
+		ygrav = r->ygrav; \
+		c->x = r->x != -1 ? r->x : c->x; \
+		c->y = r->y != -1 ? r->y : c->y; \
+		c->w = r->w != -1 ? r->w : c->w; \
+		c->h = r->h != -1 ? r->h : c->h; \
+		c->bw = r->bw != -1 && !(c->state & STATE_NOBORDER) ? r->bw : c->bw; \
+		if (!c->trans) { \
+			if ((cmdusemon = (r->mon != NULL))) { \
+				int num; \
+				if ((num = strtol(r->mon, NULL, 0)) > 0 && (m = itomon(num))) { \
+					ws = m->ws->num; \
+				} else for (m = monitors; m; m = m->next) { \
+					if (!strcmp(r->mon, m->name)) { \
+						ws = m->ws->num; \
+						break; \
+					} \
+				} \
+			} else if (r->ws > 0 && r->ws <= globalcfg[GLB_WS_NUM].val) { \
+				ws = r->ws - 1; \
+			} \
+		} \
+	} while (0)
 
 	if (c->trans)
 		cur = c->trans->ws->num;
@@ -399,44 +429,21 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 
 	if (!r) {
 		for (r = rules; r; r = r->next)
-			if (rulecmp(c, r)) break;
-	} else if (!rulecmp(c, r)) {
+			if (rulecmp(c, r)) APPLY();
+	} else if (rulecmp(c, r)) {
+		APPLY();
+	} else {
 		r = NULL;
 	}
-	if (r) {
-		c->cb = r->cb;
-		dofocus = r->focus;
-		c->state |= r->state;
-		c->x = r->x != -1 ? r->x : c->x;
-		c->y = r->y != -1 ? r->y : c->y;
-		c->w = r->w != -1 ? r->w : c->w;
-		c->h = r->h != -1 ? r->h : c->h;
-		c->bw = r->bw != -1 && !(c->state & STATE_NOBORDER) ? r->bw : c->bw;
-		if (!c->trans) {
-			if ((cmdusemon = (r->mon != NULL))) {
-				int num;
-				if ((num = strtol(r->mon, NULL, 0)) > 0 && (m = itomon(num))) {
-					ws = m->ws->num;
-				} else for (m = monitors; m; m = m->next) {
-					if (!strcmp(r->mon, m->name)) {
-						ws = m->ws->num;
-						break;
-					}
-				}
-			} else if (r->ws > 0 && r->ws <= globalcfg[GLB_WS_NUM].val) {
-				ws = r->ws - 1;
-			}
-		}
-	}
-
 	if (ws + 1 > globalcfg[GLB_WS_NUM].val && ws <= 99)
 		updworkspaces(ws + 1);
 	setworkspace(c, MIN(ws, globalcfg[GLB_WS_NUM].val), nofocus);
 	if (dofocus && c->ws != selws)
 		cmdview(c->ws);
-	if (r)
-		gravitate(c, r->xgrav, r->ygrav, 1);
+	if (xgrav != GRAV_NONE || ygrav != GRAV_NONE)
+		gravitate(c, xgrav, ygrav, 1);
 	cmdusemon = 0;
+#undef APPLY
 }
 
 void clienttype(Client *c)

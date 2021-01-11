@@ -395,7 +395,7 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 #define APPLY() \
 	do { \
 		c->cb = r->cb; \
-		dofocus = r->focus; \
+		dofocus = dofocus || r->focus; \
 		c->state |= r->state; \
 		xgrav = r->xgrav; \
 		ygrav = r->ygrav; \
@@ -404,7 +404,7 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 		c->w = r->w != -1 ? r->w : c->w; \
 		c->h = r->h != -1 ? r->h : c->h; \
 		c->bw = r->bw != -1 && !(c->state & STATE_NOBORDER) ? r->bw : c->bw; \
-		if (!c->trans) { \
+		if (!c->trans && ws == cur) { \
 			if ((cmdusemon = (r->mon != NULL))) { \
 				int num; \
 				if ((num = strtol(r->mon, NULL, 0)) > 0 && (m = itomon(num))) { \

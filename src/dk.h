@@ -85,8 +85,7 @@ enum States {
 	STATE_STICKY       = 1 << 6,
 	STATE_URGENT       = 1 << 7,
 	STATE_NEEDSMAP     = 1 << 8,
-	STATE_NEEDSRESIZE  = 1 << 9,
-	STATE_WASFLOATING  = 1 << 10,
+	STATE_WASFLOATING  = 1 << 9,
 };
 
 enum Cursors {

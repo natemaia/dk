@@ -404,7 +404,7 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 		c->w = r->w != -1 ? r->w : c->w; \
 		c->h = r->h != -1 ? r->h : c->h; \
 		c->bw = r->bw != -1 && !(c->state & STATE_NOBORDER) ? r->bw : c->bw; \
-		if (!c->trans && ws == cur) { \
+		if (!c->trans && ws == (int)cur) { \
 			if ((cmdusemon = (r->mon != NULL))) { \
 				int num; \
 				if ((num = strtol(r->mon, NULL, 0)) > 0 && (m = itomon(num))) { \
@@ -1436,6 +1436,7 @@ void relocatews(Workspace *ws, Monitor *old)
 	if (!(new = ws->mon) || new == old) return;
 	DBG("relocatews: %d:%s -> %d:%s", old->ws->num, old->name, new->ws->num, new->name)
 	FOR_EACH(c, ws->clients) relocate(c, new, old);
+	xcb_aux_sync(con);
 }
 
 void resize(Client *c, int x, int y, int w, int h, int bw)
@@ -1637,18 +1638,9 @@ void showhide(Client *c)
 	if (!c) return;
 	m = c->ws->mon;
 	if (c->ws == m->ws) {
-		if (c->state & STATE_NEEDSRESIZE) {
-			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, FULLSCREEN(c) ? 0 : c->bw);
-			c->state &= ~STATE_NEEDSRESIZE;
-		} else {
-			MOVE(c->win, c->x, c->y);
-		}
-		if (FLOATING(c)) {
-			if (c->state & STATE_FULLSCREEN && c->w == m->w && c->h == m->h)
-				resize(c, m->x, m->y, m->w, m->h, 0);
-			else
-				resize(c, c->x, c->y, c->w, c->h, FULLSCREEN(c) ? 0 : c->bw);
-		}
+		MOVE(c->win, c->x, c->y);
+		if (FLOATING(c) && !(c->state & STATE_FULLSCREEN && c->w == m->w && c->h == m->h))
+			resize(c, c->x, c->y, c->w, c->h, c->bw);
 		showhide(c->snext);
 	} else {
 		showhide(c->snext);

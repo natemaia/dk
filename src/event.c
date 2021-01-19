@@ -155,8 +155,6 @@ void configrequest(xcb_generic_event_t *ev)
 				sendconfigure(c);
 			if (c->ws == m->ws && e->x != W(c) * -2)
 				resize(c, c->x, c->y, c->w, c->h, c->bw);
-			else
-				c->state |= STATE_NEEDSRESIZE;
 		} else {
 			sendconfigure(c);
 		}
@@ -173,7 +171,7 @@ void configrequest(xcb_generic_event_t *ev)
 		};
 		xcb_aux_configure_window(con, e->window, e->value_mask, &wc);
 	}
-	xcb_aux_sync(con);
+	xcb_flush(con);
 }
 
 void destroynotify(xcb_generic_event_t *ev)

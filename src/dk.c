@@ -232,8 +232,8 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 			*h = MIN(*h, m->wh);
 			*w = MIN(*w, m->ww);
 		}
-		*x = CLAMP(*x, (*w - min) * -1, scr_w - min);
-		*y = CLAMP(*y, (*h - min) * -1, scr_h - min);
+		*x = CLAMP(*x, (*w - min) * -1, scr_w - (min + (2 * bw)));
+		*y = CLAMP(*y, (*h - min) * -1, scr_h - (min + (2 * bw)));
 	} else {
 		*x = CLAMP(*x, m->wx, m->wx + m->ww - *w + (2 * bw));
 		*y = CLAMP(*y, m->wy, m->wy + m->wh - *h + (2 * bw));

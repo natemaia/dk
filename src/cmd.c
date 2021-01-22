@@ -312,7 +312,7 @@ int cmdfocus(char **argv)
 		}
 		if (c) {
 			focus(c);
-			if (FLOATING(c)) setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+			restack(c->ws);
 		}
 	}
 	xcb_aux_sync(con);

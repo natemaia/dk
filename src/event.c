@@ -109,6 +109,7 @@ void clientmessage(xcb_generic_event_t *ev)
 					cmdview(c->ws);
 				}
 				focus(c);
+				restack(c->ws);
 			} else {
 				seturgent(c, 1);
 			}

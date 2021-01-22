@@ -1399,30 +1399,26 @@ int refresh(void)
 
 void relocate(Client *c, Monitor *new, Monitor *old)
 {
-#define RELOC(x, opposed, offset, min, max, wmin, wmax, oldmin, oldmax, oldwmin, oldwmax)  \
-	if (x - oldwmin > 0 && (offset = oldwmax / (x - oldwmin)) != 0.0) {                    \
-		if (x + (opposed) == oldmin + oldmax) {                                            \
-			x = min + max - (opposed);                                                     \
-		} else if (x + ((opposed) / 2) == oldmin + (oldmax / 2)) {                         \
-			x = (min + max - (opposed)) / 2;                                               \
-		} else {                                                                           \
-			x = CLAMP(min + (max / offset), min - ((opposed) - globalcfg[GLB_MIN_XY].val), \
-					min + max - globalcfg[GLB_MIN_XY].val);                                \
-		}                                                                                  \
-	} else {                                                                               \
-		x = CLAMP(x, min - ((opposed) - globalcfg[GLB_MIN_XY].val),                        \
-				wmin + wmax - globalcfg[GLB_MIN_XY].val);                                  \
-	}
+#define RELOC(x, op, off, min, max, omin, omax)                              \
+	if (x - omin > 0 && (off = omax / (x - omin)) != 0.0) {                  \
+		if (x + (op) == omin + omax)                                         \
+			x = min + max - (op);                                            \
+		else if (x + ((op) / 2) == omin + (omax / 2))                        \
+			x = (min + max - (op)) / 2;                                      \
+		else                                                                 \
+			x = CLAMP(min + (max / off), min - ((op) - xy), min + max - xy); \
+	} else                                                                   \
+		x = CLAMP(x, min - ((op) - xy), min + max - xy)
 
-	if (!FLOATING(c))
-		return;
+	if (!FLOATING(c)) return;
 	DBG("relocate: 0x%08x - current geom: %d,%d %dx%d", c->win, c->x, c->y, c->w, c->h)
 	if (c->state & STATE_FULLSCREEN && c->w == old->w && c->h == old->h) {
 		c->x = new->x, c->y = new->y, c->w = new->w, c->h = new->h;
 	} else {
 		float f;
-		RELOC(c->x, W(c), f, new->wx, new->ww, new->x, new->w, old->wx, old->ww, old->x, old->w)
-		RELOC(c->y, H(c), f, new->wy, new->wh, new->y, new->h, old->wy, old->wh, old->y, old->h)
+		int xy = globalcfg[GLB_MIN_XY].val;
+		RELOC(c->x, W(c), f, new->x, new->w, old->x, old->w);
+		RELOC(c->y, H(c), f, new->y, new->h, old->y, old->h);
 	}
 	DBG("relocate: 0x%08x - new geom: %d,%d %dx%d", c->win, c->x, c->y, c->w, c->h)
 #undef RELOC
@@ -1474,6 +1470,7 @@ void restack(Workspace *ws)
 	FOR_EACH(d, desks)
 		if (d->mon == ws->mon)
 			setstackmode(d->win, XCB_STACK_MODE_BELOW);
+	xcb_aux_sync(con);
 }
 
 int rulecmp(Client *c, Rule *r)

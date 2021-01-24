@@ -133,32 +133,57 @@ void configrequest(xcb_generic_event_t *ev)
 	xcb_configure_request_event_t *e = (xcb_configure_request_event_t *)ev;
 
 	if ((c = wintoclient(e->window))) {
+		if (e->x == W(c) * -2 || e->x < (c->ws->mon->x - c->w) + globalcfg[GLB_MIN_WH].val)
+			return;
 		DBG("configrequest: managed %s client 0x%08x", FLOATING(c) ?"floating":"tiled", e->window)
 		if (e->value_mask & XCB_CONFIG_WINDOW_BORDER_WIDTH) {
+			DBG("configrequest: bw: %d -> %d", c->bw, e->border_width)
 			c->bw = e->border_width;
 		} else if (FLOATING(c)) {
 			m = c->ws->mon;
-			c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
-			if (e->value_mask & XCB_CONFIG_WINDOW_X && e->x != W(c) * -2)
-				c->x = m->x + e->x - c->bw;
-			if (e->value_mask & XCB_CONFIG_WINDOW_Y && e->x != W(c) * -2)
-				c->y = m->y + e->y - c->bw;
-			if (e->value_mask & XCB_CONFIG_WINDOW_WIDTH)
-				c->w = e->width;
-			if (e->value_mask & XCB_CONFIG_WINDOW_HEIGHT)
-				c->h = e->height;
-			if (c->x >= m->wx + m->ww - globalcfg[GLB_MIN_XY].val)
-				c->x = m->wx + m->ww - W(c);
-			if (c->y >= m->wy + m->wh - globalcfg[GLB_MIN_XY].val)
-				c->y = m->wy + m->wh - H(c);
+			if (e->value_mask & XCB_CONFIG_WINDOW_X) {
+				DBG("configrequest: x: %d - > %d", c->x, m->x + e->x)
+				c->old_x = c->x;
+				c->x = m->x + e->x;
+			}
+			if (e->value_mask & XCB_CONFIG_WINDOW_Y) {
+				DBG("configrequest: y: %d - > %d", c->y, m->y + e->y)
+				c->old_y = c->y;
+				c->y = m->y + e->y;
+			}
+			if (e->value_mask & XCB_CONFIG_WINDOW_WIDTH && !(c->state & STATE_FIXED)) {
+				DBG("configrequest: w: %d - > %d", c->w, e->width)
+				c->old_w = c->w;
+				c->w = CLAMP(e->width, globalcfg[GLB_MIN_WH].val, m->w);
+			}
+			if (e->value_mask & XCB_CONFIG_WINDOW_HEIGHT && !(c->state & STATE_FIXED)) {
+				DBG("configrequest: h: %d - > %d", c->h, e->height)
+				c->old_h = c->h;
+				c->h = CLAMP(e->height, globalcfg[GLB_MIN_WH].val, m->h);
+			}
+			if (c->x + c->w > m->wx + m->ww && c->state & STATE_FLOATING) {
+				DBG("configrequest: x is out of monitor bounds, centering: %d -> %d", c->x, m->x + (m->w / 2 - W(c) / 2))
+				c->x = m->x + (m->w / 2 - W(c) / 2);
+			}
+			if (c->y + c->h > m->wy + m->wh && c->state & STATE_FLOATING) {
+				DBG("configrequest: y is out of monitor bounds, centering: %d -> %d", c->y, m->y + (m->h / 2 - H(c) / 2))
+				c->y = m->y + (m->h / 2 - H(c) / 2);
+			}
 			if (e->value_mask & (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y)
 					&& !(e->value_mask & (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT)))
+			{
+				DBG("configrequest: changing x/y but not width/height, sending configure notify: %d,%d", c->x, c->y)
 				sendconfigure(c);
-			if (c->ws == m->ws && e->x != W(c) * -2)
-				resize(c, c->x, c->y, c->w, c->h, c->bw);
+			}
+			if (c->ws == m->ws) {
+				DBG("configrequest: visible window, performing resize: %d,%d %dx%d", c->x, c->y, c->w, c->h)
+				MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
+			}
 		} else {
 			sendconfigure(c);
 		}
+		/* xcb_aux_sync(con); */
+		return;
 	} else {
 		DBG("configrequest: 0x%08x - %d,%d @ %dx%d", e->window, e->x, e->y, e->width, e->height)
 		xcb_params_configure_window_t wc = {
@@ -304,13 +329,11 @@ void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 			switch (ev->response_type & 0x7f) {
 			case XCB_MOTION_NOTIFY:
 				e = (xcb_motion_notify_event_t *)ev;
-				if (e->time - last < 1000 / 60)
-					break;
+				if (e->time - last < 1000 / 60) break;
 				last = e->time;
 				nx = ox + (e->root_x - mx);
 				ny = oy + (e->root_y - my);
-				if (nx == c->x && ny == c->y)
-					break;
+				if (nx == c->x && ny == c->y) break;
 				if (!FLOATING(c) || (c->state & STATE_FULLSCREEN
 							&& c->state & STATE_FAKEFULL && !(c->old_state & STATE_FLOATING)))
 				{
@@ -406,8 +429,7 @@ void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 							else
 								c->hoff = (e->root_y - my);
 						}
-						if (selws->layout->func(selws) < 0)
-							c->hoff = ohoff;
+						if (selws->layout->func(selws) < 0) c->hoff = ohoff;
 					} else {
 						selws->layout->func(selws);
 					}
@@ -415,15 +437,13 @@ void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 				} else {
 					nw = ow + (e->root_x - mx);
 					nh = oh + (e->root_y - my);
-					if (nw == c->w && nh == c->h)
-						break;
+					if (nw == c->w && nh == c->h) break;
 					if (!FLOATING(c) || (c->state & STATE_FULLSCREEN
 								&& c->state & STATE_FAKEFULL && !(c->old_state & STATE_FLOATING)))
 					{
 						c->state |= STATE_FLOATING;
 						c->old_state |= STATE_FLOATING;
-						if (selws->layout->func)
-							selws->layout->func(selws);
+						if (selws->layout->func) selws->layout->func(selws);
 						restack(selws);
 					}
 					resizehint(c, c->x, c->y, nw, nh, c->bw, 1, 1);
@@ -449,27 +469,13 @@ void propertynotify(xcb_generic_event_t *ev)
 	Client *c;
 	xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ev;
 
-#ifdef DEBUG
-	for (unsigned int i = 0; i < LEN(netatom); i++)
-		if (netatom[i] == e->atom) {
-			DBG("propertynotify: atom: %s - 0x%08x%s", netatoms[i], e->window, e->window == root ? " (root)" : "")
-			break;
-		}
-	for (unsigned int i = 0; i < LEN(wmatom); i++)
-		if (wmatom[i] == e->atom) {
-			DBG("propertynotify: atom: %s - 0x%08x%s", wmatoms[i], e->window, e->window == root ? " (root)" : "")
-			break;
-		}
-#endif
+#define strut(atom) (atom == netatom[NET_WM_STRUTP] || atom == netatom[NET_WM_STRUT])
 
-	if (e->state == XCB_PROPERTY_DELETE)
-		return;
+	if (e->state == XCB_PROPERTY_DELETE || e->window == root) return;
 	if ((c = wintoclient(e->window))) {
 		switch (e->atom) {
-		case XCB_ATOM_WM_HINTS:
-			clienthints(c); break;
-		case XCB_ATOM_WM_NORMAL_HINTS:
-			sizehints(c, 0); break;
+		case XCB_ATOM_WM_HINTS: clienthints(c); break;
+		case XCB_ATOM_WM_NORMAL_HINTS: sizehints(c, 0); break;
 		case XCB_ATOM_WM_TRANSIENT_FOR:
 			if ((c->trans = wintoclient(wintrans(c->win))) && !FLOATING(c)) {
 				c->state |= STATE_FLOATING;
@@ -484,12 +490,11 @@ void propertynotify(xcb_generic_event_t *ev)
 			}
 			break;
 		}
-	} else if ((e->atom == netatom[NET_WM_STRUTP] || e->atom == netatom[NET_WM_STRUT])
-			&& (p = wintopanel(e->window)))
-	{
+	} else if (strut(e->atom) && (p = wintopanel(e->window))) {
 		updstruts(p, 1);
 		needsrefresh = 1;
 	}
+#undef strut
 }
 
 void unmapnotify(xcb_generic_event_t *ev)

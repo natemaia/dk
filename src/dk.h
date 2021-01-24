@@ -141,19 +141,14 @@ enum NetAtoms {
 	NET_TYPE_DESK   = 11,
 	NET_TYPE_DIALOG = 12,
 	NET_TYPE_DOCK   = 13,
-	NET_TYPE_MENU   = 14,
-	NET_TYPE_NORMAL = 15,
-	NET_TYPE_SPLASH = 16,
-	NET_TYPE_TOOL   = 17,
-	NET_TYPE_UTIL   = 18,
-	NET_WM_CHECK    = 19,
-	NET_WM_DESK     = 20,
-	NET_WM_NAME     = 21,
-	NET_WM_STATE    = 22,
-	NET_WM_STRUT    = 23,
-	NET_WM_STRUTP   = 24,
-	NET_WM_TYPE     = 25,
-	NET_LAST        = 26,
+	NET_WM_CHECK    = 14,
+	NET_WM_DESK     = 15,
+	NET_WM_NAME     = 16,
+	NET_WM_STATE    = 17,
+	NET_WM_STRUT    = 18,
+	NET_WM_STRUTP   = 19,
+	NET_WM_TYPE     = 20,
+	NET_LAST        = 21,
 };
 
 enum Gravities {
@@ -320,11 +315,11 @@ extern xcb_atom_t wmatom[WM_LAST], netatom[NET_LAST];
 
 extern const char *ebadarg;
 extern const char *enoargs;
-extern const char *gravities[GRAV_LAST];
 extern const char *wmatoms[WM_LAST];
 extern const char *netatoms[NET_LAST];
 extern const char *cursors[CURS_LAST];
-extern const char *directionopts[DIR_END];
+extern const char *directions[DIR_END];
+extern const char *gravities[GRAV_LAST];
 
 /* config.h values */
 extern unsigned int border[BORD_LAST];

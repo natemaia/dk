@@ -70,14 +70,14 @@ const char *gravities[] = {
 	[GRAV_NONE]   = "none",   [GRAV_LEFT] = "left", [GRAV_RIGHT]  = "right",
 	[GRAV_CENTER] = "center", [GRAV_TOP]  = "top",  [GRAV_BOTTOM] = "bottom",
 };
+const char *directions[] = {
+	[DIR_NEXT]   = "next",   [DIR_PREV]   = "prev", [DIR_LAST] = "last",
+	[DIR_NEXTNE] = "nextne", [DIR_PREVNE] = "prevne",
+};
 const char *wmatoms[] = {
 	[WM_DELETE] = "WM_DELETE_WINDOW", [WM_FOCUS]   = "WM_TAKE_FOCUS",
 	[WM_MOTIF]  = "_MOTIF_WM_HINTS",  [WM_PROTO]   = "WM_PROTOCOLS",
 	[WM_STATE]  = "WM_STATE",         [WM_UTF8STR] = "UTF8_STRING",
-};
-const char *directionopts[] = {
-	[DIR_NEXT]   = "next",   [DIR_PREV]   = "prev", [DIR_LAST] = "last",
-	[DIR_NEXTNE] = "nextne", [DIR_PREVNE] = "prevne",
 };
 const char *netatoms[] = {
 	[NET_ACTIVE]      = "_NET_ACTIVE_WINDOW",
@@ -94,11 +94,6 @@ const char *netatoms[] = {
 	[NET_TYPE_DESK]   = "_NET_WM_WINDOW_TYPE_DESKTOP",
 	[NET_TYPE_DIALOG] = "_NET_WM_WINDOW_TYPE_DIALOG",
 	[NET_TYPE_DOCK]   = "_NET_WM_WINDOW_TYPE_DOCK",
-	[NET_TYPE_MENU]   = "_NET_WM_WINDOW_TYPE_MENU",
-	[NET_TYPE_NORMAL] = "_NET_WM_WINDOW_TYPE_NORMAL",
-	[NET_TYPE_SPLASH] = "_NET_WM_WINDOW_TYPE_SPLASH",
-	[NET_TYPE_TOOL]   = "_NET_WM_WINDOW_TYPE_TOOLBAR",
-	[NET_TYPE_UTIL]   = "_NET_WM_WINDOW_TYPE_UTILITY",
 	[NET_WM_CHECK]    = "_NET_SUPPORTING_WM_CHECK",
 	[NET_WM_DESK]     = "_NET_WM_DESKTOP",
 	[NET_WM_NAME]     = "_NET_WM_NAME",
@@ -275,6 +270,13 @@ void attach(Client *c, int tohead)
 		ATTACH(c, c->ws->clients);
 }
 
+void attachstack(Client *c)
+{
+	c->snext = c->ws->stack;
+	c->ws->stack = c;
+	c->ws->sel = c;
+}
+
 int assignws(Workspace *ws, Monitor *new)
 {
 	int n;
@@ -318,19 +320,16 @@ void changews(Workspace *ws, int swap, int warp)
 	lastws = selws;
 	lastmon = selmon;
 	m = selws->mon;
-	if (selws->sel)
-		unfocus(selws->sel, 1);
+	if (selws->sel) unfocus(selws->sel, 1);
 	if (swap && m != ws->mon) {
 		Monitor *old = ws->mon;
 		selws->mon = ws->mon;
-		if (ws->mon->ws == ws)
-			ws->mon->ws = selws;
+		if (ws->mon->ws == ws) ws->mon->ws = selws;
 		ws->mon = m;
 		m->ws = ws;
 		updnetworkspaces();
 		relocatews(ws, old);
-		if (lastws->mon->ws == lastws)
-			relocatews(lastws, selmon);
+		if (lastws->mon->ws == lastws) relocatews(lastws, selmon);
 	}
 	selws = ws;
 	selmon = selws->mon;
@@ -341,6 +340,7 @@ void changews(Workspace *ws, int swap, int warp)
 				ws->sel ? ws->sel->y + (ws->sel->h / 2) : ws->mon->y + (ws->mon->h / 2));
 	PROP(REPLACE, root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1, &ws->num);
 	needsrefresh = 1;
+	ignore(XCB_CONFIGURE_REQUEST);
 }
 
 void clienthints(Client *c)
@@ -452,8 +452,7 @@ void clienttype(Client *c)
 
 	if (winprop(c->win, netatom[NET_WM_STATE], &state) && state == netatom[NET_STATE_FULL])
 		setfullscreen(c, 1);
-	if ((winprop(c->win, netatom[NET_WM_TYPE], &type) && (type == netatom[NET_TYPE_DIALOG]
-					|| type == netatom[NET_TYPE_UTIL] || type == netatom[NET_TYPE_TOOL]))
+	if ((winprop(c->win, netatom[NET_WM_TYPE], &type) && type == netatom[NET_TYPE_DIALOG])
 			|| c->trans || (c->trans = wintoclient(wintrans(c->win))))
 		c->state |= STATE_FLOATING;
 }
@@ -560,13 +559,11 @@ void focus(Client *c)
 {
 	if (!selws) selws = workspaces;
 	if (!c) c = selws ? selws->stack : NULL;
-	if (selws && selws->sel && selws->sel != c)
-		unfocus(selws->sel, 0);
+	if (selws && selws->sel && selws->sel != c) unfocus(selws->sel, 0);
 	if (c) {
 		if (c->state & STATE_URGENT) seturgent(c, 0);
 		detachstack(c);
-		c->snext = c->ws->stack;
-		c->ws->stack = c;
+		attachstack(c);
 		grabbuttons(c);
 		clientborder(c, 1);
 		setinputfocus(c);
@@ -810,7 +807,8 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	/* apply rules and set the client's workspace, when focus_open is false
 	 * the new client is attached to the end of the stack, otherwise the head
 	 * later in refresh(), focus(NULL) is called to focus the right client */
-	clientrule(c, NULL, !globalcfg[GLB_FOCUS_OPEN].val || (selws->sel && selws->sel->state & STATE_FULLSCREEN
+	clientrule(c, NULL, !globalcfg[GLB_FOCUS_OPEN].val
+			|| (selws->sel && selws->sel->state & STATE_FULLSCREEN
 				&& selws->sel->w == selws->mon->w && selws->sel->h == selws->mon->h));
 	clienttype(c);
 	clienthints(c);
@@ -834,6 +832,7 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		DBG("initclient: floating mid size: %d, %d - %dx%d", c->x, c->y, c->w, c->h)
 		if (c->x == c->ws->mon->wx && c->y == c->ws->mon->wy)
 			quadrant(c, &c->x, &c->y, &c->w, &c->h);
+		MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
 	}
 	DBG("initclient: final size: %d, %d - %dx%d", c->x, c->y, c->w, c->h)
 	if (c->cb) c->cb->func(c, 0);
@@ -1150,7 +1149,7 @@ void manage(xcb_window_t win, int scan)
 			initpanel(win, g);
 		else if (type == netatom[NET_TYPE_DESK])
 			initdesk(win, g);
-		else if (type != netatom[NET_TYPE_SPLASH] && !wa->override_redirect)
+		else if (!wa->override_redirect)
 			goto client;
 	} else if (!wa->override_redirect) {
 client:
@@ -1265,7 +1264,7 @@ void printstatus(Status *s)
 					fmt[3] = '\0';
 				fprintf(s->file, fmt, ws->name);
 			}
-			fprintf(s->file, "\nL%s\nA%s", selws->layout->name, selws->sel ? selws->sel->title : "");
+			fprintf(s->file, "\nL%s\nA%s", selws->layout->name, selws->sel ? selws->sel->title :"");
 			break;
 		case STAT_FULL:
 			fprintf(s->file, "# globals - key: value ...\nnumws: %d\nsmart_border: %d\n"
@@ -1285,7 +1284,8 @@ void printstatus(Status *s)
 					border[BORD_O_URGENT], border[BORD_O_UNFOCUS]);
 			fprintf(s->file, "\n\n# number:name:layout ...\nworkspaces:");
 			FOR_EACH(ws, workspaces)
-				fprintf(s->file, " %s%d:%s:%s", ws == selws ? "*" : "", ws->num + 1, ws->name, ws->layout->name);
+				fprintf(s->file, " %s%d:%s:%s", ws == selws ? "*" : "",
+						ws->num + 1, ws->name, ws->layout->name);
 			fprintf(s->file, "\n\t# number:name active_window nmaster "
 					"nstack msplit ssplit gappx padl padr padt padb");
 			FOR_EACH(ws, workspaces)
@@ -1295,8 +1295,10 @@ void printstatus(Status *s)
 			fprintf(s->file, "\n\n# number:name:workspace ...\nmonitors:");
 			FOR_EACH(m, monitors)
 				if (m->connected)
-					fprintf(s->file, " %s%d:%s:%d", m->ws == selws ? "*" : "", m->num + 1, m->name, m->ws->num + 1);
-			fprintf(s->file, "\n\t# number:name active_window x y width height wx wy wwidth wheight");
+					fprintf(s->file, " %s%d:%s:%d", m->ws == selws ? "*" : "", m->num + 1, m->name,
+							m->ws->num + 1);
+			fprintf(s->file,
+					"\n\t# number:name active_window x y width height wx wy wwidth wheight");
 			FOR_EACH(m, monitors)
 				if (m->connected)
 					fprintf(s->file, "\n\t%d:%s 0x%08x %d %d %d %d %d %d %d %d",
@@ -1304,11 +1306,12 @@ void printstatus(Status *s)
 							m->x, m->y, m->w, m->h, m->wx, m->wy, m->ww, m->wh);
 			fprintf(s->file, "\n\n# id:workspace ...\nwindows:");
 			FOR_CLIENTS(c, ws)
-				fprintf(s->file, " %s0x%08x:%d", c == selws->sel ? "*" : "", c->win, c->ws->num + 1);
+				fprintf(s->file, " %s0x%08x:%d", c == selws->sel ? "*" :"", c->win, c->ws->num + 1);
 			fprintf(s->file, "\n\t# id title class instance x y width height bw hoff "
 					"float full fakefull fixed stick urgent callback trans_id");
 			FOR_CLIENTS(c, ws)
-				fprintf(s->file, "\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d %d %d %d %d %d %s 0x%08x",
+				fprintf(s->file, "\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d"
+						" %d %d %d %d %d %d %d %d %s 0x%08x",
 						c->win, c->title, c->class, c->inst, c->x, c->y, c->w, c->h, c->bw,
 						c->hoff, FLOATING(c), (c->state & STATE_FULLSCREEN) != 0,
 						(c->state & STATE_FAKEFULL) != 0, (c->state & STATE_FIXED) != 0,
@@ -1318,7 +1321,7 @@ void printstatus(Status *s)
 					"stick focus callback x y width height xgrav ygrav");
 			FOR_EACH(r, rules)
 				fprintf(s->file, "\nrule: \"%s\" \"%s\" \"%s\" %d %s %d %d %d %s %d %d %d %d %s %s",
-						r->title, r->class, r->inst, r->ws, r->mon, (r->state & STATE_FLOATING) != 0,
+						r->title, r->class, r->inst, r->ws, r->mon, (r->state & STATE_FLOATING) !=0,
 						(r->state & STATE_STICKY) != 0, r->focus, r->cb ? r->cb->name : "",
 						r->x, r->y, r->w, r->h, gravities[r->xgrav], gravities[r->ygrav]);
 			fprintf(s->file, "\n");
@@ -1399,28 +1402,23 @@ int refresh(void)
 
 void relocate(Client *c, Monitor *new, Monitor *old)
 {
-#define RELOC(x, op, off, min, max, omin, omax)                              \
-	if (x - omin > 0 && (off = omax / (x - omin)) != 0.0) {                  \
-		if (x + (op) == omin + omax)                                         \
-			x = min + max - (op);                                            \
-		else if (x + ((op) / 2) == omin + (omax / 2))                        \
-			x = (min + max - (op)) / 2;                                      \
-		else                                                                 \
-			x = CLAMP(min + (max / off), min - ((op) - xy), min + max - xy); \
-	} else                                                                   \
-		x = CLAMP(x, min - ((op) - xy), min + max - xy)
-
 	if (!FLOATING(c)) return;
-	DBG("relocate: 0x%08x - current geom: %d,%d %dx%d", c->win, c->x, c->y, c->w, c->h)
+	DBG("relocate: %s -> %s", old->name, new->name)
+	DBG("relocate: 0x%08x '%s' - before: %d,%d %dx%d", c->win, c->class, c->x, c->y, c->w, c->h)
 	if (c->state & STATE_FULLSCREEN && c->w == old->w && c->h == old->h) {
 		c->x = new->x, c->y = new->y, c->w = new->w, c->h = new->h;
 	} else {
-		float f;
-		int xy = globalcfg[GLB_MIN_XY].val;
-		RELOC(c->x, W(c), f, new->x, new->w, old->x, old->w);
-		RELOC(c->y, H(c), f, new->y, new->h, old->y, old->h);
+		int nx = 0, ny = 0, xoff, yoff, corner = c->x == c->ws->mon->wx && c->y == c->ws->mon->wy;
+		if ((xoff = c->x - old->x)) nx = new->x + (new->w / ((double)old->w / (double)xoff));
+		if ((yoff = c->y - old->y)) ny = new->y + (new->h / ((double)old->h / (double)yoff));
+		DBG("relocate: x: %d -> %d -- y: %d -> %d", c->x, nx, c->y, ny)
+		c->x = nx;
+		c->y = ny;
+		if (!corner && c->x == c->ws->mon->wx && c->y == c->ws->mon->wy)
+			quadrant(c, &c->x, &c->y, &c->w, &c->h);
+		MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
 	}
-	DBG("relocate: 0x%08x - new geom: %d,%d %dx%d", c->win, c->x, c->y, c->w, c->h)
+	DBG("relocate: 0x%08x '%s' - after: %d,%d %dx%d", c->win, c->class, c->x, c->y, c->w, c->h)
 #undef RELOC
 }
 
@@ -1492,7 +1490,7 @@ void sendconfigure(Client *c)
 		.height = c->h,
 		.border_width = c->bw,
 		.above_sibling = XCB_NONE,
-		.override_redirect = 0
+		.override_redirect = 0,
 	};
 	xcb_send_event(con, 0, c->win, XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char *)&e);
 }
@@ -1534,7 +1532,8 @@ void setfullscreen(Client *c, int fullscreen)
 	if (!c->ws || !(m = c->ws->mon))
 		m = selws->mon;
 	if (fullscreen && !(c->state & STATE_FULLSCREEN)) {
-		PROP(REPLACE, c->win, netatom[NET_WM_STATE], XCB_ATOM_ATOM, 32, 1, &netatom[NET_STATE_FULL]);
+		PROP(REPLACE, c->win, netatom[NET_WM_STATE], XCB_ATOM_ATOM, 32, 1,
+				&netatom[NET_STATE_FULL]);
 		c->old_state = c->state;
 		c->state |= STATE_FULLSCREEN | STATE_FLOATING;
 		resize(c, m->x, m->y, m->w, m->h, 0);
@@ -1623,8 +1622,7 @@ void setworkspace(Client *c, int num, int stacktail)
 		tail->snext = c;
 		c->snext = NULL;
 	} else {
-		c->snext = c->ws->stack;
-		c->ws->stack = c;
+		attachstack(c);
 	}
 }
 
@@ -2025,14 +2023,11 @@ void __cyg_profile_func_enter(void *fn, void *caller)
 	Dl_info info;
 
 	fprintf(stderr, "dk:");
-	for (i = 0; i < depth; i += 2)
-		fprintf(stderr, " |");
-
+	for (i = 0; i < depth; i += 2) fprintf(stderr, " |");
 	if (dladdr(fn, &info))
 		fprintf(stderr, " --> %s (%p)", info.dli_sname ? info.dli_sname : "unknown", fn);
 	else
 		fprintf(stderr, " --> (%p)", fn);
-
 	if (dladdr(caller, &info))
 		fprintf(stderr, " :: %s (%p)\n", info.dli_sname ? info.dli_sname : "unknown", caller);
 	else
@@ -2047,16 +2042,13 @@ void __cyg_profile_func_exit(void *fn, void *caller)
 
 	depth -= 2;
 	fprintf(stderr, "dk:");
-	for (i = depth; i > 0; i -= 2)
-		fprintf(stderr, " |");
-
+	for (i = depth; i > 0; i -= 2) fprintf(stderr, " |");
 	if (dladdr(fn, &info))
-		fprintf(stderr, " <-- %s (%p)", info.dli_sname, fn);
+		fprintf(stderr, " <-- %s (%p)", info.dli_sname ? info.dli_sname : "unknown", fn);
 	else
 		fprintf(stderr, " <-- (%p)", fn);
-
 	if (dladdr(caller, &info))
-		fprintf(stderr, " :: %s (%p)\n", info.dli_sname, caller);
+		fprintf(stderr, " :: %s (%p)\n", info.dli_sname ? info.dli_sname : "unknown", caller);
 	else
 		fprintf(stderr, " :: (%p)\n", caller);
 }

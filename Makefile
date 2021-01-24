@@ -18,7 +18,7 @@ COBJ = ${CSRC:.c=.o}
 
 
 # compiler and linker flags
-OPTLVL = -O2
+OPTLVL = -O3
 
 CPPFLAGS += -D_DEFAULT_SOURCE -D_BSD_SOURCE -DVERSION=\"${VERSION}\"
 CFLAGS   += -flto -std=c99 -pedantic -Wall -Wextra -I/usr/X11R6/include

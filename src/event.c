@@ -133,7 +133,7 @@ void configrequest(xcb_generic_event_t *ev)
 	xcb_configure_request_event_t *e = (xcb_configure_request_event_t *)ev;
 
 	if ((c = wintoclient(e->window))) {
-		if (e->x == W(c) * -2 || e->x < (c->ws->mon->x - c->w) + globalcfg[GLB_MIN_WH].val)
+		if (e->x == W(c) * -2 || e->x <= (c->ws->mon->x - c->w) + globalcfg[GLB_MIN_WH].val)
 			return;
 		DBG("configrequest: managed %s client 0x%08x", FLOATING(c) ?"floating":"tiled", e->window)
 		if (e->value_mask & XCB_CONFIG_WINDOW_BORDER_WIDTH) {
@@ -161,11 +161,11 @@ void configrequest(xcb_generic_event_t *ev)
 				c->old_h = c->h;
 				c->h = CLAMP(e->height, globalcfg[GLB_MIN_WH].val, m->h);
 			}
-			if (c->x + c->w > m->wx + m->ww && c->state & STATE_FLOATING) {
+			if ((c->x < m->x || c->x + c->w > m->x + m->w) && c->state & STATE_FLOATING) {
 				DBG("configrequest: x is out of monitor bounds, centering: %d -> %d", c->x, m->x + (m->w / 2 - W(c) / 2))
 				c->x = m->x + (m->w / 2 - W(c) / 2);
 			}
-			if (c->y + c->h > m->wy + m->wh && c->state & STATE_FLOATING) {
+			if ((c->y < m->y || c->y + c->h > m->y + m->h) && c->state & STATE_FLOATING) {
 				DBG("configrequest: y is out of monitor bounds, centering: %d -> %d", c->y, m->y + (m->h / 2 - H(c) / 2))
 				c->y = m->y + (m->h / 2 - H(c) / 2);
 			}
@@ -183,7 +183,7 @@ void configrequest(xcb_generic_event_t *ev)
 			sendconfigure(c);
 		}
 		/* xcb_aux_sync(con); */
-		return;
+		/* return; */
 	} else {
 		DBG("configrequest: 0x%08x - %d,%d @ %dx%d", e->window, e->x, e->y, e->width, e->height)
 		xcb_params_configure_window_t wc = {
@@ -337,15 +337,23 @@ void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 				if (!FLOATING(c) || (c->state & STATE_FULLSCREEN
 							&& c->state & STATE_FAKEFULL && !(c->old_state & STATE_FLOATING)))
 				{
+					DBG("mousemotion: popping float: %d,%d", c->x, c->y)
+					int x = c->x, y = c->y, w = c->w, h = c->h;
 					c->state |= STATE_FLOATING;
 					c->old_state |= STATE_FLOATING;
-					if (c->max_w) c->w = MIN(c->w, c->max_w);
-					if (c->max_h) c->h = MIN(c->h, c->max_h);
-					c->x = CLAMP(c->x, selws->mon->wx, selws->mon->wx + selws->mon->ww - W(c));
-					c->y = CLAMP(c->y, selws->mon->wy, selws->mon->wy + selws->mon->wh - H(c));
-					resizehint(c, c->x, c->y, c->w, c->h, c->bw, 1, 1);
-					if (selws->layout->func)
-						selws->layout->func(selws);
+					if (c->max_w) w = MIN(c->w, c->max_w);
+					if (c->max_h) h = MIN(c->h, c->max_h);
+					if (w == c->ws->mon->ww) w = c->ws->mon->w * 0.75;
+					if (h == c->ws->mon->wh) h = c->ws->mon->h * 0.75;
+					x = CLAMP(x, c->ws->mon->x, c->ws->mon->x + c->ws->mon->w - W(c));
+					y = CLAMP(y, c->ws->mon->y, c->ws->mon->y + c->ws->mon->h - H(c));
+					if (x + y == c->ws->mon->x + c->ws->mon->y) {
+						x += c->ws->mon->w - ((c->ws->mon->w * 0.75) / 2);
+						y += c->ws->mon->h - ((c->ws->mon->h * 0.75) / 2);
+					}
+					DBG("mousemotion: popping float -- new: %d,%d", c->x, c->y)
+					resizehint(c, x, y, w, h, c->bw, 1, 1);
+					if (selws->layout->func) selws->layout->func(selws);
 					restack(selws);
 				}
 				if ((m = coordtomon(e->root_x, e->root_y)) && m->ws != c->ws) {

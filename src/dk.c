@@ -1403,19 +1403,16 @@ int refresh(void)
 void relocate(Client *c, Monitor *new, Monitor *old)
 {
 	if (!FLOATING(c)) return;
-	DBG("relocate: %s -> %s", old->name, new->name)
 	DBG("relocate: 0x%08x '%s' - before: %d,%d %dx%d", c->win, c->class, c->x, c->y, c->w, c->h)
 	if (c->state & STATE_FULLSCREEN && c->w == old->w && c->h == old->h) {
 		c->x = new->x, c->y = new->y, c->w = new->w, c->h = new->h;
 	} else {
-		int nx = 0, ny = 0, xoff, yoff, corner = c->x == c->ws->mon->wx && c->y == c->ws->mon->wy;
+		int nx = new->x, ny = new->y, xoff, yoff;
 		if ((xoff = c->x - old->x)) nx = new->x + (new->w / ((double)old->w / (double)xoff));
 		if ((yoff = c->y - old->y)) ny = new->y + (new->h / ((double)old->h / (double)yoff));
 		DBG("relocate: x: %d -> %d -- y: %d -> %d", c->x, nx, c->y, ny)
-		c->x = nx;
-		c->y = ny;
-		if (!corner && c->x == c->ws->mon->wx && c->y == c->ws->mon->wy)
-			quadrant(c, &c->x, &c->y, &c->w, &c->h);
+		c->x = CLAMP(nx, new->x - (c->w - globalcfg[GLB_MIN_XY].val), new->x + new->w - globalcfg[GLB_MIN_XY].val);
+		c->y = CLAMP(ny, new->y - (c->h - globalcfg[GLB_MIN_XY].val), new->y + new->h - globalcfg[GLB_MIN_XY].val);
 		MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
 	}
 	DBG("relocate: 0x%08x '%s' - after: %d,%d %dx%d", c->win, c->class, c->x, c->y, c->w, c->h)
@@ -1435,7 +1432,8 @@ void relocatews(Workspace *ws, Monitor *old)
 
 void resize(Client *c, int x, int y, int w, int h, int bw)
 {
-	c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
+	if (!c->ws || FLOATING(c))
+		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 	c->x = x, c->y = y, c->w = w, c->h = h;
 	MOVERESIZE(c->win, x, y, w, h, bw);
 	clientborder(c, c == selws->sel);

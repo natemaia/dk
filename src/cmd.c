@@ -274,7 +274,8 @@ int cmdfloat(char **argv)
 		respond(cmdresp, "!unable to float fullscreen, sticky, or fixed windows");
 	} else {
 		if ((c->state ^= STATE_FLOATING) & STATE_FLOATING) {
-			if (c->old_x + c->old_y == c->ws->mon->wx + c->ws->mon->wy)
+			if (c->old_x + c->old_y == c->ws->mon->wx + c->ws->mon->wy
+					|| c->old_x + c->old_y == c->ws->mon->x + c->ws->mon->y)
 				quadrant(c, &c->old_x, &c->old_y, &c->old_w, &c->old_h);
 			resizehint(c, c->old_x, c->old_y, c->old_w, c->old_h, c->bw, 0, 0);
 		} else {

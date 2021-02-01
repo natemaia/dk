@@ -1408,11 +1408,14 @@ void relocate(Client *c, Monitor *new, Monitor *old)
 		c->x = new->x, c->y = new->y, c->w = new->w, c->h = new->h;
 	} else {
 		int nx = new->x, ny = new->y, xoff, yoff;
+		int corner = c->x == old->x && c->y == old->y;
 		if ((xoff = c->x - old->x)) nx = new->x + (new->w / ((double)old->w / (double)xoff));
 		if ((yoff = c->y - old->y)) ny = new->y + (new->h / ((double)old->h / (double)yoff));
 		DBG("relocate: x: %d -> %d -- y: %d -> %d", c->x, nx, c->y, ny)
 		c->x = CLAMP(nx, new->x - (c->w - globalcfg[GLB_MIN_XY].val), new->x + new->w - globalcfg[GLB_MIN_XY].val);
 		c->y = CLAMP(ny, new->y - (c->h - globalcfg[GLB_MIN_XY].val), new->y + new->h - globalcfg[GLB_MIN_XY].val);
+		if (!corner && c->x == new->x && c->y == new->y)
+			gravitate(c, GRAV_CENTER, GRAV_CENTER, 1);
 		MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
 	}
 	DBG("relocate: 0x%08x '%s' - after: %d,%d %dx%d", c->win, c->class, c->x, c->y, c->w, c->h)
@@ -1631,6 +1634,18 @@ void showhide(Client *c)
 	if (!c) return;
 	m = c->ws->mon;
 	if (c->ws == m->ws) {
+		if (c->x < m->x - (c->w + globalcfg[GLB_MIN_XY].val)
+				|| c->x > m->x + (m->w - globalcfg[GLB_MIN_XY].val))
+		{
+			c->x = CLAMP(c->x, m->x - globalcfg[GLB_MIN_XY].val,
+					m->x + m->w - (c->w - globalcfg[GLB_MIN_XY].val));
+		}
+		if (c->y < m->y - (c->h + globalcfg[GLB_MIN_XY].val)
+				|| c->y > m->y + (m->h - globalcfg[GLB_MIN_XY].val))
+		{
+			c->y = CLAMP(c->y, m->y - globalcfg[GLB_MIN_XY].val,
+					m->y + m->h - (c->h - globalcfg[GLB_MIN_XY].val));
+		}
 		MOVE(c->win, c->x, c->y);
 		if (FLOATING(c) && !(c->state & STATE_FULLSCREEN && c->w == m->w && c->h == m->h))
 			resize(c, c->x, c->y, c->w, c->h, c->bw);

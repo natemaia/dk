@@ -295,8 +295,7 @@ int assignws(Workspace *ws, Monitor *new)
 	}
 	if (n > 1 && ows) {
 		DBG("assignws: old mon: %s has available workspace: %d", ws->mon->name, ows->num)
-		if (ws == ws->mon->ws)
-			ws->mon->ws = ows;
+		if (ws == ws->mon->ws) ws->mon->ws = ows;
 		Monitor *old = ws->mon;
 		ws->mon = new;
 		relocatews(ws, old, 1);
@@ -461,13 +460,13 @@ void clientborder(Client *c, int focused)
 { /* modified from swm/wmutils */
 	xcb_gcontext_t gc;
 	xcb_pixmap_t pmap;
+
+	if (c->state & STATE_NOBORDER || !c->bw) return;
+
 	int b = c->bw;
 	int o = border[BORD_O_WIDTH];
 	unsigned int in = border[focused ? BORD_FOCUS : ((c->state & STATE_URGENT)
 			? BORD_URGENT : BORD_UNFOCUS)];
-
-	DBG("clientborder: %s -- border width: %d -- borderless: %d", c->class, c->bw, (c->state & STATE_NOBORDER) != 0)
-	if (c->state & STATE_NOBORDER || !c->bw) return;
 	if (b - o > 0) {
 		unsigned int out = border[focused ? BORD_O_FOCUS : ((c->state & STATE_URGENT)
 				? BORD_O_URGENT : BORD_O_UNFOCUS)];
@@ -821,7 +820,7 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 							| XCB_EVENT_MASK_STRUCTURE_NOTIFY });
 	grabbuttons(c);
 	DBG("initclient: mid size: %d, %d - %dx%d", c->x, c->y, c->w, c->h)
-	if (FLOATING(c) || c->state & STATE_FIXED) {
+	if ((FLOATING(c) || c->state & STATE_FIXED) && !(c->state & STATE_FULLSCREEN)) {
 		c->w = CLAMP(c->w, globalcfg[GLB_MIN_WH].val, c->ws->mon->ww);
 		c->h = CLAMP(c->h, globalcfg[GLB_MIN_WH].val, c->ws->mon->wh);
 		if (c->trans) {
@@ -1541,19 +1540,21 @@ int sendwmproto(Client *c, int wmproto)
 void setfullscreen(Client *c, int fullscreen)
 {
 	Monitor *m;
+	xcb_atom_t state = netatom[NET_WM_STATE];
 
-	if (!c->ws || !(m = c->ws->mon))
-		m = selws->mon;
+	if (!c->ws || !(m = c->ws->mon)) m = selws->mon;
 	if (fullscreen && !(c->state & STATE_FULLSCREEN)) {
-		PROP(REPLACE, c->win, netatom[NET_WM_STATE], XCB_ATOM_ATOM, 32, 1,
-				&netatom[NET_STATE_FULL]);
+		PROP(REPLACE, c->win, state, XCB_ATOM_ATOM, 32, 1, &netatom[NET_STATE_FULL]);
 		c->old_state = c->state;
-		c->state |= STATE_FULLSCREEN | STATE_FLOATING;
+		c->state |= STATE_FULLSCREEN | STATE_FLOATING | STATE_NOBORDER;
+		c->old_bw = c->bw;
+		c->bw = 0;
 		resize(c, m->x, m->y, m->w, m->h, 0);
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	} else if (!fullscreen && (c->state & STATE_FULLSCREEN)) {
-		PROP(REPLACE, c->win, netatom[NET_WM_STATE], XCB_ATOM_ATOM, 32, 0, (unsigned char *)0);
+		PROP(REPLACE, c->win, state, XCB_ATOM_ATOM, 32, 0, (unsigned char *)0);
 		c->state = c->old_state;
+		c->bw = c->old_bw;
 		resize(c, c->old_x, c->old_y, c->old_w, c->old_h, c->bw);
 		needsrefresh = 1;
 	}

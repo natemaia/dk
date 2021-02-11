@@ -373,7 +373,7 @@ void printstatus(Status *s);
 void quadrant(Client *c, int *x, int *y, int *w, int *h);
 int refresh(void);
 void relocate(Client *c, Monitor *new, Monitor *old);
-void relocatews(Workspace *ws, Monitor *old);
+void relocatews(Workspace *ws, Monitor *old, int wasvis);
 void resize(Client *c, int x, int y, int w, int h, int bw);
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, int mouse);
 void restack(Workspace *ws);

@@ -299,7 +299,7 @@ int assignws(Workspace *ws, Monitor *new)
 			ws->mon->ws = ows;
 		Monitor *old = ws->mon;
 		ws->mon = new;
-		relocatews(ws, old);
+		relocatews(ws, old, 1);
 		needsrefresh = 1;
 	} else {
 		respond(cmdresp, "!unable to assign last/only workspace on monitor");
@@ -311,12 +311,12 @@ int assignws(Workspace *ws, Monitor *new)
 void changews(Workspace *ws, int swap, int warp)
 {
 	Monitor *m;
-	int dowarp;
 
 	if (!ws || ws == selws) return;
 	DBG("changews: %d:%s -> %d:%s - swap: %d - warp: %d",
 			selws->num, selws->mon->name, ws->num, ws->mon->name, swap, warp)
-	dowarp = !swap && warp && selws->mon != ws->mon;
+	int dowarp = !swap && warp && selws->mon != ws->mon;
+	int vis = ws == ws->mon->ws;
 	lastws = selws;
 	lastmon = selmon;
 	m = selws->mon;
@@ -328,8 +328,8 @@ void changews(Workspace *ws, int swap, int warp)
 		ws->mon = m;
 		m->ws = ws;
 		updnetworkspaces();
-		relocatews(ws, old);
-		if (lastws->mon->ws == lastws) relocatews(lastws, selmon);
+		relocatews(ws, old, vis);
+		if (lastws->mon->ws == lastws) relocatews(lastws, selmon, 1);
 	}
 	selws = ws;
 	selmon = selws->mon;
@@ -1116,6 +1116,13 @@ Workspace *initws(int num)
 	return ws;
 }
 
+int inrect(int x, int y, int w, int h, int rx, int ry, int rw, int rh)
+{
+	if (x < rx || x + w > rx + rw || y < ry || y + h > ry + rh)
+		return 0;
+	return 1;
+}
+
 Monitor *itomon(int num)
 {
 	Monitor *mon = monitors;
@@ -1403,7 +1410,7 @@ int refresh(void)
 
 void relocate(Client *c, Monitor *new, Monitor *old)
 {
-	if (!FLOATING(c)) return;
+	if (!FLOATING(c) || inrect(c->x, c->y, c->w, c->h, new->x, new->y, new->w, new->h)) return;
 	if (c->state & STATE_FULLSCREEN && c->w == old->w && c->h == old->h) {
 		c->x = new->x, c->y = new->y, c->w = new->w, c->h = new->h;
 		return;
@@ -1428,12 +1435,12 @@ void relocate(Client *c, Monitor *new, Monitor *old)
 	if (!corner && c->x == new->x && c->y == new->y) gravitate(c, GRAV_CENTER, GRAV_CENTER, 1);
 }
 
-void relocatews(Workspace *ws, Monitor *old)
+void relocatews(Workspace *ws, Monitor *old, int wasvis)
 {
 	Client *c;
 	Monitor *new;
 
-	if (!(new = ws->mon) || new == old || ws != ws->mon->ws) return;
+	if (!(new = ws->mon) || new == old || ws != ws->mon->ws || !wasvis) return;
 	DBG("relocatews: %d:%s -> %d:%s", old->ws->num, old->name, new->ws->num, new->name)
 	FOR_EACH(c, ws->clients) relocate(c, new, old);
 }

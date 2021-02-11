@@ -1418,10 +1418,11 @@ void relocate(Client *c, Monitor *new, Monitor *old)
 
 	DBG("relocate: nx: %d - ny: %d xscale: %f - yscale: %f - x: %d -> %d - y: %d -> %d",
 			nx, ny, xscale, yscale, c->x, new->x + nx, c->y, new->y + ny)
-	c->x = CLAMP(new->x + nx, new->x - (c->w - globalcfg[GLB_MIN_XY].val),
-			new->x + new->w - globalcfg[GLB_MIN_XY].val);
-	c->y = CLAMP(new->y + ny, new->y - (c->h - globalcfg[GLB_MIN_XY].val),
-			new->y + new->h - globalcfg[GLB_MIN_XY].val);
+	c->w = new->w > old->w ? c->w * xscale : c->w / xscale;
+	c->h = new->h > old->h ? c->h * yscale : c->h / yscale;
+	c->x = new->x + nx;
+	c->y = new->y + ny;
+	applysizehints(c, &c->x, &c->y, &c->w, &c->h, c->bw, 0, 0);
 	if (c->x > 0 && c->x < new->x) c->x = new->x;
 	if (c->y > 0 && c->y < new->y) c->y = new->y;
 	if (!corner && c->x == new->x && c->y == new->y) gravitate(c, GRAV_CENTER, GRAV_CENTER, 1);

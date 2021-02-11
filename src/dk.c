@@ -1433,7 +1433,7 @@ void relocatews(Workspace *ws, Monitor *old)
 	Client *c;
 	Monitor *new;
 
-	if (!(new = ws->mon) || new == old) return;
+	if (!(new = ws->mon) || new == old || ws != ws->mon->ws) return;
 	DBG("relocatews: %d:%s -> %d:%s", old->ws->num, old->name, new->ws->num, new->name)
 	FOR_EACH(c, ws->clients) relocate(c, new, old);
 }

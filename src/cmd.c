@@ -512,7 +512,7 @@ int cmdreload(char **argv)
 int cmdresize(char **argv)
 {
 	Client *c = cmdclient, *t;
-	Workspace *ws = c->ws;
+	Workspace *ws = c ? c->ws : selws;
 	float f, *sf;
 	int i, nparsed = 0;
 	int xgrav = GRAV_NONE, ygrav = GRAV_NONE;
@@ -523,6 +523,10 @@ int cmdresize(char **argv)
 	nparsed++;                                                                          \
 	if (!(++argv) || (val = parseint(*argv, rel, allowzero)) == INT_MIN) goto badvalue; \
 
+	if (!c && !(c = selws->sel)) {
+		respond(cmdresp, "!no window available to resize");
+		return -1;
+	}
 	if (FULLSCREEN(c)) {
 		respond(cmdresp, "!unable to resize fullscreen windows");
 		return -1;

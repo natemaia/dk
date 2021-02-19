@@ -681,7 +681,7 @@ int cmdrule(char **argv)
 			if (!r.cb) goto badvalue;
 		} else if (!strcmp(*argv, "x")) {
 			nparsed++;
-			if (!(++argv) || !parsegeom(*argv, 'y', &r.y, NULL, &r.ygrav)) goto badvalue;
+			if (!(++argv) || !parsegeom(*argv, 'x', &r.x, NULL, &r.xgrav)) goto badvalue;
 		} else if (!strcmp(*argv, "y")) {
 			nparsed++;
 			if (!(++argv) || !parsegeom(*argv, 'y', &r.y, NULL, &r.ygrav)) goto badvalue;

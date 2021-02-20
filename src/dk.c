@@ -424,6 +424,7 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 		cur = c->trans->ws->num;
 	else if (!winprop(c->win, netatom[NET_WM_DESK], &cur) || cur > 99)
 		cur = selws->num;
+
 	ws = cur;
 
 	if (!r) {
@@ -434,13 +435,20 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 	} else {
 		r = NULL;
 	}
+
 	if (ws + 1 > globalcfg[GLB_WS_NUM].val && ws <= 99)
 		updworkspaces(ws + 1);
+
 	setworkspace(c, MIN(ws, globalcfg[GLB_WS_NUM].val), nofocus);
+
 	if (dofocus && c->ws != selws)
 		cmdview(c->ws);
-	if (xgrav != GRAV_NONE || ygrav != GRAV_NONE)
+
+	if (xgrav != GRAV_NONE || ygrav != GRAV_NONE) {
+		DBG("clientrule: applying gravities: x: %s, y: %s", gravities[xgrav], gravities[ygrav])
 		gravitate(c, xgrav, ygrav, 1);
+	}
+
 	cmdusemon = 0;
 #undef APPLY
 }
@@ -559,7 +567,7 @@ void focus(Client *c)
 {
 	if (!selws) selws = workspaces;
 	if (!c) c = selws ? selws->stack : NULL;
-	if (selws && selws->sel && selws->sel != c) unfocus(selws->sel, 0);
+	if (selws && selws->sel) unfocus(selws->sel, 0);
 	if (c) {
 		if (c->state & STATE_URGENT) seturgent(c, 0);
 		detachstack(c);
@@ -727,8 +735,9 @@ void gravitate(Client *c, int xgrav, int ygrav, int matchgap)
 	case GRAV_BOTTOM: y = mony + monh - H(c) - gap; break;
 	case GRAV_CENTER: y = (mony + monh - H(c)) / 2; break;
 	}
-	if (c->ws == c->ws->mon->ws && x != c->x && y != c->y)
-		resizehint(c, x, y, c->w, c->h, c->bw, 0, 0);
+	DBG("gravitate: moving window: %d, %d -> %d, %d", c->x, c->y, x, y)
+	c->x = x, c->y = y;
+	if (c->ws == c->ws->mon->ws) MOVE(c->win, x, y);
 }
 
 int iferr(int lvl, char *msg, xcb_generic_error_t *e)
@@ -1397,8 +1406,8 @@ int refresh(void)
 		MAP(c, ws->clients)
 	}
 	focus(NULL);
-	for (m = nextmon(monitors); m; m = nextmon(m->next))
-		restack(m->ws);
+	FOR_EACH(c, selws->clients) clientborder(c, c == selws->sel);
+	for (m = nextmon(monitors); m; m = nextmon(m->next)) restack(m->ws);
 	xcb_aux_sync(con);
 	ignore(XCB_ENTER_NOTIFY);
 	printstatus(NULL);

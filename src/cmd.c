@@ -682,9 +682,11 @@ int cmdrule(char **argv)
 		} else if (!strcmp(*argv, "x")) {
 			nparsed++;
 			if (!(++argv) || !parsegeom(*argv, 'x', &r.x, NULL, &r.xgrav)) goto badvalue;
+			DBG("cmdrule: x gravity set: %s", gravities[r.xgrav])
 		} else if (!strcmp(*argv, "y")) {
 			nparsed++;
 			if (!(++argv) || !parsegeom(*argv, 'y', &r.y, NULL, &r.ygrav)) goto badvalue;
+			DBG("cmdrule: y gravity set: %s", gravities[r.ygrav])
 		} else if (!strcmp("w", *argv) || !strcmp("width", *argv)) {
 			ARG(r.w);
 		} else if (!strcmp("h", *argv) || !strcmp("height", *argv)) {

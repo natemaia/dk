@@ -435,20 +435,15 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 	} else {
 		r = NULL;
 	}
-
 	if (ws + 1 > globalcfg[GLB_WS_NUM].val && ws <= 99)
 		updworkspaces(ws + 1);
-
 	setworkspace(c, MIN(ws, globalcfg[GLB_WS_NUM].val), nofocus);
 
-	if (dofocus && c->ws != selws)
-		cmdview(c->ws);
-
+	if (dofocus && c->ws != selws) cmdview(c->ws);
 	if (xgrav != GRAV_NONE || ygrav != GRAV_NONE) {
 		DBG("clientrule: applying gravities: x: %s, y: %s", gravities[xgrav], gravities[ygrav])
 		gravitate(c, xgrav, ygrav, 1);
 	}
-
 	cmdusemon = 0;
 #undef APPLY
 }
@@ -812,6 +807,7 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	free(pr);
 
 	clientname(c);
+	sizehints(c, 1);
 
 	/* apply rules and set the client's workspace, when focus_open is false
 	 * the new client is attached to the end of the stack, otherwise the head
@@ -821,7 +817,6 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 				&& selws->sel->w == selws->mon->w && selws->sel->h == selws->mon->h));
 	clienttype(c);
 	clienthints(c);
-	sizehints(c, 1);
 	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK,
 			(unsigned int[]){ XCB_EVENT_MASK_ENTER_WINDOW
 							| XCB_EVENT_MASK_FOCUS_CHANGE
@@ -836,10 +831,10 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 			c->x = c->trans->x + ((W(c->trans) - W(c)) / 2);
 			c->y = c->trans->y + ((H(c->trans) - H(c)) / 2);
 		}
-		c->x = CLAMP(c->x, c->ws->mon->wx, c->ws->mon->wx + c->ws->mon->ww - W(c));
-		c->y = CLAMP(c->y, c->ws->mon->wy, c->ws->mon->wy + c->ws->mon->wh - H(c));
+		c->x = CLAMP(c->x, c->ws->mon->x, c->ws->mon->x + c->ws->mon->w - W(c));
+		c->y = CLAMP(c->y, c->ws->mon->y, c->ws->mon->y + c->ws->mon->h - H(c));
 		DBG("initclient: floating mid size: %d, %d - %dx%d", c->x, c->y, c->w, c->h)
-		if (c->x == c->ws->mon->wx && c->y == c->ws->mon->wy)
+		if (c->x == c->ws->mon->x && c->y == c->ws->mon->y)
 			quadrant(c, &c->x, &c->y, &c->w, &c->h);
 		MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
 	}

@@ -269,24 +269,16 @@ rule MATCH mon=HDMI-A-0
 \fI\fCx y w width h height bw border_width\fR (integer/string)
 determine the window location and size.
 .IP \[bu] 2
-\fI\fCx\fR change the x coordinate.
+\fI\fCx\fR change the x coordinate, can be an integer or one of the following.
 .RS 2
 .IP \[bu] 2
-\fI\fCcenter\fR justify to the center of the screen.
-.IP \[bu] 2
-\fI\fCleft\fR justify to the left of the screen.
-.IP \[bu] 2
-\fI\fCright\fR justify to the right of the screen.
+\fI\fCcenter left\fR and \fI\fCright\fR gravitate on the x coordinate.
 .RE
 .IP \[bu] 2
-\fI\fCy\fR change the y coordinate.
+\fI\fCy\fR change the y coordinate, can be an integer or one of the following.
 .RS 2
 .IP \[bu] 2
-\fI\fCcenter\fR justify to the center of the screen.
-.IP \[bu] 2
-\fI\fCtop\fR justify to the top of the screen.
-.IP \[bu] 2
-\fI\fCbottom\fR justify to the bottom of the screen.
+\fI\fCcenter top\fR and \fI\fCbottom\fR gravitate on the y coordinate.
 .RE
 .IP \[bu] 2
 \fI\fCw width\fR change the window width.
@@ -304,8 +296,11 @@ rule MATCH x=center y=center w=1280 h=720 bw=0
 .PP
 \fI\fCcallback\fR (string) determine a callback function to be invoked
 on window open and close.
-These are defined in the config header and compiled into the source, one
-example is provided.
+.in +.9i
+.in +.9i
+These are defined in the config header and compiled into the source,
+.br
+one example is provided.
 .IP
 .nf
 \fI\fC
@@ -322,11 +317,19 @@ rule MATCH float=true stick=true
 \fR
 .fi
 .PP
+\fI\fCignore\fR (boolean) determine if the window should ignore configure
+request events.
+.IP
+.nf
+\fI\fC
+rule MATCH ignore=true
+\fR
+.fi
+.PP
 \fI\fCfocus\fR (boolean) determine if the window should be focused and
 view it\[cq]s workspace.
-.PD 0
-.P
-.PD
+.in +.8i
+.in +.8i
 If \fI\fCmon\fR is also set it will be activated first before viewing
 the workspace.
 .IP
@@ -344,8 +347,10 @@ rule MATCH focus=true
 \fI\fCSETTING\fR one or more settings to be changed.
 .IP \[bu] 2
 \fI\fCWS\fR the workspace which subcommand should apply to, if
-unspecified the current is used. \fI\fC_\fR is a special workspace used
-to define default values for new workspaces which haven\[cq]t been created yet.
+unspecified the current is used.
+.in +.3i
+\fI_\fR is a special workspace used to define default values for
+new workspaces which haven\[cq]t been created yet.
 .IP
 .nf
 \fI\fC
@@ -709,24 +714,16 @@ win focus +2
 .PP
 \fI\fCresize\fR change the window size, location, and border width.
 .IP \[bu] 2
-\fI\fCx\fR change the x coordinate.
+\fI\fCx\fR change the x coordinate, can be an integer or one of the following.
 .RS 2
 .IP \[bu] 2
-\fI\fCcenter\fR justify to the center of the screen.
-.IP \[bu] 2
-\fI\fCleft\fR justify to the left of the screen.
-.IP \[bu] 2
-\fI\fCright\fR justify to the right of the screen.
+\fI\fCcenter left\fR and \fI\fCright\fR gravitate on the x coordinate.
 .RE
 .IP \[bu] 2
-\fI\fCy\fR change the y coordinate.
+\fI\fCy\fR change the y coordinate, can be an integer or one of the following.
 .RS 2
 .IP \[bu] 2
-\fI\fCcenter\fR justify to the center of the screen.
-.IP \[bu] 2
-\fI\fCtop\fR justify to the top of the screen.
-.IP \[bu] 2
-\fI\fCbottom\fR justify to the bottom of the screen.
+\fI\fCcenter top\fR and \fI\fCbottom\fR gravitate on the y coordinate.
 .RE
 .IP \[bu] 2
 \fI\fCw width\fR change the window width.

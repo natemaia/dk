@@ -93,6 +93,7 @@ enum States {
 	STATE_URGENT       = 1 << 7,
 	STATE_NEEDSMAP     = 1 << 8,
 	STATE_WASFLOATING  = 1 << 9,
+	STATE_IGNORECFG    = 1 << 10,
 };
 
 enum Cursors {

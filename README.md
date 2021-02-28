@@ -243,14 +243,12 @@ rule MATCH mon=HDMI-A-0   # using name
 
 `x` `y` `w` `width` `h` `height` `bw` `border_width` (integer/string) determine the window location and size.
 
-- `x` change the x coordinate.
-    - `center` justify to the center of the screen.
-    - `left` justify to the left of the screen.
-    - `right` justify to the right of the screen.
-- `y` change the y coordinate.
-    - `center` justify to the center of the screen.
-    - `top` justify to the top of the screen.
-    - `bottom` justify to the bottom of the screen.
+- `x` change the x coordinate, can be an integer or one of the following.
+    - `center left` and `right` gravitate on the x coordinate.
+
+- `y` change the y coordinate, can be an integer or one of the following.
+    - `center top` and `bottom` gravitate on the y coordinate.
+
 - `w` `width` change the window width.
 - `h` `height` change the window height.
 - `bw` `border_width` change the window border width.
@@ -271,6 +269,12 @@ rule MATCH callback=albumart
 `float` `stick` (boolean) determine if the window should be floating or stick respectively.
 ```
 rule MATCH float=true stick=true
+```
+---
+
+`ignore` (boolean) determine if the window should ignore configure request events.
+```
+rule MATCH ignore=true
 ```
 ---
 
@@ -527,15 +531,11 @@ win focus +2      # focus two windows ahead
 
 `resize` change the window size, location, and border width.
 
-- `x` change the x coordinate.
-    - `center` justify to the center of the screen.
-    - `left` justify to the left of the screen.
-    - `right` justify to the right of the screen.
+- `x` change the x coordinate, can be an integer or one of the following.
+    - `center left` and `right` gravitate on the x coordinate.
 
-- `y` change the y coordinate.
-    - `center` justify to the center of the screen.
-    - `top` justify to the top of the screen.
-    - `bottom` justify to the bottom of the screen.
+- `y` change the y coordinate, can be an integer or one of the following.
+    - `center top` and `bottom` gravitate on the y coordinate.
 
 - `w` `width` change the window width.
 - `h` `height` change the window height.

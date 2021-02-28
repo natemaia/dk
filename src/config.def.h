@@ -55,7 +55,7 @@ void albumart(Client *c, int closed)
 	if (closed) {
 		c->ws->padr = 0;
 	} else {
-		c->ws->padr = c->w + (2 * c->ws->gappx);
+		c->ws->padr = W(c) + (2 * c->ws->gappx);
 		gravitate(c, GRAV_RIGHT, GRAV_CENTER, 1);
 		focus(c->snext);
 	}

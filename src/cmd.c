@@ -646,6 +646,10 @@ int cmdrule(char **argv)
 	nparsed++;                              \
 	if (!(++argv) || !*argv) goto badvalue; \
 	val = *argv
+#define STATE(val)                                              \
+	nparsed++;                                                  \
+	if (!(++argv) || (j = parsebool(*argv)) < 0) goto badvalue; \
+	r.state |= j ? val : STATE_NONE
 
 	while (*argv) {
 		if (!strcmp(*argv, "class")) {
@@ -697,13 +701,11 @@ int cmdrule(char **argv)
 			if ((r.bw = j) == 0 && border[BORD_WIDTH])
 				r.state |= STATE_NOBORDER;
 		} else if (!strcmp(*argv, "float")) {
-			nparsed++;
-			if (!(++argv) || (j = parsebool(*argv)) < 0) goto badvalue;
-			r.state |= j ? STATE_FLOATING : STATE_NONE;
+			STATE(STATE_FLOATING);
 		} else if (!strcmp(*argv, "stick")) {
-			nparsed++;
-			if (!(++argv) || (j = parsebool(*argv)) < 0) goto badvalue;
-			r.state |= j ? STATE_STICKY | STATE_FLOATING : STATE_NONE;
+			STATE(STATE_STICKY | STATE_FLOATING);
+		} else if (!strcmp(*argv, "ignore")) {
+			STATE(STATE_IGNORECFG);
 		} else if (!strcmp(*argv, "focus")) {
 			nparsed++;
 			if (!(++argv) || (j = parsebool(*argv)) < 0) goto badvalue;

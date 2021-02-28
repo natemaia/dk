@@ -1413,7 +1413,14 @@ int refresh(void)
 
 void relocate(Client *c, Monitor *new, Monitor *old)
 {
-	if (!FLOATING(c) || inrect(c->x, c->y, c->w, c->h, new->x, new->y, new->w, new->h)) return;
+	if (!FLOATING(c) || inrect(c->x, c->y, c->w, c->h, new->x, new->y, new->w, new->h))
+		return;
+	if (c->state & STATE_STICKY) {
+		Client *sel = lastws->sel == c ? c : selws->sel;
+		setworkspace(c, old->ws->num, 0);
+		focus(sel);
+		return;
+	}
 	if (c->state & STATE_FULLSCREEN && c->w == old->w && c->h == old->h) {
 		c->x = new->x, c->y = new->y, c->w = new->w, c->h = new->h;
 		return;
@@ -1663,9 +1670,12 @@ void showhide(Client *c)
 			c->y = CLAMP(c->y, m->y - globalcfg[GLB_MIN_XY].val,
 					m->y + m->h - (c->h - globalcfg[GLB_MIN_XY].val));
 		}
-		MOVE(c->win, c->x, c->y);
-		if (FLOATING(c) && !(c->state & STATE_FULLSCREEN && c->w == m->w && c->h == m->h))
+		if (c->state & STATE_FULLSCREEN && !(c->state & STATE_FAKEFULL) && (c->w != m->w || c->h != m->h))
+			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, 0);
+		else if (FLOATING(c))
 			resize(c, c->x, c->y, c->w, c->h, c->bw);
+		else
+			MOVE(c->win, c->x, c->y);
 		showhide(c->snext);
 	} else {
 		showhide(c->snext);

@@ -50,10 +50,17 @@
 		for_macro(ptr, arr) if (ptr->win == win) return ptr;\
 	return NULL
 
-#define ATTACH(v, list) do { v->next = list; list = v; } while (0)
-#define DETACH(v, listptr)                                                 \
-	while (*(listptr) && *(listptr) != v) (listptr) = &(*(listptr))->next; \
-	*(listptr) = v->next
+#define ATTACH(v, list)           \
+	do {                          \
+		v->next = list; list = v; \
+	} while (0)
+
+#define DETACH(v, listptr)				      \
+	do {                                      \
+		while (*(listptr) && *(listptr) != v) \
+			(listptr) = &(*(listptr))->next;  \
+		*(listptr) = v->next;                 \
+	} while (0)
 
 #define PROP(mode, win, atom, type, membsize, nmemb, value) \
 	xcb_change_property(con, XCB_PROP_MODE_##mode, win, atom, type, (membsize), (nmemb), value)

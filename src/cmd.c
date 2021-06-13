@@ -652,11 +652,11 @@ int cmdrule(char **argv)
 	r.state |= j ? val : STATE_NONE
 
 	while (*argv) {
-		if (!strcmp(*argv, "class")) {
+		if (!strcmp(*argv, "class") || !strcmp(*argv, "match_class")) {
 			STR(r.class);
-		} else if (!strcmp(*argv, "instance")) {
+		} else if (!strcmp(*argv, "instance") || !strcmp(*argv, "match_instance")) {
 			STR(r.inst);
-		} else if (!strcmp(*argv, "title")) {
+		} else if (!strcmp(*argv, "title") || !strcmp(*argv, "match_title")) {
 			STR(r.title);
 		} else if (!strcmp(*argv, "mon")) {
 			STR(r.mon);

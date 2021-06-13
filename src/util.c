@@ -14,7 +14,6 @@
 
 #include "util.h"
 
-
 void check(int i, char *msg)
 {
 	if (i < 0)
@@ -25,7 +24,7 @@ void *ecalloc(size_t elems, size_t elemsize)
 {
 	void *p;
 
-	if (!(p = calloc(elems, elemsize)))
+	if (UNLIKELY((p = calloc(elems, elemsize)) == NULL))
 		err(1, "unable to allocate space");
 	return p;
 }
@@ -34,7 +33,7 @@ void *erealloc(void *p, size_t size)
 {
 	void *np;
 
-	if (!(np = realloc(p, size)))
+	if (UNLIKELY((np = realloc(p, size)) == NULL))
 		err(1, "unable to reallocate space");
 	return np;
 }

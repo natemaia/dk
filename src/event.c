@@ -98,12 +98,18 @@ void clientmessage(xcb_generic_event_t *ev)
 			}
 			setworkspace(c, d[0], c != c->ws->sel);
 			needsrefresh = 1;
-		} else if (e->type == netatom[NET_WM_STATE]
-				&& (d[1] == netatom[NET_STATE_FULL] || d[2] == netatom[NET_STATE_FULL]))
-		{
-			setfullscreen(c, (d[0] == 1 || (d[0] == 2 && !(c->state & STATE_FULLSCREEN))));
+		} else if (e->type == netatom[NET_WM_STATE]) {
+			if (d[1] == netatom[NET_STATE_FULL] || d[2] == netatom[NET_STATE_FULL]) {
+				setfullscreen(c, (d[0] == 1 || (d[0] == 2 && !(c->state & STATE_FULLSCREEN))));
+			} else if ((d[1] == netatom[NET_STATE_DEMANDATT]
+						|| d[2] == netatom[NET_STATE_DEMANDATT]) && c != selws->sel)
+			{
+				goto act;
+			}
 		} else if (e->type == netatom[NET_ACTIVE] && c != selws->sel) {
+act:
 			if (globalcfg[GLB_FOCUS_URGENT].val) {
+				setnetstate(c->win, c->state);
 				if (c->ws != selws) {
 					unfocus(selws->sel, 1);
 					cmdview(c->ws);
@@ -113,6 +119,7 @@ void clientmessage(xcb_generic_event_t *ev)
 			} else {
 				seturgent(c, 1);
 			}
+			needsrefresh = 1;
 		}
 	}
 }
@@ -478,8 +485,6 @@ void propertynotify(xcb_generic_event_t *ev)
 	Client *c;
 	xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ev;
 
-#define strut(atom) (atom == netatom[NET_WM_STRUTP] || atom == netatom[NET_WM_STRUT])
-
 	if (e->state == XCB_PROPERTY_DELETE || e->window == root) return;
 	if ((c = wintoclient(e->window))) {
 		switch (e->atom) {
@@ -499,11 +504,12 @@ void propertynotify(xcb_generic_event_t *ev)
 			}
 			break;
 		}
-	} else if (strut(e->atom) && (p = wintopanel(e->window))) {
+	} else if ((e->atom == netatom[NET_WM_STRUTP] || e->atom == netatom[NET_WM_STRUT])
+			&& (p = wintopanel(e->window)))
+	{
 		updstruts(p, 1);
 		needsrefresh = 1;
 	}
-#undef strut
 }
 
 void unmapnotify(xcb_generic_event_t *ev)

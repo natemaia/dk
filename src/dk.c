@@ -80,27 +80,28 @@ const char *wmatoms[] = {
 	[WM_STATE]  = "WM_STATE",         [WM_UTF8STR] = "UTF8_STRING",
 };
 const char *netatoms[] = {
-	[NET_ACTIVE]      = "_NET_ACTIVE_WINDOW",
-	[NET_CLIENTS]     = "_NET_CLIENT_LIST",
-	[NET_CLOSE]       = "_NET_CLOSE_WINDOW",
-	[NET_DESK_CUR]    = "_NET_CURRENT_DESKTOP",
-	[NET_DESK_GEOM]   = "_NET_DESKTOP_GEOMETRY",
-	[NET_DESK_NAMES]  = "_NET_DESKTOP_NAMES",
-	[NET_DESK_NUM]    = "_NET_NUMBER_OF_DESKTOPS",
-	[NET_DESK_VP]     = "_NET_DESKTOP_VIEWPORT",
-	[NET_DESK_WA]     = "_NET_WORKAREA",
-	[NET_STATE_FULL]  = "_NET_WM_STATE_FULLSCREEN",
-	[NET_SUPPORTED]   = "_NET_SUPPORTED",
-	[NET_TYPE_DESK]   = "_NET_WM_WINDOW_TYPE_DESKTOP",
-	[NET_TYPE_DIALOG] = "_NET_WM_WINDOW_TYPE_DIALOG",
-	[NET_TYPE_DOCK]   = "_NET_WM_WINDOW_TYPE_DOCK",
-	[NET_WM_CHECK]    = "_NET_SUPPORTING_WM_CHECK",
-	[NET_WM_DESK]     = "_NET_WM_DESKTOP",
-	[NET_WM_NAME]     = "_NET_WM_NAME",
-	[NET_WM_STATE]    = "_NET_WM_STATE",
-	[NET_WM_STRUTP]   = "_NET_WM_STRUT_PARTIAL",
-	[NET_WM_STRUT]    = "_NET_WM_STRUT",
-	[NET_WM_TYPE]     = "_NET_WM_WINDOW_TYPE",
+	[NET_ACTIVE]          = "_NET_ACTIVE_WINDOW",
+	[NET_CLIENTS]         = "_NET_CLIENT_LIST",
+	[NET_CLOSE]           = "_NET_CLOSE_WINDOW",
+	[NET_DESK_CUR]        = "_NET_CURRENT_DESKTOP",
+	[NET_DESK_GEOM]       = "_NET_DESKTOP_GEOMETRY",
+	[NET_DESK_NAMES]      = "_NET_DESKTOP_NAMES",
+	[NET_DESK_NUM]        = "_NET_NUMBER_OF_DESKTOPS",
+	[NET_DESK_VP]         = "_NET_DESKTOP_VIEWPORT",
+	[NET_DESK_WA]         = "_NET_WORKAREA",
+	[NET_STATE_FULL]      = "_NET_WM_STATE_FULLSCREEN",
+	[NET_STATE_DEMANDATT] = "_NET_WM_STATE_DEMANDS_ATTENTION",
+	[NET_SUPPORTED]       = "_NET_SUPPORTED",
+	[NET_TYPE_DESK]       = "_NET_WM_WINDOW_TYPE_DESKTOP",
+	[NET_TYPE_DIALOG]     = "_NET_WM_WINDOW_TYPE_DIALOG",
+	[NET_TYPE_DOCK]       = "_NET_WM_WINDOW_TYPE_DOCK",
+	[NET_WM_CHECK]        = "_NET_SUPPORTING_WM_CHECK",
+	[NET_WM_DESK]         = "_NET_WM_DESKTOP",
+	[NET_WM_NAME]         = "_NET_WM_NAME",
+	[NET_WM_STATE]        = "_NET_WM_STATE",
+	[NET_WM_STRUTP]       = "_NET_WM_STRUT_PARTIAL",
+	[NET_WM_STRUT]        = "_NET_WM_STRUT",
+	[NET_WM_TYPE]         = "_NET_WM_WINDOW_TYPE",
 };
 
 
@@ -439,6 +440,7 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 		updworkspaces(ws + 1);
 	setworkspace(c, MIN(ws, globalcfg[GLB_WS_NUM].val), nofocus);
 
+	if (!dofocus && nofocus && !globalcfg[GLB_FOCUS_URGENT].val) seturgent(c, 1);
 	if (dofocus && c->ws != selws) cmdview(c->ws);
 	if (xgrav != GRAV_NONE || ygrav != GRAV_NONE) {
 		DBG("clientrule: applying gravities: x: %s, y: %s", gravities[xgrav], gravities[ygrav])
@@ -1601,6 +1603,16 @@ void setstackmode(xcb_window_t win, unsigned int mode)
 	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_STACK_MODE, &mode);
 }
 
+void setnetstate(xcb_window_t win, unsigned int state)
+{
+	xcb_atom_t type = netatom[NET_WM_STATE];
+
+	if (state & STATE_FULLSCREEN)
+		PROP(REPLACE, win, type, XCB_ATOM_ATOM, 32, 1, &netatom[NET_STATE_FULL]);
+	else
+		PROP(REPLACE, win, type, XCB_ATOM_ATOM, 32, 0, (unsigned char *)0);
+}
+
 void seturgent(Client *c, int urg)
 {
 	xcb_generic_error_t *e;
@@ -1612,8 +1624,10 @@ void seturgent(Client *c, int urg)
 		c->state |= STATE_URGENT;
 	else if (!urg)
 		c->state &= ~STATE_URGENT;
+	setnetstate(c->win, c->state);
 	if (xcb_icccm_get_wm_hints_reply(con, pc, &wmh, &e)) {
-		wmh.flags = urg ? (wmh.flags | XCB_ICCCM_WM_HINT_X_URGENCY)
+		wmh.flags = urg
+			? (wmh.flags | XCB_ICCCM_WM_HINT_X_URGENCY)
 			: (wmh.flags & ~XCB_ICCCM_WM_HINT_X_URGENCY);
 		xcb_icccm_set_wm_hints(con, c->win, &wmh);
 	} else {

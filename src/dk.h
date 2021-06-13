@@ -80,6 +80,7 @@
 			(unsigned int[]){(x), (y), MAX((w), globalcfg[GLB_MIN_WH].val), \
 			MAX((h), globalcfg[GLB_MIN_WH].val), (bw)})
 
+#define UNLIKELY(x)     __builtin_expect(!!(x), 0)
 
 enum States {
 	STATE_NONE         = 0,
@@ -135,28 +136,29 @@ enum WMAtoms {
 };
 
 enum NetAtoms {
-	NET_ACTIVE      = 0,
-	NET_CLIENTS     = 1,
-	NET_CLOSE       = 2,
-	NET_DESK_CUR    = 3,
-	NET_DESK_GEOM   = 4,
-	NET_DESK_NAMES  = 5,
-	NET_DESK_NUM    = 6,
-	NET_DESK_VP     = 7,
-	NET_DESK_WA     = 8,
-	NET_STATE_FULL  = 9,
-	NET_SUPPORTED   = 10,
-	NET_TYPE_DESK   = 11,
-	NET_TYPE_DIALOG = 12,
-	NET_TYPE_DOCK   = 13,
-	NET_WM_CHECK    = 14,
-	NET_WM_DESK     = 15,
-	NET_WM_NAME     = 16,
-	NET_WM_STATE    = 17,
-	NET_WM_STRUT    = 18,
-	NET_WM_STRUTP   = 19,
-	NET_WM_TYPE     = 20,
-	NET_LAST        = 21,
+	NET_ACTIVE          = 0,
+	NET_CLIENTS         = 1,
+	NET_CLOSE           = 2,
+	NET_DESK_CUR        = 3,
+	NET_DESK_GEOM       = 4,
+	NET_DESK_NAMES      = 5,
+	NET_DESK_NUM        = 6,
+	NET_DESK_VP         = 7,
+	NET_DESK_WA         = 8,
+	NET_STATE_FULL      = 9,
+	NET_STATE_DEMANDATT = 10,
+	NET_SUPPORTED       = 11,
+	NET_TYPE_DESK       = 12,
+	NET_TYPE_DIALOG     = 13,
+	NET_TYPE_DOCK       = 14,
+	NET_WM_CHECK        = 15,
+	NET_WM_DESK         = 16,
+	NET_WM_NAME         = 17,
+	NET_WM_STATE        = 18,
+	NET_WM_STRUT        = 19,
+	NET_WM_STRUTP       = 20,
+	NET_WM_TYPE         = 21,
+	NET_LAST            = 22,
 };
 
 enum Gravities {
@@ -390,6 +392,7 @@ void sendconfigure(Client *c);
 int sendwmproto(Client *c, int wmproto);
 void setfullscreen(Client *c, int fullscreen);
 void setinputfocus(Client *c);
+void setnetstate(xcb_window_t win, unsigned int state);
 void setnetwsnames(void);
 void setstackmode(xcb_window_t win, unsigned int mode);
 void seturgent(Client *c, int urg);

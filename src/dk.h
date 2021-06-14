@@ -151,14 +151,15 @@ enum NetAtoms {
 	NET_TYPE_DESK       = 12,
 	NET_TYPE_DIALOG     = 13,
 	NET_TYPE_DOCK       = 14,
-	NET_WM_CHECK        = 15,
-	NET_WM_DESK         = 16,
-	NET_WM_NAME         = 17,
-	NET_WM_STATE        = 18,
-	NET_WM_STRUT        = 19,
-	NET_WM_STRUTP       = 20,
-	NET_WM_TYPE         = 21,
-	NET_LAST            = 22,
+	NET_TYPE_SPLASH     = 15,
+	NET_WM_CHECK        = 16,
+	NET_WM_DESK         = 17,
+	NET_WM_NAME         = 18,
+	NET_WM_STATE        = 19,
+	NET_WM_STRUT        = 20,
+	NET_WM_STRUTP       = 21,
+	NET_WM_TYPE         = 22,
+	NET_LAST            = 23,
 };
 
 enum Gravities {
@@ -224,6 +225,7 @@ typedef struct Rule {
 	int xgrav, ygrav;
 	int ws, focus;
 	unsigned int state;
+	xcb_atom_t type;
 	char *title, *class, *inst, *mon;
 	const Callback *cb;
 	regex_t titlereg, classreg, instreg;

@@ -95,6 +95,7 @@ const char *netatoms[] = {
 	[NET_TYPE_DESK]       = "_NET_WM_WINDOW_TYPE_DESKTOP",
 	[NET_TYPE_DIALOG]     = "_NET_WM_WINDOW_TYPE_DIALOG",
 	[NET_TYPE_DOCK]       = "_NET_WM_WINDOW_TYPE_DOCK",
+	[NET_TYPE_SPLASH]     = "_NET_WM_WINDOW_TYPE_SPLASH",
 	[NET_WM_CHECK]        = "_NET_SUPPORTING_WM_CHECK",
 	[NET_WM_DESK]         = "_NET_WM_DESKTOP",
 	[NET_WM_NAME]         = "_NET_WM_NAME",
@@ -389,6 +390,7 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 	Monitor *m;
 	Rule *r = wr;
 	int ws, dofocus = 0;
+	xcb_atom_t type = 0;
 	xcb_atom_t cur = selws->num;
 	int xgrav = GRAV_NONE, ygrav = GRAV_NONE;
 
@@ -425,13 +427,13 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 		cur = c->trans->ws->num;
 	else if (!winprop(c->win, netatom[NET_WM_DESK], &cur) || cur > 99)
 		cur = selws->num;
-
 	ws = cur;
+	winprop(c->win, netatom[NET_WM_TYPE], &type);
 
 	if (!r) {
 		for (r = rules; r; r = r->next)
-			if (rulecmp(c, r)) APPLY();
-	} else if (rulecmp(c, r)) {
+			if (rulecmp(c, r) && (!r->type || r->type == type)) APPLY();
+	} else if (rulecmp(c, r) && (!r->type || r->type == type)) {
 		APPLY();
 	} else {
 		r = NULL;
@@ -456,7 +458,8 @@ void clienttype(Client *c)
 
 	if (winprop(c->win, netatom[NET_WM_STATE], &state) && state == netatom[NET_STATE_FULL])
 		setfullscreen(c, 1);
-	if ((winprop(c->win, netatom[NET_WM_TYPE], &type) && type == netatom[NET_TYPE_DIALOG])
+	if ((winprop(c->win, netatom[NET_WM_TYPE], &type)
+				&& (type == netatom[NET_TYPE_DIALOG] || type == netatom[NET_TYPE_SPLASH]))
 			|| c->trans || (c->trans = wintoclient(wintrans(c->win))))
 		c->state |= STATE_FLOATING;
 }
@@ -810,6 +813,8 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 
 	clientname(c);
 	sizehints(c, 1);
+	clienttype(c);
+	clienthints(c);
 
 	/* apply rules and set the client's workspace, when focus_open is false
 	 * the new client is attached to the end of the stack, otherwise the head
@@ -817,8 +822,6 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	clientrule(c, NULL, !globalcfg[GLB_FOCUS_OPEN].val
 			|| (selws->sel && selws->sel->state & STATE_FULLSCREEN
 				&& selws->sel->w == selws->mon->w && selws->sel->h == selws->mon->h));
-	clienttype(c);
-	clienthints(c);
 	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK,
 			(unsigned int[]){ XCB_EVENT_MASK_ENTER_WINDOW
 							| XCB_EVENT_MASK_FOCUS_CHANGE

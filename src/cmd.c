@@ -634,7 +634,7 @@ int cmdrule(char **argv)
 	unsigned int i, delete = 0, apply = 0;
 	Rule r = {
 		.x = -1, .y = -1, .w = -1, .h = -1, .ws = -1, .bw = -1,
-		.focus = 0, .state = STATE_NONE, .xgrav = GRAV_NONE, .ygrav = GRAV_NONE,
+		.focus = 0, .state = STATE_NONE, .type = 0, .xgrav = GRAV_NONE, .ygrav = GRAV_NONE,
 		.cb = NULL, .mon = NULL, .inst = NULL, .class = NULL, .title = NULL,
 	};
 
@@ -658,6 +658,16 @@ int cmdrule(char **argv)
 			STR(r.inst);
 		} else if (!strcmp(*argv, "title") || !strcmp(*argv, "match_title")) {
 			STR(r.title);
+		} else if (!strcmp(*argv, "type") || !strcmp(*argv, "match_type")) {
+			nparsed++;
+			if (!(++argv) || !*argv) goto badvalue;
+			if (!strcmp(*argv, "splash")) {
+				r.type = netatom[NET_TYPE_SPLASH];
+			} else if (!strcmp(*argv, "dialog")) {
+				r.type = netatom[NET_TYPE_DIALOG];
+			} else {
+				goto badvalue;
+			}
 		} else if (!strcmp(*argv, "mon")) {
 			STR(r.mon);
 		} else if (!strcmp(*argv, "ws")) {

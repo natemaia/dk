@@ -743,7 +743,7 @@ badvalue:
 		nparsed++;
 	}
 
-	if ((r.class || r.inst || r.title) && (r.ws != -1 || r.mon || r.focus || r.cb
+	if ((r.class || r.inst || r.title || r.type) && (r.ws != -1 || r.mon || r.focus || r.cb
 				|| r.state != STATE_NONE || r.x != -1 || r.y != -1 || r.w != -1
 				|| r.h != -1 || r.bw != -1 || r.xgrav != GRAV_NONE || r.ygrav != GRAV_NONE))
 	{

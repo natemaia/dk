@@ -221,7 +221,8 @@ rule remove RULE [MATCH]
 ###### Settings
 
 `class` `instance` `title` `type` (string) regex to match the window class, instance, title, and  
-type respectively. Regex matching is always done **case insensitive** with extended mode enabled.
+type respectively *(may be prefixed with match_ for clarity)*. Regex matching is always done **case insensitive**  
+with extended regex mode enabled.
 ```
 rule [SUBCOMMAND] class="^firefox$" instance="^navigator$" title="^mozilla firefox$" type=dialog [SETTING]
 ```

@@ -67,6 +67,10 @@ alt + shift + {h,j,k,l}
 alt + ctrl + {h,j,k,l}
 	dkcmd win resize {w=-20,h=+20,h=-20,w=+20}
 
+# move the active window up/down the stack
+alt + {Up,Down}
+	dkcmd win mvstack {up,down}
+
 # view, send, or follow to a workspace (by number)
 alt + {_,shift + ,ctrl + }{1-9,0}
 	dkcmd ws {view,send,follow} {1-9,10}

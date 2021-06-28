@@ -232,13 +232,10 @@ rule remove RULE [MATCH]
 .fi
 .SS Settings
 .PP
-\fI\fCclass instance title type\fR (string) regex to
-match the window class, instance, title, and
-.PD 0
-.P
-.PD
-type respectively.
-Regex matching is always done \f[B]case insensitive\fR with extended regex.
+\fI\fCclass instance title type\fR (string) regex to match the window
+class, instance, title, and type respectively (may be prefixed with
+match_ for clarity). Regex matching is always done \f[B]case insensitive\fR
+with extended regex mode enabled.
 .IP
 .nf
 \fI\fC

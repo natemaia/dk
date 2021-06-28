@@ -220,11 +220,15 @@ rule remove RULE [MATCH]
 
 ###### Settings
 
-`class` `instance` `title` (string) regex to match the window class, instance, and  
-title respectively. Regex matching is always done **case insensitive** with extended mode enabled.
+`class` `instance` `title` `type` (string) regex to match the window class, instance, title, and  
+type respectively. Regex matching is always done **case insensitive** with extended mode enabled.
 ```
-rule [SUBCOMMAND] class="^firefox$" instance="^navigator$" title="^mozilla firefox$" [SETTING]
+rule [SUBCOMMAND] class="^firefox$" instance="^navigator$" title="^mozilla firefox$" type=dialog [SETTING]
 ```
+
+
+`type` currently only supports `dialog` and `splash` windows, all others are treated as normal windows.
+
 ---
 
 `ws` (integer/string) determine what workspace the window should be on.
@@ -526,6 +530,16 @@ win [CLIENT] kill
 win CLIENT focus  # focus window by id
 win focus next    # focus the next window
 win focus +2      # focus two windows ahead
+```
+---
+
+`mvstack` (integer/string) move a tiled window around the stack.
+
+- `up` move the tiled window up the stack.
+- `down` move the tiled window down the stack.
+
+```
+win [CLIENT] mvstack up
 ```
 ---
 

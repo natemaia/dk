@@ -188,6 +188,7 @@ Cmd wincmds[] = {
 	{ "focus",    cmdfocus    },
 	{ "kill",     cmdkill     },
 	{ "resize",   cmdresize   },
+	{ "mvstack",  cmdmvstack  },
 	{ "stick",    cmdstick    },
 	{ "swap",     cmdswap     },
 	{ "focusm",   focusmaster },

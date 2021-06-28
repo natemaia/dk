@@ -618,6 +618,33 @@ end:
 #undef ARG
 }
 
+int cmdmvstack(char **argv)
+{
+	Client *c = cmdclient;
+	char arg[8];
+	char *dir = "y";
+	char *newargv[] = { dir, arg, NULL };
+
+	if ((!c && !(c = selws->sel)) || FLOATING(c) || FULLSCREEN(c)) {
+		respond(cmdresp, "!no window available to move in the stack");
+		return -1;
+	}
+
+	if (!strcmp("up", *argv)) {
+		strlcpy(arg, "-20", sizeof(arg));
+	} else if (!strcmp("down", *argv)) {
+		strlcpy(arg, "+20", sizeof(arg));
+	} else if (parseint(*argv, NULL, 0) != INT_MIN) {
+		strlcpy(arg, *argv, sizeof(arg));
+	} else {
+		respond(cmdresp, "!win mvstack: invalid value: %s", *argv);
+		return -1;
+	}
+
+	cmdresize(newargv);
+	return 1;
+}
+
 int cmdrestart(char **argv)
 {
 	running = 0, restart = 1;

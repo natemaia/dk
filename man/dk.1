@@ -232,18 +232,20 @@ rule remove RULE [MATCH]
 .fi
 .SS Settings
 .PP
-\fI\fCclass instance title\fR (string) regex to
-match the window class, instance, and
+\fI\fCclass instance title type\fR (string) regex to
+match the window class, instance, title, and
 .PD 0
 .P
 .PD
-title respectively.
+type respectively.
 Regex matching is always done \f[B]case insensitive\fR with extended regex.
 .IP
 .nf
 \fI\fC
-rule [SUBCOMMAND] class=\[dq]\[ha]firefox$\[dq] instance=\[dq]\[ha]navigator$\[dq] title=\[dq]\[ha]mozilla firefox$\[dq] [SETTING]
+rule [SUBCOMMAND] class=\[dq]\[ha]firefox$\[dq] instance=\[dq]\[ha]navigator$\[dq] title=\[dq]\[ha]mozilla firefox$\[dq] type=dialog [SETTING]
 \fR
+.BR
+type currently only supports dialog and splash windows, all others are treated as normal windows.
 .fi
 .PP
 \fI\fCws\fR (integer/string) determine what workspace the window should
@@ -709,6 +711,18 @@ win [CLIENT] kill
 win CLIENT focus
 win focus next
 win focus +2
+\fR
+.fi
+.PP
+\fI\fCmvstack\fR (integer/string) move a tiled window around the stack.
+.IP \[bu] 2
+\fI\fCup\fR move the tiled window up the stack.
+.IP \[bu] 2
+\fI\fCdown\fR move the tiled window down the stack.
+.IP
+.nf
+\fI\fC
+win CLIENT mvstack up
 \fR
 .fi
 .PP

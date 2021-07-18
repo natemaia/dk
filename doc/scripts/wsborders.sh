@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # simple script to change dk border colour based on the workspace
-# written by Nathaniel Maia, 2020
+# written by Nathaniel Maia, 2021
 
 # example usage bind with sxhkd
 # alt + {_,shift + ,ctrl + }{1-9,0}
@@ -53,7 +53,7 @@ case "$1" in
 		[ouf]='#222222'
 		)
 		;;
-	[6-9]|0)
+	[6-9]|10)
 		typeset -A col=(
 		[f]='#ee5555'
 		[u]='#6699cc'

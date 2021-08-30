@@ -169,11 +169,11 @@ void configrequest(xcb_generic_event_t *ev)
 				c->old_h = c->h;
 				c->h = CLAMP(e->height, globalcfg[GLB_MIN_WH].val, m->h);
 			}
-			if ((c->x < m->x || c->x + c->w > m->x + m->w) && c->state & STATE_FLOATING) {
+			if ((c->x + c->w < m->x + globalcfg[GLB_MIN_XY].val || c->x > m->x + m->w - globalcfg[GLB_MIN_XY].val) && c->state & STATE_FLOATING) {
 				DBG("configrequest: x is out of monitor bounds, centering: %d -> %d", c->x, m->x + (m->w / 2 - W(c) / 2))
 				c->x = m->x + (m->w / 2 - W(c) / 2);
 			}
-			if ((c->y < m->y || c->y + c->h > m->y + m->h) && c->state & STATE_FLOATING) {
+			if ((c->y + c->h < m->y + globalcfg[GLB_MIN_XY].val || c->y > m->y + m->h - globalcfg[GLB_MIN_XY].val) && c->state & STATE_FLOATING) {
 				DBG("configrequest: y is out of monitor bounds, centering: %d -> %d", c->y, m->y + (m->h / 2 - H(c) / 2))
 				c->y = m->y + (m->h / 2 - H(c) / 2);
 			}

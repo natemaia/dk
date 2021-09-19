@@ -1059,6 +1059,7 @@ void initwm(void)
 				| XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE
 				| XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE
 				| XCB_RANDR_NOTIFY_MASK_OUTPUT_PROPERTY);
+		xcb_flush(con);
 		updrandr();
 	} else {
 		warnx("unable to get randr extension data");
@@ -1859,12 +1860,11 @@ int updoutputs(xcb_randr_output_t *outs, int nouts, xcb_timestamp_t t)
 				if (!m->connected || crtc->x != m->x || crtc->y != m->y
 						|| crtc->width != m->w || crtc->height != m->h)
 					changed = 1;
-				m->num = nmons++;
 				m->x = m->wx = crtc->x;
 				m->y = m->wy = crtc->y;
 				m->w = m->ww = crtc->width;
 				m->h = m->wh = crtc->height;
-				m->connected = 1;
+				m->connected = (m->w != 0 && m->h != 0 && crtc->mode != XCB_NONE);
 			} else {
 				initmon(nmons++, name, outs[i], crtc->x, crtc->y, crtc->width, crtc->height);
 				changed = 1;

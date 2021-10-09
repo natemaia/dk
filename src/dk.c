@@ -995,7 +995,7 @@ void initsock(void)
 		sock = ecalloc(1, (len = 15));
 		strlcpy(sock, "/tmp/dk.socket", len);
 	}
-	if (setenv("DKSOCK", sock, 0) < 0)
+	if (setenv("DKSOCK", sock, 1) < 0)
 		warn("unable to set DKSOCK environment variable");
 	addr.sun_family = AF_UNIX;
 	strlcpy(addr.sun_path, sock, sizeof(addr.sun_path));
@@ -1284,6 +1284,7 @@ void printstatus(Status *s)
 			fprintf(s->file, "\nL%s\nA%s", selws->layout->name, selws->sel ? selws->sel->title :"");
 			break;
 		case STAT_FULL:
+			/* Globals */
 			fprintf(s->file, "# globals - key: value ...\nnumws: %d\nsmart_border: %d\n"
 					"smart_gap: %d\nfocus_urgent: %d\nfocus_mouse: %d\nfocus_open: %d\n"
 					"tile_hints: %d\ntile_tohead: %d\nwin_minxy: %d\nwin_minwh: %d",
@@ -1292,6 +1293,8 @@ void printstatus(Status *s)
 					globalcfg[GLB_FOCUS_MOUSE].val, globalcfg[GLB_FOCUS_OPEN].val,
 					globalcfg[GLB_TILE_HINTS].val, globalcfg[GLB_TILE_TOHEAD].val,
 					globalcfg[GLB_MIN_XY].val, globalcfg[GLB_MIN_WH].val);
+
+			/* Borders */
 			fprintf(s->file, "\n\n# width outer_width focus urgent unfocus "
 					"outer_focus outer_urgent outer_unfocus\n"
 					"border: %u %u 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x",
@@ -1299,21 +1302,27 @@ void printstatus(Status *s)
 					border[BORD_FOCUS], border[BORD_URGENT],
 					border[BORD_UNFOCUS], border[BORD_O_FOCUS],
 					border[BORD_O_URGENT], border[BORD_O_UNFOCUS]);
+
+			/* Workspaces */
 			fprintf(s->file, "\n\n# number:name:layout ...\nworkspaces:");
 			FOR_EACH(ws, workspaces)
-				fprintf(s->file, " %s%d:%s:%s", ws == selws ? "*" : "",
-						ws->num + 1, ws->name, ws->layout->name);
-			fprintf(s->file, "\n\t# number:name active_window nmaster "
-					"nstack msplit ssplit gappx padl padr padt padb");
+				fprintf(s->file, " %s%d:%s:%s", ws == selws ? "*" : "", ws->num + 1, ws->name, ws->layout->name);
+
+			/* Workspace settings */
+			fprintf(s->file, "\n\t# number:name active_window nmaster nstack msplit ssplit gappx padl padr padt padb");
 			FOR_EACH(ws, workspaces)
 				fprintf(s->file, "\n\t%d:%s 0x%08x %d %d %0.2f %0.2f %d %d %d %d %d",
 						ws->num + 1, ws->name, ws->sel ? ws->sel->win : 0, ws->nmaster, ws->nstack,
 						ws->msplit, ws->ssplit, ws->gappx, ws->padl, ws->padr, ws->padt, ws->padb);
+
+			/* Monitors */
 			fprintf(s->file, "\n\n# number:name:workspace ...\nmonitors:");
 			FOR_EACH(m, monitors)
 				if (m->connected)
 					fprintf(s->file, " %s%d:%s:%d", m->ws == selws ? "*" : "", m->num + 1, m->name,
 							m->ws->num + 1);
+
+			/* Monitor settings */
 			fprintf(s->file,
 					"\n\t# number:name active_window x y width height wx wy wwidth wheight");
 			FOR_EACH(m, monitors)
@@ -1321,11 +1330,14 @@ void printstatus(Status *s)
 					fprintf(s->file, "\n\t%d:%s 0x%08x %d %d %d %d %d %d %d %d",
 							m->num + 1, m->name, m->ws->sel ? m->ws->sel->win : 0,
 							m->x, m->y, m->w, m->h, m->wx, m->wy, m->ww, m->wh);
+
+			/* Clients */
 			fprintf(s->file, "\n\n# id:workspace ...\nwindows:");
 			FOR_CLIENTS(c, ws)
 				fprintf(s->file, " %s0x%08x:%d", c == selws->sel ? "*" :"", c->win, c->ws->num + 1);
-			fprintf(s->file, "\n\t# id title class instance x y width height bw hoff "
-					"float full fakefull fixed stick urgent callback trans_id");
+
+			/* Client settings */
+			fprintf(s->file, "\n\t# id title class instance x y width height bw hoff float full fakefull fixed stick urgent callback trans_id");
 			FOR_CLIENTS(c, ws)
 				fprintf(s->file, "\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d"
 						" %d %d %d %d %d %d %d %d %s 0x%08x",
@@ -1334,14 +1346,16 @@ void printstatus(Status *s)
 						(c->state & STATE_FAKEFULL) != 0, (c->state & STATE_FIXED) != 0,
 						(c->state & STATE_STICKY) != 0, (c->state & STATE_URGENT) != 0,
 						c->cb ? c->cb->name : "", c->trans ? c->trans->win : 0);
-			fprintf(s->file, "\n\n# title class instance workspace monitor float "
-					"stick focus callback x y width height xgrav ygrav");
+
+			/* Rules */
+			fprintf(s->file, "\n\n# title class instance workspace monitor float stick focus callback x y width height xgrav ygrav");
 			FOR_EACH(r, rules)
 				fprintf(s->file, "\nrule: \"%s\" \"%s\" \"%s\" %d %s %d %d %d %s %d %d %d %d %s %s",
 						r->title, r->class, r->inst, r->ws, r->mon, (r->state & STATE_FLOATING) !=0,
 						(r->state & STATE_STICKY) != 0, r->focus, r->cb ? r->cb->name : "",
 						r->x, r->y, r->w, r->h, gravities[r->xgrav], gravities[r->ygrav]);
 			fprintf(s->file, "\n");
+
 			break;
 		}
 		fflush(s->file);

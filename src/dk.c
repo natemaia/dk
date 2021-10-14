@@ -1337,15 +1337,15 @@ void printstatus(Status *s)
 				fprintf(s->file, " %s0x%08x:%d", c == selws->sel ? "*" :"", c->win, c->ws->num + 1);
 
 			/* Client settings */
-			fprintf(s->file, "\n\t# id title class instance x y width height bw hoff float full fakefull fixed stick urgent callback trans_id");
+			fprintf(s->file, "\n\t# id title class instance ws x y width height bw hoff float full fakefull fixed stick urgent callback trans_id");
 			FOR_CLIENTS(c, ws)
-				fprintf(s->file, "\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d"
+				fprintf(s->file, "\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d"
 						" %d %d %d %d %d %d %d %d %s 0x%08x",
-						c->win, c->title, c->class, c->inst, c->x, c->y, c->w, c->h, c->bw,
+						c->win, c->title, c->class, c->inst, c->ws->num + 1, c->x, c->y, c->w, c->h, c->bw,
 						c->hoff, FLOATING(c), (c->state & STATE_FULLSCREEN) != 0,
 						(c->state & STATE_FAKEFULL) != 0, (c->state & STATE_FIXED) != 0,
 						(c->state & STATE_STICKY) != 0, (c->state & STATE_URGENT) != 0,
-						c->cb ? c->cb->name : "", c->trans ? c->trans->win : 0);
+						c->cb ? c->cb->name : "none", c->trans ? c->trans->win : 0);
 
 			/* Rules */
 			fprintf(s->file, "\n\n# title class instance workspace monitor float stick focus callback x y width height xgrav ygrav");

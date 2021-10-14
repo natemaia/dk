@@ -229,7 +229,7 @@ int parsegeom(char *arg, char type, int *i, int *rel, int *grav)
 
 Workspace *parsewsormon(char *arg, int mon)
 {
-	int i, n;
+	int i, n = 0;
 	Monitor *m;
 	Workspace *cws = selws, *ws;
 
@@ -244,7 +244,7 @@ Workspace *parsewsormon(char *arg, int mon)
 				return ws;
 	}
 	if (mon)
-		for (n = 0, m = nextmon(monitors); m; m = nextmon(m->next), n++)
+		for (m = nextmon(monitors); m; m = nextmon(m->next), n++)
 			;
 	if ((i = parseintclamp(arg, NULL, 1, mon ? n : globalcfg[GLB_WS_NUM].val)) == INT_MIN || i <= 0)
 		return NULL;

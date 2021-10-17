@@ -1366,7 +1366,7 @@ void printstatus(Status *s)
 	}
 }
 
-void quadrant(Client *c, int *x, int *y, int *w, int *h)
+void quadrant(Client *c, int *x, int *y, const int *w, const int *h)
 {
 	Monitor *m = c->ws->mon;
 	static int index = 0;

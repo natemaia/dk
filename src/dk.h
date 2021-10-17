@@ -17,8 +17,10 @@
 #endif
 
 #ifndef NAN
-	#if __GNUC_PREREQ (3, 3)
-		#define NAN (__builtin_nanf(""))
+	#ifdef __GNUC_PREREQ
+		#if __GNUC_PREREQ (3, 3)
+			#define NAN (__builtin_nanf(""))
+		#endif
 	#else
 		#define NAN (0.0f / 0.0f)
 	#endif
@@ -382,7 +384,7 @@ Monitor *outputtomon(xcb_randr_output_t id);
 void popfloat(Client *c);
 void printstatus_all(void);
 void printstatus(Status *s);
-void quadrant(Client *c, int *x, int *y, int *w, int *h);
+void quadrant(Client *c, int *x, int *y, const int *w, const int *h);
 int refresh(void);
 void relocate(Client *c, Monitor *new, Monitor *old);
 void relocatews(Workspace *ws, Monitor *old, int wasvis);

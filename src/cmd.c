@@ -137,7 +137,7 @@ int adjustwsormon(char **argv)
 	}
 	if (ws) {
 		nparsed++;
-		if (ws != cmdclient->ws || ws != selws || selws->mon != ws->mon)
+		if ((cmdclient && ws != cmdclient->ws) || ws != selws || selws->mon != ws->mon)
 			fn(ws);
 	} else {
 		respond(cmdresp, "!invalid value for %s: %s", cmdusemon ? "mon" : "ws", *argv);

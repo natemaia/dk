@@ -363,7 +363,6 @@ int cmdgappx(char **argv)
 
 int cmdkill(char **argv)
 {
-	if (!cmdclient) return 0;
 	if (!sendwmproto(cmdclient, WM_DELETE)) {
 		xcb_grab_server(con);
 		xcb_set_close_down_mode(con, XCB_CLOSE_DOWN_DESTROY_ALL);
@@ -1056,7 +1055,8 @@ int cmdwin(char **argv)
 			int match = 0;
 			for (unsigned int ui = 0; wincmds[ui].str; ui++)
 				if ((match = !strcmp(wincmds[ui].str, *argv))) {
-					if ((e = wincmds[ui].func(argv + 1)) == -1) return -1;
+					if (cmdclient)
+						if ((e = wincmds[ui].func(argv + 1)) == -1) return -1;
 					nparsed += e;
 					argv += e;
 					break;

@@ -176,7 +176,10 @@ enum Gravities {
 
 enum StatusType {
 	STAT_WS   = 0,
-	STAT_FULL = 1,
+	STAT_LAYOUT = 1,
+	STAT_TITLE = 2,
+	STAT_BAR = 3,
+	STAT_FULL = 4,
 };
 
 enum CfgType {

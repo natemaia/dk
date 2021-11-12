@@ -932,6 +932,12 @@ int cmdstatus(char **argv)
 				type = STAT_WS;
 			else if (!strcmp("full", *argv))
 				type = STAT_FULL;
+			else if (!strcmp("bar", *argv))
+				type = STAT_BAR;
+			else if (!strcmp("layout", *argv))
+				type = STAT_LAYOUT;
+			else if (!strcmp("title", *argv))
+				type = STAT_TITLE;
 			else
 				goto badvalue;
 		} else if (!strcmp("num", *argv)) {

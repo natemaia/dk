@@ -571,7 +571,10 @@ status [TYPE] [FILE] [NUM]
 ###### Subcommands
 `type` (string) the type of status info to output.
 
-- `ws` output simple workspace info for parsing and use in bars.
+- `ws` output workspace info.
+- `title` output current window title.
+- `layout` output current workspace layout name.
+- `bar` output simple info for use in bars *(title, layout, and ws combined)*.
 - `full` output the full wm and managed client state.
 
 ```
@@ -586,7 +589,7 @@ status file=/tmp/dk.status [TYPE] [NUM]
 ```
 ---
 
-`num` (integer) the number of times to output, -1 is infinite and default if not passed.
+`num` (integer) the number of times to output, -1 is infinite and default if not specified.
 
 ```
 status [TYPE] [FILE]        # output forever

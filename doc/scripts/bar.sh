@@ -127,7 +127,7 @@ mkfifo "$fifo"
 clock '' > "$fifo" &
 battery '' > "$fifo" &
 volume 'pavucontrol' > "$fifo" &
-dkcmd status > "$fifo" &
+dkcmd status type=bar > "$fifo" &
 
 
 # run the pipeline

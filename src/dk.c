@@ -1287,12 +1287,8 @@ void printstatus(Status *s)
 			fprintf(s->file, "W");
 			FOR_EACH(ws, workspaces) {
 				char fmt[5] = "i%s:";
-				if (ws == selws)
-					fmt[0] = ws->clients ? 'A' : 'I';
-				else
-					fmt[0] = ws->clients ? 'a' : 'i';
-				if (!ws->next)
-					fmt[3] = '\0';
+				fmt[0] = (ws == selws) ? ws->clients ? 'A' : 'I' : ws->clients ? 'a' : 'i';
+				if (!ws->next) fmt[3] = '\0';
 				fprintf(s->file, fmt, ws->name);
 			}
 			fprintf(s->file, "\nL%s\nA%s", selws->layout->name, selws->sel ? selws->sel->title :"");
@@ -1368,9 +1364,9 @@ void printstatus(Status *s)
 						r->title, r->class, r->inst, r->ws, r->mon, (r->state & STATE_FLOATING) !=0,
 						(r->state & STATE_STICKY) != 0, r->focus, r->cb ? r->cb->name : "",
 						r->x, r->y, r->w, r->h, gravities[r->xgrav], gravities[r->ygrav]);
+			/* fprintf(s->file, "\n"); */
 			break;
 		}
-		fprintf(s->file, "\n");
 		fflush(s->file);
 		if (!(s->num -= s->num > 0 ? 1 : 0))
 			freestatus(s);

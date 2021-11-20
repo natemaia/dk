@@ -922,7 +922,7 @@ int cmdstatus(char **argv)
 	char *path = NULL;
 	FILE *file = cmdresp;
 	int i, num = -1, nparsed = 0;
-	unsigned int type = STAT_WS;
+	unsigned int type = STAT_BAR;
 
 	while (*argv) {
 		if (!strcmp("type", *argv)) {
@@ -1116,7 +1116,7 @@ int cmdws_(char **argv)
 		{
 			nparsed++;
 			if (!(++argv) || (f = parsefloat(*argv, NULL)) == NAN) goto badvalue;
-			*ff = f;
+			*ff = CLAMP(f, 0.05, 0.95);
 		} else if (!strcmp(*argv, "gap")) {
 			nparsed++;
 			if (!(++argv) || (j = parseintclamp(*argv, NULL, 0, scr_h / 6)) == INT_MIN) goto badvalue;

@@ -114,7 +114,7 @@ int ltile(Workspace *ws)
 {
 	Client *c;
 	Monitor *m = ws->mon;
-	int i, n, x, *y, remain, ret = 0, p = -1, pbw;
+	int i, n, x, *y, remain, ret = 0, p = -1, pbw = 0;
 	int mw, my, sw, sy, ss, ssw, ssy, ns = 1;
 	int minh = globalcfg[GLB_MIN_WH].val;
 
@@ -234,7 +234,7 @@ int rtile(Workspace *ws)
 {
 	Client *c;
 	Monitor *m = ws->mon;
-	int i, n, x, *y, remain, ret = 0, p = -1, pbw;
+	int i, n, x, *y, remain, ret = 0, p = -1, pbw = 0;
 	int mw, my, sw, sy, ss, ssw, ssy, ns = 1;
 	int minh = globalcfg[GLB_MIN_WH].val;
 

@@ -48,6 +48,7 @@ char *argv0, *sock = NULL;
 unsigned int lockmask = 0;
 int scr_h, scr_w, sockfd, randrbase, cmdusemon;
 int running, restart, needsrefresh, status_usingcmdresp, depth;
+int winchange, wschange, lytchange;
 
 Desk *desks;
 Rule *rules;
@@ -122,6 +123,7 @@ int main(int argc, char *argv[])
 	randrbase = -1;
 	running = needsrefresh = 1;
 	sockfd = restart = cmdusemon = 0;
+	winchange = wschange = lytchange = 0;
 
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "-s")) {
@@ -190,13 +192,14 @@ int main(int argc, char *argv[])
 					free(ev);
 				}
 		}
-		if (needsrefresh) needsrefresh = refresh();
 		s = stats;
 		while (s) {
 			next = s->next;
 			if (write(fileno(s->file), 0, 0) == -1) freestatus(s);
 			s = next;
 		}
+		if (stats && (winchange || wschange || lytchange)) printstatus(NULL);
+		if (needsrefresh) needsrefresh = refresh();
 	}
 	return 0;
 }
@@ -577,6 +580,7 @@ void focus(Client *c)
 		setinputfocus(c);
 		selws->sel = c;
 		cmdclient = c;
+		winchange = 1;
 	} else {
 		unfocus(NULL, 1);
 		if (selws) selws->sel = NULL;
@@ -1022,6 +1026,13 @@ Status *initstatus(FILE *file, char *path, int num, unsigned int type)
 		tail->next = s;
 	else
 		stats = s;
+
+	switch (type) {
+		case STAT_WS: wschange = 1; break;
+		case STAT_WIN: winchange = 1; break;
+		case STAT_LYT: lytchange = 1; break;
+		default: wschange = winchange = lytchange = 1; break;
+	}
 	return s;
 }
 
@@ -1269,19 +1280,20 @@ void printstatus(Status *s)
 	while (s) {
 		next = s->next;
 		switch (s->type) {
-		case STAT_TITLE:
-			fprintf(s->file, "%s", selws->sel ? selws->sel->title : "");
+		case STAT_WIN:
+			if (winchange) fprintf(s->file, "%s", selws->sel ? selws->sel->title : "");
 			break;
-		case STAT_LAYOUT:
-			fprintf(s->file, "%s", selws->layout->name);
+		case STAT_LYT:
+			if (lytchange) fprintf(s->file, "%s", selws->layout->name);
 			break;
 		case STAT_WS:
-			FOR_EACH(ws, workspaces) {
-				char fmt[5] = "i%s:";
-				fmt[0] = (ws == selws) ? ws->clients ? 'A' : 'I' : ws->clients ? 'a' : 'i';
-				if (!ws->next) fmt[3] = '\0';
-				fprintf(s->file, fmt, ws->name);
-			}
+			if (wschange)
+				FOR_EACH(ws, workspaces) {
+					char fmt[5] = "i%s:";
+					fmt[0] = (ws == selws) ? ws->clients ? 'A' : 'I' : ws->clients ? 'a' : 'i';
+					if (!ws->next) fmt[3] = '\0';
+					fprintf(s->file, fmt, ws->name);
+				}
 			break;
 		case STAT_BAR:
 			fprintf(s->file, "W");
@@ -1373,6 +1385,7 @@ void printstatus(Status *s)
 		if (single) break;
 		s = next;
 	}
+	winchange = lytchange = wschange = 0;
 }
 
 void quadrant(Client *c, int *x, int *y, const int *w, const int *h)
@@ -1434,7 +1447,6 @@ int refresh(void)
 	for (m = nextmon(monitors); m; m = nextmon(m->next)) restack(m->ws);
 	xcb_aux_sync(con);
 	ignore(XCB_ENTER_NOTIFY);
-	printstatus(NULL);
 
 	return 0;
 #undef MAP
@@ -2022,6 +2034,7 @@ void updworkspaces(int needed)
 	}
 	setnetwsnames();
 	needsrefresh = 1;
+	wschange = 1;
 }
 
 xcb_get_window_attributes_reply_t *winattr(xcb_window_t win)

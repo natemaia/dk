@@ -572,9 +572,9 @@ status [TYPE] [FILE] [NUM]
 `type` (string) the type of status info to output.
 
 - `ws` output workspace info.
-- `title` output current window title.
+- `win` output current window title.
 - `layout` output current workspace layout name.
-- `bar` output simple info for use in bars *(title, layout, and ws combined)*.
+- `bar` output simple info for use in bars *(win, layout, and ws combined)*.
 - `full` output the full wm and managed client state.
 
 ```

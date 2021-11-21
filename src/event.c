@@ -498,7 +498,7 @@ void propertynotify(xcb_generic_event_t *ev)
 			break;
 		default:
 			if (e->atom == XCB_ATOM_WM_NAME || e->atom == netatom[NET_WM_NAME]) {
-				if (clientname(c)) printstatus(NULL);
+				if (clientname(c)) winchange = 1;
 			} else if (e->atom == netatom[NET_WM_TYPE]) {
 				clienttype(c);
 			}

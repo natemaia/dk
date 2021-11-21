@@ -176,9 +176,9 @@ enum Gravities {
 
 enum StatusType {
 	STAT_WS   = 0,
-	STAT_LAYOUT = 1,
-	STAT_TITLE = 2,
-	STAT_BAR = 3,
+	STAT_LYT  = 1,
+	STAT_WIN  = 2,
+	STAT_BAR  = 3,
 	STAT_FULL = 4,
 };
 
@@ -314,6 +314,7 @@ extern unsigned int lockmask;
 extern char *argv0, *sock, **environ;
 extern int scr_h, scr_w, sockfd, randrbase, cmdusemon;
 extern int running, restart, needsrefresh, status_usingcmdresp, depth;
+extern int winchange, wschange, lytchange;
 
 extern Desk *desks;
 extern Rule *rules;
@@ -385,7 +386,6 @@ Monitor *nextmon(Monitor *m);
 Client *nexttiled(Client *c);
 Monitor *outputtomon(xcb_randr_output_t id);
 void popfloat(Client *c);
-void printstatus_all(void);
 void printstatus(Status *s);
 void quadrant(Client *c, int *x, int *y, const int *w, const int *h);
 int refresh(void);

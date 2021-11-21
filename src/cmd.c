@@ -137,8 +137,10 @@ int adjustwsormon(char **argv)
 	}
 	if (ws) {
 		nparsed++;
-		if ((cmdclient && ws != cmdclient->ws) || ws != selws || selws->mon != ws->mon)
+		if ((cmdclient && ws != cmdclient->ws) || ws != selws || selws->mon != ws->mon) {
 			fn(ws);
+			wschange = 1;
+		}
 	} else {
 		respond(cmdresp, "!invalid value for %s: %s", cmdusemon ? "mon" : "ws", *argv);
 		return -1;
@@ -382,7 +384,7 @@ int cmdlayout(char **argv)
 		if (!strcmp(layouts[i].name, *argv)) {
 			Client *c = NULL;
 			if (tilecount(setws) == 1) c = nexttiled(setws->clients);
-			if (&layouts[i] != setws->layout && (setws->layout = &layouts[i])->func == NULL) {
+			if ((lytchange = &layouts[i] != setws->layout) && (setws->layout = &layouts[i])->func == NULL) {
 				if (c) {
 					c->w = c->ws->mon->ww / 1.5;
 					c->h = c->ws->mon->wh / 1.3;
@@ -818,16 +820,6 @@ int cmdset(char **argv)
 	Workspace *ws = NULL;
 	int i, nparsed = 0, names = 0;
 
-#define INT(idx)                                                                       \
-	if (!argv || (i = parseintclamp(*argv, NULL, 10, 1000)) == INT_MIN) goto badvalue; \
-	globalcfg[idx].val = i
-#define BOOL(idx)                                           \
-	if (!argv || (i = parsebool(*argv)) < 0) goto badvalue; \
-	globalcfg[idx].val = i
-#define NUMWS(idx)                                                                  \
-	if (!argv || (i = parseintclamp(*argv, NULL, 1, 99)) == INT_MIN) goto badvalue; \
-	if (i > globalcfg[idx].val) updworkspaces(i)
-
 	setws = selws;
 	if (!argv || !*argv) {
 		respond(cmdresp, "!set %s", enoargs);
@@ -843,6 +835,7 @@ int cmdset(char **argv)
 				if ((i = cmdws_(argv + 1)) == -1) return -1;
 				setws = selws;
 				argv += i + 1, nparsed += i + 1;
+				wschange = 1;
 				continue;
 			} else if (!(ws = parsewsormon(*argv, 0))) {
 				goto badvalue;
@@ -851,27 +844,38 @@ int cmdset(char **argv)
 		} else if (!strcmp("mon", *argv)) {
 			argv++, nparsed++;
 			if (!globalcfg[GLB_WS_STATIC].val) {
-				respond(cmdresp, "!unable to set monitor without static_ws=true");
+				respond(cmdresp, "!unable to set workspace monitor without static_ws=true");
 				return -1;
 			} else if (!argv || !(ws = parsewsormon(*argv, 1))) {
 				respond(cmdresp, "!invalid monitor index or name: %s", argv ? *argv : NULL);
 				return -1;
 			}
 			assignws(setws, ws->mon);
+			wschange = 1;
 		} else if (!strcmp("name", *argv)) {
 			argv++, nparsed++;
 			if (!argv || !*argv) goto badvalue;
 			strlcpy(setws->name, *argv, sizeof(setws->name));
 			names = 1;
+			wschange = 1;
 		} else {
 			int match = 0;
 			for (j = 0; j < LEN(globalcfg); j++) {
 				if ((match = !strcmp(globalcfg[j].str, *argv))) {
 					argv++, nparsed++;
 					switch (globalcfg[j].type) {
-					case TYPE_BOOL:  BOOL(j);  break;
-					case TYPE_NUMWS: NUMWS(j); break;
-					case TYPE_INT:   INT(j);   break;
+					case TYPE_BOOL:
+						if (!argv || (i = parsebool(*argv)) < 0) goto badvalue;
+						globalcfg[j].val = i;
+						break;
+					case TYPE_NUMWS:
+						if (!argv || (i = parseintclamp(*argv, NULL, 1, 99)) == INT_MIN) goto badvalue;
+						if (i > globalcfg[j].val) updworkspaces(i);
+						break;
+					case TYPE_INT:
+						if (!argv || (i = parseintclamp(*argv, NULL, 10, 1000)) == INT_MIN) goto badvalue;
+						globalcfg[j].val = i;
+						break;
 					}
 					argv++, nparsed++;
 					break;
@@ -895,9 +899,6 @@ badvalue:
 	needsrefresh = 1;
 	if (names) setnetwsnames();
 	return nparsed;
-#undef INT
-#undef BOOL
-#undef NUMWS
 }
 
 int cmdsplit(char **argv)
@@ -935,9 +936,9 @@ int cmdstatus(char **argv)
 			else if (!strcmp("bar", *argv))
 				type = STAT_BAR;
 			else if (!strcmp("layout", *argv))
-				type = STAT_LAYOUT;
-			else if (!strcmp("title", *argv))
-				type = STAT_TITLE;
+				type = STAT_LYT;
+			else if (!strcmp("win", *argv))
+				type = STAT_WIN;
 			else
 				goto badvalue;
 		} else if (!strcmp("num", *argv)) {
@@ -948,13 +949,10 @@ int cmdstatus(char **argv)
 		} else if (!strcmp("file", *argv)) {
 			argv++;
 			nparsed++;
-			if (*argv) {
-				size_t len = strlen(*argv) + 1;
-				path = ecalloc(1, len);
-				strlcpy(path, *argv, len);
-			} else {
-				goto badvalue;
-			}
+			if (!*argv) goto badvalue;
+			size_t len = strlen(*argv) + 1;
+			path = ecalloc(1, len);
+			strlcpy(path, *argv, len);
 		} else {
 			break;
 badvalue:

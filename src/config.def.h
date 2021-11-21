@@ -97,7 +97,7 @@ int tstack(Workspace *ws)
 	 */
 
 	Client *c;
-	int i, n, mh, mw, mx, sx, sw;
+	int i, n, mh, mw, mx, sx, sw = 0;
 
 	if (!(n = tilecount(ws))) return 1;
 

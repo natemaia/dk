@@ -21,8 +21,8 @@ COBJ = ${CSRC:.c=.o}
 OPTLVL = -O2
 
 CPPFLAGS += -D_DEFAULT_SOURCE -D_BSD_SOURCE -DVERSION=\"${VERSION}\"
-CFLAGS   += -flto -std=c99 -pedantic -Wall -Wextra -I/usr/X11R6/include
-LDFLAGS  += -s -flto -L/usr/X11R6/lib -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
+CFLAGS   += -flto -std=c11 -pedantic -Wall -Wextra -I/usr/X11R6/include
+LDFLAGS  += -s -L/usr/X11R6/lib -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
 
 all: dk dkcmd
 
@@ -39,7 +39,7 @@ leak: CFLAGS += -ggdb3
 leak: all
 
 .c.o:
-	${CC} ${OPTLVL} ${CFLAGS} ${CPPFLAGS} -c $<
+	${CC} ${CFLAGS} ${OPTLVL} ${CPPFLAGS} -c $<
 
 ${OBJ}: config.h
 
@@ -47,10 +47,10 @@ config.h:
 	@test -e src/$@ || cp -v src/config.def.h src/$@
 
 dk: config.h ${OBJ}
-	${CC} ${OBJ} -o $@ ${LDFLAGS}
+	${CC} ${CFLAGS} ${OPTLVL} ${LDFLAGS} ${OBJ} -o $@
 
 dkcmd: ${COBJ}
-	${CC} ${COBJ} -o $@
+	${CC} ${CFLAGS} ${OPTLVL} ${COBJ} -o $@
 
 clean:
 	rm -f *.o dk dkcmd

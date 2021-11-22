@@ -778,7 +778,7 @@ void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	Client *c;
 	xcb_generic_error_t *e;
 	xcb_get_property_cookie_t pc;
-	xcb_get_property_reply_t *pr;
+	xcb_get_property_reply_t *pr = NULL;
 	xcb_icccm_get_wm_class_reply_t p;
 
 	c = ecalloc(1, sizeof(Client));
@@ -1165,7 +1165,7 @@ Workspace *itows(int num)
 void manage(xcb_window_t win, int scan)
 {
 	xcb_get_geometry_reply_t *g = NULL;
-	xcb_get_window_attributes_reply_t *wa;
+	xcb_get_window_attributes_reply_t *wa = NULL;
 	xcb_atom_t type, state;
 
 	if (wintoclient(win) || wintopanel(win) || wintodesk(win))

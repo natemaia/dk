@@ -30,7 +30,7 @@ debug: CPPFLAGS += -DDEBUG
 debug: all
 
 fdebug: CFLAGS   += -finstrument-functions -export-dynamic
-fdebug: LDFLAGS  += -ldl -Wl,--export-dynamic
+fdebug: LDFLAGS  += -lmcheck -ldl -Wl,--export-dynamic
 fdebug: CPPFLAGS += -DFUNCDEBUG
 fdebug: debug
 

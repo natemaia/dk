@@ -383,8 +383,10 @@ int clientname(Client *c)
 			return 0;
 		}
 	}
-	r.name[r.name_len] = '\0';
-	strlcpy(c->title, r.name_len > 0 ? r.name : "broken", sizeof(c->title));
+	if (r.name_len > 0)
+		strlcpy(c->title, r.name, MIN(sizeof(c->title), r.name_len + 1));
+	else
+		strlcpy(c->title, "broken", sizeof(c->title));
 	xcb_icccm_get_text_property_reply_wipe(&r);
 	return 1;
 }

@@ -47,7 +47,7 @@ config.h:
 	@test -e src/$@ || cp -v src/config.def.h src/$@
 
 dk: config.h ${OBJ}
-	${CC} ${CFLAGS} ${OPTLVL} ${LDFLAGS} ${OBJ} -o $@
+	${CC} ${CFLAGS} ${OPTLVL} ${OBJ} -o $@ ${LDFLAGS}
 
 dkcmd: ${COBJ}
 	${CC} ${CFLAGS} ${OPTLVL} ${COBJ} -o $@

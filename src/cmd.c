@@ -138,6 +138,7 @@ int adjustwsormon(char **argv)
 	if (ws) {
 		nparsed++;
 		if ((cmdclient && ws != cmdclient->ws) || ws != selws || selws->mon != ws->mon) {
+			lytchange = fn != cmdsend && ws->layout != selws->layout;
 			fn(ws);
 			wschange = 1;
 		}

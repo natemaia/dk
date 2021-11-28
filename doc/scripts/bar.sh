@@ -131,6 +131,10 @@ dkcmd status type=bar > "$fifo" &
 
 
 # run the pipeline
-parsefifo < "$fifo" | lemonbar -a 32 -u $underline -B "$bg" -F "$fg" -f "$font0" -f "$font1" -f "$font2" -f "$font3" | sh
+if [[ $1 == '-b' ]]; then
+	parsefifo < "$fifo" | lemonbar -b -a 32 -u $underline -B "$bg" -F "$fg" -f "$font0" -f "$font1" -f "$font2" -f "$font3" | sh
+else
+	parsefifo < "$fifo" | lemonbar -a 32 -u $underline -B "$bg" -F "$fg" -f "$font0" -f "$font1" -f "$font2" -f "$font3" | sh
+fi
 
 # vim:ft=sh:fdm=marker:fmr={,}

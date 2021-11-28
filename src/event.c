@@ -507,7 +507,8 @@ void propertynotify(xcb_generic_event_t *ev)
 	} else if ((e->atom == netatom[NET_WM_STRUTP] || e->atom == netatom[NET_WM_STRUT])
 			&& (p = wintopanel(e->window)))
 	{
-		updstruts(p, 1);
+		fillstruts(p);
+		updstruts();
 		needsrefresh = 1;
 	}
 }

@@ -893,30 +893,16 @@ void initmon(int num, char *name, xcb_randr_output_t id, int x, int y, int w, in
 
 void initpanel(xcb_window_t win, xcb_get_geometry_reply_t *g)
 {
-	int *s;
 	Panel *p;
-	xcb_generic_error_t *e;
-	xcb_get_property_cookie_t rc;
-	xcb_get_property_reply_t *prop = NULL;
 
-	rc = xcb_get_property(con, 0, win, netatom[NET_WM_STRUTP], XCB_ATOM_CARDINAL, 0, 4);
 	p = ecalloc(1, sizeof(Panel));
 	p->win = win;
 	p->state |= STATE_NEEDSMAP;
 	if (!(p->mon = coordtomon(g->x, g->y)))
 		p->mon = selws->mon;
-	if (!(prop = xcb_get_property_reply(con, rc, &e)) || prop->type == XCB_NONE) {
-		rc = xcb_get_property(con, 0, p->win, netatom[NET_WM_STRUT], XCB_ATOM_CARDINAL, 0, 4);
-		iferr(0, "unable to get _NET_WM_STRUT_PARTIAL reply from window", e);
-		if (!(prop = xcb_get_property_reply(con, rc, &e)))
-			iferr(0, "unable to get _NET_WM_STRUT reply from window", e);
-	}
-	if (prop && xcb_get_property_value_length(prop) >= 4 && (s = xcb_get_property_value(prop))) {
-		p->l = s[0], p->r = s[1], p->t = s[2], p->b = s[3];
-		updstruts(p, 1);
-	}
-	free(prop);
 	ATTACH(p, panels);
+	fillstruts(p);
+	updstruts();
 	xcb_change_window_attributes(con, p->win, XCB_CW_EVENT_MASK,
 			(unsigned int[]){ XCB_EVENT_MASK_PROPERTY_CHANGE
 							| XCB_EVENT_MASK_STRUCTURE_NOTIFY });
@@ -1270,6 +1256,7 @@ void popfloat(Client *c)
 void printstatus(Status *s)
 {
 	Rule *r;
+	Panel *p;
 	Client *c;
 	Monitor *m;
 	Status *next;
@@ -1379,7 +1366,17 @@ void printstatus(Status *s)
 						r->title, r->class, r->inst, r->ws, r->mon, (r->state & STATE_FLOATING) !=0,
 						(r->state & STATE_STICKY) != 0, r->focus, r->cb ? r->cb->name : "",
 						r->x, r->y, r->w, r->h, gravities[r->xgrav], gravities[r->ygrav]);
-			/* fprintf(s->file, "\n"); */
+
+			/* Panels */
+			fprintf(s->file, "\n\n# id:monitor ...\npanels:");
+			FOR_EACH(p, panels)
+				fprintf(s->file, " 0x%08x:%s", p->win, p->mon->name);
+
+			/* Panel settings */
+			fprintf(s->file, "\n\t# id monitor strut_left strut_right strut_top strut_bottom");
+			FOR_EACH(p, panels)
+				fprintf(s->file, "\n\t0x%08x %s %d %d %d %d", p->win, p->mon->name, p->l, p->r, p->t, p->b);
+
 			break;
 		}
 		fflush(s->file);
@@ -1820,7 +1817,7 @@ void unmanage(xcb_window_t win, int destroyed)
 	} else if ((ptr = p = wintopanel(win))) {
 		Panel **pp = &panels;
 		DETACH(p, pp);
-		updstruts(p, 0);
+		updstruts();
 	} else if ((ptr = d = wintodesk(win))) {
 		Desk **dd = &desks;
 		DETACH(d, dd);
@@ -1962,20 +1959,34 @@ int updrandr(void)
 	return changed;
 }
 
-void updstruts(Panel *p, int apply)
+void fillstruts(Panel *p)
 {
-	Panel *n;
+	int *s;
+	xcb_generic_error_t *err;
+	xcb_get_property_reply_t *prop = NULL;
+	xcb_get_property_cookie_t rc = xcb_get_property(con, 0, p->win, netatom[NET_WM_STRUTP], XCB_ATOM_CARDINAL, 0, 4);
+
+	if (!(prop = xcb_get_property_reply(con, rc, &err)) || prop->type == XCB_NONE) {
+		rc = xcb_get_property(con, 0, p->win, netatom[NET_WM_STRUT], XCB_ATOM_CARDINAL, 0, 4);
+		iferr(0, "unable to get _NET_WM_STRUT_PARTIAL reply from window", err);
+		if (!(prop = xcb_get_property_reply(con, rc, &err)))
+			iferr(0, "unable to get _NET_WM_STRUT reply from window", err);
+	}
+	if (prop && xcb_get_property_value_length(prop) >= 4 && (s = xcb_get_property_value(prop)))
+		p->l = s[0], p->r = s[1], p->t = s[2], p->b = s[3];
+	free(prop);
+}
+
+void updstruts(void)
+{
+	Panel *p;
 	Monitor *m;
 
 	FOR_EACH(m, monitors)
 		m->wx = m->x, m->wy = m->y, m->ww = m->w, m->wh = m->h;
-	if (p) {
-		if (apply && !panels)
+	FOR_EACH(p, panels)
+		if (p->l || p->r || p->t || p->b)
 			applypanelstrut(p);
-		FOR_EACH(n, panels)
-			if ((apply || n != p) && (n->l || n->r || n->t || n->b))
-				applypanelstrut(p);
-	}
 	updnetworkspaces();
 }
 
@@ -2028,13 +2039,7 @@ void updworkspaces(int needed)
 	FOR_CLIENTS(c, ws)
 		if (c->state & STATE_FULLSCREEN && ws == ws->mon->ws)
 			resize(c, ws->mon->x, ws->mon->y, ws->mon->w, ws->mon->h, c->bw);
-	if (!panels) {
-		updnetworkspaces();
-	} else {
-		Panel *p;
-		FOR_EACH(p, panels)
-			updstruts(p, 1);
-	}
+	updstruts();
 	setnetwsnames();
 	needsrefresh = 1;
 	wschange = 1;

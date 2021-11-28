@@ -219,7 +219,7 @@ badvalue:
 #undef COLOUR
 }
 
-int cmdcycle(char **argv)
+int cmdcycle(__attribute__((unused)) char **argv)
 {
 	Client *c = cmdclient, *first;
 
@@ -234,11 +234,10 @@ int cmdcycle(char **argv)
 	focus(first);
 	movestack(-1);
 	focus(c);
-	(void)(argv);
 	return 0;
 }
 
-int cmdfakefull(char **argv)
+int cmdfakefull(__attribute__((unused)) char **argv)
 {
 	Client *c = cmdclient;
 
@@ -249,7 +248,6 @@ int cmdfakefull(char **argv)
 			resize(c, c->ws->mon->x, c->ws->mon->y, c->ws->mon->w, c->ws->mon->h, c->bw);
 		needsrefresh = 1;
 	}
-	(void)(argv);
 	return 0;
 }
 
@@ -333,10 +331,9 @@ int cmdfollow(Workspace *ws)
 	return 0;
 }
 
-int cmdfull(char **argv)
+int cmdfull(__attribute__((unused)) char **argv)
 {
 	setfullscreen(cmdclient, !(cmdclient->state & STATE_FULLSCREEN));
-	(void)(argv);
 	return 0;
 }
 
@@ -364,7 +361,7 @@ int cmdgappx(char **argv)
 	return nparsed;
 }
 
-int cmdkill(char **argv)
+int cmdkill(__attribute__((unused)) char **argv)
 {
 	if (!sendwmproto(cmdclient, WM_DELETE)) {
 		xcb_grab_server(con);
@@ -375,7 +372,6 @@ int cmdkill(char **argv)
 	}
 	xcb_aux_sync(con);
 	ignore(XCB_ENTER_NOTIFY);
-	(void)(argv);
 	return 0;
 }
 
@@ -497,17 +493,15 @@ badvalue:
 #undef PAD
 }
 
-int cmdexit(char **argv)
+int cmdexit(__attribute__((unused)) char **argv)
 {
 	running = 0;
-	(void)(argv);
 	return 0;
 }
 
-int cmdreload(char **argv)
+int cmdreload(__attribute__((unused)) char **argv)
 {
 	execcfg();
-	(void)(argv);
 	return 0;
 }
 
@@ -647,10 +641,9 @@ int cmdmvstack(char **argv)
 	return 1;
 }
 
-int cmdrestart(char **argv)
+int cmdrestart(__attribute__((unused)) char **argv)
 {
 	running = 0, restart = 1;
-	(void)(argv);
 	return 0;
 }
 
@@ -976,7 +969,7 @@ badvalue:
 	return nparsed;
 }
 
-int cmdstick(char **argv)
+int cmdstick(__attribute__((unused)) char **argv)
 {
 	Client *c = cmdclient;
 	unsigned int all = 0xffffffff;
@@ -993,11 +986,10 @@ int cmdstick(char **argv)
 		c->state |= STATE_STICKY | STATE_FLOATING;
 		PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL, 32, 1, &all);
 	}
-	(void)(argv);
 	return 0;
 }
 
-int cmdswap(char **argv)
+int cmdswap(__attribute__((unused)) char **argv)
 {
 	static Client *last = NULL;
 	Client *c = cmdclient, *old, *cur = NULL, *prev = NULL;
@@ -1030,7 +1022,6 @@ int cmdswap(char **argv)
 		}
 	}
 	needsrefresh = 1;
-	(void)(argv);
 	return 0;
 }
 

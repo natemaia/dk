@@ -220,9 +220,12 @@ void dispatch(xcb_generic_event_t *ev)
 	if ((type = ev->response_type & 0x7f)) {
 		if (handlers[type]) {
 			handlers[type](ev);
-		} else if (ev->response_type == randrbase + XCB_RANDR_SCREEN_CHANGE_NOTIFY) {
-			if (((xcb_randr_screen_change_notify_event_t *)ev)->root == root && updrandr())
+		} else if (ev->response_type == randrbase + XCB_RANDR_SCREEN_CHANGE_NOTIFY
+				&& ((xcb_randr_screen_change_notify_event_t *)ev)->root == root)
+		{
+			if (updrandr())
 				updworkspaces(globalcfg[GLB_WS_NUM].val);
+			updstruts();
 		}
 	} else {
 		xcb_generic_error_t *e = (xcb_generic_error_t*)ev;

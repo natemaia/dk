@@ -207,13 +207,13 @@ int main(int argc, char *argv[])
 void applypanelstrut(Panel *p)
 {
 	if (p->mon->x + p->l > p->mon->wx)
-		p->mon->wx = p->l;
+		p->mon->wx = p->mon->x + p->l;
 	if (p->mon->y + p->t > p->mon->wy)
-		p->mon->wy = p->t;
-	if (p->mon->w - p->mon->wx - (p->r + p->l) < p->mon->ww)
-		p->mon->ww = p->mon->w - p->mon->wx - (p->r + p->l);
-	if (p->mon->h - p->mon->wy - (p->b + p->t) < p->mon->wh)
-		p->mon->wh = p->mon->h - p->mon->wy - (p->b + p->t);
+		p->mon->wy = p->mon->y + p->t;
+	if (p->mon->wx + p->mon->ww > (p->mon->x + p->mon->w) - (p->r + (p->mon->wy - p->mon->y)))
+		p->mon->ww = p->mon->w - p->r - (p->mon->wx - p->mon->x);
+	if (p->mon->wy + p->mon->wh > (p->mon->y + p->mon->h) - (p->b + (p->mon->wy - p->mon->y)))
+		p->mon->wh = p->mon->h - p->b - (p->mon->wy - p->mon->y);
 }
 
 int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse)
@@ -1992,6 +1992,7 @@ void updstruts(void)
 		if (p->l || p->r || p->t || p->b)
 			applypanelstrut(p);
 	updnetworkspaces();
+	needsrefresh = 1;
 }
 
 void updnetworkspaces(void)
@@ -2045,7 +2046,6 @@ void updworkspaces(int needed)
 			resize(c, ws->mon->x, ws->mon->y, ws->mon->w, ws->mon->h, c->bw);
 	updstruts();
 	setnetwsnames();
-	needsrefresh = 1;
 	wschange = 1;
 }
 

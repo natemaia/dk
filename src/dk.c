@@ -206,10 +206,14 @@ int main(int argc, char *argv[])
 
 void applypanelstrut(Panel *p)
 {
-	if (p->mon->x + p->l > p->mon->wx)          p->mon->wx = p->l;
-	if (p->mon->y + p->t > p->mon->wy)          p->mon->wy = p->t;
-	if (p->mon->w - (p->r + p->l) < p->mon->ww) p->mon->ww = p->mon->w - (p->r + p->l);
-	if (p->mon->h - (p->b + p->t) < p->mon->wh) p->mon->wh = p->mon->h - (p->b + p->t);
+	if (p->mon->x + p->l > p->mon->wx)
+		p->mon->wx = p->l;
+	if (p->mon->y + p->t > p->mon->wy)
+		p->mon->wy = p->t;
+	if (p->mon->w - p->mon->wx - (p->r + p->l) < p->mon->ww)
+		p->mon->ww = p->mon->w - p->mon->wx - (p->r + p->l);
+	if (p->mon->h - p->mon->wy - (p->b + p->t) < p->mon->wh)
+		p->mon->wh = p->mon->h - p->mon->wy - (p->b + p->t);
 }
 
 int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse)

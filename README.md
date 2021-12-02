@@ -369,7 +369,7 @@ set smart_gap=true
 
 `smart_border` (boolean) remove borders on workspaces with only one tiled window.
 ```
-set tile_hints=true
+set smart_border=true
 ```
 ---
 

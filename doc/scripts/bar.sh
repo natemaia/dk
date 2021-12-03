@@ -8,7 +8,7 @@ bg="#111111"
 fg="#666666"
 highlight="#6699ee"
 underline=3
-seperator="┃"
+separator="┃"
 
 # xfonts
 font0="-xos4-terminus-medium-r-normal--24-240-72-72-c-120-iso10646-1"
@@ -39,12 +39,12 @@ clock()
 {
 	if [[ $1 ]]; then
 		while :; do
-			date +"%%{A1:$1:}T%a %H:%M%%{A}"
+			date +"T%%{A1:$1:} %a %H:%M %%{A}"
 			sleep 10
 		done
 	else
 		while :; do
-			date +"T%a %H:%M"
+			date +"T %a %H:%M "
 			sleep 10
 		done
 	fi
@@ -54,12 +54,12 @@ battery()
 {
 	if [[ $1 ]]; then
 		while :; do
-			printf 'B%s\n' "%{A1:$1:}$(acpi --battery 2>/dev/null | cut -d, -f2 | tr -d '[:space:]')%{A}"
+			printf 'B%s\n' "%{A1:$1:} $(acpi --battery 2>/dev/null | cut -d, -f2 | tr -d '[:space:]') %{A}"
 			sleep 10
 		done
 	else
 		while :; do
-			printf 'B%s\n' "$(acpi --battery 2>/dev/null | cut -d, -f2 | tr -d '[:space:]')"
+			printf 'B%s\n' " $(acpi --battery 2>/dev/null | cut -d, -f2 | tr -d '[:space:]') "
 			sleep 10
 		done
 	fi
@@ -69,12 +69,12 @@ volume()
 {
 	if [[ $1 ]]; then
 		while :; do
-			printf 'V%s\n' "%{A1:$1:}$(pamixer --get-volume-human)%{A}"
+			printf 'V%s\n' "%{A1:$1:} $(pamixer --get-volume-human) %{A}"
 			sleep 0.2
 		done
 	else
 		while :; do
-			printf 'V%s\n' "$(pamixer --get-volume-human)"
+			printf 'V%s\n' " $(pamixer --get-volume-human) "
 			sleep 0.2
 		done
 	fi
@@ -82,7 +82,7 @@ volume()
 
 parsefifo()
 {
-	typeset f='' b='' u='' wm='' time='' bat='' vol='' title='' layout=''
+	typeset f='' b='' u='' wm='' time='' bat='' vol='' title='' layout='' s="$separator"
 
 	while read -r line; do
 		case $line in
@@ -92,23 +92,21 @@ parsefifo()
 			A*) title="${line#?}" ;;
 			L*) l="${line#?}"; layout="${layouts[$l]}" ;;
 			W*)
-				wm='' IFS=':'
-				set -- ${line#?}
-				while (( $# > 0 )); do
-					item=$1
+				wm='' IFS=':' # set the internal field separator to ':'
+				set -- ${line#?}  # split the line into arguments ($@) based on the field separator
+				for item in "$@"; do
 					name=${item#?}
 					case $item in
 						A*) f="$highlight" b="$bg" u="$highlight" ;; # occupied   - focused
-						a*) f="$fg" b="$bg" u="$highlight" ;;        # occupied   - unfocused
-						I*) f="$highlight" b="$bg" u="$fg" ;;        # unoccupied - focused
-						i*) f="$fg" b="$bg" u="$fg" ;;               # unoccupied - unfocused
+						a*) f="$fg"        b="$bg" u="$highlight" ;; # occupied   - unfocused
+						I*) f="$highlight" b="$bg" u="$fg"        ;; # unoccupied - focused
+						i*) f="$fg"        b="$bg" u="$fg"        ;; # unoccupied - unfocused
 					esac
 					wm="$wm%{F$f}%{B$b}%{+u}%{U$u}%{A:dkcmd ws $name:} $name %{A}%{-u}%{B-}%{F-}"
-					shift
 				done
 				;;
 		esac
-		printf "%s\n" "%{l}$wm $seperator $layout%{c}$title%{r}$bat $seperator $vol $seperator $time "
+		printf "%s\n" "%{l}$wm $s $layout%{c}$title%{r}${bat}${s}${vol}${s}${time}"
 	done
 }
 

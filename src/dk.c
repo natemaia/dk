@@ -587,11 +587,11 @@ void focus(Client *c)
 		setinputfocus(c);
 		selws->sel = c;
 		cmdclient = c;
-		winchange = 1;
 	} else {
 		unfocus(NULL, 1);
 		if (selws) selws->sel = NULL;
 	}
+	winchange = 1;
 }
 
 void freemon(Monitor *m)

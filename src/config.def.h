@@ -148,16 +148,15 @@ Callback callbacks[] = {
 
 Cmd keywords[] = {
 	/* command,  function */
+	{ "win",     cmdwin     },
+	{ "ws",      cmdws      },
 	{ "mon",     cmdmon     },
-	{ "quit",    cmdexit    },
+	{ "set",     cmdset     },
+	{ "rule",    cmdrule    },
+	{ "status",  cmdstatus  },
 	{ "exit",    cmdexit    },
 	{ "reload",  cmdreload  },
 	{ "restart", cmdrestart },
-	{ "rule",    cmdrule    },
-	{ "set",     cmdset     },
-	{ "status",  cmdstatus  },
-	{ "win",     cmdwin     },
-	{ "ws",      cmdws      },
 
 	/* don't add below the terminating null */
 	{ NULL,      NULL    }
@@ -165,15 +164,15 @@ Cmd keywords[] = {
 
 Cmd setcmds[] = {
 	/* command,   function */
-	{ "border",   cmdborder },
-	{ "gap",      cmdgappx  },
 	{ "layout",   cmdlayout },
 	{ "master",   cmdmors   },
-	{ "mouse",    cmdmouse  },
-	{ "pad",      cmdpad    },
+	{ "stack",    cmdmors   },
 	{ "msplit",   cmdsplit  },
 	{ "ssplit",   cmdsplit  },
-	{ "stack",    cmdmors   },
+	{ "border",   cmdborder },
+	{ "gap",      cmdgappx  },
+	{ "pad",      cmdpad    },
+	{ "mouse",    cmdmouse  },
 
 	/* don't add below the terminating null */
 	{ NULL,       NULL      }
@@ -181,16 +180,16 @@ Cmd setcmds[] = {
 
 Cmd wincmds[] = {
 	/* command,   function */
-	{ "cycle",    cmdcycle    },
-	{ "fakefull", cmdfakefull },
-	{ "float",    cmdfloat    },
-	{ "full",     cmdfull     },
 	{ "focus",    cmdfocus    },
 	{ "kill",     cmdkill     },
 	{ "resize",   cmdresize   },
 	{ "mvstack",  cmdmvstack  },
-	{ "stick",    cmdstick    },
 	{ "swap",     cmdswap     },
+	{ "float",    cmdfloat    },
+	{ "full",     cmdfull     },
+	{ "cycle",    cmdcycle    },
+	{ "stick",    cmdstick    },
+	{ "fakefull", cmdfakefull },
 	{ "focusm",   focusmaster },
 
 	/* don't add below the terminating null */
@@ -205,18 +204,17 @@ Layout layouts[] = {
 	{ "grid",      grid,           0,                      0 },
 	{ "spiral",    spiral,         1,                      0 },
 	{ "dwindle",   dwindle,        1,                      0 },
-	{ "tstack",    tstack,         1,                      1 },
 	{ "none",      NULL,           1,                      0 }, /* NULL layout function is floating */
-	{ "float",     NULL,           1,                      0 },
+	{ "tstack",    tstack,         1,                      1 },
 
 	/* don't add below the terminating null */
 	{ NULL,        NULL,           0,                      0 }
 };
 
 WsCmd wscmds[] = {
+	{ "view",   cmdview   },
 	{ "follow", cmdfollow },
 	{ "send",   cmdsend   },
-	{ "view",   cmdview   },
 
 	/* don't add below the terminating null */
 	{ NULL,     NULL      }

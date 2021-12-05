@@ -26,31 +26,32 @@
 	#endif
 #endif
 
-#define W(c) (c->w + (2 * c->bw))
-#define H(c) (c->h + (2 * c->bw))
-#define LEN(x) (sizeof(x) / sizeof(*x))
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
-#define CLAMP(x, min, max) (MIN(MAX((x), (min)), (max)))
-
-#define OVERLAP(a0, a1, b0, b1) (MIN(a0, a1) <= MAX(b0, b1) && MIN(b0, b1) <= MAX(a0, a1))
-#define INRECT(x, y, w, h, ox, oy, ow, oh) (OVERLAP(x, x + w, ox, ox + ow) && OVERLAP(y, y + h, oy, oy + oh))
+#define LEN(x)                (sizeof(x) / sizeof(*x))
+#define MIN(a, b)             ((a) < (b) ? (a) : (b))
+#define MAX(a, b)             ((a) > (b) ? (a) : (b))
+#define CLAMP(x, min, max)    (MIN(MAX((x), (min)), (max)))
+#define INRECT(x, y, w, h, rx, ry, rw, rh) \
+	(x >= rx && x + w <= rx + rw && y >= ry && y + h <= ry + rh)
 
 #define ISTILE(ws) (ws->layout->func == ltile || ws->layout->func == rtile)
 
-#define FLOATING(c) (c->state & STATE_FLOATING || !c->ws->layout->func)
-#define FULLSCREEN(c) (c->state & STATE_FULLSCREEN && !(c->state & STATE_FAKEFULL))
+#define W(c)            (c->w + (2 * c->bw))
+#define H(c)            (c->h + (2 * c->bw))
+#define FLOATING(c)     (c->state & STATE_FLOATING || !c->ws->layout->func)
+#define FULLSCREEN(c)   (c->state & STATE_FULLSCREEN && !(c->state & STATE_FAKEFULL))
 
-#define FOR_EACH(v, list) if (list) for (v = list; v; v = v->next)
-#define FOR_CLIENTS(c, ws) FOR_EACH(ws, workspaces) FOR_EACH(c, ws->clients)
+#define FOR_EACH(v, list)    if (list) for (v = list; v; v = v->next)
+#define FOR_CLIENTS(c, ws)   FOR_EACH(ws, workspaces) FOR_EACH(c, ws->clients)
 
-#define FIND_TAIL(v, list) for (v = list; v && v->next; v = v->next)
-#define FIND_PREV(v, cur, list) for (v = list; v && v->next && v->next != cur; v = v->next)
+#define FIND_TAIL(v, list)        for (v = list; v && v->next; v = v->next)
+#define FIND_PREV(v, cur, list)   for (v = list; v && v->next && v->next != cur; v = v->next)
 
-#define WINTO(for_macro, win, ptr, arr)                     \
-	if (win != XCB_WINDOW_NONE && win != root)              \
-		for_macro(ptr, arr) if (ptr->win == win) return ptr;\
-	return NULL
+#define WINTO(for_macro, win, ptr, arr)                           \
+	do {                                                          \
+		if (win != XCB_WINDOW_NONE && win != root)                \
+			for_macro(ptr, arr) if (ptr->win == win) return ptr;  \
+		return NULL;                                              \
+	} while (0)
 
 #define ATTACH(v, list)           \
 	do {                          \
@@ -83,6 +84,7 @@
 			MAX((h), globalcfg[GLB_MIN_WH].val), (bw)})
 
 #define UNLIKELY(x)     __builtin_expect(!!(x), 0)
+
 
 enum States {
 	STATE_NONE         = 0,
@@ -238,8 +240,10 @@ typedef struct Rule {
 } Rule;
 
 typedef struct Panel {
+	int x, y, w, h;
 	int l, r, t, b; /* struts */
 	unsigned int state;
+	char class[64], inst[64];
 	xcb_window_t win;
 	struct Panel *next;
 	Monitor *mon;
@@ -311,22 +315,21 @@ struct Workspace {
 /* dk.c values */
 extern FILE *cmdresp;
 extern unsigned int lockmask;
-extern char *argv0, *sock, **environ;
-extern int scr_h, scr_w, sockfd, randrbase, cmdusemon;
+extern char *argv0, **environ;
+extern int scr_h, scr_w, randrbase, cmdusemon, winchange, wschange, lytchange;
 extern int running, restart, needsrefresh, status_usingcmdresp, depth;
-extern int winchange, wschange, lytchange;
 
 extern Desk *desks;
 extern Rule *rules;
 extern Panel *panels;
 extern Status *stats;
-extern Client *cmdclient;
-extern Monitor *primary, *monitors, *selmon, *lastmon;
-extern Workspace *setws, *selws, *lastws, *workspaces;
+extern Client *cmdc;
+extern Monitor *monitors, *primary, *selmon, *lastmon;
+extern Workspace *workspaces, *setws, *selws, *lastws;
 
-extern xcb_screen_t *scr;
+/* extern xcb_screen_t *scr; */
 extern xcb_connection_t *con;
-extern xcb_window_t root, wmcheck;
+extern xcb_window_t root;
 extern xcb_key_symbols_t *keysyms;
 extern xcb_cursor_t cursor[CURS_LAST];
 extern xcb_atom_t wmatom[WM_LAST], netatom[NET_LAST];
@@ -352,8 +355,6 @@ extern Layout layouts[];
 extern WsCmd wscmds[];
 extern Workspace wsdef;
 
-void applypanelstrut(Panel *p);
-int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse);
 int assignws(Workspace *ws, Monitor *new);
 void changews(Workspace *ws, int swap, int warp);
 void clientborder(Client *c, int focused);
@@ -366,36 +367,26 @@ void detach(Client *c, int reattach);
 void execcfg(void);
 void fillstruts(Panel *p);
 void focus(Client *c);
-void freemon(Monitor *m);
 void freerule(Rule *r);
-void freestatus(Status *s);
 void freewm(void);
-void freews(Workspace *ws);
 void grabbuttons(Client *c);
 void gravitate(Client *c, int horz, int vert, int matchgap);
 int iferr(int lvl, char *msg, xcb_generic_error_t *e);
 Rule *initrule(Rule *wr);
-void initscan(void);
-void initsock(void);
-Status *initstatus(FILE *file, char *path, int num, unsigned int type);
-void initwm(void);
+Status *initstatus(Status *tmp);
 Monitor *itomon(int num);
 Workspace *itows(int num);
 void manage(xcb_window_t win, int scan);
 void movestack(int direction);
 Monitor *nextmon(Monitor *m);
 Client *nexttiled(Client *c);
-Monitor *outputtomon(xcb_randr_output_t id);
 void popfloat(Client *c);
-void printstatus(Status *s);
+void printstatus(Status *s, int freeable);
 void quadrant(Client *c, int *x, int *y, const int *w, const int *h);
-int refresh(void);
 void relocate(Client *c, Monitor *new, Monitor *old);
-void relocatews(Workspace *ws, Monitor *old, int wasvis);
 void resize(Client *c, int x, int y, int w, int h, int bw);
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, int mouse);
 void restack(Workspace *ws);
-int rulecmp(Client *c, Rule *r);
 void sendconfigure(Client *c);
 int sendwmproto(Client *c, int wmproto);
 void setfullscreen(Client *c, int fullscreen);
@@ -406,19 +397,13 @@ void setstackmode(xcb_window_t win, unsigned int mode);
 void seturgent(Client *c, int urg);
 void setwinstate(xcb_window_t win, long state);
 void setworkspace(Client *c, int num, int stacktail);
-void showhide(Client *c);
 void sizehints(Client *c, int uss);
 int tilecount(Workspace *ws);
 void unfocus(Client *c, int focusroot);
 void unmanage(xcb_window_t win, int destroyed);
-void updnetworkspaces(void);
-int updoutputs(xcb_randr_output_t *outs, int nouts, xcb_timestamp_t t);
 int updrandr(void);
 void updstruts(void);
 void updworkspaces(int needed);
-xcb_get_window_attributes_reply_t *winattr(xcb_window_t win);
-xcb_get_geometry_reply_t *wingeom(xcb_window_t win);
-int winprop(xcb_window_t win, xcb_atom_t prop, xcb_atom_t *ret);
 Client *wintoclient(xcb_window_t win);
 Desk *wintodesk(xcb_window_t win);
 Panel *wintopanel(xcb_window_t win);

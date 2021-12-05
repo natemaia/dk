@@ -15,5 +15,4 @@ int parsegeom(char *arg, char type, int *i, int *rel, int *grav);
 int parseint(char *arg, int *rel, int allowzero);
 int parseintclamp(char *arg, int *rel, int min, int max);
 int parseopt(char *arg, const char **optarr);
-char *parsetoken(char **src);
 Workspace *parsewsormon(char *arg, int mon);

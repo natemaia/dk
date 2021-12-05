@@ -45,7 +45,7 @@ Client *parseclient(char *arg, int *ebadwin)
 	return c;
 }
 
-char *parsetoken(char **src)
+static char *parsetoken(char **src)
 {
 	/* returns a pointer to a null terminated char * inside src
 	 * *unsafe* modifies src replace separator with null terminator
@@ -55,18 +55,14 @@ char *parsetoken(char **src)
 	int qoute, strongquote = 0;
 	char *s, *t, *head, *tail;
 
-	if (!(*src) || !(**src))
-		return NULL;
-	while (**src && (**src == ' ' || **src == '\t' || **src == '='))
-		(*src)++;
+	if (!(*src) || !(**src)) return NULL;
+	while (**src && (**src == ' ' || **src == '\t' || **src == '=')) (*src)++;
 
 	if ((qoute = **src == '"' || (strongquote = **src == '\''))) {
 		head = *src + 1;
-		if (!(tail = strchr(head, strongquote ? '\'' : '"')))
-			return 0;
+		if (!(tail = strchr(head, strongquote ? '\'' : '"'))) return 0;
 		if (!strongquote)
-			while (*(tail - 1) == '\\')
-				tail = strchr(tail + 1, '"');
+			while (*(tail - 1) == '\\') tail = strchr(tail + 1, '"');
 	} else {
 		head = *src;
 		tail = strpbrk(*src, " =\n\t");
@@ -74,16 +70,13 @@ char *parsetoken(char **src)
 
 	s = t = head;
 	while (tail ? s < tail : *s) {
-		if (qoute && !strongquote && *s == '\\' && *(s + 1) == '"') {
+		if (qoute && !strongquote && *s == '\\' && *(s + 1) == '"')
 			s++;
-		} else {
-			n++;
-			*t++ = *s++;
-		}
+		else
+			n++, *t++ = *s++;
 	}
 	*t = '\0';
 	*src = tail ? ++tail : '\0';
-
 	return head;
 }
 
@@ -93,13 +86,10 @@ void parsecmd(char *buf)
 	int n = 0, match = 0, max = 32;
 	status_usingcmdresp = 0;
 
-	argv = ecalloc(max, sizeof(char *));
-	save = argv;
+	save = argv = ecalloc(max, sizeof(char *));
 	while ((tok = parsetoken(&buf))) {
-		if (n + 1 >= max) {
-			argv = erealloc(argv, (max *= 2) * sizeof(char *));
-			save = argv;
-		}
+		if (n + 1 >= max)
+			save = argv = erealloc(argv, (max *= 2) * sizeof(char *));
 		argv[n++] = tok;
 	}
 	argv[n] = NULL;
@@ -110,34 +100,27 @@ void parsecmd(char *buf)
 		while (j > 0 && *argv) {
 			for (i = 0, match = 0; keywords[i].str; i++) {
 				if ((match = !strcmp(keywords[i].str, *argv))) {
-					cmdclient = selws->sel;
+					cmdc = selws->sel;
 					if ((n = keywords[i].func(argv + 1)) == -1) goto end;
-					argv += ++n;
-					j -= n;
+					argv += ++n, j -= n;
 					break;
 				}
 			}
-			if (!match && j-- <= 0)
-				break;
+			if (!match && j-- <= 0) break;
 		}
 	}
-	if (!match && *argv)
-		respond(cmdresp, "!invalid or unknown command: %s", *argv);
+	if (!match && *argv) respond(cmdresp, "!invalid or unknown command: %s", *argv);
 end:
-	if (cmdresp && !status_usingcmdresp) {
-		fflush(cmdresp);
-		fclose(cmdresp);
-	}
+	if (cmdresp && !status_usingcmdresp) { fflush(cmdresp); fclose(cmdresp); }
 	free(save);
 }
 
 int parsecolour(char *arg, unsigned int *result)
 {
 	char *end;
-	unsigned int argb, len;
+	unsigned int argb, len, orig = *result;
 
-	if ((len = strlen(arg)) < 6 || len > 10)
-		return -1;
+	if ((len = strlen(arg)) < 6 || len > 10) return -1;
 	len -= arg[0] == '#' ? 1 : (arg[0] == '0' && arg[1] == 'x') ? 2 : 0;
 	if ((argb = strtoul(arg[0] == '#' ? arg + 1 : arg, &end, 16)) <= 0xffffffff && *end == '\0') {
 		unsigned short a, r, g, b;
@@ -151,6 +134,7 @@ int parsecolour(char *arg, unsigned int *result)
 		} else {
 			*result = argb;
 		}
+		needsrefresh = needsrefresh || orig != *result;
 		return 1;
 	}
 	return -1;
@@ -174,8 +158,7 @@ int parseint(char *arg, int *rel, int allowzero)
 	char *end;
 
 	if (arg && ((i = strtol(arg, &end, 0)) || (allowzero && !strcmp("0", arg))) && *end == '\0') {
-		if (rel)
-			*rel = arg[0] == '-' || arg[0] == '+';
+		if (rel) *rel = arg[0] == '-' || arg[0] == '+';
 		return i;
 	}
 	return INT_MIN;
@@ -192,11 +175,9 @@ int parseintclamp(char *arg, int *rel, int min, int max)
 
 int parseopt(char *arg, const char **optarr)
 {
-	if (arg) {
+	if (arg)
 		for (int i = 0; optarr && *optarr; optarr++, i++)
-			if (!strcmp(*optarr, arg))
-				return i;
-	}
+			if (!strcmp(*optarr, arg)) return i;
 	return -1;
 }
 
@@ -239,12 +220,10 @@ Workspace *parsewsormon(char *arg, int mon)
 	if (!arg) return NULL;
 	if (mon) {
 		for (m = nextmon(monitors); m; m = nextmon(m->next))
-			if (!strcmp(m->name, arg))
-				return m->ws;
+			if (!strcmp(m->name, arg)) return m->ws;
 	} else {
 		FOR_EACH(ws, workspaces)
-			if (!strcmp(ws->name, arg))
-				return ws;
+			if (!strcmp(ws->name, arg)) return ws;
 	}
 	if (mon)
 		for (m = nextmon(monitors); m; m = nextmon(m->next), n++)

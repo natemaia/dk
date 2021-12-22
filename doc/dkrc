@@ -19,36 +19,38 @@ fi
 	# workspace settings
 	# ------------------------
 
-	# initialize 10 workspaces (1-10)
+	# initialize 10 workspaces (1-10) (default: 1/monitor)
 	dkcmd set numws=10
 
 	# default workspace '_' values used when allocating new workspaces
 	# can be applied to all existing workspaces when passed 'apply' after ws=_
 	dkcmd set ws=_ apply layout=tile master=1 stack=3 gap=0 msplit=0.5 ssplit=0.5
 
-	# change workspace names
-	dkcmd set \
-		ws=1  name="1" \
-		ws=2  name="2" \
-		ws=3  name="3" \
-		ws=4  name="4" \
-		ws=5  name="5" \
-		ws=6  name="6" \
-		ws=7  name="7" \
-		ws=8  name="8" \
-		ws=9  name="9" \
-		ws=10 name="10"
-
 	# use grid layout, padding, and gaps on workspace 10
 	dkcmd set ws=10 layout=grid pad left=200 right=200 top=100 bottom=100 gap width=50
 
-	# use static workspaces (not default)
-	dkcmd set static_ws=false
+	# change workspace names (default: number == name)
+	# dkcmd set \
+	# 	ws=1  name="edit" \
+	# 	ws=2  name="web" \
+	# 	ws=3  name="😀" \
+	# 	ws=4  name="😠" \
+	# 	ws=5  name="5" \
+	# 	ws=6  name="6" \
+	# 	ws=7  name="7" \
+	# 	ws=8  name="8" \
+	# 	ws=9  name="9" \
+	# 	ws=10 name="10"
 
-	# assign workspaces to monitors (requires static_ws=true)
+	# enable static workspaces and assign them to monitors (only relevant for multiple monitors)
+	# aside -
+	#		many that come from other workspace models tried dk and requested this feature
+	#		try embracing the default behaviour and allow access to any workspace from any monitor
+	#       you might end up liking it :)
+	#
 	# mon1='DisplayPort-0'
 	# mon2='HDMI-A-0'
-	# dkcmd set \
+	# dkcmd set static_ws=true \
 	# 	ws=1  mon=$mon1 \
 	# 	ws=2  mon=$mon1 \
 	# 	ws=3  mon=$mon1 \
@@ -83,10 +85,13 @@ fi
 	# borders
 	# ---------
 
+	# traditional
 	# set border width and colour for each window state
 	# dkcmd set border width=1 colour focus='#6699cc' unfocus='#000000' urgent='#ee5555'
 
-	# alternatively, enable split borders and colours
+	# alternative
+	# enable split borders and colours, width is overall width, outer width consumes some of width.
+	# outer width must be less than width, outer width of 0 will be single borders
 	dkcmd set border width=5 outer_width=3 \
 		colour \
 		focus='#6699cc' \
@@ -100,7 +105,7 @@ fi
 	# window rules
 	# --------------
 
-	# rule class, instance, and title regexes are always case insensitive
+	# rule class, instance, and title regexes (*ALWAYS* CASE INSENSITIVE)
 
 	# open window(s) on a specific workspace (assigned monitor)
 	dkcmd rule class="^gimp$" ws=2
@@ -108,8 +113,8 @@ fi
 	# open window(s) on a monitor by number or name (active workspace on monitor)
 	dkcmd rule class="^chromium$" mon="HDMI-A-0"
 
-	# open window(s) and use a callback function (defined in config.h)
-	# we also ignore to stop the window from being resized on it's own
+	# open window(s) and use a callback function (user defined in config.h)
+	# we also ignore=true to stop the window from being resized on it's own from events
 	# eg. mpv --x11-name=albumart /path/to/media
 	dkcmd rule class="^mpv$" instance="^albumart$" float=true ignore=true callback=albumart bw=0
 
@@ -121,6 +126,7 @@ fi
 
 	# open window(s) with sticky and floating enabled to view on all workspaces.
 	dkcmd rule class="^stickyterm$" stick=true float=true w=1280 h=720
+	dkcmd rule class="^scratchpad$" float=true
 
 	# focus window and workspace on opening
 	dkcmd rule class="^firefox$" ws=1 focus=true

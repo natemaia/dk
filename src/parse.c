@@ -4,12 +4,14 @@
  * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
  */
 
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
 #include <regex.h>
 #include <err.h>
+#include <locale.h>
 
 #include <xcb/randr.h>
 #include <xcb/xcb_keysyms.h>
@@ -145,7 +147,7 @@ float parsefloat(char *arg, int *rel)
 	float f;
 	char *end;
 
-	if (arg && (f = strtof(arg, &end)) && *end == '\0' && f >= -0.95 && f <= 0.95 && f != NAN) {
+	if (arg && (f = strtof(arg, &end)) && *end == '\0' && f != NAN) {
 		if (rel) *rel = arg[0] == '-' || arg[0] == '+';
 		return f;
 	}

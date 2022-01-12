@@ -6,6 +6,7 @@
 
 #define USES_XCB_CONNECTION
 #define _XOPEN_SOURCE 700
+#define _POSIX_C_SOURCE 200112L
 
 #ifdef FUNCDEBUG
 #define _GNU_SOURCE
@@ -21,7 +22,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <limits.h>
-#include <locale.h>
 #include <regex.h>
 #include <signal.h>
 #include <err.h>
@@ -152,8 +152,6 @@ int main(int argc, char *argv[])
 			return usage(argv[0], VERSION, 1, 'h', "[-hv] [-s SOCKET_FD]");
 		}
 	}
-	if (!setlocale(LC_ALL, ""))
-		err(1, "no locale support");
 	if (xcb_connection_has_error((con = xcb_connect(NULL, NULL))))
 		err(1, "error connecting to X");
 	atexit(freewm);

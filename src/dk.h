@@ -83,8 +83,6 @@
 			(unsigned int[]){(x), (y), MAX((w), globalcfg[GLB_MIN_WH].val), \
 			MAX((h), globalcfg[GLB_MIN_WH].val), (bw)})
 
-#define UNLIKELY(x)     __builtin_expect(!!(x), 0)
-
 
 enum States {
 	STATE_NONE         = 0,

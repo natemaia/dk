@@ -234,11 +234,17 @@ void dispatch(xcb_generic_event_t *ev)
 	} else {
 		xcb_generic_error_t *e = (xcb_generic_error_t*)ev;
 
+		/* ignore some specific error types */
 		if (e->error_code == XCB_WINDOW
 				|| (e->error_code == XCB_MATCH
 					&& (e->major_code == XCB_SET_INPUT_FOCUS || e->major_code == XCB_CONFIGURE_WINDOW))
 				|| (e->error_code == XCB_ACCESS
-					&& (e->major_code == XCB_GRAB_BUTTON || e->major_code == XCB_GRAB_KEY)))
+					&& (e->major_code == XCB_GRAB_BUTTON || e->major_code == XCB_GRAB_KEY))
+				|| (e->error_code == XCB_DRAWABLE
+					&& (e->major_code == XCB_CREATE_PIXMAP || e->major_code == XCB_CREATE_GC || e->major_code == XCB_POLY_FILL_RECTANGLE))
+				|| (e->error_code == XCB_G_CONTEXT
+					&& (e->major_code == XCB_CHANGE_GC || e->major_code == XCB_FREE_GC))
+				|| (e->error_code == XCB_PIXMAP && e->major_code == XCB_FREE_PIXMAP))
 			return;
 		fprintf(stderr, "dk: previous request returned error %i, \"%s\""
 				" major code %u, minor code %u resource id %u sequence %u\n",

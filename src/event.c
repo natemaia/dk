@@ -191,7 +191,7 @@ void configrequest(xcb_generic_event_t *ev)
 			}
 			if (c->ws == m->ws) {
 				DBG("configrequest: visible window, performing resize: %d,%d %dx%d", c->x, c->y, c->w, c->h)
-				MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
+				resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0, 0);
 			}
 		} else {
 			sendconfigure(c);
@@ -209,7 +209,7 @@ void configrequest(xcb_generic_event_t *ev)
 		};
 		xcb_aux_configure_window(con, e->window, e->value_mask, &wc);
 	}
-	xcb_flush(con);
+	xcb_aux_sync(con);
 }
 
 void destroynotify(xcb_generic_event_t *ev)

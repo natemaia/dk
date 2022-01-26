@@ -353,6 +353,7 @@ extern Layout layouts[];
 extern WsCmd wscmds[];
 extern Workspace wsdef;
 
+int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse);
 int assignws(Workspace *ws, Monitor *new);
 void changews(Workspace *ws, int swap, int warp);
 void clientborder(Client *c, int focused);

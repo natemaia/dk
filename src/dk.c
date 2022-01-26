@@ -229,7 +229,7 @@ static void applypanelstrut(Panel *p)
 		p->mon->wh = p->mon->h - p->b - (p->mon->wy - p->mon->y);
 }
 
-static int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse)
+int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse)
 {
 	Monitor *m = c->ws->mon;
 	int min = globalcfg[GLB_MIN_XY].val;

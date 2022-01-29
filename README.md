@@ -61,11 +61,11 @@ To start dk you can add the following to your `~/.xinitrc`
 exec dk
 ```
 
-Optionally copy the example dkrc and/or sxhkdrc to their respective locations
+Optionally copy the example dkrc and/or sxhkdrc to `~/.config/dk/`
 ```
-mkdir -p ~/.config/sxhkd ~/.config/dk
-cp /usr/local/share/doc/dk/sxhkdrc ~/.config/sxhkd/
+mkdir -p ~/.config/dk
 cp /usr/local/share/doc/dk/dkrc ~/.config/dk/
+cp /usr/local/share/doc/dk/sxhkdrc ~/.config/dk/
 ```
 
 ### Configuration
@@ -73,12 +73,12 @@ cp /usr/local/share/doc/dk/dkrc ~/.config/dk/
 There are example `dkrc` and `sxhkdrc` files in `doc/` or  
 `/usr/local/share/doc/dk` after installation.
 
-dk looks for a file in the following order
+dk looks for an rc file in the following order
 ```
 $DKRC                     # user specified location
 $HOME/.config/dk/dkrc     # default location
 ```
-and to runs it, **it must be executable in order for this to happen**.
+and tries to run it, **it must be executable in order for this to happen**.
 
 Advanced changes and configuration like new layouts, callbacks, or commands  
 can be done by copying the default config header `config.def.h` to `config.h`,  

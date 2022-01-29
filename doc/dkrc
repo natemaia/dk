@@ -11,7 +11,7 @@ logfile="$HOME/.dkrc.log"
 # (re)load sxhkd for keybinds
 if hash sxhkd >/dev/null 2>&1; then
 	pkill sxhkd
-	sxhkd &
+	sxhkd -c "$HOME/.config/dk/sxhkdrc" &
 fi
 
 { # compound command to redirect all output

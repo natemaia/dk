@@ -66,7 +66,6 @@ Optionally copy the example dkrc and/or sxhkdrc to their respective locations
 mkdir -p ~/.config/sxhkd ~/.config/dk
 cp /usr/local/share/doc/dk/sxhkdrc ~/.config/sxhkd/
 cp /usr/local/share/doc/dk/dkrc ~/.config/dk/
-chmod +x ~/.config/dk/dkrc
 ```
 
 ### Configuration

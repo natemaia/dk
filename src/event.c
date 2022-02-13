@@ -194,7 +194,7 @@ void configrequest(xcb_generic_event_t *ev)
 				sizehints(c, 0);
 				applysizehints(c, &c->x, &c->y, &c->w, &c->h, c->bw, 0, 0);
 				MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
-				/* resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0, 0); */
+				sendconfigure(c);
 			}
 		} else {
 			sendconfigure(c);
@@ -212,7 +212,7 @@ void configrequest(xcb_generic_event_t *ev)
 		};
 		xcb_aux_configure_window(con, e->window, e->value_mask, &wc);
 	}
-	xcb_aux_sync(con);
+	xcb_flush(con);
 }
 
 void destroynotify(xcb_generic_event_t *ev)

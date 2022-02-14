@@ -287,7 +287,7 @@ int cmdfocus(char **argv)
 	if (FULLSCREEN(c) || !c->ws->clients->next) return nparsed;
 	if (c != selws->sel) {
 		focus(c);
-		if (FLOATING(c)) setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+		if (FLOATING(c)) restack(c->ws);
 		return nparsed;
 	}
 	if ((opt = parseopt(*argv, directions)) < 0 && (i = parseint(*argv, NULL, 0)) == INT_MIN) {
@@ -304,11 +304,9 @@ int cmdfocus(char **argv)
 			FIND_PREV(c, selws->sel, selws->clients);
 			direction++;
 		}
-		if (c) {
-			focus(c);
-			restack(c->ws);
-		}
+		if (c) focus(c);
 	}
+	if (c && FLOATING(c)) restack(c->ws);
 	xcb_aux_sync(con);
 	ignore(XCB_ENTER_NOTIFY);
 	return nparsed;

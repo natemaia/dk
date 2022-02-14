@@ -39,14 +39,21 @@ static void (*handlers[XCB_NO_OPERATION + 1])(xcb_generic_event_t *) = {
 
 void buttonpress(xcb_generic_event_t *ev)
 {
-	Client *c;
+	Client *c, *v;
 	xcb_generic_error_t *er;
 	xcb_grab_pointer_cookie_t pc;
 	xcb_button_press_event_t *e = (xcb_button_press_event_t *)ev;
 
 	if (!(c = wintoclient(e->event))) return;
 	if (c != selws->sel) focus(c);
-	if (FLOATING(c)) setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+	if (FLOATING(c)) {
+		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+		if (!(c->state & STATE_ABOVE))
+			for (v = c->ws->stack; v; v = v->snext)
+				if (v->state & STATE_ABOVE && ((v->state & STATE_FLOATING) || v->ws->layout->func == NULL))
+					setstackmode(v->win, XCB_STACK_MODE_ABOVE);
+		xcb_flush(con);
+	}
 	xcb_allow_events(con, XCB_ALLOW_REPLAY_POINTER, e->time);
 	if ((e->state & ~(lockmask | XCB_MOD_MASK_LOCK)) == (mousemod & ~(lockmask | XCB_MOD_MASK_LOCK))
 			&& (e->detail == mousemove || e->detail == mouseresize))
@@ -101,13 +108,20 @@ void clientmessage(xcb_generic_event_t *ev)
 		} else if (e->type == netatom[NET_WM_STATE]) {
 			if (d[1] == netatom[NET_STATE_FULL] || d[2] == netatom[NET_STATE_FULL]) {
 				setfullscreen(c, (d[0] == 1 || (d[0] == 2 && !(c->state & STATE_FULLSCREEN))));
+			} else if (d[1] == netatom[NET_STATE_ABOVE] || d[2] == netatom[NET_STATE_ABOVE]) {
+				int above = d[0] == 1 || (d[0] == 2 && !(c->state & STATE_FULLSCREEN));
+				if (above && !(c->state & STATE_ABOVE))
+					c->state |= STATE_ABOVE | STATE_FLOATING;
+				else if (!above && (c->state & STATE_ABOVE))
+					c->state &= ~STATE_ABOVE;
+				needsrefresh = 1;
 			} else if ((d[1] == netatom[NET_STATE_DEMANDATT]
 						|| d[2] == netatom[NET_STATE_DEMANDATT]) && c != selws->sel)
 			{
-				goto act;
+				goto activate;
 			}
 		} else if (e->type == netatom[NET_ACTIVE] && c != selws->sel) {
-act:
+activate:
 			if (globalcfg[GLB_FOCUS_URGENT].val) {
 				setnetstate(c->win, c->state);
 				if (c->ws != selws) {

@@ -89,8 +89,9 @@ const char *netatoms[] = {
 	[NET_DESK_NUM]        = "_NET_NUMBER_OF_DESKTOPS",
 	[NET_DESK_VP]         = "_NET_DESKTOP_VIEWPORT",
 	[NET_DESK_WA]         = "_NET_WORKAREA",
-	[NET_STATE_FULL]      = "_NET_WM_STATE_FULLSCREEN",
+	[NET_STATE_ABOVE]     = "_NET_WM_STATE_ABOVE",
 	[NET_STATE_DEMANDATT] = "_NET_WM_STATE_DEMANDS_ATTENTION",
+	[NET_STATE_FULL]      = "_NET_WM_STATE_FULLSCREEN",
 	[NET_SUPPORTED]       = "_NET_SUPPORTED",
 	[NET_TYPE_DESK]       = "_NET_WM_WINDOW_TYPE_DESKTOP",
 	[NET_TYPE_DIALOG]     = "_NET_WM_WINDOW_TYPE_DIALOG",
@@ -477,8 +478,12 @@ void clienttype(Client *c)
 {
 	xcb_atom_t type, state;
 
-	if (winprop(c->win, netatom[NET_WM_STATE], &state) && state == netatom[NET_STATE_FULL])
-		setfullscreen(c, 1);
+	if (winprop(c->win, netatom[NET_WM_STATE], &state)) {
+		if (state == netatom[NET_STATE_FULL])
+			setfullscreen(c, 1);
+		else if (state == netatom[NET_STATE_ABOVE])
+			c->state |= STATE_ABOVE | STATE_FLOATING;
+	}
 	if ((winprop(c->win, netatom[NET_WM_TYPE], &type)
 				&& (type == netatom[NET_TYPE_DIALOG] || type == netatom[NET_TYPE_SPLASH]))
 			|| c->trans || (c->trans = wintoclient(wintrans(c->win))))
@@ -1269,6 +1274,9 @@ void popfloat(Client *c)
 	quadrant(c, &x, &y, &w, &h);
 	setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	resizehint(c, x, y, w, h, c->bw, 0, 0);
+	for (c = c->ws->stack; c; c = c->snext)
+		if (c->state & STATE_ABOVE && ((c->state & STATE_FLOATING) || c->ws->layout->func == NULL))
+			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	xcb_aux_sync(con);
 }
 
@@ -1368,14 +1376,15 @@ void printstatus(Status *s, int freeable)
 				fprintf(s->file, " %s0x%08x:%d", c == selws->sel ? "*" : "", c->win, c->ws->num + 1);
 
 			/* Client settings */
-			fprintf(s->file, "\n\t# id title class instance ws x y width height bw hoff float full fakefull fixed stick urgent callback trans_id");
+			fprintf(s->file, "\n\t# id title class instance ws x y width height bw hoff float full fakefull fixed stick urgent above callback trans_id");
 			FOR_CLIENTS(c, ws)
 				fprintf(s->file, "\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d"
-						" %d %d %d %d %d %d %d %d %s 0x%08x",
+						" %d %d %d %d %d %d %d %d %d %s 0x%08x",
 						c->win, c->title, c->class, c->inst, c->ws->num + 1, c->x, c->y, c->w, c->h, c->bw,
 						c->hoff, FLOATING(c), (c->state & STATE_FULLSCREEN) != 0,
 						(c->state & STATE_FAKEFULL) != 0, (c->state & STATE_FIXED) != 0,
 						(c->state & STATE_STICKY) != 0, (c->state & STATE_URGENT) != 0,
+						(c->state & STATE_ABOVE) != 0,
 						c->cb ? c->cb->name : "none", c->trans ? c->trans->win : 0);
 
 			/* Rules */
@@ -1447,12 +1456,12 @@ static int refresh(void)
 	Monitor *m;
 	Workspace *ws;
 
-#define MAP(v, list)                                    \
-	FOR_EACH(v, list)                                   \
-		if (v->state & STATE_NEEDSMAP) {                \
-			v->state &= ~STATE_NEEDSMAP;                \
-			setstackmode(v->win, XCB_STACK_MODE_BELOW); \
-			xcb_map_window(con, v->win);                \
+#define MAP(v, list)                                                                                      \
+	FOR_EACH(v, list)                                                                                     \
+		if (v->state & STATE_NEEDSMAP) {                                                                  \
+			v->state &= ~STATE_NEEDSMAP;                                                                  \
+			setstackmode(v->win, (v->state & STATE_ABOVE) ? XCB_STACK_MODE_ABOVE : XCB_STACK_MODE_BELOW); \
+			xcb_map_window(con, v->win);                                                                  \
 		}
 
 	MAP(p, panels)
@@ -1552,6 +1561,9 @@ void restack(Workspace *ws)
 	FOR_EACH(d, desks)
 		if (d->mon == ws->mon)
 			setstackmode(d->win, XCB_STACK_MODE_BELOW);
+	for (c = ws->stack; c; c = c->snext)
+		if (c->state & STATE_ABOVE && ((c->state & STATE_FLOATING) || c->ws->layout->func == NULL))
+			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	xcb_aux_sync(con);
 }
 

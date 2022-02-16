@@ -306,7 +306,7 @@ int cmdfocus(char **argv)
 		}
 		if (c) focus(c);
 	}
-	if (c && FLOATING(c)) restack(c->ws);
+	if (c && (FLOATING(c) || c->ws->layout->func == mono)) restack(c->ws);
 	xcb_aux_sync(con);
 	ignore(XCB_ENTER_NOTIFY);
 	return nparsed;

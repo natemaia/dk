@@ -231,6 +231,49 @@ static void applypanelstrut(Panel *p)
 		p->mon->wh = p->mon->h - p->b - (p->mon->wy - p->mon->y);
 }
 
+static void applyrule(Client *c, Rule *r, xcb_atom_t curws, int nofocus)
+{
+	int ws = curws, dofocus = 0, xgrav = GRAV_NONE, ygrav = GRAV_NONE;
+
+	if (r) {
+		c->cb = r->cb;
+		dofocus = r->focus;
+		c->state |= r->state;
+		xgrav = r->xgrav;
+		ygrav = r->ygrav;
+		c->x = r->x != -1 ? r->x : c->x;
+		c->y = r->y != -1 ? r->y : c->y;
+		c->w = r->w != -1 ? r->w : c->w;
+		c->h = r->h != -1 ? r->h : c->h;
+		c->bw = r->bw != -1 && !(c->state & STATE_NOBORDER) ? r->bw : c->bw;
+		if (!c->trans && ws == (int)curws) {
+			if ((cmdusemon = (r->mon != NULL))) {
+				int num;
+				Monitor *m;
+				if ((num = strtol(r->mon, NULL, 0)) > 0 && (m = itomon(num))) {
+					ws = m->ws->num;
+				} else for (m = monitors; m; m = m->next) {
+					if (!strcmp(r->mon, m->name)) {
+						ws = m->ws->num;
+						break;
+					}
+				}
+			} else if (r->ws > 0 && r->ws <= globalcfg[GLB_WS_NUM].val) {
+				ws = r->ws - 1;
+			}
+		}
+	}
+
+	if (ws + 1 > globalcfg[GLB_WS_NUM].val && ws <= 99)
+		updworkspaces(ws + 1);
+	setworkspace(c, MIN(ws, globalcfg[GLB_WS_NUM].val), nofocus);
+
+	if (!dofocus && nofocus && !globalcfg[GLB_FOCUS_URGENT].val) seturgent(c, 1);
+	if (dofocus && c->ws != selws) cmdview(c->ws);
+	if (xgrav != GRAV_NONE || ygrav != GRAV_NONE) gravitate(c, xgrav, ygrav, 1);
+	cmdusemon = 0;
+}
+
 int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse)
 {
 	Monitor *m = c->ws->mon;
@@ -410,69 +453,28 @@ int clientname(Client *c)
 
 void clientrule(Client *c, Rule *wr, int nofocus)
 {
-	Monitor *m;
 	Rule *r = wr;
-	int ws, dofocus = 0;
 	xcb_atom_t type = 0;
-	xcb_atom_t cur = selws->num;
-	int xgrav = GRAV_NONE, ygrav = GRAV_NONE;
-
-#define APPLY() \
-	do { \
-		c->cb = r->cb; \
-		dofocus = dofocus || r->focus; \
-		c->state |= r->state; \
-		xgrav = r->xgrav; \
-		ygrav = r->ygrav; \
-		c->x = r->x != -1 ? r->x : c->x; \
-		c->y = r->y != -1 ? r->y : c->y; \
-		c->w = r->w != -1 ? r->w : c->w; \
-		c->h = r->h != -1 ? r->h : c->h; \
-		c->bw = r->bw != -1 && !(c->state & STATE_NOBORDER) ? r->bw : c->bw; \
-		if (!c->trans && ws == (int)cur) { \
-			if ((cmdusemon = (r->mon != NULL))) { \
-				int num; \
-				if ((num = strtol(r->mon, NULL, 0)) > 0 && (m = itomon(num))) { \
-					ws = m->ws->num; \
-				} else for (m = monitors; m; m = m->next) { \
-					if (!strcmp(r->mon, m->name)) { \
-						ws = m->ws->num; \
-						break; \
-					} \
-				} \
-			} else if (r->ws > 0 && r->ws <= globalcfg[GLB_WS_NUM].val) { \
-				ws = r->ws - 1; \
-			} \
-		} \
-	} while (0)
+	xcb_atom_t curws = selws->num;
 
 	if (c->trans)
-		cur = c->trans->ws->num;
-	else if (!winprop(c->win, netatom[NET_WM_DESK], &cur) || cur > 99)
-		cur = selws->num;
-	ws = cur;
+		curws = c->trans->ws->num;
+	else if (!winprop(c->win, netatom[NET_WM_DESK], &curws) || curws > 99)
+		curws = selws->num;
 	winprop(c->win, netatom[NET_WM_TYPE], &type);
 
 	if (!r) {
 		for (r = rules; r; r = r->next)
-			if (rulecmp(c, r) && (!r->type || r->type == type)) APPLY();
+			if (rulecmp(c, r) && (!r->type || r->type == type)) {
+				applyrule(c, r, curws, nofocus);
+				return;
+			}
 	} else if (rulecmp(c, r) && (!r->type || r->type == type)) {
-		APPLY();
-	} else {
-		r = NULL;
+		applyrule(c, r, curws, nofocus);
+		return;
 	}
-	if (ws + 1 > globalcfg[GLB_WS_NUM].val && ws <= 99)
-		updworkspaces(ws + 1);
-	setworkspace(c, MIN(ws, globalcfg[GLB_WS_NUM].val), nofocus);
 
-	if (!dofocus && nofocus && !globalcfg[GLB_FOCUS_URGENT].val) seturgent(c, 1);
-	if (dofocus && c->ws != selws) cmdview(c->ws);
-	if (xgrav != GRAV_NONE || ygrav != GRAV_NONE) {
-		DBG("clientrule: applying gravities: x: %s, y: %s", gravities[xgrav], gravities[ygrav])
-		gravitate(c, xgrav, ygrav, 1);
-	}
-	cmdusemon = 0;
-#undef APPLY
+	applyrule(c, NULL, curws, nofocus);
 }
 
 void clienttype(Client *c)

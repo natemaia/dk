@@ -24,6 +24,7 @@
 #include <limits.h>
 #include <regex.h>
 #include <signal.h>
+#include <fcntl.h>
 #include <err.h>
 
 #include <xcb/randr.h>
@@ -576,6 +577,7 @@ void execcfg(void)
 		strlcat(path, "/.config/dk/dkrc", sizeof(path));
 		cfg = path;
 	}
+
 	if (!fork()) {
 		if (con)
 			close(xcb_get_file_descriptor(con));
@@ -690,6 +692,7 @@ void freewm(void)
 	xcb_disconnect(con);
 
 	if (restart) {
+		fcntl(sockfd, F_SETFD, ~FD_CLOEXEC & fcntl(sockfd, F_GETFD));
 		char fdstr[64];
 		if (!itoa(sockfd, fdstr))
 			itoa(-1, fdstr);

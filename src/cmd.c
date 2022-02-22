@@ -582,7 +582,7 @@ badvalue:
 			for (i = 0, t = nexttiled(ws->clients); t && t != c; t = nexttiled(t->next), i++)
 				;
 			sf = (ws->nmaster && i < ws->nmaster + ws->nstack) ? &ws->msplit : &ws->ssplit;
-			f = relw ? ((ws->mon->ww * *sf) + w) / ws->mon->ww : w / ws->mon->ww;
+			f = relw ? ((ws->mon->ww * *sf) + w) / ws->mon->ww : (float)w / ws->mon->ww;
 			if (f < 0.05 || f > 0.95) {
 				respond(cmdresp, "!width exceeded limit: %f", ws->mon->ww * f);
 			} else {
@@ -600,9 +600,9 @@ badvalue:
 		}
 	} else if (w != INT_MIN || (h != INT_MIN && ws->layout->invert_split_direction)) {
 		if (w != INT_MIN)
-			f = relw ? ((ws->mon->ww * ws->msplit) + w) / ws->mon->ww : w / ws->mon->ww;
+			f = relw ? ((ws->mon->ww * ws->msplit) + w) / ws->mon->ww : (float)w / ws->mon->ww;
 		else
-			f = relh ? ((ws->mon->wh * ws->msplit) + h) / ws->mon->wh : h / ws->mon->wh;
+			f = relh ? ((ws->mon->wh * ws->msplit) + h) / ws->mon->wh : (float)h / ws->mon->wh;
 		if (f < 0.05 || f > 0.95) {
 			respond(cmdresp, "!%s exceeded limit: %f", w != INT_MIN ? "width" : "height", ws->mon->ww * f);
 		} else {

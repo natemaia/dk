@@ -1,0 +1,162 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/cc",
+      "-flto",
+      "-std=c11",
+      "-pedantic",
+      "-Wall",
+      "-Wextra",
+      "-I/usr/X11R6/include",
+      "-O2",
+      "-D_DEFAULT_SOURCE",
+      "-D_BSD_SOURCE",
+      "-DVERSION=\"1.6\"",
+      "-DDEBUG",
+      "-c",
+      "src/dk.c"
+    ],
+    "directory": "/media/wdblue/git/personal/dk",
+    "file": "/media/wdblue/git/personal/dk/src/dk.c"
+  },
+  {
+    "arguments": [
+      "/usr/bin/cc",
+      "-flto",
+      "-std=c11",
+      "-pedantic",
+      "-Wall",
+      "-Wextra",
+      "-I/usr/X11R6/include",
+      "-O2",
+      "-D_DEFAULT_SOURCE",
+      "-D_BSD_SOURCE",
+      "-DVERSION=\"1.6\"",
+      "-DDEBUG",
+      "-c",
+      "src/cmd.c"
+    ],
+    "directory": "/media/wdblue/git/personal/dk",
+    "file": "/media/wdblue/git/personal/dk/src/cmd.c"
+  },
+  {
+    "arguments": [
+      "/usr/bin/cc",
+      "-flto",
+      "-std=c11",
+      "-pedantic",
+      "-Wall",
+      "-Wextra",
+      "-I/usr/X11R6/include",
+      "-O2",
+      "-D_DEFAULT_SOURCE",
+      "-D_BSD_SOURCE",
+      "-DVERSION=\"1.6\"",
+      "-DDEBUG",
+      "-c",
+      "src/event.c"
+    ],
+    "directory": "/media/wdblue/git/personal/dk",
+    "file": "/media/wdblue/git/personal/dk/src/event.c"
+  },
+  {
+    "arguments": [
+      "/usr/bin/cc",
+      "-flto",
+      "-std=c11",
+      "-pedantic",
+      "-Wall",
+      "-Wextra",
+      "-I/usr/X11R6/include",
+      "-O2",
+      "-D_DEFAULT_SOURCE",
+      "-D_BSD_SOURCE",
+      "-DVERSION=\"1.6\"",
+      "-DDEBUG",
+      "-c",
+      "src/layout.c"
+    ],
+    "directory": "/media/wdblue/git/personal/dk",
+    "file": "/media/wdblue/git/personal/dk/src/layout.c"
+  },
+  {
+    "arguments": [
+      "/usr/bin/cc",
+      "-flto",
+      "-std=c11",
+      "-pedantic",
+      "-Wall",
+      "-Wextra",
+      "-I/usr/X11R6/include",
+      "-O2",
+      "-D_DEFAULT_SOURCE",
+      "-D_BSD_SOURCE",
+      "-DVERSION=\"1.6\"",
+      "-DDEBUG",
+      "-c",
+      "src/parse.c"
+    ],
+    "directory": "/media/wdblue/git/personal/dk",
+    "file": "/media/wdblue/git/personal/dk/src/parse.c"
+  },
+  {
+    "arguments": [
+      "/usr/bin/cc",
+      "-flto",
+      "-std=c11",
+      "-pedantic",
+      "-Wall",
+      "-Wextra",
+      "-I/usr/X11R6/include",
+      "-O2",
+      "-D_DEFAULT_SOURCE",
+      "-D_BSD_SOURCE",
+      "-DVERSION=\"1.6\"",
+      "-DDEBUG",
+      "-c",
+      "src/strl.c"
+    ],
+    "directory": "/media/wdblue/git/personal/dk",
+    "file": "/media/wdblue/git/personal/dk/src/strl.c"
+  },
+  {
+    "arguments": [
+      "/usr/bin/cc",
+      "-flto",
+      "-std=c11",
+      "-pedantic",
+      "-Wall",
+      "-Wextra",
+      "-I/usr/X11R6/include",
+      "-O2",
+      "-D_DEFAULT_SOURCE",
+      "-D_BSD_SOURCE",
+      "-DVERSION=\"1.6\"",
+      "-DDEBUG",
+      "-c",
+      "src/util.c"
+    ],
+    "directory": "/media/wdblue/git/personal/dk",
+    "file": "/media/wdblue/git/personal/dk/src/util.c"
+  },
+  {
+    "arguments": [
+      "/usr/bin/cc",
+      "-flto",
+      "-std=c11",
+      "-pedantic",
+      "-Wall",
+      "-Wextra",
+      "-I/usr/X11R6/include",
+      "-O2",
+      "-D_DEFAULT_SOURCE",
+      "-D_BSD_SOURCE",
+      "-DVERSION=\"1.6\"",
+      "-DDEBUG",
+      "-c",
+      "src/dkcmd.c"
+    ],
+    "directory": "/media/wdblue/git/personal/dk",
+    "file": "/media/wdblue/git/personal/dk/src/dkcmd.c"
+  }
+]

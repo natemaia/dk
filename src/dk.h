@@ -6,8 +6,29 @@
 
 #pragma once
 
+#include <sys/un.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <limits.h>
+#include <regex.h>
+#include <signal.h>
+#include <fcntl.h>
+#include <err.h>
+
+#include <xcb/randr.h>
+#include <xcb/xproto.h>
+#include <xcb/xcb_util.h>
+#include <xcb/xcb_icccm.h>
+#include <xcb/xcb_cursor.h>
+#include <xcb/xcb_keysyms.h>
+
 #ifdef DEBUG
-	#define DBG(fmt, ...)  warnx("%d: " fmt, __LINE__, ##__VA_ARGS__);
+	#define DBG(fmt, ...)  warnx("%d: " fmt, __LINE__, __VA_ARGS__);
 #else
 	#define DBG(fmt, ...)
 #endif

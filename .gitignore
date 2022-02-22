@@ -4,5 +4,6 @@ config.h
 src/config.h
 tags
 src/tags
+.cache
 *.o
 *.bak

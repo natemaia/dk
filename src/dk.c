@@ -888,6 +888,7 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	}
 	DBG("initclient: final size: %d, %d - %dx%d", c->x, c->y, c->w, c->h)
 	if (c->cb) c->cb->func(c, 0);
+	wschange = c->ws->clients->next ? wschange : 1;
 }
 
 static void initdesk(xcb_window_t win, xcb_get_geometry_reply_t *g)
@@ -1640,6 +1641,7 @@ void setfullscreen(Client *c, int fullscreen)
 		c->bw = 0;
 		resize(c, m->x, m->y, m->w, m->h, 0);
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+		needsrefresh = 1;
 	} else if (!fullscreen && (c->state & STATE_FULLSCREEN)) {
 		PROP(REPLACE, c->win, state, XCB_ATOM_ATOM, 32, 0, (unsigned char *)0);
 		c->state = c->old_state;
@@ -1845,6 +1847,7 @@ void unmanage(xcb_window_t win, int destroyed)
 	if ((ptr = c = wintoclient(win))) {
 		if (c->cb && running)
 			c->cb->func(c, 1);
+		wschange = c->ws->clients->next ? wschange : 1;
 		detach(c, 0);
 		detachstack(c);
 		focus(NULL);

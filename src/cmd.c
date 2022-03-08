@@ -874,7 +874,7 @@ int cmdsplit(char **argv)
 	if ((f = parsefloat(*argv, &rel)) && f != NAN) {
 		float *ff = !strcmp("msplit", *(argv - 1)) ? &setws->msplit : &setws->ssplit;
 		if (setws->layout->func && f != 0.0) {
-			float nf = rel ? CLAMP(f < 1.0 ? f + *ff : f - 1.0, 0.05, 0.95) : CLAMP(f, 0.05, 0.95);
+			float nf = rel ? CLAMP(f + *ff, 0.05, 0.95) : CLAMP(f, 0.05, 0.95);
 			if (nf != *ff) *ff = nf, needsrefresh = 1;
 		}
 		return 1;

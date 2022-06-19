@@ -207,6 +207,7 @@ int main(int argc, char *argv[])
 					free(ev);
 				}
 		}
+		if (needsrefresh) needsrefresh = refresh();
 		s = stats;
 		while (s) {
 			next = s->next;
@@ -214,7 +215,6 @@ int main(int argc, char *argv[])
 			s = next;
 		}
 		if (stats && (winchange || wschange || lytchange)) printstatus(NULL, 1);
-		if (needsrefresh) needsrefresh = refresh();
 	}
 	return 0;
 }
@@ -1354,11 +1354,11 @@ void printstatus(Status *s, int freeable)
 				fprintf(s->file, " %s%d:%s:%s", ws == selws ? "*" : "", ws->num + 1, ws->name, ws->layout->name);
 
 			/* Workspace settings */
-			fprintf(s->file, "\n\t# number:name active_window nmaster nstack msplit ssplit gappx padl padr padt padb");
+			fprintf(s->file, "\n\t# number:name active_window nmaster nstack msplit ssplit gappx smartgap padl padr padt padb");
 			FOR_EACH(ws, workspaces)
-				fprintf(s->file, "\n\t%d:%s 0x%08x %d %d %0.2f %0.2f %d %d %d %d %d",
+				fprintf(s->file, "\n\t%d:%s 0x%08x %d %d %0.2f %0.2f %d %d %d %d %d %d",
 						ws->num + 1, ws->name, ws->sel ? ws->sel->win : 0, ws->nmaster, ws->nstack,
-						ws->msplit, ws->ssplit, ws->gappx, ws->padl, ws->padr, ws->padt, ws->padb);
+						ws->msplit, ws->ssplit, ws->gappx, ws->smartgap, ws->padl, ws->padr, ws->padt, ws->padb);
 
 			/* Monitors */
 			fprintf(s->file, "\n\n# number:name:workspace ...\nmonitors:");
@@ -1394,23 +1394,27 @@ void printstatus(Status *s, int freeable)
 						c->cb ? c->cb->name : "none", c->trans ? c->trans->win : 0);
 
 			/* Rules */
-			fprintf(s->file, "\n\n# title class instance workspace monitor float stick focus callback x y width height xgrav ygrav");
-			FOR_EACH(r, rules)
-				fprintf(s->file, "\nrule: \"%s\" \"%s\" \"%s\" %d %s %d %d %d %s %d %d %d %d %s %s",
-						r->title, r->class, r->inst, r->ws, r->mon, (r->state & STATE_FLOATING) !=0,
-						(r->state & STATE_STICKY) != 0, r->focus, r->cb ? r->cb->name : "",
-						r->x, r->y, r->w, r->h, gravities[r->xgrav], gravities[r->ygrav]);
+			if (rules) {
+				fprintf(s->file, "\n\n# title class instance workspace monitor float stick focus callback x y width height xgrav ygrav");
+				FOR_EACH(r, rules)
+					fprintf(s->file, "\nrule: \"%s\" \"%s\" \"%s\" %d %s %d %d %d %s %d %d %d %d %s %s",
+							r->title, r->class, r->inst, r->ws, r->mon, (r->state & STATE_FLOATING) !=0,
+							(r->state & STATE_STICKY) != 0, r->focus, r->cb ? r->cb->name : "",
+							r->x, r->y, r->w, r->h, gravities[r->xgrav], gravities[r->ygrav]);
+			}
 
 			/* Panels */
-			fprintf(s->file, "\n\n# id:monitor ...\npanels:");
-			FOR_EACH(p, panels)
-				fprintf(s->file, " 0x%08x:%s", p->win, p->mon->name);
+			if (panels) {
+				fprintf(s->file, "\n\n# id:monitor ...\npanels:");
+				FOR_EACH(p, panels)
+					fprintf(s->file, " 0x%08x:%s", p->win, p->mon->name);
 
-			/* Panel settings */
-			fprintf(s->file, "\n\t# id class instance monitor x y width height left right top bottom");
-			FOR_EACH(p, panels)
-				fprintf(s->file, "\n\t0x%08x \"%s\" \"%s\" %s %d %d %d %d %d %d %d %d", p->win, p->class, p->inst, p->mon->name,
-						p->x, p->y, p->w, p->h, p->l, p->r, p->t, p->b);
+				/* Panel settings */
+				fprintf(s->file, "\n\t# id class instance monitor x y width height left right top bottom");
+				FOR_EACH(p, panels)
+					fprintf(s->file, "\n\t0x%08x \"%s\" \"%s\" %s %d %d %d %d %d %d %d %d", p->win, p->class, p->inst, p->mon->name,
+							p->x, p->y, p->w, p->h, p->l, p->r, p->t, p->b);
+			}
 
 			break;
 		}
@@ -1480,7 +1484,7 @@ static int refresh(void)
 	focus(NULL);
 	FOR_EACH(c, selws->clients) clientborder(c, c == selws->sel);
 	for (m = nextmon(monitors); m; m = nextmon(m->next)) restack(m->ws);
-	xcb_aux_sync(con);
+	/* xcb_aux_sync(con); */
 	ignore(XCB_ENTER_NOTIFY);
 
 	return 0;

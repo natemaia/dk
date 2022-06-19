@@ -321,7 +321,7 @@ struct Callback {
 };
 
 struct Workspace {
-	int nmaster, nstack, gappx;
+	int nmaster, nstack, gappx, smartgap;
 	int padr, padl, padt, padb;
 	float msplit, ssplit;
 	const Layout *layout;

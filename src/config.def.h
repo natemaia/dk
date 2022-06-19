@@ -97,7 +97,7 @@ int tstack(Workspace *ws)
 	 */
 
 	Client *c;
-	int i, n, mh, mw, mx, sx, sw = 0;
+	int i, n, g, mh, mw, mx, sx, sw = 0;
 
 	if (!(n = tilecount(ws))) return 1;
 
@@ -108,7 +108,10 @@ int tstack(Workspace *ws)
 	int wh = ws->mon->wh - ws->padt - ws->padb;
 
 	/* apply smart gap */
-	int g = !globalcfg[GLB_SMART_GAP].val || n > 1 ? ws->gappx : 0;
+	if (globalcfg[GLB_SMART_GAP].val && n == 1)
+		g = 0, ws->smartgap = 1;
+	else
+		g = ws->gappx, ws->smartgap = 0;
 	mw = (ww - g) / MAX(1, ws->nmaster);
 	mh = wh - g;
 

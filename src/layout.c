@@ -32,7 +32,11 @@ int dwindle(Workspace *ws)
 
 	if (!(n = tilecount(ws))) return 1;
 
-	g = globalcfg[GLB_SMART_GAP].val && n == 1 ? 0 : ws->gappx;
+	if (globalcfg[GLB_SMART_GAP].val && n == 1)
+		g = 0, ws->smartgap = 1;
+	else
+		g = ws->gappx, ws->smartgap = 0;
+
 	x = m->wx + ws->padl;
 	y = m->wy + ws->padt;
 	w = m->ww - ws->padl - ws->padr;
@@ -90,7 +94,11 @@ int grid(Workspace *ws)
 	wy = m->wy + ws->padt;
 	ww = m->ww - ws->padl - ws->padr;
 	wh = m->wh - ws->padt - ws->padb;
-	g = globalcfg[GLB_SMART_GAP].val && n == 1 ? 0 : ws->gappx;
+
+	if (globalcfg[GLB_SMART_GAP].val && n == 1)
+		g = 0, ws->smartgap = 1;
+	else
+		g = ws->gappx, ws->smartgap = 0;
 
 	for (i = col = row = 0, c = nexttiled(ws->clients); c; i++, c = nexttiled(c->next)) {
 		if (i / MAX(1, rows) + 1 > cols - n % cols)
@@ -114,7 +122,7 @@ int ltile(Workspace *ws)
 {
 	Client *c;
 	Monitor *m = ws->mon;
-	int i, n, x, *y, remain, ret = 0, p = -1, pbw = 0;
+	int i, g, n, x, *y, remain, ret = 0, p = -1, pbw = 0;
 	int mw, my, sw, sy, ss, ssw, ssy, ns = 1;
 	int minh = globalcfg[GLB_MIN_WH].val;
 
@@ -125,7 +133,11 @@ int ltile(Workspace *ws)
 	int wy = m->wy + ws->padt;
 	int ww = m->ww - ws->padl - ws->padr;
 	int wh = m->wh - ws->padt - ws->padb;
-	int g = !globalcfg[GLB_SMART_GAP].val || n > 1 ? ws->gappx : 0;
+
+	if (globalcfg[GLB_SMART_GAP].val && n == 1)
+		g = 0, ws->smartgap = 1;
+	else
+		g = ws->gappx, ws->smartgap = 0;
 
 	if (n <= ws->nmaster)
 		mw = ww, ss = 1;
@@ -219,7 +231,11 @@ int mono(Workspace *ws)
 	int g;
 	Client *c;
 
-	g = globalcfg[GLB_SMART_GAP].val ? 0 : ws->gappx;
+	if (globalcfg[GLB_SMART_GAP].val)
+		g = 0, ws->smartgap = 1;
+	else
+		g = ws->gappx, ws->smartgap = 0;
+
 	for (c = nexttiled(ws->clients); c; c = nexttiled(c->next)) {
 		int b = globalcfg[GLB_SMART_BORDER].val ? 0 : c->bw;
 		resizehint(c, ws->mon->wx + ws->padl + g, ws->mon->wy + ws->padt + g,
@@ -234,7 +250,7 @@ int rtile(Workspace *ws)
 {
 	Client *c;
 	Monitor *m = ws->mon;
-	int i, n, x, *y, remain, ret = 0, p = -1, pbw = 0;
+	int i, g, n, x, *y, remain, ret = 0, p = -1, pbw = 0;
 	int mw, my, sw, sy, ss, ssw, ssy, ns = 1;
 	int minh = globalcfg[GLB_MIN_WH].val;
 
@@ -245,7 +261,11 @@ int rtile(Workspace *ws)
 	int wy = m->wy + ws->padt;
 	int ww = m->ww - ws->padl - ws->padr;
 	int wh = m->wh - ws->padt - ws->padb;
-	int g = !globalcfg[GLB_SMART_GAP].val || n > 1 ? ws->gappx : 0;
+
+	if (globalcfg[GLB_SMART_GAP].val && n == 1)
+		g = 0, ws->smartgap = 1;
+	else
+		g = ws->gappx, ws->smartgap = 0;
 
 	if (n <= ws->nmaster)
 		mw = ww, ss = 1;
@@ -346,7 +366,11 @@ int spiral(Workspace *ws)
 
 	if (!(n = tilecount(ws))) return 1;
 
-	g = globalcfg[GLB_SMART_GAP].val && n == 1 ? 0 : ws->gappx;
+	if (globalcfg[GLB_SMART_GAP].val && n == 1)
+		g = 0, ws->smartgap = 1;
+	else
+		g = ws->gappx, ws->smartgap = 0;
+
 	x = m->wx + ws->padl;
 	y = m->wy + ws->padt;
 	w = m->ww - ws->padl - ws->padr;

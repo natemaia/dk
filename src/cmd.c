@@ -1024,11 +1024,7 @@ int cmdwin(char **argv)
 
 int cmdws(char **argv)
 {
-	int nparsed = 0;
-
-	if (workspaces && workspaces->next)
-		nparsed = adjustwsormon(argv);
-	return nparsed;
+	return (workspaces && workspaces->next) ? adjustwsormon(argv) : 0;
 }
 
 int cmdws_(char **argv)

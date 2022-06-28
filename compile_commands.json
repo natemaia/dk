@@ -2,7 +2,7 @@
   {
     "arguments": [
       "/usr/bin/cc",
-      "-flto",
+      "-flto=auto",
       "-std=c11",
       "-pedantic",
       "-Wall",
@@ -11,7 +11,7 @@
       "-O2",
       "-D_DEFAULT_SOURCE",
       "-D_BSD_SOURCE",
-      "-DVERSION=\"1.6\"",
+      "-DVERSION=\"1.7\"",
       "-DDEBUG",
       "-c",
       "src/dk.c"
@@ -22,7 +22,7 @@
   {
     "arguments": [
       "/usr/bin/cc",
-      "-flto",
+      "-flto=auto",
       "-std=c11",
       "-pedantic",
       "-Wall",
@@ -31,7 +31,7 @@
       "-O2",
       "-D_DEFAULT_SOURCE",
       "-D_BSD_SOURCE",
-      "-DVERSION=\"1.6\"",
+      "-DVERSION=\"1.7\"",
       "-DDEBUG",
       "-c",
       "src/cmd.c"
@@ -42,7 +42,7 @@
   {
     "arguments": [
       "/usr/bin/cc",
-      "-flto",
+      "-flto=auto",
       "-std=c11",
       "-pedantic",
       "-Wall",
@@ -51,7 +51,7 @@
       "-O2",
       "-D_DEFAULT_SOURCE",
       "-D_BSD_SOURCE",
-      "-DVERSION=\"1.6\"",
+      "-DVERSION=\"1.7\"",
       "-DDEBUG",
       "-c",
       "src/event.c"
@@ -62,7 +62,7 @@
   {
     "arguments": [
       "/usr/bin/cc",
-      "-flto",
+      "-flto=auto",
       "-std=c11",
       "-pedantic",
       "-Wall",
@@ -71,7 +71,7 @@
       "-O2",
       "-D_DEFAULT_SOURCE",
       "-D_BSD_SOURCE",
-      "-DVERSION=\"1.6\"",
+      "-DVERSION=\"1.7\"",
       "-DDEBUG",
       "-c",
       "src/layout.c"
@@ -82,7 +82,7 @@
   {
     "arguments": [
       "/usr/bin/cc",
-      "-flto",
+      "-flto=auto",
       "-std=c11",
       "-pedantic",
       "-Wall",
@@ -91,7 +91,7 @@
       "-O2",
       "-D_DEFAULT_SOURCE",
       "-D_BSD_SOURCE",
-      "-DVERSION=\"1.6\"",
+      "-DVERSION=\"1.7\"",
       "-DDEBUG",
       "-c",
       "src/parse.c"
@@ -102,7 +102,7 @@
   {
     "arguments": [
       "/usr/bin/cc",
-      "-flto",
+      "-flto=auto",
       "-std=c11",
       "-pedantic",
       "-Wall",
@@ -111,7 +111,7 @@
       "-O2",
       "-D_DEFAULT_SOURCE",
       "-D_BSD_SOURCE",
-      "-DVERSION=\"1.6\"",
+      "-DVERSION=\"1.7\"",
       "-DDEBUG",
       "-c",
       "src/strl.c"
@@ -122,7 +122,7 @@
   {
     "arguments": [
       "/usr/bin/cc",
-      "-flto",
+      "-flto=auto",
       "-std=c11",
       "-pedantic",
       "-Wall",
@@ -131,7 +131,7 @@
       "-O2",
       "-D_DEFAULT_SOURCE",
       "-D_BSD_SOURCE",
-      "-DVERSION=\"1.6\"",
+      "-DVERSION=\"1.7\"",
       "-DDEBUG",
       "-c",
       "src/util.c"
@@ -142,7 +142,7 @@
   {
     "arguments": [
       "/usr/bin/cc",
-      "-flto",
+      "-flto=auto",
       "-std=c11",
       "-pedantic",
       "-Wall",
@@ -151,7 +151,7 @@
       "-O2",
       "-D_DEFAULT_SOURCE",
       "-D_BSD_SOURCE",
-      "-DVERSION=\"1.6\"",
+      "-DVERSION=\"1.7\"",
       "-DDEBUG",
       "-c",
       "src/dkcmd.c"

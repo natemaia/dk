@@ -142,9 +142,10 @@ void confignotify(xcb_generic_event_t *ev)
 {
 	xcb_configure_notify_event_t *e = (xcb_configure_notify_event_t *)ev;
 
-	if (e->window != root) return;
-	scr_w = e->width;
-	scr_h = e->height;
+	if (e->window == root) {
+		scr_w = e->width;
+		scr_h = e->height;
+	}
 }
 
 void configrequest(xcb_generic_event_t *ev)

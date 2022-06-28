@@ -43,7 +43,9 @@ char *itoa(int n, char *s)
 	int j, i = 0, sign = n;
 
 	if (sign < 0) n = -n;
-	do { s[i++] = n % 10 + '0'; } while ((n /= 10) > 0);
+	do {
+		s[i++] = n % 10 + '0';
+	} while ((n /= 10) > 0);
 	if (sign < 0) s[i++] = '-';
 	s[i] = '\0';
 	for (j = i - 1, i = 0; i < j; i++, j--) {

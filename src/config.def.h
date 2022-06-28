@@ -226,16 +226,17 @@ WsCmd wscmds[] = {
 
 /* workspaces defaults */
 Workspace wsdef = {
-	1,           /* nmaster */
-	3,           /* nstack  */
-	0,           /* gappx   */
-	0,           /* padl    */
-	0,           /* padr    */
-	0,           /* padt    */
-	0,           /* padb    */
-	0.5,         /* msplit  */
-	0.5,         /* ssplit  */
-	&layouts[0], /* layout  */
+	1,           /* nmaster  */
+	3,           /* nstack   */
+	0,           /* gappx    */
+	0,           /* smartgap */
+	0,           /* padl     */
+	0,           /* padr     */
+	0,           /* padt     */
+	0,           /* padb     */
+	0.5,         /* msplit   */
+	0.5,         /* ssplit   */
+	&layouts[0], /* layout   */
 
 	/* unused values - inherited from Workspace struct */
 	0, { '\0' }, NULL, NULL, NULL, NULL, NULL

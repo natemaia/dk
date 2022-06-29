@@ -229,7 +229,7 @@ Workspace wsdef = {
 	1,           /* nmaster  */
 	3,           /* nstack   */
 	0,           /* gappx    */
-	0,           /* smartgap */
+	1,           /* smartgap */
 	0,           /* padl     */
 	0,           /* padr     */
 	0,           /* padt     */

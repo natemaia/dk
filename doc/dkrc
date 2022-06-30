@@ -44,8 +44,8 @@ fi
 
 	# enable static workspaces and assign them to monitors (only relevant for multiple monitors)
 	# aside -
-	#		many that come from other workspace models tried dk and requested this feature
-	#		try embracing the default behaviour and allow access to any workspace from any monitor
+	#       many that come from other workspace models tried dk and requested this feature
+	#       try embracing the default behaviour and allow access to any workspace from any monitor
 	#       you might end up liking it :)
 	#
 	# mon1='DisplayPort-0'

@@ -622,6 +622,7 @@ void focus(Client *c)
 		setinputfocus(c);
 		selws->sel = c;
 		cmdc = c;
+		if (c->ws->layout->func == mono) MOVE(c->win, c->x, c->y);
 	} else {
 		unfocus(NULL, 1);
 		if (selws) selws->sel = NULL;

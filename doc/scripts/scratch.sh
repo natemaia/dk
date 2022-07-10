@@ -5,6 +5,8 @@
 # if open toggle between the current workspace and the last
 # written by Nathaniel Maia - 2021
 
+# example rule for the below script to be placed in your dkrc
+#    dkcmd rule class="^scratchpad$" float=true
 
 # these can be edited by the user to be any window, just make sure to set the class
 # to our title using whatever flag is needed: --class, -c, etc.

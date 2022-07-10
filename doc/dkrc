@@ -126,7 +126,6 @@ fi
 
 	# open window(s) with sticky and floating enabled to view on all workspaces.
 	dkcmd rule class="^stickyterm$" stick=true float=true w=1280 h=720
-	dkcmd rule class="^scratchpad$" float=true
 
 	# focus window and workspace on opening
 	dkcmd rule class="^firefox$" ws=1 focus=true
@@ -135,7 +134,7 @@ fi
 	dkcmd rule class="^firefox$" mon="HDMI-A-0"
 	dkcmd rule remove class="^firefox$"
 
-	# apply current rule set to all existing windows
+	# apply current rule set to all existing windows (useful for WM reload/restart)
 	dkcmd rule apply '*'
 
 	# delete all rules

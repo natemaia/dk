@@ -403,6 +403,8 @@ void changews(Workspace *ws, int swap, int warp)
 				ws->sel ? ws->sel->x + (ws->sel->w / 2) : ws->mon->x + (ws->mon->w / 2),
 				ws->sel ? ws->sel->y + (ws->sel->h / 2) : ws->mon->y + (ws->mon->h / 2));
 	PROP(REPLACE, root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1, &ws->num);
+	showhide(lastws->stack);
+	showhide(selws->stack);
 	needsrefresh = 1;
 	ignore(XCB_CONFIGURE_REQUEST);
 }
@@ -1465,7 +1467,6 @@ static int refresh(void)
 	Panel *p;
 	Client *c;
 	Monitor *m;
-	Workspace *ws;
 
 #define MAP(v, list)                                                                                      \
 	FOR_EACH(v, list)                                                                                     \
@@ -1475,18 +1476,27 @@ static int refresh(void)
 			xcb_map_window(con, v->win);                                                                  \
 		}
 
-	MAP(p, panels)
-	MAP(d, desks)
-	FOR_EACH(ws, workspaces) {
-		showhide(ws->stack);
-		if (ws == ws->mon->ws && ws->layout->func) ws->layout->func(ws);
-		MAP(c, ws->clients)
+	if (panels) MAP(p, panels)
+	if (desks) MAP(d, desks)
+	FOR_EACH(m, monitors) {
+		if (m->ws->layout->func) m->ws->layout->func(m->ws);
+		MAP(c, m->ws->clients)
+		FOR_EACH(c, m->ws->clients) clientborder(c, c == selws->sel);
+		restack(m->ws);
 	}
 	focus(NULL);
-	FOR_EACH(c, selws->clients) clientborder(c, c == selws->sel);
-	for (m = nextmon(monitors); m; m = nextmon(m->next)) restack(m->ws);
-	/* xcb_aux_sync(con); */
 	ignore(XCB_ENTER_NOTIFY);
+
+
+	/* FOR_EACH(ws, workspaces) { */
+	/* 	showhide(ws->stack); */
+	/* 	if (ws == ws->mon->ws && ws->layout->func) ws->layout->func(ws); */
+	/* 	MAP(c, ws->clients) */
+	/* } */
+	/* focus(NULL); */
+	/* FOR_EACH(c, selws->clients) clientborder(c, c == selws->sel); */
+	/* for (m = nextmon(monitors); m; m = nextmon(m->next)) restack(m->ws); */
+	/* ignore(XCB_ENTER_NOTIFY); */
 
 	return 0;
 #undef MAP

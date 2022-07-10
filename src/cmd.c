@@ -263,8 +263,8 @@ int cmdfloat(char **argv)
 		}
 		return nparsed;
 	}
-	if (FULLSCREEN(c) || c->state & (STATE_STICKY | STATE_FIXED)) {
-		respond(cmdresp, "!unable to change floating state of fullscreen, sticky, or fixed windows");
+	if (FULLSCREEN(c) || c->state & STATE_STICKY || c->state & STATE_FIXED) {
+		respond(cmdresp, "!unable to change floating state of fullscreen, sticky, or fixed size windows");
 	} else {
 		if ((c->state ^= STATE_FLOATING) & STATE_FLOATING) {
 			if (c->old_x + c->old_y == c->ws->mon->wx + c->ws->mon->wy
@@ -939,7 +939,7 @@ int cmdstick(__attribute__((unused)) char **argv)
 		respond(cmdresp, "!unable to change sticky state of fullscreen windows");
 		return 0;
 	}
-	if ((c->state ^= STATE_STICKY) & STATE_STICKY) {
+	if (c->state & STATE_STICKY) {
 		c->state &= ~STATE_STICKY;
 		PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL, 32, 1, &c->ws->num);
 	} else {

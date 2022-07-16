@@ -770,8 +770,9 @@ int cmdsend(Workspace *ws)
 		Monitor *old = c->ws->mon;
 		unfocus(c, 1);
 		setworkspace(c, ws->num, c != c->ws->sel);
-		if (ws->mon != old && ws->mon->ws == ws)
-			relocate(c, ws->mon, old);
+		if (ws->mon != old && ws->mon->ws == ws) relocate(c, ws->mon, old);
+		showhide(ws->stack);
+		showhide(selws->stack);
 		needsrefresh = 1;
 	}
 	return 0;

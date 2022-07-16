@@ -116,7 +116,6 @@ static void initwm(void);
 static int refresh(void);
 static void relocatews(Workspace *ws, Monitor *old, int wasvis);
 static int rulecmp(Client *c, Rule *r);
-static void showhide(Client *c);
 static void updnetworkspaces(void);
 static xcb_get_window_attributes_reply_t *winattr(xcb_window_t win);
 static void winclass(xcb_window_t win, char *class, char *inst, size_t len);
@@ -1757,7 +1756,7 @@ void setworkspace(Client *c, int num, int stacktail)
 	}
 }
 
-static void showhide(Client *c)
+void showhide(Client *c)
 {
 	Monitor *m;
 

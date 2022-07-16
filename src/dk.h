@@ -419,6 +419,7 @@ void setstackmode(xcb_window_t win, unsigned int mode);
 void seturgent(Client *c, int urg);
 void setwinstate(xcb_window_t win, long state);
 void setworkspace(Client *c, int num, int stacktail);
+void showhide(Client *c);
 void sizehints(Client *c, int uss);
 int tilecount(Workspace *ws);
 void unfocus(Client *c, int focusroot);

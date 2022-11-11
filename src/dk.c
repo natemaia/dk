@@ -1547,7 +1547,7 @@ static void relocatews(Workspace *ws, Monitor *old, int wasvis)
 
 void resize(Client *c, int x, int y, int w, int h, int bw)
 {
-	if (!c->ws || FLOATING(c))
+	if ((!c->ws || FLOATING(c)) && !(c->state & STATE_FULLSCREEN))
 		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 	c->x = x, c->y = y, c->w = w, c->h = h;
 	MOVERESIZE(c->win, x, y, w, h, bw);

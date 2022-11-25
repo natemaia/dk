@@ -27,9 +27,14 @@ Arch
 xcb-proto xcb-util xcb-util-wm xcb-util-cursor xcb-util-keysyms
 ```
 
+Void
+```
+libxcb-devel xcb-proto-devel xcb-util-devel xcb-util-wm-devel xcb-util-cursor-devel xcb-util-keysyms-devel
+```
+
 Debian/Ubuntu
 ```
-build-essential libxcb-randr0-dev libxcb-util-dev libxcb-icccm4-dev libxcb-cursor-dev libxcb-keysyms1-dev
+libxcb-randr0-dev libxcb-util-dev libxcb-icccm4-dev libxcb-cursor-dev libxcb-keysyms1-dev
 ```
 
 Other systems should have packages with similar names.

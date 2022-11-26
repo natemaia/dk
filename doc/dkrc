@@ -14,6 +14,22 @@ if hash sxhkd >/dev/null 2>&1; then
 	sxhkd -c "$HOME/.config/dk/sxhkdrc" &
 fi
 
+# adjust border widths based on the DPI of the monitor
+px=$(xrandr | grep ' connected' | tail -n1 | grep -o '[0-9]\+x[0-9]\+' | cut -d'x' -f2)
+mm=$(xrandr | grep ' connected' | tail -n1 | grep -o '[0-9]\+mm' | tail -n1 | sed 's/mm//')
+dpi=$(( (px / mm) * 25 ))
+
+if [ $dpi -ge 140 ]; then
+	border_width=5
+	border_outer_width=3
+elif [ $dpi -ge 120 ]; then
+	border_width=4
+	border_outer_width=2
+else
+	border_width=2
+	border_outer_width=1
+fi
+
 { # compound command to redirect all output
 
 	# workspace settings
@@ -87,12 +103,12 @@ fi
 
 	# traditional
 	# set border width and colour for each window state
-	# dkcmd set border width=1 colour focus='#6699cc' unfocus='#000000' urgent='#ee5555'
+	# dkcmd set border width=$border_width colour focus='#6699cc' unfocus='#000000' urgent='#ee5555'
 
 	# alternative
 	# enable split borders and colours, width is overall width, outer width consumes some of width.
 	# outer width must be less than width, outer width of 0 will be single borders
-	dkcmd set border width=5 outer_width=3 \
+	dkcmd set border width=$border_width outer_width=$border_outer_width \
 		colour \
 		focus='#6699cc' \
 		unfocus='#444444' \

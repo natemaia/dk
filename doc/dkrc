@@ -43,7 +43,7 @@ fi
 	dkcmd set ws=_ apply layout=tile master=1 stack=3 gap=0 msplit=0.5 ssplit=0.5
 
 	# use grid layout, padding, and gaps on workspace 10
-	dkcmd set ws=10 layout=grid pad left=200 right=200 top=100 bottom=100 gap width=50
+	dkcmd set ws=10 layout=grid pad left=200 right=200 top=100 bottom=100 gap=50
 
 	# change workspace names (default: number == name)
 	# dkcmd set \
@@ -106,8 +106,8 @@ fi
 	# dkcmd set border width=$border_width colour focus='#6699cc' unfocus='#000000' urgent='#ee5555'
 
 	# alternative
-	# enable split borders and colours, width is overall width, outer width consumes some of width.
-	# outer width must be less than width, outer width of 0 will be single borders
+	# enable split borders and colours, width is overall width, outer_width consumes some of width.
+	# outer_width must be less than width, outer_width of 0 will be single borders
 	dkcmd set border width=$border_width outer_width=$border_outer_width \
 		colour \
 		focus='#6699cc' \

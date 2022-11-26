@@ -31,13 +31,9 @@ alt + shift + x
 
 
 
-# quit dk
-alt + shift + q
-	dkcmd exit
-
-# reload dkrc
-alt + shift + r
-	dkcmd reload
+# quit dk, reload dkrc
+alt + shift + {q,r}
+	dkcmd {exit,reload}
 
 # restart dk
 alt + ctrl + shift + r

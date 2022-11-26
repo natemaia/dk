@@ -374,6 +374,7 @@ int assignws(Workspace *ws, Monitor *new)
 void changews(Workspace *ws, int swap, int warp)
 {
 	Monitor *m;
+	Workspace *hidews = ws->mon->ws;
 
 	if (!ws || ws == selws) return;
 	DBG("changews: %d:%s -> %d:%s - swap: %d - warp: %d",
@@ -397,13 +398,16 @@ void changews(Workspace *ws, int swap, int warp)
 	selws = ws;
 	selmon = selws->mon;
 	selmon->ws = selws;
-	if (dowarp)
+	if (dowarp) {
 		xcb_warp_pointer(con, root, root, 0, 0, 0, 0,
 				ws->sel ? ws->sel->x + (ws->sel->w / 2) : ws->mon->x + (ws->mon->w / 2),
 				ws->sel ? ws->sel->y + (ws->sel->h / 2) : ws->mon->y + (ws->mon->h / 2));
-	PROP(REPLACE, root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1, &ws->num);
-	showhide(lastws->stack);
+		showhide(hidews->stack);
+	} else {
+		showhide(lastws->stack);
+	}
 	showhide(selws->stack);
+	PROP(REPLACE, root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1, &ws->num);
 	needsrefresh = 1;
 	ignore(XCB_CONFIGURE_REQUEST);
 }

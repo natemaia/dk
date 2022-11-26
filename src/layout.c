@@ -240,12 +240,9 @@ int mono(Workspace *ws)
 		int b = globalcfg[GLB_SMART_BORDER].val ? 0 : ws->sel->bw;
 
 		for (c = nexttiled(ws->clients); c; c = nexttiled(c->next)) {
-			if (c == selws->sel)
-				resizehint(c, ws->mon->wx + ws->padl + g, ws->mon->wy + ws->padt + g,
-						ws->mon->ww - ws->padl - ws->padr - (2 * g) - (2 * b),
-						ws->mon->wh - ws->padt - ws->padb - (2 * g) - (2 * b), b, 0, 0);
-			else
-				MOVE(c->win, W(c) * -2, c->y);
+			resizehint(c, ws->mon->wx + ws->padl + g, ws->mon->wy + ws->padt + g,
+					ws->mon->ww - ws->padl - ws->padr - (2 * g) - (2 * b),
+					ws->mon->wh - ws->padt - ws->padb - (2 * g) - (2 * b), b, 0, 0);
 		}
 		xcb_aux_sync(con);
 	}

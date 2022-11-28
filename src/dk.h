@@ -280,10 +280,8 @@ typedef struct Status {
 
 typedef struct Client {
 	char title[256], class[64], inst[64];
-	int x, y, w, h, bw, hoff, depth;
-	int old_x, old_y, old_w, old_h, old_bw;
-	int max_w, max_h, min_w, min_h;
-	int base_w, base_h, inc_w, inc_h;
+	int x, y, w, h, bw, hoff, depth, old_x, old_y, old_w, old_h, old_bw;
+	int max_w, max_h, min_w, min_h, base_w, base_h, inc_w, inc_h, hints;
 	float min_aspect, max_aspect;
 	unsigned int state, old_state;
 	xcb_window_t win;

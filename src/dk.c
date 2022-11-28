@@ -182,7 +182,6 @@ int main(int argc, char *argv[])
 	confd = xcb_get_file_descriptor(con);
 	nfds = MAX(confd, sockfd) + 1;
 	while (running) {
-		if (xcb_connection_has_error(con)) break;
 		xcb_flush(con);
 		FD_ZERO(&read_fds);
 		FD_SET(sockfd, &read_fds);
@@ -206,6 +205,7 @@ int main(int argc, char *argv[])
 					free(ev);
 				}
 		}
+		if (xcb_connection_has_error(con)) break;
 		if (needsrefresh) needsrefresh = refresh();
 		s = stats;
 		while (s) {
@@ -276,7 +276,7 @@ static void applyrule(Client *c, Rule *r, xcb_atom_t curws, int nofocus)
 int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse)
 {
 	Monitor *m = c->ws->mon;
-	int min = globalcfg[GLB_MIN_XY].val;
+	int baseismin, min = globalcfg[GLB_MIN_XY].val;
 
 	*w = MAX(1, *w);
 	*h = MAX(1, *h);
@@ -293,15 +293,15 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 			*h = MIN(*h, m->wh);
 			*w = MIN(*w, m->ww);
 		}
-		*x = CLAMP(*x, (*w - min) * -1, scr_w - (min + (2 * bw)));
-		*y = CLAMP(*y, (*h - min) * -1, scr_h - (min + (2 * bw)));
+		*x = CLAMP(*x, (*w - min) * -1, scr_w - (min + bw));
+		*y = CLAMP(*y, (*h - min) * -1, scr_h - (min + bw));
 	} else {
-		*x = CLAMP(*x, m->wx, m->wx + m->ww - *w + (2 * bw));
-		*y = CLAMP(*y, m->wy, m->wy + m->wh - *h + (2 * bw));
+		*x = CLAMP(*x, m->wx, m->wx + m->ww - (*w + bw));
+		*y = CLAMP(*y, m->wy, m->wy + m->wh - (*h + bw));
 	}
 
 	if (FLOATING(c) || globalcfg[GLB_TILE_HINTS].val) {
-		int baseismin;
+		if (!c->hints) sizehints(c, 0);
 		if (!(baseismin = (c->base_w == c->min_w && c->base_h == c->min_h)))
 			*w -= c->base_w, *h -= c->base_h;
 		if (c->min_aspect > 0 && c->max_aspect > 0) {
@@ -1039,7 +1039,7 @@ static void initsock(void)
 	addr.sun_family = AF_UNIX;
 	strlcpy(addr.sun_path, sock, sizeof(addr.sun_path));
 	check((sockfd = socket(AF_UNIX, SOCK_STREAM, 0)), "unable to create socket");
-	unlink(sock); // NOLINT  -- shit linter, this will NEVER be NULL
+	if (sock) unlink(sock);
 	check(bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)), "unable to bind socket");
 	check(listen(sockfd, SOMAXCONN), "unable to listen on socket");
 }
@@ -1099,11 +1099,7 @@ static void initwm(void)
 
 	if ((ext = xcb_get_extension_data(con, &xcb_randr_id)) && ext->present) {
 		randrbase = ext->first_event;
-		xcb_randr_select_input(con, root,
-				XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE
-				| XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE
-				| XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE
-				| XCB_RANDR_NOTIFY_MASK_OUTPUT_PROPERTY);
+		xcb_randr_select_input(con, root, XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE);
 		xcb_flush(con);
 		updrandr();
 	} else {
@@ -1490,17 +1486,6 @@ static int refresh(void)
 	focus(NULL);
 	ignore(XCB_ENTER_NOTIFY);
 
-
-	/* FOR_EACH(ws, workspaces) { */
-	/* 	showhide(ws->stack); */
-	/* 	if (ws == ws->mon->ws && ws->layout->func) ws->layout->func(ws); */
-	/* 	MAP(c, ws->clients) */
-	/* } */
-	/* focus(NULL); */
-	/* FOR_EACH(c, selws->clients) clientborder(c, c == selws->sel); */
-	/* for (m = nextmon(monitors); m; m = nextmon(m->next)) restack(m->ws); */
-	/* ignore(XCB_ENTER_NOTIFY); */
-
 	return 0;
 #undef MAP
 }
@@ -1832,8 +1817,9 @@ void sizehints(Client *c, int uss)
 	} else {
 		iferr(0, "unable to get wm normal hints", e);
 	}
-	if (c->max_w && c->max_h && c->max_w == c->min_w && c->max_h == c->min_h)
+	if (c->max_w && c->max_w == c->min_w && c->max_h && c->max_h == c->min_h)
 		c->state |= STATE_FIXED | STATE_FLOATING;
+	c->hints = 1;
 }
 
 int tilecount(Workspace *ws)

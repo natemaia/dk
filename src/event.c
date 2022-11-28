@@ -520,7 +520,7 @@ void propertynotify(xcb_generic_event_t *ev)
 	if ((c = wintoclient(e->window))) {
 		switch (e->atom) {
 		case XCB_ATOM_WM_HINTS: clienthints(c); break;
-		case XCB_ATOM_WM_NORMAL_HINTS: sizehints(c, 0); break;
+		case XCB_ATOM_WM_NORMAL_HINTS: c->hints = 0; break;
 		case XCB_ATOM_WM_TRANSIENT_FOR:
 			if ((c->trans = wintoclient(wintrans(c->win))) && !FLOATING(c)) {
 				c->state |= STATE_FLOATING;

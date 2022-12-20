@@ -1,5 +1,10 @@
 ## dk
 
+![dk|500x500, 75%](https://bitbucket.org/natemaia/dk/raw/master/dk.png)
+
+<!-- [<img src="https://bytebucket.org/natemaia/dk/raw/d96cf613f44aef71ed97feb7a5ddeff7fa15350c/dk.png" width="250"/>](dk.png) -->
+
+
 A list based tiling window manager in the vein of dwm, bspwm, and xmonad.
 
 Some basics:
@@ -625,6 +630,8 @@ make nostrip
 ### Credits
 
 See the LICENSE file for a list of authors/contributors.
+
+Huge thanks to Kjetil Molteberg *(@badkarma)* on the Archlabs forum for the logo.
 
 Non contributors that I owe a huge thanks to:
 [dwm](https://dmw.suckless.org), [bspwm](https://github.com/baskerville/bspwm),

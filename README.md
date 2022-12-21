@@ -1,8 +1,6 @@
 ## dk
 
-![dk|500x500, 75%](https://bitbucket.org/natemaia/dk/raw/master/dk.png)
-
-<!-- [<img src="https://bytebucket.org/natemaia/dk/raw/d96cf613f44aef71ed97feb7a5ddeff7fa15350c/dk.png" width="250"/>](dk.png) -->
+![](dk.png)
 
 
 A list based tiling window manager in the vein of dwm, bspwm, and xmonad.

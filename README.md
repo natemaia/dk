@@ -1,7 +1,4 @@
-## dk
-
 ![](dk.png)
-
 
 A list based tiling window manager in the vein of dwm, bspwm, and xmonad.
 

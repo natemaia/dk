@@ -738,6 +738,7 @@ badvalue:
 				|| r.h != -1 || r.bw != -1 || r.xgrav != GRAV_NONE || r.ygrav != GRAV_NONE))
 	{
 #define M(a, b) (a == NULL || (b && !strcmp(a, b)))
+
 		FOR_EACH(pr, rules) { /* free any existing rule that uses the same matches */
 			if (M(r.class, pr->class) && M(r.inst, pr->inst) && M(r.title, pr->title)) {
 				freerule(pr);

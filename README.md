@@ -616,6 +616,11 @@ To enable internal stderr debug output
 make debug
 ```
 
+Te enable debug and get function calls
+```
+make fdebug
+```
+
 To leave debug symbols in *(for gdb, valgrind, etc.)*.
 ```
 make nostrip

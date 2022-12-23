@@ -88,8 +88,9 @@
 
 #define PROP(mode, win, atom, type, membsize, nmemb, value) \
 	xcb_change_property(con, XCB_PROP_MODE_##mode, win, atom, type, (membsize), (nmemb), value)
+
 #define GET(win, val, error, type, functtype)                                             \
-		if (win == XCB_WINDOW_NONE || win == root) return val;                                \
+		if (win == XCB_WINDOW_NONE) return val;                                \
 		if (!(val = xcb_get_##functtype##_reply(con, xcb_get_##functtype(con, win), &error))) \
 			iferr(0, "unable to get window " type " reply", error)
 
@@ -397,6 +398,7 @@ Status *initstatus(Status *tmp);
 Monitor *itomon(int num);
 Workspace *itows(int num);
 void manage(xcb_window_t win, int scan);
+void mapclient(Client *c, int deiconify);
 void movestack(int direction);
 Monitor *nextmon(Monitor *m);
 Client *nexttiled(Client *c);
@@ -422,7 +424,8 @@ void sizehints(Client *c, int uss);
 int tilecount(Workspace *ws);
 void unfocus(Client *c, int focusroot);
 void unmanage(xcb_window_t win, int destroyed);
-int updrandr(void);
+void unmapclient(Client *c, int iconify);
+int updrandr(int init);
 void updstruts(void);
 void updworkspaces(int needed);
 Client *wintoclient(xcb_window_t win);

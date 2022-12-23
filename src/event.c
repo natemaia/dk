@@ -93,12 +93,15 @@ void clientmessage(xcb_generic_event_t *ev)
 
 	DBG("clientmessage: 0x%08x", e->window)
 	if (e->window == root && e->type == netatom[NET_DESK_CUR]) {
+		DBG("clientmessage: root window current desktop message: %d", e->type)
 		unfocus(selws->sel, 1);
 		cmdview(itows(d[0]));
 	} else if (e->type == netatom[NET_CLOSE]) {
+		DBG("clientmessage: close window message: %d", e->type)
 		unmanage(e->window, 1);
 	} else if ((c = wintoclient(e->window))) {
 		if (e->type == netatom[NET_WM_DESK]) {
+			DBG("clientmessage: change desktop message: %d", e->type)
 			if (!itows(d[0])) {
 				warnx("invalid workspace index: %d", d[0]);
 				return;
@@ -106,6 +109,7 @@ void clientmessage(xcb_generic_event_t *ev)
 			setworkspace(c, d[0], c != c->ws->sel);
 			needsrefresh = 1;
 		} else if (e->type == netatom[NET_WM_STATE]) {
+			DBG("clientmessage: change state message: %d", e->type)
 			if (d[1] == netatom[NET_STATE_FULL] || d[2] == netatom[NET_STATE_FULL]) {
 				setfullscreen(c, (d[0] == 1 || (d[0] == 2 && !(c->state & STATE_FULLSCREEN))));
 			} else if (d[1] == netatom[NET_STATE_ABOVE] || d[2] == netatom[NET_STATE_ABOVE]) {
@@ -245,7 +249,7 @@ void dispatch(xcb_generic_event_t *ev)
 		} else if (ev->response_type == randrbase + XCB_RANDR_SCREEN_CHANGE_NOTIFY
 				&& ((xcb_randr_screen_change_notify_event_t *)ev)->root == root)
 		{
-			if (updrandr())
+			if (updrandr(0))
 				updworkspaces(globalcfg[GLB_WS_NUM].val);
 			updstruts();
 		}

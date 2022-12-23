@@ -1,6 +1,7 @@
 /* dk window manager
  *
  * see license file for copyright and license details
+ *
  * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
  */
 
@@ -65,6 +66,13 @@ xcb_key_symbols_t *keysyms;
 xcb_cursor_t cursor[CURS_LAST];
 xcb_atom_t wmatom[WM_LAST], netatom[NET_LAST];
 
+static unsigned int rootmask = XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT
+				| XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY
+				| XCB_EVENT_MASK_BUTTON_PRESS
+				| XCB_EVENT_MASK_ENTER_WINDOW
+				| XCB_EVENT_MASK_LEAVE_WINDOW
+				| XCB_EVENT_MASK_STRUCTURE_NOTIFY
+				| XCB_EVENT_MASK_PROPERTY_CHANGE;
 const char *ebadarg = "invalid argument for";
 const char *enoargs = "command requires additional arguments but none were given";
 const char *gravities[] = {
@@ -164,7 +172,7 @@ int main(int argc, char *argv[])
 	iferr(1, "is another window manager running?",
 			xcb_request_check(con,
 				xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK,
-					(unsigned int[]){XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT})));
+					(unsigned int[]){ XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT })));
 
 	initwm();
 	initsock();
@@ -407,9 +415,10 @@ void changews(Workspace *ws, int swap, int warp)
 		showhide(lastws->stack);
 	}
 	showhide(selws->stack);
+	ignore(XCB_CONFIGURE_REQUEST);
+	ignore(XCB_ENTER_NOTIFY);
 	PROP(REPLACE, root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1, &ws->num);
 	needsrefresh = 1;
-	ignore(XCB_CONFIGURE_REQUEST);
 }
 
 void clienthints(Client *c)
@@ -673,12 +682,11 @@ void freewm(void)
 	while (panels) unmanage(panels->win, 0);
 	while (desks) unmanage(desks->win, 0);
 
-	/* move clients back into visible space when not restarting
-	 * this solves the issue of some clients storing their location
-	 * which is incorrect as we move them off-screen when not visible */
-	if (!restart)
-		FOR_CLIENTS(c, ws)
-			MOVE(c->win, c->x, c->y);
+	/* map and move clients back into visible space this solves the issue of clients storing
+	 * their location and map state which is incorrect as we unmap them when not visible */
+	FOR_CLIENTS(c, ws) mapclient(c, 1);
+	xcb_aux_sync(con);
+
 	while ((ws = workspaces)) {
 		while (ws->stack) unmanage(ws->stack->win, 0);
 		freews(ws);
@@ -843,10 +851,7 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	c->old_state = STATE_NONE;
 	c->trans = wintoclient(wintrans(c->win));
 
-	DBG("initclient: initial size: %d, %d - %dx%d", c->x, c->y, c->w, c->h)
-
 	winclass(win, c->class, c->inst, sizeof(c->class));
-
 	pc = xcb_get_property(con, 0, c->win, wmatom[WM_MOTIF], wmatom[WM_MOTIF], 0, 5);
 	if ((pr = xcb_get_property_reply(con, pc, &e))
 			&& xcb_get_property_value_length(pr) >= 3) {
@@ -865,19 +870,19 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	clienthints(c);
 
 	/* apply rules and set the client's workspace, when focus_open is false
-	 * the new client is attached to the end of the stack, otherwise the head
-	 * we also avoid focusing when the currently focused window is fullscreen
+	 * the new client is attached to the end of the stack, otherwise the head.
+	 * we also avoid focusing when the currently focused window is fullscreen.
 	 * later in refresh(), focus(NULL) is called to focus the right client */
 	clientrule(c, NULL, !globalcfg[GLB_FOCUS_OPEN].val
 			|| (selws->sel && selws->sel->state & STATE_FULLSCREEN
 				&& selws->sel->w == selws->mon->w && selws->sel->h == selws->mon->h));
+
 	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK,
 			(unsigned int[]){ XCB_EVENT_MASK_ENTER_WINDOW
 							| XCB_EVENT_MASK_FOCUS_CHANGE
 							| XCB_EVENT_MASK_PROPERTY_CHANGE
 							| XCB_EVENT_MASK_STRUCTURE_NOTIFY });
 	grabbuttons(c);
-	DBG("initclient: mid size: %d, %d - %dx%d", c->x, c->y, c->w, c->h)
 	if ((FLOATING(c) || c->state & STATE_FIXED) && !(c->state & STATE_FULLSCREEN)) {
 		c->w = CLAMP(c->w, globalcfg[GLB_MIN_WH].val, c->ws->mon->ww);
 		c->h = CLAMP(c->h, globalcfg[GLB_MIN_WH].val, c->ws->mon->wh);
@@ -887,12 +892,10 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		}
 		c->x = CLAMP(c->x, c->ws->mon->x, c->ws->mon->x + c->ws->mon->w - W(c));
 		c->y = CLAMP(c->y, c->ws->mon->y, c->ws->mon->y + c->ws->mon->h - H(c));
-		DBG("initclient: floating mid size: %d, %d - %dx%d", c->x, c->y, c->w, c->h)
 		if (c->x == c->ws->mon->x && c->y == c->ws->mon->y)
 			quadrant(c, &c->x, &c->y, &c->w, &c->h);
 		MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
 	}
-	DBG("initclient: final size: %d, %d - %dx%d", c->x, c->y, c->w, c->h)
 	if (c->cb) c->cb->func(c, 0);
 	wschange = c->ws->clients->next ? wschange : 1;
 }
@@ -1086,7 +1089,7 @@ static void initwm(void)
 	sa.sa_flags = SA_RESTART;
 	for (i = 0; i < LEN(sigs); i++)
 		check(sigaction(sigs[i], &sa, NULL), "unable to setup signal handler");
-	/* handle/ignore SIGPIPE otherwise write() on broken pipes will crash and burn */
+	/* ignore SIGPIPE otherwise write() on broken pipes will crash and burn */
 	signal(SIGPIPE, SIG_IGN);
 
 	check(xcb_cursor_context_new(con, scr, &ctx), "unable to create cursor context");
@@ -1101,7 +1104,7 @@ static void initwm(void)
 		randrbase = ext->first_event;
 		xcb_randr_select_input(con, root, XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE);
 		xcb_flush(con);
-		updrandr();
+		updrandr(1);
 	} else {
 		warnx("unable to get randr extension data");
 	}
@@ -1123,19 +1126,11 @@ static void initwm(void)
 	PROP(REPLACE, root, netatom[NET_SUPPORTED], XCB_ATOM_ATOM, 32, LEN(netatom), netatom);
 	xcb_delete_property(con, root, netatom[NET_CLIENTS]);
 
+
+	long rm = monitors->next ? (rootmask | XCB_EVENT_MASK_POINTER_MOTION) : rootmask;
 	iferr(1, "unable to change root window event mask or cursor",
-			xcb_request_check(con,
-				xcb_change_window_attributes_checked(
-					con, root, XCB_CW_EVENT_MASK | XCB_CW_CURSOR,
-					(unsigned int[]){ XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT
-									| XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY
-									| XCB_EVENT_MASK_BUTTON_PRESS
-									| XCB_EVENT_MASK_POINTER_MOTION
-									| XCB_EVENT_MASK_ENTER_WINDOW
-									| XCB_EVENT_MASK_LEAVE_WINDOW
-									| XCB_EVENT_MASK_STRUCTURE_NOTIFY
-									| XCB_EVENT_MASK_PROPERTY_CHANGE,
-									cursor[CURS_NORMAL]})));
+			xcb_request_check(con, xcb_change_window_attributes_checked( con,
+					root, XCB_CW_EVENT_MASK | XCB_CW_CURSOR, (unsigned int[]){ rm, cursor[CURS_NORMAL] })));
 
 	if (!(keysyms = xcb_key_symbols_alloc(con)))
 		err(1, "unable to get keysyms from X connection");
@@ -1200,8 +1195,7 @@ void manage(xcb_window_t win, int scan)
 	} else if (!wa->override_redirect) {
 client:
 		if (scan && !(wa->map_state == XCB_MAP_STATE_VIEWABLE
-					|| (winprop(win, wmatom[WM_STATE], &state)
-						&& state == XCB_ICCCM_WM_STATE_ICONIC)))
+					|| (winprop(win, wmatom[WM_STATE], &state) && state == XCB_ICCCM_WM_STATE_ICONIC)))
 			goto end;
 		initclient(win, g);
 		PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &win);
@@ -1211,6 +1205,14 @@ client:
 end:
 	free(wa);
 	free(g);
+}
+
+void mapclient(Client *c, int deiconify)
+{
+	if (deiconify) setwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
+	MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
+	xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, c->win, XCB_CURRENT_TIME);
+	xcb_map_window(con, c->win);
 }
 
 void movestack(int direction)
@@ -1573,7 +1575,7 @@ void restack(Workspace *ws)
 	for (c = ws->stack; c; c = c->snext)
 		if (c->state & STATE_ABOVE && ((c->state & STATE_FLOATING) || c->ws->layout->func == NULL))
 			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-	xcb_aux_sync(con);
+	xcb_flush(con);
 }
 
 static int rulecmp(Client *c, Rule *r)
@@ -1681,6 +1683,13 @@ void setnetwsnames(void)
 
 void setstackmode(xcb_window_t win, unsigned int mode)
 {
+#ifdef DEBUG
+	Client *c = wintoclient(win);
+	if (c)
+		DBG("setstackmode: stacking window %s: %s", mode == XCB_STACK_MODE_ABOVE ? "above" : "below", c->title)
+	else
+		DBG("setstackmode: stacking window %s: 0x%08x", mode == XCB_STACK_MODE_ABOVE ? "above" : "below", win)
+#endif
 	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_STACK_MODE, &mode);
 }
 
@@ -1752,34 +1761,25 @@ void showhide(Client *c)
 	if (!c) return;
 	m = c->ws->mon;
 	if (c->ws == m->ws) {
-		if (c->x < m->x - (c->w + globalcfg[GLB_MIN_XY].val)
-				|| c->x > m->x + (m->w - globalcfg[GLB_MIN_XY].val))
-		{
-			c->x = CLAMP(c->x, m->x - globalcfg[GLB_MIN_XY].val,
-					m->x + m->w - (c->w - globalcfg[GLB_MIN_XY].val));
-		}
-		if (c->y < m->y - (c->h + globalcfg[GLB_MIN_XY].val)
-				|| c->y > m->y + (m->h - globalcfg[GLB_MIN_XY].val))
-		{
-			c->y = CLAMP(c->y, m->y - globalcfg[GLB_MIN_XY].val,
-					m->y + m->h - (c->h - globalcfg[GLB_MIN_XY].val));
-		}
-		if (c->state & STATE_FULLSCREEN && !(c->state & STATE_FAKEFULL) && (c->w != m->w || c->h != m->h))
-			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, 0);
-		else if (FLOATING(c))
-			resize(c, c->x, c->y, c->w, c->h, c->bw);
-		else
-			MOVE(c->win, c->x, c->y);
+		if (c->x < m->x - (c->w + globalcfg[GLB_MIN_XY].val) || c->x > m->x + (m->w - globalcfg[GLB_MIN_XY].val))
+			c->x = CLAMP(c->x, m->x - globalcfg[GLB_MIN_XY].val, m->x + m->w - (c->w - globalcfg[GLB_MIN_XY].val));
+		if (c->y < m->y - (c->h + globalcfg[GLB_MIN_XY].val) || c->y > m->y + (m->h - globalcfg[GLB_MIN_XY].val))
+			c->y = CLAMP(c->y, m->y - globalcfg[GLB_MIN_XY].val, m->y + m->h - (c->h - globalcfg[GLB_MIN_XY].val));
+		mapclient(c, 1);
 		showhide(c->snext);
 	} else {
 		showhide(c->snext);
 		if (!(c->state & STATE_STICKY)) {
-			MOVE(c->win, W(c) * -2, c->y);
+			unmapclient(c, 1);
 		} else if (c->ws != selws && m == selws->mon) {
 			Client *sel = lastws->sel == c ? c : selws->sel;
 			setworkspace(c, selws->num, 0);
 			focus(sel);
 		}
+	}
+	if (c == c->ws->stack) {
+		ignore(XCB_ENTER_NOTIFY);
+		xcb_aux_sync(con);
 	}
 }
 
@@ -1896,6 +1896,25 @@ void unmanage(xcb_window_t win, int destroyed)
 	}
 }
 
+void unmapclient(Client *c, int iconify)
+{
+	long rm, cm;
+	xcb_get_window_attributes_reply_t *ca, *ra;
+
+	ra = winattr(root), ca = winattr(c->win);
+	rm = (ra->your_event_mask & ~XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY);
+	cm = (ca->your_event_mask & ~XCB_EVENT_MASK_STRUCTURE_NOTIFY);
+	xcb_grab_server(con);
+	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &rm);
+	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &cm);
+	xcb_unmap_window(con, c->win);
+	if (iconify) setwinstate(c->win, XCB_ICCCM_WM_STATE_ICONIC);
+	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &ra->your_event_mask);
+	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &ca->your_event_mask);
+	xcb_aux_sync(con);
+	xcb_ungrab_server(con);
+}
+
 static void updnetworkspaces(void)
 {
 	int v[4];
@@ -2000,7 +2019,7 @@ next:
 	return changed;
 }
 
-int updrandr(void)
+int updrandr(int init)
 {
 	int changed = 0;
 	xcb_generic_error_t *e;
@@ -2014,6 +2033,12 @@ int updrandr(void)
 			warnx("no monitors available");
 		else
 			changed = updoutputs(xcb_randr_get_screen_resources_outputs(r), n, r->config_timestamp);
+
+		if (!init) {
+			long rm = monitors->next ? (rootmask | XCB_EVENT_MASK_POINTER_MOTION) : rootmask;
+			xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &rm);
+		}
+
 		free(r);
 	} else {
 		iferr(0, "unable to get screen resources", e);

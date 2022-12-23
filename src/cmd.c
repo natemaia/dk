@@ -353,8 +353,9 @@ int cmdkill(__attribute__((unused)) char **argv)
 		xcb_kill_client(con, cmdc->win);
 		xcb_aux_sync(con);
 		xcb_ungrab_server(con);
+	} else {
+		xcb_aux_sync(con);
 	}
-	xcb_aux_sync(con);
 	ignore(XCB_ENTER_NOTIFY);
 	return 0;
 }

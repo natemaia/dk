@@ -90,7 +90,7 @@ alt + {_,shift + }{i,d}
 
 # change gap width
 alt + {equal,minus}
-	dkcmd set gap width {+5,-5}
+	dkcmd set gap {+5,-5}
 
 # change border widths
 alt + ctrl + {_,shift + }{equal,minus}

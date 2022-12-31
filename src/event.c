@@ -556,10 +556,8 @@ void unmapnotify(xcb_generic_event_t *ev)
 	if (e->event == root) return;
 	free(xcb_query_tree_reply(con, xcb_query_tree(con, e->window), &er));
 	if (er) { free(er); return; }
-	if (e->response_type & ~0x7f) {
-		setwinstate(e->window, XCB_ICCCM_WM_STATE_WITHDRAWN);
-	} else {
-		DBG("unmapnotify: 0x%08x", e->window)
-		unmanage(e->window, 0);
-	}
+
+	DBG("unmapnotify: withdrawing and un-managing window: 0x%08x", e->window)
+	setwinstate(e->window, XCB_ICCCM_WM_STATE_WITHDRAWN);
+	unmanage(e->window, 0);
 }

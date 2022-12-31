@@ -421,6 +421,51 @@ void changews(Workspace *ws, int swap, int warp)
 	needsrefresh = 1;
 }
 
+void clientborder(Client *c, int focused)
+{ /* modified from swm/wmutils */
+	xcb_gcontext_t gc;
+	xcb_pixmap_t pmap;
+
+	if (c->state & STATE_NOBORDER || !c->bw) return;
+
+	int b = c->bw;
+	int o = border[BORD_O_WIDTH];
+	unsigned int in = border[focused ? BORD_FOCUS : ((c->state & STATE_URGENT)
+			? BORD_URGENT : BORD_UNFOCUS)];
+	if (b - o > 0) {
+		unsigned int out = border[focused ? BORD_O_FOCUS : ((c->state & STATE_URGENT)
+				? BORD_O_URGENT : BORD_O_UNFOCUS)];
+		xcb_rectangle_t inner[] = {
+			{ c->w,         0,            b - o,        c->h + b - o },
+			{ c->w + b + o, 0,            b - o,        c->h + b - o },
+			{ 0,            c->h,         c->w + b - o, b - o        },
+			{ 0,            c->h + b + o, c->w + b - o, b - o        },
+			{ c->w + b + o, c->h + b + o, b,            b            }
+		};
+		xcb_rectangle_t outer[] = {
+			{ c->w + b - o, 0,            o,            c->h + b * 2 },
+			{ c->w + b,     0,            o,            c->h + b * 2 },
+			{ 0,            c->h + b - o, c->w + b * 2, o            },
+			{ 0,            c->h + b,     c->w + b * 2, o            },
+			{ 1,            1,            1,            1            }
+		};
+
+		pmap = xcb_generate_id(con);
+		gc = xcb_generate_id(con);
+		xcb_create_pixmap(con, c->depth, pmap, c->win, W(c), H(c));
+		xcb_create_gc(con, gc, pmap, XCB_GC_FOREGROUND, &in);
+		xcb_poly_fill_rectangle(con, pmap, gc, LEN(inner), inner);
+		xcb_change_gc(con, gc, XCB_GC_FOREGROUND, &out);
+		xcb_poly_fill_rectangle(con, pmap, gc, LEN(outer), outer);
+		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXMAP, &pmap);
+		xcb_free_pixmap(con, pmap);
+		xcb_free_gc(con, gc);
+	} else {
+		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, &in);
+	}
+	xcb_aux_sync(con);
+}
+
 void clienthints(Client *c)
 {
 	xcb_generic_error_t *e;
@@ -438,6 +483,31 @@ void clienthints(Client *c)
 	} else {
 		iferr(0, "unable to get window wm hints reply", e);
 	}
+}
+
+void clientmap(Client *c)
+{
+	DBG("clientmap: mapping window: %s", c->title)
+	setwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
+	xcb_map_window(con, c->win);
+}
+
+void clientunmap(Client *c)
+{
+	DBG("clientunmap: unmapping window: %s", c->title)
+	xcb_get_window_attributes_reply_t *ra = winattr(root), *ca = winattr(c->win);
+	uint32_t rm = (ra->your_event_mask & ~XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY);
+	uint32_t cm = (ca->your_event_mask & ~XCB_EVENT_MASK_STRUCTURE_NOTIFY);
+
+	xcb_grab_server(con);
+	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &rm);
+	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &cm);
+	xcb_unmap_window(con, c->win);
+	setwinstate(c->win, XCB_ICCCM_WM_STATE_ICONIC);
+	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &ra->your_event_mask);
+	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &ca->your_event_mask);
+	xcb_aux_sync(con);
+	xcb_ungrab_server(con);
 }
 
 int clientname(Client *c)
@@ -505,50 +575,6 @@ void clienttype(Client *c)
 				&& (type == netatom[NET_TYPE_DIALOG] || type == netatom[NET_TYPE_SPLASH]))
 			|| c->trans || (c->trans = wintoclient(wintrans(c->win))))
 		c->state |= STATE_FLOATING;
-}
-
-void clientborder(Client *c, int focused)
-{ /* modified from swm/wmutils */
-	xcb_gcontext_t gc;
-	xcb_pixmap_t pmap;
-
-	if (c->state & STATE_NOBORDER || !c->bw) return;
-
-	int b = c->bw;
-	int o = border[BORD_O_WIDTH];
-	unsigned int in = border[focused ? BORD_FOCUS : ((c->state & STATE_URGENT)
-			? BORD_URGENT : BORD_UNFOCUS)];
-	if (b - o > 0) {
-		unsigned int out = border[focused ? BORD_O_FOCUS : ((c->state & STATE_URGENT)
-				? BORD_O_URGENT : BORD_O_UNFOCUS)];
-		xcb_rectangle_t inner[] = {
-			{ c->w,         0,            b - o,        c->h + b - o },
-			{ c->w + b + o, 0,            b - o,        c->h + b - o },
-			{ 0,            c->h,         c->w + b - o, b - o        },
-			{ 0,            c->h + b + o, c->w + b - o, b - o        },
-			{ c->w + b + o, c->h + b + o, b,            b            }
-		};
-		xcb_rectangle_t outer[] = {
-			{ c->w + b - o, 0,            o,            c->h + b * 2 },
-			{ c->w + b,     0,            o,            c->h + b * 2 },
-			{ 0,            c->h + b - o, c->w + b * 2, o            },
-			{ 0,            c->h + b,     c->w + b * 2, o            },
-			{ 1,            1,            1,            1            }
-		};
-
-		pmap = xcb_generate_id(con);
-		gc = xcb_generate_id(con);
-		xcb_create_pixmap(con, c->depth, pmap, c->win, W(c), H(c));
-		xcb_create_gc(con, gc, pmap, XCB_GC_FOREGROUND, &in);
-		xcb_poly_fill_rectangle(con, pmap, gc, LEN(inner), inner);
-		xcb_change_gc(con, gc, XCB_GC_FOREGROUND, &out);
-		xcb_poly_fill_rectangle(con, pmap, gc, LEN(outer), outer);
-		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXMAP, &pmap);
-		xcb_free_pixmap(con, pmap);
-		xcb_free_gc(con, gc);
-	} else {
-		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, &in);
-	}
 }
 
 Monitor *coordtomon(int x, int y)
@@ -682,9 +708,7 @@ void freewm(void)
 	while (panels) unmanage(panels->win, 0);
 	while (desks) unmanage(desks->win, 0);
 
-	/* map and move clients back into visible space this solves the issue of clients storing
-	 * their location and map state which is incorrect as we unmap them when not visible */
-	FOR_CLIENTS(c, ws) mapclient(c, 1);
+	FOR_CLIENTS(c, ws) clientmap(c);
 	xcb_aux_sync(con);
 
 	while ((ws = workspaces)) {
@@ -1127,7 +1151,7 @@ static void initwm(void)
 	xcb_delete_property(con, root, netatom[NET_CLIENTS]);
 
 
-	long rm = monitors->next ? (rootmask | XCB_EVENT_MASK_POINTER_MOTION) : rootmask;
+	uint32_t rm = monitors->next ? (rootmask | XCB_EVENT_MASK_POINTER_MOTION) : rootmask;
 	iferr(1, "unable to change root window event mask or cursor",
 			xcb_request_check(con, xcb_change_window_attributes_checked( con,
 					root, XCB_CW_EVENT_MASK | XCB_CW_CURSOR, (unsigned int[]){ rm, cursor[CURS_NORMAL] })));
@@ -1205,14 +1229,6 @@ client:
 end:
 	free(wa);
 	free(g);
-}
-
-void mapclient(Client *c, int deiconify)
-{
-	if (deiconify) setwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
-	MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
-	xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, c->win, XCB_CURRENT_TIME);
-	xcb_map_window(con, c->win);
 }
 
 void movestack(int direction)
@@ -1473,6 +1489,7 @@ static int refresh(void)
 	FOR_EACH(v, list)                                                                                     \
 		if (v->state & STATE_NEEDSMAP) {                                                                  \
 			v->state &= ~STATE_NEEDSMAP;                                                                  \
+			setwinstate(v->win, XCB_ICCCM_WM_STATE_NORMAL);                                               \
 			setstackmode(v->win, (v->state & STATE_ABOVE) ? XCB_STACK_MODE_ABOVE : XCB_STACK_MODE_BELOW); \
 			xcb_map_window(con, v->win);                                                                  \
 		}
@@ -1724,9 +1741,9 @@ void seturgent(Client *c, int urg)
 	}
 }
 
-void setwinstate(xcb_window_t win, long state)
+void setwinstate(xcb_window_t win, uint32_t state)
 {
-	long data[] = { state, XCB_ATOM_NONE };
+	uint32_t data[] = { state, XCB_ATOM_NONE };
 	PROP(REPLACE, win, wmatom[WM_STATE], wmatom[WM_STATE], 32, 2, (unsigned char *)data);
 }
 
@@ -1761,16 +1778,18 @@ void showhide(Client *c)
 	if (!c) return;
 	m = c->ws->mon;
 	if (c->ws == m->ws) {
+		DBG("showhide: ws: %d -- showing window : %s", c->ws->num + 1, c->title)
 		if (c->x < m->x - (c->w + globalcfg[GLB_MIN_XY].val) || c->x > m->x + (m->w - globalcfg[GLB_MIN_XY].val))
 			c->x = CLAMP(c->x, m->x - globalcfg[GLB_MIN_XY].val, m->x + m->w - (c->w - globalcfg[GLB_MIN_XY].val));
 		if (c->y < m->y - (c->h + globalcfg[GLB_MIN_XY].val) || c->y > m->y + (m->h - globalcfg[GLB_MIN_XY].val))
 			c->y = CLAMP(c->y, m->y - globalcfg[GLB_MIN_XY].val, m->y + m->h - (c->h - globalcfg[GLB_MIN_XY].val));
-		mapclient(c, 1);
+		clientmap(c);
 		showhide(c->snext);
 	} else {
+		DBG("showhide: ws: %d -- hiding window : %s", c->ws->num + 1, c->title)
 		showhide(c->snext);
 		if (!(c->state & STATE_STICKY)) {
-			unmapclient(c, 1);
+			clientunmap(c);
 		} else if (c->ws != selws && m == selws->mon) {
 			Client *sel = lastws->sel == c ? c : selws->sel;
 			setworkspace(c, selws->num, 0);
@@ -1778,8 +1797,8 @@ void showhide(Client *c)
 		}
 	}
 	if (c == c->ws->stack) {
-		ignore(XCB_ENTER_NOTIFY);
 		xcb_aux_sync(con);
+		ignore(XCB_ENTER_NOTIFY);
 	}
 }
 
@@ -1894,25 +1913,6 @@ void unmanage(xcb_window_t win, int destroyed)
 			PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &d->win);
 		needsrefresh = 1;
 	}
-}
-
-void unmapclient(Client *c, int iconify)
-{
-	long rm, cm;
-	xcb_get_window_attributes_reply_t *ca, *ra;
-
-	ra = winattr(root), ca = winattr(c->win);
-	rm = (ra->your_event_mask & ~XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY);
-	cm = (ca->your_event_mask & ~XCB_EVENT_MASK_STRUCTURE_NOTIFY);
-	xcb_grab_server(con);
-	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &rm);
-	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &cm);
-	xcb_unmap_window(con, c->win);
-	if (iconify) setwinstate(c->win, XCB_ICCCM_WM_STATE_ICONIC);
-	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &ra->your_event_mask);
-	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &ca->your_event_mask);
-	xcb_aux_sync(con);
-	xcb_ungrab_server(con);
 }
 
 static void updnetworkspaces(void)
@@ -2035,7 +2035,7 @@ int updrandr(int init)
 			changed = updoutputs(xcb_randr_get_screen_resources_outputs(r), n, r->config_timestamp);
 
 		if (!init) {
-			long rm = monitors->next ? (rootmask | XCB_EVENT_MASK_POINTER_MOTION) : rootmask;
+			uint32_t rm = monitors->next ? (rootmask | XCB_EVENT_MASK_POINTER_MOTION) : rootmask;
 			xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &rm);
 		}
 

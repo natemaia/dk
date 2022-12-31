@@ -833,7 +833,6 @@ int cmdset(char **argv)
 					switch (globalcfg[j].type) {
 					case TYPE_BOOL:
 						if (!argv || (i = parsebool(*argv)) < 0) goto badvalue;
-						needsrefresh = needsrefresh || globalcfg[j].val != i;
 						globalcfg[j].val = i;
 						break;
 					case TYPE_NUMWS:
@@ -842,10 +841,10 @@ int cmdset(char **argv)
 						break;
 					case TYPE_INT:
 						if (!argv || (i = parseintclamp(*argv, NULL, 10, 1000)) == INT_MIN) goto badvalue;
-						needsrefresh = needsrefresh || globalcfg[j].val != i;
 						globalcfg[j].val = i;
 						break;
 					}
+					needsrefresh = needsrefresh || globalcfg[j].val != i;
 					argv++, nparsed++;
 					break;
 				}

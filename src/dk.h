@@ -87,7 +87,7 @@
 	} while (0)
 
 #define PROP(mode, win, atom, type, membsize, nmemb, value) \
-	xcb_change_property(con, XCB_PROP_MODE_##mode, win, atom, type, (membsize), (nmemb), value)
+	xcb_change_property(con, XCB_PROP_MODE_##mode, win, atom, type, (membsize), (nmemb), (const void *)value)
 
 #define GET(win, val, error, type, functtype)                                             \
 		if (win == XCB_WINDOW_NONE) return val;                                \
@@ -95,14 +95,13 @@
 			iferr(0, "unable to get window " type " reply", error)
 
 #define MOVE(win, x, y)                                                       \
-	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, \
-			(unsigned int[]){(x), (y)})
+	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, (uint32_t[]){(x), (y)})
 #define MOVERESIZE(win, x, y, w, h, bw)                                     \
 	xcb_configure_window(con, win,                                          \
 			XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y                       \
 			| XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT            \
 			| XCB_CONFIG_WINDOW_BORDER_WIDTH,                               \
-			(unsigned int[]){(x), (y), MAX((w), globalcfg[GLB_MIN_WH].val), \
+			(uint32_t[]){(x), (y), MAX((w), globalcfg[GLB_MIN_WH].val),     \
 			MAX((h), globalcfg[GLB_MIN_WH].val), (bw)})
 
 
@@ -243,7 +242,7 @@ typedef struct Monitor {
 } Monitor;
 
 typedef struct Desk {
-	unsigned int state;
+	uint32_t state;
 	xcb_window_t win;
 	struct Desk *next;
 	Monitor *mon;
@@ -253,7 +252,7 @@ typedef struct Rule {
 	int x, y, w, h, bw;
 	int xgrav, ygrav;
 	int ws, focus;
-	unsigned int state;
+	uint32_t state;
 	xcb_atom_t type;
 	char *title, *class, *inst, *mon;
 	const Callback *cb;
@@ -264,7 +263,7 @@ typedef struct Rule {
 typedef struct Panel {
 	int x, y, w, h;
 	int l, r, t, b; /* struts */
-	unsigned int state;
+	uint32_t state;
 	char class[64], inst[64];
 	xcb_window_t win;
 	struct Panel *next;
@@ -273,7 +272,7 @@ typedef struct Panel {
 
 typedef struct Status {
 	int num;
-	unsigned int type;
+	uint32_t type;
 	FILE *file;
 	char *path;
 	struct Status *next;
@@ -281,10 +280,10 @@ typedef struct Status {
 
 typedef struct Client {
 	char title[256], class[64], inst[64];
-	int x, y, w, h, bw, hoff, depth, old_x, old_y, old_w, old_h, old_bw;
-	int max_w, max_h, min_w, min_h, base_w, base_h, inc_w, inc_h, hints;
+	int32_t x, y, w, h, bw, hoff, depth, old_x, old_y, old_w, old_h, old_bw;
+	int32_t max_w, max_h, min_w, min_h, base_w, base_h, inc_w, inc_h, hints;
 	float min_aspect, max_aspect;
-	unsigned int state, old_state;
+	uint32_t state, old_state;
 	xcb_window_t win;
 	struct Client *trans, *next, *snext;
 	Workspace *ws;
@@ -334,7 +333,7 @@ struct Workspace {
 
 /* dk.c values */
 extern FILE *cmdresp;
-extern unsigned int lockmask;
+extern uint32_t lockmask;
 extern char *argv0, **environ;
 extern int scr_h, scr_w, randrbase, cmdusemon, winchange, wschange, lytchange;
 extern int running, restart, needsrefresh, status_usingcmdresp, depth;
@@ -363,7 +362,7 @@ extern const char *directions[DIR_END];
 extern const char *gravities[GRAV_LAST];
 
 /* config.h values */
-extern unsigned int border[BORD_LAST];
+extern uint32_t border[BORD_LAST];
 extern GlobalCfg globalcfg[GLB_LAST];
 extern xcb_mod_mask_t mousemod;
 extern xcb_button_t mousemove, mouseresize;
@@ -412,9 +411,9 @@ void sendconfigure(Client *c);
 int sendwmproto(Client *c, int wmproto);
 void setfullscreen(Client *c, int fullscreen);
 void setinputfocus(Client *c);
-void setnetstate(xcb_window_t win, unsigned int state);
+void setnetstate(xcb_window_t win, uint32_t state);
 void setnetwsnames(void);
-void setstackmode(xcb_window_t win, unsigned int mode);
+void setstackmode(xcb_window_t win, uint32_t mode);
 void seturgent(Client *c, int urg);
 void setwinstate(xcb_window_t win, uint32_t state);
 void setworkspace(Client *c, int num, int stacktail);

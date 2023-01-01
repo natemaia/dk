@@ -21,7 +21,7 @@ COBJ = ${CSRC:.c=.o}
 OPTLVL = -O3
 
 CPPFLAGS += -D_DEFAULT_SOURCE -D_BSD_SOURCE -DVERSION=\"${VERSION}\"
-CFLAGS   += -flto=auto -std=c11 -pedantic -Wall -Wextra -I/usr/X11R6/include
+CFLAGS   += -flto=auto -std=c17 -pedantic -Wall -Wextra -I/usr/X11R6/include
 LDFLAGS  += -s -L/usr/X11R6/lib -lxcb -lxcb-keysyms -lxcb-util -lxcb-cursor -lxcb-icccm -lxcb-randr
 
 all: dk dkcmd

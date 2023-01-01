@@ -89,7 +89,7 @@ void clientmessage(xcb_generic_event_t *ev)
 {
 	Client *c;
 	xcb_client_message_event_t *e = (xcb_client_message_event_t *)ev;
-	unsigned int *d = e->data.data32;
+	uint32_t *d = e->data.data32;
 
 	DBG("clientmessage: 0x%08x", e->window)
 	if (e->window == root && e->type == netatom[NET_DESK_CUR]) {
@@ -270,9 +270,9 @@ void dispatch(xcb_generic_event_t *ev)
 			return;
 		fprintf(stderr, "dk: previous request returned error %i, \"%s\""
 				" major code %u, minor code %u resource id %u sequence %u\n",
-				(int)e->error_code, xcb_event_get_error_label(e->error_code),
-				(uint32_t) e->major_code, (uint32_t) e->minor_code,
-				(uint32_t) e->resource_id, (uint32_t) e->sequence);
+				e->error_code, xcb_event_get_error_label(e->error_code),
+				(uint32_t)e->major_code, (uint32_t) e->minor_code,
+				(uint32_t)e->resource_id, (uint32_t) e->sequence);
 	}
 }
 

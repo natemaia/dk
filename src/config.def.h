@@ -77,9 +77,9 @@ void popfull(__attribute__((unused)) Client *c, int closed)
 int focusmaster(__attribute__((unused)) char **argv)
 {
 	/*
-	 * basic example of a new win command
+	 * basic example of a new `win` command
 	 *
-	 * focus the master window on the current workspace
+	 * (re)focus the master window on the current workspace
 	 */
 	focus(nexttiled(selws->clients));
 	return 0;
@@ -226,18 +226,15 @@ WsCmd wscmds[] = {
 
 /* workspaces defaults */
 Workspace wsdef = {
-	1,           /* nmaster  */
-	3,           /* nstack   */
-	0,           /* gappx    */
-	1,           /* smartgap */
-	0,           /* padl     */
-	0,           /* padr     */
-	0,           /* padt     */
-	0,           /* padb     */
-	0.5,         /* msplit   */
-	0.5,         /* ssplit   */
-	&layouts[0], /* layout   */
-
-	/* unused values - inherited from Workspace struct */
-	0, { '\0' }, NULL, NULL, NULL, NULL, NULL
+	.nmaster = 1,
+	.nstack = 3,
+	.gappx = 0,
+	.smartgap = 1,
+	.padl = 0,
+	.padr = 0,
+	.padt = 0,
+	.padb = 0,
+	.msplit = 0.5,
+	.ssplit = 0.5,
+	.layout = &layouts[0],
 };

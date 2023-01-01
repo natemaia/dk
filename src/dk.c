@@ -66,13 +66,17 @@ xcb_key_symbols_t *keysyms;
 xcb_cursor_t cursor[CURS_LAST];
 xcb_atom_t wmatom[WM_LAST], netatom[NET_LAST];
 
-static unsigned int rootmask = XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT
+static uint32_t rootmask = XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT
 				| XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY
 				| XCB_EVENT_MASK_BUTTON_PRESS
 				| XCB_EVENT_MASK_ENTER_WINDOW
 				| XCB_EVENT_MASK_LEAVE_WINDOW
 				| XCB_EVENT_MASK_STRUCTURE_NOTIFY
 				| XCB_EVENT_MASK_PROPERTY_CHANGE;
+static uint32_t clientmask = XCB_EVENT_MASK_ENTER_WINDOW
+				| XCB_EVENT_MASK_FOCUS_CHANGE
+				| XCB_EVENT_MASK_PROPERTY_CHANGE
+				| XCB_EVENT_MASK_STRUCTURE_NOTIFY;
 const char *ebadarg = "invalid argument for";
 const char *enoargs = "command requires additional arguments but none were given";
 const char *gravities[] = {
@@ -172,7 +176,7 @@ int main(int argc, char *argv[])
 	iferr(1, "is another window manager running?",
 			xcb_request_check(con,
 				xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK,
-					(unsigned int[]){ XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT })));
+					(uint32_t[]){ XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT })));
 
 	initwm();
 	initsock();
@@ -428,12 +432,12 @@ void clientborder(Client *c, int focused)
 
 	if (c->state & STATE_NOBORDER || !c->bw) return;
 
-	int b = c->bw;
-	int o = border[BORD_O_WIDTH];
-	unsigned int in = border[focused ? BORD_FOCUS : ((c->state & STATE_URGENT)
+	uint32_t b = c->bw;
+	uint32_t o = border[BORD_O_WIDTH];
+	uint32_t in = border[focused ? BORD_FOCUS : ((c->state & STATE_URGENT)
 			? BORD_URGENT : BORD_UNFOCUS)];
 	if (b - o > 0) {
-		unsigned int out = border[focused ? BORD_O_FOCUS : ((c->state & STATE_URGENT)
+		uint32_t out = border[focused ? BORD_O_FOCUS : ((c->state & STATE_URGENT)
 				? BORD_O_URGENT : BORD_O_UNFOCUS)];
 		xcb_rectangle_t inner[] = {
 			{ c->w,         0,            b - o,        c->h + b - o },
@@ -901,11 +905,7 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 			|| (selws->sel && selws->sel->state & STATE_FULLSCREEN
 				&& selws->sel->w == selws->mon->w && selws->sel->h == selws->mon->h));
 
-	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK,
-			(unsigned int[]){ XCB_EVENT_MASK_ENTER_WINDOW
-							| XCB_EVENT_MASK_FOCUS_CHANGE
-							| XCB_EVENT_MASK_PROPERTY_CHANGE
-							| XCB_EVENT_MASK_STRUCTURE_NOTIFY });
+	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &clientmask);
 	grabbuttons(c);
 	if ((FLOATING(c) || c->state & STATE_FIXED) && !(c->state & STATE_FULLSCREEN)) {
 		c->w = CLAMP(c->w, globalcfg[GLB_MIN_WH].val, c->ws->mon->ww);
@@ -927,15 +927,14 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 static void initdesk(xcb_window_t win, xcb_get_geometry_reply_t *g)
 {
 	Desk *d;
+	uint32_t deskmask = XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
 
 	d = ecalloc(1, sizeof(Desk));
 	d->win = win;
 	if (!(d->mon = coordtomon(g->x, g->y))) d->mon = selws->mon;
 	d->state |= STATE_NEEDSMAP;
 	ATTACH(d, desks);
-	xcb_change_window_attributes(con, d->win, XCB_CW_EVENT_MASK,
-			(unsigned int[]){ XCB_EVENT_MASK_PROPERTY_CHANGE
-							| XCB_EVENT_MASK_STRUCTURE_NOTIFY });
+	xcb_change_window_attributes(con, d->win, XCB_CW_EVENT_MASK, &deskmask);
 	MOVERESIZE(win, d->mon->x, d->mon->y, d->mon->w, d->mon->h, g->border_width);
 	setstackmode(d->win, XCB_STACK_MODE_BELOW);
 }
@@ -963,6 +962,7 @@ static void initmon(int num, char *name, xcb_randr_output_t id, int x, int y, in
 static void initpanel(xcb_window_t win, xcb_get_geometry_reply_t *g)
 {
 	Panel *p;
+	uint32_t panelmask = XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
 
 	p = ecalloc(1, sizeof(Panel));
 	p->win = win;
@@ -976,9 +976,7 @@ static void initpanel(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	ATTACH(p, panels);
 	fillstruts(p);
 	updstruts();
-	xcb_change_window_attributes(con, p->win, XCB_CW_EVENT_MASK,
-			(unsigned int[]){ XCB_EVENT_MASK_PROPERTY_CHANGE
-							| XCB_EVENT_MASK_STRUCTURE_NOTIFY });
+	xcb_change_window_attributes(con, p->win, XCB_CW_EVENT_MASK, &panelmask);
 }
 
 Rule *initrule(Rule *wr)
@@ -1152,9 +1150,10 @@ static void initwm(void)
 
 
 	uint32_t rm = monitors->next ? (rootmask | XCB_EVENT_MASK_POINTER_MOTION) : rootmask;
+	uint32_t val[] = { rm, cursor[CURS_NORMAL] };
 	iferr(1, "unable to change root window event mask or cursor",
-			xcb_request_check(con, xcb_change_window_attributes_checked( con,
-					root, XCB_CW_EVENT_MASK | XCB_CW_CURSOR, (unsigned int[]){ rm, cursor[CURS_NORMAL] })));
+			xcb_request_check(con, xcb_change_window_attributes_checked(con, root,
+					XCB_CW_EVENT_MASK | XCB_CW_CURSOR, &val)));
 
 	if (!(keysyms = xcb_key_symbols_alloc(con)))
 		err(1, "unable to get keysyms from X connection");
@@ -1665,7 +1664,7 @@ void setfullscreen(Client *c, int fullscreen)
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 		needsrefresh = 1;
 	} else if (!fullscreen && (c->state & STATE_FULLSCREEN)) {
-		PROP(REPLACE, c->win, state, XCB_ATOM_ATOM, 32, 0, (unsigned char *)0);
+		PROP(REPLACE, c->win, state, XCB_ATOM_ATOM, 32, 0, (const void *)0);
 		c->state = c->old_state;
 		c->bw = c->old_bw;
 		resize(c, c->old_x, c->old_y, c->old_w, c->old_h, c->bw);
@@ -1698,7 +1697,7 @@ void setnetwsnames(void)
 	free(names);
 }
 
-void setstackmode(xcb_window_t win, unsigned int mode)
+void setstackmode(xcb_window_t win, uint32_t mode)
 {
 #ifdef DEBUG
 	Client *c = wintoclient(win);
@@ -1710,14 +1709,14 @@ void setstackmode(xcb_window_t win, unsigned int mode)
 	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_STACK_MODE, &mode);
 }
 
-void setnetstate(xcb_window_t win, unsigned int state)
+void setnetstate(xcb_window_t win, uint32_t state)
 {
 	xcb_atom_t type = netatom[NET_WM_STATE];
 
 	if (state & STATE_FULLSCREEN)
 		PROP(REPLACE, win, type, XCB_ATOM_ATOM, 32, 1, &netatom[NET_STATE_FULL]);
 	else
-		PROP(REPLACE, win, type, XCB_ATOM_ATOM, 32, 0, (unsigned char *)0);
+		PROP(REPLACE, win, type, XCB_ATOM_ATOM, 32, 0, (const void *)0);
 }
 
 void seturgent(Client *c, int urg)
@@ -1744,7 +1743,7 @@ void seturgent(Client *c, int urg)
 void setwinstate(xcb_window_t win, uint32_t state)
 {
 	uint32_t data[] = { state, XCB_ATOM_NONE };
-	PROP(REPLACE, win, wmatom[WM_STATE], wmatom[WM_STATE], 32, 2, (unsigned char *)data);
+	PROP(REPLACE, win, wmatom[WM_STATE], wmatom[WM_STATE], 32, 2, (const void *)data);
 }
 
 void setworkspace(Client *c, int num, int stacktail)

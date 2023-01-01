@@ -331,7 +331,7 @@ int cmdgappx(char **argv)
 {
 	int i, rel, nparsed = 0;
 
-	if (!strcmp(*argv, "width")) argv++, nparsed++;
+	if (!strcmp(*argv, "w") || !strcmp(*argv, "width")) argv++, nparsed++;
 	if (!*argv) {
 		respond(cmdresp, "!gap %s", enoargs);
 		return -1;
@@ -934,20 +934,22 @@ badvalue:
 
 int cmdstick(__attribute__((unused)) char **argv)
 {
+	uint32_t ws;
 	Client *c = cmdc;
-	unsigned int all = 0xffffffff;
 
 	if (FULLSCREEN(c)) {
 		respond(cmdresp, "!unable to change sticky state of fullscreen windows");
 		return 0;
 	}
 	if (c->state & STATE_STICKY) {
+		ws = c->ws->num;
 		c->state &= ~STATE_STICKY;
-		PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL, 32, 1, &c->ws->num);
+		PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL, 32, 1, &ws);
 	} else {
+		ws = 0xffffffff;
 		cmdfloat(NULL);
 		c->state |= STATE_STICKY | STATE_FLOATING;
-		PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL, 32, 1, &all);
+		PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL, 32, 1, &ws);
 	}
 	return 0;
 }

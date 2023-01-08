@@ -139,6 +139,7 @@ int main(int argc, char *argv[])
 {
 	ssize_t n;
 	Client *c = NULL;
+	Workspace *ws;
 	Status *s, *next;
 	fd_set read_fds;
 	xcb_window_t sel;
@@ -189,6 +190,14 @@ int main(int argc, char *argv[])
 	} else if (nextmon(monitors->next) && primary) {
 		xcb_warp_pointer(con, root, root, 0, 0, 0, 0, primary->x + (primary->w / 2),
 				primary->y + (primary->h / 2));
+	}
+
+	/* TODO: fix this shit hack to avoid windows being all mapped on the current workspace when restarting */
+	FOR_EACH(ws, workspaces) {
+		FOR_EACH(c, ws->clients)
+			if (FLOATING(c))
+				resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0, 0);
+		showhide(ws->stack);
 	}
 
 	confd = xcb_get_file_descriptor(con);
@@ -410,6 +419,7 @@ void changews(Workspace *ws, int swap, int warp)
 	selws = ws;
 	selmon = selws->mon;
 	selmon->ws = selws;
+	showhide(selws->stack);
 	if (dowarp) {
 		xcb_warp_pointer(con, root, root, 0, 0, 0, 0,
 				ws->sel ? ws->sel->x + (ws->sel->w / 2) : ws->mon->x + (ws->mon->w / 2),
@@ -418,9 +428,8 @@ void changews(Workspace *ws, int swap, int warp)
 	} else {
 		showhide(lastws->stack);
 	}
-	showhide(selws->stack);
-	ignore(XCB_CONFIGURE_REQUEST);
 	ignore(XCB_ENTER_NOTIFY);
+	ignore(XCB_CONFIGURE_REQUEST);
 	PROP(REPLACE, root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1, &ws->num);
 	needsrefresh = 1;
 }
@@ -494,6 +503,7 @@ void clientmap(Client *c)
 	DBG("clientmap: mapping window: %s", c->title)
 	setwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
 	xcb_map_window(con, c->win);
+	c->state &= ~STATE_NEEDSMAP;
 }
 
 void clientunmap(Client *c)
@@ -1484,21 +1494,23 @@ static int refresh(void)
 	Client *c;
 	Monitor *m;
 
-#define MAP(v, list)                                                                                      \
-	FOR_EACH(v, list)                                                                                     \
-		if (v->state & STATE_NEEDSMAP) {                                                                  \
-			v->state &= ~STATE_NEEDSMAP;                                                                  \
-			setwinstate(v->win, XCB_ICCCM_WM_STATE_NORMAL);                                               \
-			setstackmode(v->win, (v->state & STATE_ABOVE) ? XCB_STACK_MODE_ABOVE : XCB_STACK_MODE_BELOW); \
-			xcb_map_window(con, v->win);                                                                  \
+#define MAP(v, list)                                        \
+	FOR_EACH(v, list)                                       \
+		if (v->state & STATE_NEEDSMAP) {                    \
+			v->state &= ~STATE_NEEDSMAP;                    \
+			setwinstate(v->win, XCB_ICCCM_WM_STATE_NORMAL); \
+			xcb_map_window(con, v->win);                    \
 		}
 
 	if (panels) MAP(p, panels)
 	if (desks) MAP(d, desks)
 	FOR_EACH(m, monitors) {
 		if (m->ws->layout->func) m->ws->layout->func(m->ws);
-		MAP(c, m->ws->clients)
-		FOR_EACH(c, m->ws->clients) clientborder(c, c == selws->sel);
+		FOR_EACH(c, m->ws->clients) {
+			if (c->state & STATE_NEEDSMAP && c->ws == m->ws)
+				clientmap(c);
+			clientborder(c, c == selws->sel);
+		}
 		restack(m->ws);
 	}
 	focus(NULL);
@@ -1794,10 +1806,6 @@ void showhide(Client *c)
 			setworkspace(c, selws->num, 0);
 			focus(sel);
 		}
-	}
-	if (c == c->ws->stack) {
-		xcb_aux_sync(con);
-		ignore(XCB_ENTER_NOTIFY);
 	}
 }
 

@@ -436,11 +436,7 @@ void changews(Workspace *ws, int swap, int warp)
 
 void clientborder(Client *c, int focused)
 { /* modified from swm/wmutils */
-	xcb_gcontext_t gc;
-	xcb_pixmap_t pmap;
-
 	if (c->state & STATE_NOBORDER || !c->bw) return;
-
 	uint32_t b = c->bw;
 	uint32_t o = border[BORD_O_WIDTH];
 	uint32_t in = border[focused ? BORD_FOCUS : ((c->state & STATE_URGENT)
@@ -463,8 +459,8 @@ void clientborder(Client *c, int focused)
 			{ 1,            1,            1,            1            }
 		};
 
-		pmap = xcb_generate_id(con);
-		gc = xcb_generate_id(con);
+		xcb_pixmap_t pmap = xcb_generate_id(con);
+		xcb_gcontext_t gc = xcb_generate_id(con);
 		xcb_create_pixmap(con, c->depth, pmap, c->win, W(c), H(c));
 		xcb_create_gc(con, gc, pmap, XCB_GC_FOREGROUND, &in);
 		xcb_poly_fill_rectangle(con, pmap, gc, LEN(inner), inner);

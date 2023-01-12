@@ -616,12 +616,10 @@ static void detachstack(Client *c)
 
 void execcfg(void)
 {
-	char *cfg;
-	char path[PATH_MAX];
+	char *cfg, *s, path[PATH_MAX];
 
 	if (!(cfg = getenv("DKRC"))) {
-		char *s = getenv("HOME");
-		if (!s) {
+		if (!(s = getenv("HOME"))) {
 			warn("getenv");
 			return;
 		}
@@ -631,8 +629,7 @@ void execcfg(void)
 	}
 
 	if (!fork()) {
-		if (con)
-			close(xcb_get_file_descriptor(con));
+		if (con) close(xcb_get_file_descriptor(con));
 		setsid();
 		execle(cfg, cfg, (char *)NULL, environ);
 		warn("unable to execute config file: %s", cfg);
@@ -1871,8 +1868,7 @@ void unmanage(xcb_window_t win, int destroyed)
 	Workspace *ws;
 
 	if ((ptr = c = wintoclient(win))) {
-		if (c->cb && running)
-			c->cb->func(c, 1);
+		if (c->cb && running) c->cb->func(c, 1);
 		wschange = c->ws->clients->next ? wschange : 1;
 		detach(c, 0);
 		detachstack(c);
@@ -1902,18 +1898,15 @@ void unmanage(xcb_window_t win, int destroyed)
 		xcb_aux_sync(con);
 		xcb_ungrab_server(con);
 	} else {
-		xcb_flush(con);
+		xcb_aux_sync(con);
 	}
 
 	if (ptr) {
 		free(ptr);
 		xcb_delete_property(con, root, netatom[NET_CLIENTS]);
-		FOR_CLIENTS(c, ws)
-			PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &c->win);
-		FOR_EACH(p, panels)
-			PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &p->win);
-		FOR_EACH(d, desks)
-			PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &d->win);
+		FOR_CLIENTS(c, ws)  PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &c->win);
+		FOR_EACH(p, panels) PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &p->win);
+		FOR_EACH(d, desks)  PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &d->win);
 		needsrefresh = 1;
 	}
 }

@@ -294,7 +294,7 @@ void enternotify(xcb_generic_event_t *ev)
 		ws = m->ws;
 	if (ws && ws != selws)
 		changews(ws, 0, 0);
-	if (c && globalcfg[GLB_FOCUS_MOUSE].val)
+	if (c && c != ws->sel && globalcfg[GLB_FOCUS_MOUSE].val)
 		focus(c);
 }
 

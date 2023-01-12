@@ -158,7 +158,6 @@ Cmd keywords[] = {
 	{ "rule",    cmdrule    },
 	{ "status",  cmdstatus  },
 	{ "exit",    cmdexit    },
-	{ "reload",  cmdreload  },
 	{ "restart", cmdrestart },
 
 	/* don't add below the terminating null */

@@ -76,7 +76,7 @@ int adjustwsormon(char **argv)
 			cm = cur->mon;
 			argv++, nparsed++;
 		} else if (e == -1) {
-			respond(cmdresp, "!invalid window id: %s", *argv);
+			respond(cmdresp, "!invalid window id: %s\nexpected hex e.g. 0x001fefe7", *argv);
 			return e;
 		} else {
 			cmdc = selws->sel;
@@ -141,7 +141,10 @@ int adjustwsormon(char **argv)
 			wschange = 1;
 		}
 	} else {
-		respond(cmdresp, "!invalid value for %s: %s", cmdusemon ? "mon" : "ws", *argv);
+		if (cmdusemon)
+			respond(cmdresp, "!invalid value for mon: %s\nexpected integer or monitor name e.g. HDMI-A-0", *argv);
+		else
+			respond(cmdresp, "!invalid value for ws: %s\nexpected integer or workspace name e.g. 2", *argv);
 		return -1;
 	}
 	return nparsed;
@@ -331,12 +334,11 @@ int cmdgappx(char **argv)
 {
 	int i, rel, nparsed = 0;
 
-	if (!strcmp(*argv, "w") || !strcmp(*argv, "width")) argv++, nparsed++;
 	if (!*argv) {
 		respond(cmdresp, "!gap %s", enoargs);
 		return -1;
 	} else if ((i = parseint(*argv, &rel, 1)) == INT_MIN) {
-		respond(cmdresp, "!invalid value for gap: %s", *argv);
+		respond(cmdresp, "!invalid value for gap: %s\n\nexpected integer e.g. 10", *argv);
 		return -1;
 	} else {
 		nparsed++;
@@ -379,7 +381,7 @@ int cmdlayout(char **argv)
 			}
 			return 1;
 		}
-	respond(cmdresp, "!invalid layout name: %s", *argv);
+	respond(cmdresp, "!invalid layout name: %s\nexpected string e.g tile", *argv);
 	return -1;
 }
 
@@ -506,12 +508,6 @@ badvalue:
 int cmdexit(__attribute__((unused)) char **argv)
 {
 	running = 0;
-	return 0;
-}
-
-int cmdreload(__attribute__((unused)) char **argv)
-{
-	execcfg();
 	return 0;
 }
 
@@ -1011,7 +1007,7 @@ int cmdwin(char **argv)
 		if ((c = parseclient(*argv, &e))) {
 			cmdc = c;
 		} else if (e == -1) {
-			respond(cmdresp, "!invalid window id: %s", *argv);
+			respond(cmdresp, "!invalid window id: %s\nexpected hex e.g. 0x001fefe7", *argv);
 			return -1;
 		} else {
 			int match = 0;

@@ -25,7 +25,6 @@ int cmdmors(char **argv);
 int cmdmouse(char **argv);
 int cmdmvstack(char **argv);
 int cmdpad(char **argv);
-int cmdreload(__attribute__((unused)) char **argv);
 int cmdresize(char **argv);
 int cmdrestart(__attribute__((unused)) char **argv);
 int cmdrule(char **argv);

@@ -161,7 +161,6 @@ dkcmd COMMAND
 
 - `quit` exit dk.
 - `restart` re-execute dk.
-- `reload` re-execute dkrc.
 
 #### Ws and Mon
 `mon` and `ws` operate on monitors and workspaces respectively.

@@ -31,9 +31,13 @@ alt + shift + x
 
 
 
-# quit dk, reload dkrc
-alt + shift + {q,r}
-	dkcmd {exit,reload}
+# quit dk
+alt + shift + q
+	dkcmd exit
+
+# reload dkrc
+alt + shift + r
+	$HOME/.config/dk/dkrc
 
 # restart dk
 alt + ctrl + shift + r

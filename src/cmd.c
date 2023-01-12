@@ -372,6 +372,9 @@ int cmdlayout(char **argv)
 					c->w = c->ws->mon->ww / 1.5;
 					c->h = c->ws->mon->wh / 1.3;
 					gravitate(c, GRAV_CENTER, GRAV_CENTER, 0);
+					int x = c->x, y = c->y, w = c->w, h = c->h, bw = c->bw;
+					applysizehints(c, &x, &y, &w, &h, bw, 0 , 0);
+					resize(c, x, y, w, h, bw);
 				}
 			}
 			return 1;

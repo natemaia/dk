@@ -1,7 +1,7 @@
 # dk window manager
 # see license file for copyright and license details
 
-VERSION = 1.7
+VERSION = 1.8
 
 # install paths
 VPATH   = src

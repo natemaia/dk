@@ -933,7 +933,7 @@ badvalue:
 
 int cmdstick(__attribute__((unused)) char **argv)
 {
-	uint32_t ws;
+	uint32_t ws = 0xffffffff;
 	Client *c = cmdc;
 
 	if (FULLSCREEN(c)) {
@@ -945,7 +945,6 @@ int cmdstick(__attribute__((unused)) char **argv)
 		c->state &= ~STATE_STICKY;
 		PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL, 32, 1, &ws);
 	} else {
-		ws = 0xffffffff;
 		cmdfloat(NULL);
 		c->state |= STATE_STICKY | STATE_FLOATING;
 		PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL, 32, 1, &ws);

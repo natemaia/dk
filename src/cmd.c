@@ -829,6 +829,7 @@ int cmdset(char **argv)
 			for (j = 0; j < LEN(globalcfg); j++) {
 				if ((match = !strcmp(globalcfg[j].str, *argv))) {
 					argv++, nparsed++;
+					needsrefresh = needsrefresh || globalcfg[j].val != i;
 					switch (globalcfg[j].type) {
 					case TYPE_BOOL:
 						if (!argv || (i = parsebool(*argv)) < 0) goto badvalue;
@@ -843,7 +844,6 @@ int cmdset(char **argv)
 						globalcfg[j].val = i;
 						break;
 					}
-					needsrefresh = needsrefresh || globalcfg[j].val != i;
 					argv++, nparsed++;
 					break;
 				}

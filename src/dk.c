@@ -192,12 +192,13 @@ int main(int argc, char *argv[])
 				primary->y + (primary->h / 2));
 	}
 
-	/* TODO: fix this shit hack to avoid windows being all mapped on the current workspace when restarting */
+	/* TODO: fix this shit hack to avoid various issues when restarting */
 	FOR_EACH(ws, workspaces) {
 		FOR_EACH(c, ws->clients)
 			if (FLOATING(c))
-				resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0, 0);
-		showhide(ws->stack);
+				resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0, 0); /* floating windows being the wrong size */
+		if (ws->layout->func) ws->layout->func(ws); /* border issues on tiled clients */
+		showhide(ws->stack); /* show only windows on the active workspace */
 	}
 
 	confd = xcb_get_file_descriptor(con);
@@ -496,7 +497,7 @@ void clienthints(Client *c)
 
 void clientmap(Client *c)
 {
-	DBG("clientmap: mapping window: %s", c->title)
+	DBG("clientmap: %s", c->title)
 	setwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
 	xcb_map_window(con, c->win);
 	c->state &= ~STATE_NEEDSMAP;
@@ -504,7 +505,7 @@ void clientmap(Client *c)
 
 void clientunmap(Client *c)
 {
-	DBG("clientunmap: unmapping window: %s", c->title)
+	DBG("clientunmap: %s", c->title)
 	xcb_get_window_attributes_reply_t *ra = winattr(root), *ca = winattr(c->win);
 	uint32_t rm = (ra->your_event_mask & ~XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY);
 	uint32_t cm = (ca->your_event_mask & ~XCB_EVENT_MASK_STRUCTURE_NOTIFY);
@@ -664,6 +665,8 @@ void focus(Client *c)
 		if (c->state & STATE_URGENT) seturgent(c, 0);
 		detachstack(c);
 		attachstack(c);
+		if (c->trans && FULLSCREEN(c->trans))
+			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 		grabbuttons(c);
 		clientborder(c, 1);
 		setinputfocus(c);
@@ -879,7 +882,7 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	c->bw = c->old_bw = border[BORD_WIDTH];
 	c->state = STATE_NEEDSMAP;
 	c->old_state = STATE_NONE;
-	c->trans = wintoclient(wintrans(c->win));
+	c->trans = wintoclient(wintrans(win));
 
 	winclass(win, c->class, c->inst, sizeof(c->class));
 	pc = xcb_get_property(con, 0, c->win, wmatom[WM_MOTIF], wmatom[WM_MOTIF], 0, 5);
@@ -899,15 +902,22 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	clienttype(c);
 	clienthints(c);
 
+	DBG("initclient: %s", c->title)
+
 	/* apply rules and set the client's workspace, when focus_open is false
 	 * the new client is attached to the end of the stack, otherwise the head.
 	 * we also avoid focusing when the currently focused window is fullscreen.
 	 * later in refresh(), focus(NULL) is called to focus the right client */
-	clientrule(c, NULL, !globalcfg[GLB_FOCUS_OPEN].val
-			|| (selws->sel && selws->sel->state & STATE_FULLSCREEN
-				&& selws->sel->w == selws->mon->w && selws->sel->h == selws->mon->h));
+	if (c->trans && FULLSCREEN(c->trans)) {
+		c->state |= STATE_ABOVE;
+		clientrule(c, NULL, 0);
+	} else {
+		clientrule(c, NULL, !globalcfg[GLB_FOCUS_OPEN].val
+				|| (selws->sel && selws->sel->state & STATE_FULLSCREEN
+					&& selws->sel->w == selws->mon->w && selws->sel->h == selws->mon->h));
+	}
 
-	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &clientmask);
+	xcb_change_window_attributes(con, win, XCB_CW_EVENT_MASK, &clientmask);
 	grabbuttons(c);
 	if ((FLOATING(c) || c->state & STATE_FIXED) && !(c->state & STATE_FULLSCREEN)) {
 		c->w = CLAMP(c->w, globalcfg[GLB_MIN_WH].val, c->ws->mon->ww);
@@ -920,7 +930,7 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		c->y = CLAMP(c->y, c->ws->mon->y, c->ws->mon->y + c->ws->mon->h - H(c));
 		if (c->x == c->ws->mon->x && c->y == c->ws->mon->y)
 			quadrant(c, &c->x, &c->y, &c->w, &c->h);
-		MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
+		MOVERESIZE(win, c->x, c->y, c->w, c->h, c->bw);
 	}
 	if (c->cb) c->cb->func(c, 0);
 	wschange = c->ws->clients->next ? wschange : 1;
@@ -1593,9 +1603,11 @@ void restack(Workspace *ws)
 		if (d->mon == ws->mon)
 			setstackmode(d->win, XCB_STACK_MODE_BELOW);
 	for (c = ws->stack; c; c = c->snext)
-		if (c->state & STATE_ABOVE && ((c->state & STATE_FLOATING) || c->ws->layout->func == NULL))
+		if ((c->state & STATE_ABOVE && ((c->state & STATE_FLOATING) || c->ws->layout->func == NULL))
+				|| (c->trans && FULLSCREEN(c->trans)))
 			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	xcb_flush(con);
+	ignore(XCB_ENTER_NOTIFY);
 }
 
 static int rulecmp(Client *c, Rule *r)
@@ -1756,7 +1768,7 @@ void setworkspace(Client *c, int num, int stacktail)
 	Client *tail = NULL;
 
 	if (!(ws = itows(num)) || ws == c->ws) return;
-	DBG("setworkspace: 0x%08x -> %d", c->win, num)
+	DBG("setworkspace: %s -> %d", c->title, num)
 	if (c->ws) {
 		detach(c, 0);
 		detachstack(c);

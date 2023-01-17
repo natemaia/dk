@@ -665,8 +665,6 @@ void focus(Client *c)
 		if (c->state & STATE_URGENT) seturgent(c, 0);
 		detachstack(c);
 		attachstack(c);
-		if (c->trans && FULLSCREEN(c->trans))
-			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 		grabbuttons(c);
 		clientborder(c, 1);
 		setinputfocus(c);

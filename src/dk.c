@@ -901,19 +901,16 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	clienthints(c);
 
 	DBG("initclient: %s", c->title)
-
-	/* apply rules and set the client's workspace, when focus_open is false
-	 * the new client is attached to the end of the stack, otherwise the head.
-	 * we also avoid focusing when the currently focused window is fullscreen.
-	 * later in refresh(), focus(NULL) is called to focus the right client */
 	if (c->trans && FULLSCREEN(c->trans)) {
+		DBG("initclient: transient of fullscreen window, setting STATE_ABOVE: %s", c->title)
 		c->state |= STATE_ABOVE;
-		clientrule(c, NULL, 0);
-	} else {
-		clientrule(c, NULL, !globalcfg[GLB_FOCUS_OPEN].val
-				|| (selws->sel && selws->sel->state & STATE_FULLSCREEN
-					&& selws->sel->w == selws->mon->w && selws->sel->h == selws->mon->h));
 	}
+
+	/* apply rules and set the client's workspace, when config focus_open=false
+	 * the new client is attached to the end of the stack, otherwise the head.
+	 * later in refresh(), focus(NULL) is called to focus the right client */
+	DBG("initclient: rule setting: %s", c->title)
+	clientrule(c, NULL, !globalcfg[GLB_FOCUS_OPEN].val);
 
 	xcb_change_window_attributes(con, win, XCB_CW_EVENT_MASK, &clientmask);
 	grabbuttons(c);
@@ -1513,6 +1510,7 @@ static int refresh(void)
 		}
 		restack(m->ws);
 	}
+	DBG("refresh: focusing first client: %s", selws->sel ? selws->sel->title : "NONE")
 	focus(NULL);
 	ignore(XCB_ENTER_NOTIFY);
 

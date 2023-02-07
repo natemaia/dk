@@ -100,20 +100,23 @@ void clientmessage(xcb_generic_event_t *ev)
 		DBG("clientmessage: close window message: %d", e->type)
 		unmanage(e->window, 1);
 	} else if ((c = wintoclient(e->window))) {
+		DBG("clientmessage: managed window: %s", c->title)
 		if (e->type == netatom[NET_WM_DESK]) {
-			DBG("clientmessage: change desktop message: %d", e->type)
+			DBG("clientmessage: change desktop: %d", e->type)
 			if (!itows(d[0])) {
 				warnx("invalid workspace index: %d", d[0]);
 				return;
 			}
 			setworkspace(c, d[0], c != c->ws->sel);
-			needsrefresh = 1;
+			wschange = winchange = needsrefresh = 1;
 		} else if (e->type == netatom[NET_WM_STATE]) {
-			DBG("clientmessage: change state message: %d", e->type)
+			DBG("clientmessage: change state: %d", e->type)
 			if (d[1] == netatom[NET_STATE_FULL] || d[2] == netatom[NET_STATE_FULL]) {
+				DBG("clientmessage: state fullscreen: %d", (d[0] == 1 || (d[0] == 2 && !(c->state & STATE_FULLSCREEN))))
 				setfullscreen(c, (d[0] == 1 || (d[0] == 2 && !(c->state & STATE_FULLSCREEN))));
 			} else if (d[1] == netatom[NET_STATE_ABOVE] || d[2] == netatom[NET_STATE_ABOVE]) {
 				int above = d[0] == 1 || (d[0] == 2 && !(c->state & STATE_FULLSCREEN));
+				DBG("clientmessage: state above: %d", above)
 				if (above && !(c->state & STATE_ABOVE))
 					c->state |= STATE_ABOVE | STATE_FLOATING;
 				else if (!above && (c->state & STATE_ABOVE))
@@ -122,9 +125,11 @@ void clientmessage(xcb_generic_event_t *ev)
 			} else if ((d[1] == netatom[NET_STATE_DEMANDATT]
 						|| d[2] == netatom[NET_STATE_DEMANDATT]) && c != selws->sel)
 			{
+				DBG("clientmessage: state demands attention: %d", (d[1] == netatom[NET_STATE_DEMANDATT] || d[2] == netatom[NET_STATE_DEMANDATT]))
 				goto activate;
 			}
 		} else if (e->type == netatom[NET_ACTIVE] && c != selws->sel) {
+			DBG("clientmessage: change NET_ACTIVE_WINDOW: %d", e->type)
 activate:
 			if (globalcfg[GLB_FOCUS_URGENT].val) {
 				setnetstate(c->win, c->state);

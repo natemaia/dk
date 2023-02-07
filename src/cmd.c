@@ -775,6 +775,7 @@ int cmdsend(Workspace *ws)
 		showhide(ws->stack);
 		showhide(selws->stack);
 		needsrefresh = 1;
+		wschange = 1;
 	}
 	return 0;
 }

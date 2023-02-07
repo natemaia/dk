@@ -432,6 +432,7 @@ void changews(Workspace *ws, int swap, int warp)
 	ignore(XCB_ENTER_NOTIFY);
 	ignore(XCB_CONFIGURE_REQUEST);
 	PROP(REPLACE, root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1, &ws->num);
+	xcb_flush(con);
 	needsrefresh = 1;
 }
 
@@ -470,10 +471,11 @@ void clientborder(Client *c, int focused)
 		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXMAP, &pmap);
 		xcb_free_pixmap(con, pmap);
 		xcb_free_gc(con, gc);
+		xcb_aux_sync(con);
 	} else {
 		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, &in);
+		xcb_flush(con);
 	}
-	xcb_aux_sync(con);
 }
 
 void clienthints(Client *c)
@@ -501,6 +503,7 @@ void clientmap(Client *c)
 	setwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
 	xcb_map_window(con, c->win);
 	c->state &= ~STATE_NEEDSMAP;
+	xcb_aux_sync(con);
 }
 
 void clientunmap(Client *c)
@@ -514,7 +517,7 @@ void clientunmap(Client *c)
 	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &rm);
 	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &cm);
 	xcb_unmap_window(con, c->win);
-	setwinstate(c->win, XCB_ICCCM_WM_STATE_ICONIC);
+	setwinstate(c->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
 	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &ra->your_event_mask);
 	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &ca->your_event_mask);
 	xcb_aux_sync(con);
@@ -1723,6 +1726,13 @@ void setstackmode(xcb_window_t win, uint32_t mode)
 
 void setnetstate(xcb_window_t win, uint32_t state)
 {
+#ifdef DEBUG
+	Client *c = wintoclient(win);
+	if (c)
+		DBG("setnetstate: window %s: %s", c->title, (state & STATE_FULLSCREEN) ? "fullscreen" : "none")
+	else
+		DBG("setnetstate: window 0x%08x: %s", win, (state & STATE_FULLSCREEN) ? "fullscreen" : "none")
+#endif
 	xcb_atom_t type = netatom[NET_WM_STATE];
 
 	if (state & STATE_FULLSCREEN)
@@ -1754,6 +1764,13 @@ void seturgent(Client *c, int urg)
 
 void setwinstate(xcb_window_t win, uint32_t state)
 {
+#ifdef DEBUG
+	Client *c = wintoclient(win);
+	if (c)
+		DBG("setwinstate: window %s: %s", c->title, state == XCB_ICCCM_WM_STATE_NORMAL ? "normal" : "withdrawn")
+	else
+		DBG("setwinstate: window 0x%08x: %s", win, state == XCB_ICCCM_WM_STATE_NORMAL ? "normal" : "withdrawn")
+#endif
 	uint32_t data[] = { state, XCB_ATOM_NONE };
 	PROP(REPLACE, win, wmatom[WM_STATE], wmatom[WM_STATE], 32, 2, (const void *)data);
 }

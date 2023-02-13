@@ -65,12 +65,15 @@ int adjustwsormon(char **argv)
 	Monitor *m = NULL, *cm = cur->mon;
 
 	if (*argv) {
+		/* find which command function we'll be using: view, follow, send */
 		for (unsigned int i = 0; wscmds[i].str; i++)
 			if (!strcmp(wscmds[i].str, *argv)) {
 				fn = wscmds[i].func;
 				argv++, nparsed++;
 				break;
 			}
+
+		/* when not viewing a workspace we can pass a client as a parameter */
 		if (fn != cmdview && (cmdc = parseclient(*argv, &e))) {
 			cur = cmdc->ws;
 			cm = cur->mon;
@@ -79,17 +82,22 @@ int adjustwsormon(char **argv)
 			respond(cmdresp, "!invalid window id: %s\nexpected hex e.g. 0x001fefe7", *argv);
 			return e;
 		} else {
+			/* use the selected window otherwise */
 			cmdc = selws->sel;
 		}
 	}
+
 	if (!*argv) {
+		/* we expect a direction or name of the ws/mon */
 		respond(cmdresp, "!%s %s", cmdusemon ? "mon" : "ws", enoargs);
 		return -1;
 	}
+
+	/* parse directions: next, prev, last, etc. */
 	if ((opt = parseopt(*argv, directions)) >= 0) {
 		if (opt == DIR_LAST) {
 			ws = cmdusemon
-				? (lastmon && lastmon->connected ? lastmon->ws : cur)
+				? (lastmon && lastmon->connected) ? lastmon->ws : cur
 				: lastws ? lastws : cur;
 		} else if (opt == DIR_NEXT && cmdusemon) {
 			if (!(m = nextmon(cm->next)))
@@ -131,20 +139,24 @@ int adjustwsormon(char **argv)
 			}
 		}
 	} else {
+		/* with no direction passed we search for workspace/monitor name or index */
 		ws = parsewsormon(*argv, cmdusemon);
 	}
+
 	if (ws) {
+		DBG("adjustwsormon: using workspace %d : monitor %s", ws->num + 1, ws->mon->name)
 		nparsed++;
 		if ((cmdc && ws != cmdc->ws) || ws != selws || selws->mon != ws->mon) {
+			DBG("adjustwsormon: %s client: %s", fn == cmdsend ? "sending" : fn == cmdfollow ? "following" : "viewing", cmdc ? cmdc->title : "none");
 			lytchange = fn != cmdsend && ws->layout != selws->layout;
 			fn(ws);
 			wschange = 1;
 		}
 	} else {
 		if (cmdusemon)
-			respond(cmdresp, "!invalid value for mon: %s\nexpected integer or monitor name e.g. HDMI-A-0", *argv);
+			respond(cmdresp, "!%s mon: %s\nexpected integer or monitor name e.g. HDMI-A-0", ebadarg, *argv);
 		else
-			respond(cmdresp, "!invalid value for ws: %s\nexpected integer or workspace name e.g. 2", *argv);
+			respond(cmdresp, "!%s ws: %s\nexpected integer or workspace name e.g. 2", ebadarg, *argv);
 		return -1;
 	}
 	return nparsed;
@@ -318,6 +330,7 @@ int cmdfocus(char **argv)
 int cmdfollow(Workspace *ws)
 {
 	if (ws && cmdc && ws != cmdc->ws) {
+		DBG("cmdfollow: following client to workspace %d : monitor %s : %s", ws->num + 1, ws->mon->name, cmdc->title)
 		cmdsend(ws);
 		cmdview(ws);
 	}
@@ -768,12 +781,15 @@ int cmdsend(Workspace *ws)
 	Client *c = cmdc;
 
 	if (ws && c && ws != c->ws) {
+		DBG("cmdsend: sending client to workspace %d : monitor %s : %s", ws->num + 1, ws->mon->name, c->title)
 		Monitor *old = c->ws->mon;
 		unfocus(c, 1);
 		setworkspace(c, ws->num, c != c->ws->sel);
 		if (ws->mon != old && ws->mon->ws == ws) relocate(c, ws->mon, old);
 		showhide(ws->stack);
 		showhide(selws->stack);
+		if (FLOATING(c))
+			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
 		needsrefresh = 1;
 		wschange = 1;
 	}
@@ -992,6 +1008,7 @@ int cmdswap(__attribute__((unused)) char **argv)
 int cmdview(Workspace *ws)
 {
 	if (ws) {
+		DBG("cmdsend: viewing workspace %d : monitor %s", ws->num + 1, ws->mon->name)
 		changews(ws, globalcfg[GLB_WS_STATIC].val ? 0 : !cmdusemon,
 				cmdusemon || (globalcfg[GLB_WS_STATIC].val && selws->mon != ws->mon));
 	}

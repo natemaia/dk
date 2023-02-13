@@ -1507,7 +1507,7 @@ static int refresh(void)
 	FOR_EACH(m, monitors) {
 		if (m->ws->layout->func) m->ws->layout->func(m->ws);
 		FOR_EACH(c, m->ws->clients) {
-			if (c->state & STATE_NEEDSMAP && c->ws == m->ws)
+			if (c->state & STATE_NEEDSMAP)
 				clientmap(c);
 			clientborder(c, c == selws->sel);
 		}

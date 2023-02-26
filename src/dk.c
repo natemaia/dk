@@ -1780,6 +1780,7 @@ void setworkspace(Client *c, int num, int stacktail)
 	Workspace *ws;
 	Client *tail = NULL;
 
+	/* TODO: why are we using itows here rather than the caller, this would also be better for error handling */
 	if (!(ws = itows(num)) || ws == c->ws) return;
 	DBG("setworkspace: %s -> %d", c->title, num)
 	if (c->ws) {
@@ -1797,6 +1798,8 @@ void setworkspace(Client *c, int num, int stacktail)
 	} else {
 		attachstack(c);
 	}
+	if (!c->ws->clients->next)
+		wschange = 1;
 }
 
 void showhide(Client *c)

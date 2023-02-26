@@ -29,7 +29,7 @@ xcb-proto xcb-util xcb-util-wm xcb-util-cursor xcb-util-keysyms
 
 Void
 ```
-libxcb-devel xcb-proto-devel xcb-util-devel xcb-util-wm-devel xcb-util-cursor-devel xcb-util-keysyms-devel
+libxcb-devel xcb-proto xcb-util-devel xcb-util-wm-devel xcb-util-cursor-devel xcb-util-keysyms-devel
 ```
 
 Debian/Ubuntu

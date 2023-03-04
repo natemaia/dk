@@ -434,6 +434,7 @@ void changews(Workspace *ws, int swap, int warp)
 	PROP(REPLACE, root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1, &ws->num);
 	xcb_flush(con);
 	needsrefresh = 1;
+	wschange = 1;
 }
 
 void clientborder(Client *c, int focused)
@@ -1798,8 +1799,8 @@ void setworkspace(Client *c, int num, int stacktail)
 	} else {
 		attachstack(c);
 	}
-	if (!c->ws->clients->next)
-		wschange = 1;
+	/* update workspace status when this is the only window on the ws (unoccupied -> occupied) */
+	wschange = c->ws->clients->next ? wschange : 1;
 }
 
 void showhide(Client *c)

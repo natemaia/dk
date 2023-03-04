@@ -263,7 +263,7 @@ int cmdfloat(char **argv)
 	int nparsed = 0;
 	Client *c = cmdc;
 
-	if (!c->ws->layout->func) return nparsed;
+	if (!c || !c->ws->layout->func) return nparsed;
 	if (argv && *argv && !strcmp(*argv, "all")) {
 		nparsed++;
 		FOR_EACH(c, cmdc->ws->clients) {
@@ -278,19 +278,27 @@ int cmdfloat(char **argv)
 		}
 		return nparsed;
 	}
+
 	if (FULLSCREEN(c) || c->state & STATE_STICKY || c->state & STATE_FIXED) {
 		respond(cmdresp, "!unable to change floating state of fullscreen, sticky, or fixed size windows");
-	} else {
-		if ((c->state ^= STATE_FLOATING) & STATE_FLOATING) {
-			if (c->old_x + c->old_y == c->ws->mon->wx + c->ws->mon->wy
-					|| c->old_x + c->old_y == c->ws->mon->x + c->ws->mon->y)
-				quadrant(c, &c->old_x, &c->old_y, &c->old_w, &c->old_h);
-			resizehint(c, c->old_x, c->old_y, c->old_w, c->old_h, c->bw, 0, 0);
-		} else {
-			c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
-		}
-		needsrefresh = 1;
+		return nparsed;
 	}
+
+	if ((c->state ^= STATE_FLOATING) & STATE_FLOATING) {
+		Monitor *m = c->ws->mon;
+		DBG("cmdfloat: client state is now floating: %s", c->title)
+		if (c->old_x + c->old_y == m->wx + m->wy || c->old_x + c->old_y == m->x + m->y) {
+			DBG("cmdfloat: fitting within monitor bounds: %s - %d,%d %dx%d", m->name, m->wx, m->wy, m->ww, m->wh)
+			quadrant(c, &c->old_x, &c->old_y, &c->old_w, &c->old_h);
+		}
+		DBG("cmdfloat: resizing: %d,%d %dx%d", c->old_x, c->old_y, c->old_w, c->old_h)
+		resizehint(c, c->old_x, c->old_y, c->old_w, c->old_h, c->bw, 0, 0);
+	} else {
+		DBG("cmdfloat: client state is now tiled: %s", c->title)
+		DBG("cmdfloat: saving location and size: %d,%d %dx%d", c->x, c->y, c->w, c->h)
+		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
+	}
+	needsrefresh = 1;
 	return nparsed;
 }
 
@@ -1008,7 +1016,7 @@ int cmdswap(__attribute__((unused)) char **argv)
 int cmdview(Workspace *ws)
 {
 	if (ws) {
-		DBG("cmdsend: viewing workspace %d : monitor %s", ws->num + 1, ws->mon->name)
+		DBG("cmdview: viewing workspace %d : monitor %s", ws->num + 1, ws->mon->name)
 		changews(ws, globalcfg[GLB_WS_STATIC].val ? 0 : !cmdusemon,
 				cmdusemon || (globalcfg[GLB_WS_STATIC].val && selws->mon != ws->mon));
 	}

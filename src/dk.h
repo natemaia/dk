@@ -89,13 +89,17 @@
 #define PROP(mode, win, atom, type, membsize, nmemb, value) \
 	xcb_change_property(con, XCB_PROP_MODE_##mode, win, atom, type, (membsize), (nmemb), (const void *)value)
 
-#define GET(win, val, error, type, functtype)                                             \
-		if (win == XCB_WINDOW_NONE) return val;                                \
+#define GET(win, val, error, type, functtype)                                                 \
+	do {                                                                                      \
+		if (win == XCB_WINDOW_NONE) return val;                                               \
 		if (!(val = xcb_get_##functtype##_reply(con, xcb_get_##functtype(con, win), &error))) \
-			iferr(0, "unable to get window " type " reply", error)
+			iferr(0, "unable to get window " type " reply", error);                           \
+	} while (0)
+
 
 #define MOVE(win, x, y)                                                       \
 	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, (uint32_t[]){(x), (y)})
+
 #define MOVERESIZE(win, x, y, w, h, bw)                                     \
 	xcb_configure_window(con, win,                                          \
 			XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y                       \

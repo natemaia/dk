@@ -1226,15 +1226,19 @@ void manage(xcb_window_t win, int scan)
 		if (type == netatom[NET_TYPE_DOCK])       initpanel(win, g);
 		else if (type == netatom[NET_TYPE_DESK])  initdesk(win, g);
 		else if (!wa->override_redirect)          goto client;
+
+		/* never reached for normal windows, only panels, desktops, and override_redirect windows */
+		setwinstate(win, XCB_ICCCM_WM_STATE_NORMAL);
 	} else if (!wa->override_redirect) {
 client:
+		/* TODO: this could be a problem for restart if we want to use the iconic state the client is never initialized */
 		if (scan && !(wa->map_state == XCB_MAP_STATE_VIEWABLE
 					|| (winprop(win, wmatom[WM_STATE], &state) && state == XCB_ICCCM_WM_STATE_ICONIC)))
 			goto end;
+
 		initclient(win, g);
 		PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &win);
 	}
-	setwinstate(win, XCB_ICCCM_WM_STATE_NORMAL);
 	needsrefresh = 1;
 end:
 	free(wa);
@@ -1768,9 +1772,9 @@ void setwinstate(xcb_window_t win, uint32_t state)
 #ifdef DEBUG
 	Client *c = wintoclient(win);
 	if (c)
-		DBG("setwinstate: window %s: %s", c->title, state == XCB_ICCCM_WM_STATE_NORMAL ? "normal" : "withdrawn")
+		DBG("setwinstate: window %s: %s", c->title, state == XCB_ICCCM_WM_STATE_NORMAL ? "NORMAL" : "WITHDRAWN")
 	else
-		DBG("setwinstate: window 0x%08x: %s", win, state == XCB_ICCCM_WM_STATE_NORMAL ? "normal" : "withdrawn")
+		DBG("setwinstate: window 0x%08x: %s", win, state == XCB_ICCCM_WM_STATE_NORMAL ? "NORMAL" : "WITHDRAWN")
 #endif
 	uint32_t data[] = { state, XCB_ATOM_NONE };
 	PROP(REPLACE, win, wmatom[WM_STATE], wmatom[WM_STATE], 32, 2, (const void *)data);

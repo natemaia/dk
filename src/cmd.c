@@ -799,7 +799,7 @@ int cmdsend(Workspace *ws)
 		if (FLOATING(c))
 			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
 		needsrefresh = 1;
-		wschange = 1;
+		wschange = c->ws->clients->next ? wschange : 1;
 	}
 	return 0;
 }

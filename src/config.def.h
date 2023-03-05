@@ -5,7 +5,7 @@
 #pragma once
 
 
-unsigned int border[BORD_LAST] = {
+uint32_t border[BORD_LAST] = {
 	[BORD_WIDTH]     = 1,          /* int: total border width in pixels */
 	[BORD_FOCUS]     = 0xFF6699cc, /* hex: focused window border colour (inner) */
 	[BORD_URGENT]    = 0xFFee5555, /* hex: urgent window border colour (inner) */
@@ -128,7 +128,6 @@ int tstack(Workspace *ws)
 			resizehint(c, mx, (wy + wh) - mh, mw - g - (2 * bw), mh - g - (2 * bw), bw, 0, 0);
 			mx += W(c) + g;
 		} else { /* stack windows */
-			sw += (i + 1 == n && sx + sw != ww) ? ww - (sx + sw) : 0;
 			resizehint(c, sx, wy + g, sw - g - (2 * bw), wh - (mh + (2 * g)) - (2 * bw), bw, 0, 0);
 			sx += W(c) + g;
 		}

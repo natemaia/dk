@@ -46,7 +46,7 @@ void buttonpress(xcb_generic_event_t *ev)
 
 	if (!(c = wintoclient(e->event))) return;
 	if (c != selws->sel) focus(c);
-	if (FLOATING(c)) {
+	if (FLOATING(c) && (e->detail == mousemove || e->detail == mouseresize)) {
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 		if (!(c->state & STATE_ABOVE))
 			for (v = c->ws->stack; v; v = v->snext)

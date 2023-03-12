@@ -793,11 +793,16 @@ int cmdsend(Workspace *ws)
 		Monitor *old = c->ws->mon;
 		unfocus(c, 1);
 		setworkspace(c, ws->num, c != c->ws->sel);
-		if (ws->mon != old && ws->mon->ws == ws) relocate(c, ws->mon, old);
+		if (ws->mon != old && ws->mon->ws == ws) {
+			DBG("cmdsend: relocating window: %s -- from %s to %s", c->title, old->name, ws->mon->name)
+			relocate(c, ws->mon, old);
+		}
+		if (FLOATING(c)) {
+			DBG("cmdsend: move/resize floating window: %s -- x: %d - y: %d - w: %d - h: %d", c->title, c->x, c->y, c->w, c->h)
+			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
+		}
 		showhide(ws->stack);
 		showhide(selws->stack);
-		if (FLOATING(c))
-			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
 		needsrefresh = 1;
 		wschange = c->ws->clients->next ? wschange : 1;
 	}

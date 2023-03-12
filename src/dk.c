@@ -1514,6 +1514,8 @@ static int refresh(void)
 		FOR_EACH(c, m->ws->clients) {
 			if (c->state & STATE_NEEDSMAP)
 				clientmap(c);
+			if (FLOATING(c))
+				MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
 			clientborder(c, c == selws->sel);
 		}
 		restack(m->ws);
@@ -1536,10 +1538,16 @@ void relocate(Client *c, Monitor *new, Monitor *old)
 		focus(sel);
 		return;
 	}
+	DBG("relocate: window: %s -- from %s to %s -- x: %d - y: %d - w: %d - h: %d",
+			c->title, old->name, new->name, c->x, c->y, c->w, c->h)
+
 	if (c->state & STATE_FULLSCREEN && c->w == old->w && c->h == old->h) {
+		DBG("relocate: fullscreen window: %s -- x: %d -> %d - y: %d -> %d - w: %d -> %d - h: %d -> %d",
+				c->title, c->x, new->x, c->y, new->y, c->w, new->w, c->h, new->h)
 		c->x = new->x, c->y = new->y, c->w = new->w, c->h = new->h;
 		return;
 	}
+
 	int corner = c->x == old->x && c->y == old->y;
 	double xscale = new->w > old->w
 		? (double)new->w / (double)old->w : (double)old->w / (double)new->w;
@@ -1558,6 +1566,7 @@ void relocate(Client *c, Monitor *new, Monitor *old)
 	if (c->x > 0 && c->x < new->x) c->x = new->x;
 	if (c->y > 0 && c->y < new->y) c->y = new->y;
 	if (!corner && c->x == new->x && c->y == new->y) gravitate(c, GRAV_CENTER, GRAV_CENTER, 1);
+	DBG("relocate: finale size/location of window: %s -- x: %d - y: %d - w: %d - h: %d", c->title, c->x, c->y, c->w, c->h)
 }
 
 static void relocatews(Workspace *ws, Monitor *old, int wasvis)

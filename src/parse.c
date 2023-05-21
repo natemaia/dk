@@ -175,10 +175,10 @@ int parseintclamp(char *arg, int *rel, int min, int max)
 	return INT_MIN;
 }
 
-int parseopt(char *arg, const char **optarr)
+int parseopt(char *arg, const char **optarr, int len_optarr)
 {
 	if (arg)
-		for (int i = 0; optarr && *optarr; optarr++, i++)
+		for (int i = 0; i < len_optarr; optarr++, i++)
 			if (!strcmp(*optarr, arg)) return i;
 	return -1;
 }

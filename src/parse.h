@@ -14,5 +14,5 @@ float parsefloat(char *arg, int *rel);
 int parsegeom(char *arg, char type, int *i, int *rel, int *grav);
 int parseint(char *arg, int *rel, int allowzero);
 int parseintclamp(char *arg, int *rel, int min, int max);
-int parseopt(char *arg, const char **optarr);
+int parseopt(char *arg, const char **optarr, int len_optarr);
 Workspace *parsewsormon(char *arg, int mon);

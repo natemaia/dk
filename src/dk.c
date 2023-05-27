@@ -518,7 +518,7 @@ void clientunmap(Client *c)
 	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &rm);
 	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &cm);
 	xcb_unmap_window(con, c->win);
-	setwinstate(c->win, XCB_ICCCM_WM_STATE_ICONIC);
+	setwinstate(c->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
 	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &ra->your_event_mask);
 	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &ca->your_event_mask);
 	xcb_aux_sync(con);

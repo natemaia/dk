@@ -518,7 +518,7 @@ void clientunmap(Client *c)
 	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &rm);
 	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &cm);
 	xcb_unmap_window(con, c->win);
-	setwinstate(c->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
+	setwinstate(c->win, XCB_ICCCM_WM_STATE_ICONIC);
 	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &ra->your_event_mask);
 	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &ca->your_event_mask);
 	xcb_aux_sync(con);
@@ -1360,39 +1360,74 @@ void printstatus(Status *s, int freeable)
 				if (!ws->next) fmt[3] = '\0';
 				fprintf(s->file, fmt, ws->name);
 			}
-			fprintf(s->file, "\nL%s\nA%s", selws->layout->name, selws->sel ? selws->sel->title :"");
+			fprintf(s->file, "\nL%s\nA%s",
+					selws->layout->name,
+					selws->sel && !(selws->sel->state & STATE_HIDDEN) ? selws->sel->title :"");
 			break;
 		case STAT_FULL:
 			/* Globals */
-			fprintf(s->file, "# globals - key: value ...\nnumws: %d\nsmart_border: %d\n"
-					"smart_gap: %d\nfocus_urgent: %d\nfocus_mouse: %d\nfocus_open: %d\n"
-					"tile_hints: %d\ntile_tohead: %d\nwin_minxy: %d\nwin_minwh: %d",
-					globalcfg[GLB_WS_NUM].val, globalcfg[GLB_SMART_BORDER].val,
-					globalcfg[GLB_SMART_GAP].val, globalcfg[GLB_FOCUS_URGENT].val,
-					globalcfg[GLB_FOCUS_MOUSE].val, globalcfg[GLB_FOCUS_OPEN].val,
-					globalcfg[GLB_TILE_HINTS].val, globalcfg[GLB_TILE_TOHEAD].val,
-					globalcfg[GLB_MIN_XY].val, globalcfg[GLB_MIN_WH].val);
+			fprintf(s->file, "# globals - key: value ...\n"
+					"numws: %d\n"
+					"smart_border: %d\n"
+					"smart_gap: %d\n"
+					"focus_urgent: %d\n"
+					"focus_mouse: %d\n"
+					"focus_open: %d\n"
+					"tile_hints: %d\n"
+					"tile_tohead: %d\n"
+					"win_minxy: %d\n"
+					"win_minwh: %d\n"
+					"active_window: 0x%08x",
+					globalcfg[GLB_WS_NUM].val,
+					globalcfg[GLB_SMART_BORDER].val,
+					globalcfg[GLB_SMART_GAP].val,
+					globalcfg[GLB_FOCUS_URGENT].val,
+					globalcfg[GLB_FOCUS_MOUSE].val,
+					globalcfg[GLB_FOCUS_OPEN].val,
+					globalcfg[GLB_TILE_HINTS].val,
+					globalcfg[GLB_TILE_TOHEAD].val,
+					globalcfg[GLB_MIN_XY].val,
+					globalcfg[GLB_MIN_WH].val,
+					selws->sel ? selws->sel->win : 0);
 
 			/* Borders */
-			fprintf(s->file, "\n\n# width outer_width focus urgent unfocus "
-					"outer_focus outer_urgent outer_unfocus\n"
+			fprintf(s->file, "\n\n# width outer_width focus urgent unfocus outer_focus outer_urgent outer_unfocus\n"
 					"border: %u %u 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x",
-					border[BORD_WIDTH], border[BORD_O_WIDTH],
-					border[BORD_FOCUS], border[BORD_URGENT],
-					border[BORD_UNFOCUS], border[BORD_O_FOCUS],
-					border[BORD_O_URGENT], border[BORD_O_UNFOCUS]);
+					border[BORD_WIDTH],
+					border[BORD_O_WIDTH],
+					border[BORD_FOCUS],
+					border[BORD_URGENT],
+					border[BORD_UNFOCUS],
+					border[BORD_O_FOCUS],
+					border[BORD_O_URGENT],
+					border[BORD_O_UNFOCUS]);
 
 			/* Workspaces */
 			fprintf(s->file, "\n\n# number:name:layout ...\nworkspaces:");
 			FOR_EACH(ws, workspaces)
-				fprintf(s->file, " %s%d:%s:%s", ws == selws ? "*" : "", ws->num + 1, ws->name, ws->layout->name);
+				fprintf(s->file, " %s%d:%s:%s",
+						ws == selws ? "*" : "",
+						ws->num + 1,
+						ws->name,
+						ws->layout->name);
 
 			/* Workspace settings */
 			fprintf(s->file, "\n\t# number:name active_window nmaster nstack msplit ssplit gappx smartgap padl padr padt padb");
 			FOR_EACH(ws, workspaces)
 				fprintf(s->file, "\n\t%d:%s 0x%08x %d %d %0.2f %0.2f %d %d %d %d %d %d",
-						ws->num + 1, ws->name, ws->sel ? ws->sel->win : 0, ws->nmaster, ws->nstack,
-						ws->msplit, ws->ssplit, ws->gappx, ws->smartgap, ws->padl, ws->padr, ws->padt, ws->padb);
+						ws->num + 1,
+						ws->name,
+						ws->sel ? ws->sel->win : 0,
+						ws->nmaster,
+						ws->nstack,
+						ws->msplit,
+						ws->ssplit,
+						ws->gappx,
+						ws->smartgap && tilecount(ws) == 1,
+						ws->padl,
+						ws->padr,
+						ws->padt,
+						ws->padb);
 
 			/* Monitors */
 			fprintf(s->file, "\n\n# number:name:workspace ...\nmonitors:");
@@ -1402,13 +1437,21 @@ void printstatus(Status *s, int freeable)
 							m->ws->num + 1);
 
 			/* Monitor settings */
-			fprintf(s->file,
-					"\n\t# number:name active_window x y width height wx wy wwidth wheight");
+			fprintf(s->file, "\n\t# number:name active_window x y width height wx wy wwidth wheight");
 			FOR_EACH(m, monitors)
 				if (m->connected)
 					fprintf(s->file, "\n\t%d:%s 0x%08x %d %d %d %d %d %d %d %d",
-							m->num + 1, m->name, m->ws->sel ? m->ws->sel->win : 0,
-							m->x, m->y, m->w, m->h, m->wx, m->wy, m->ww, m->wh);
+							m->num + 1,
+							m->name,
+							m->ws->sel ? m->ws->sel->win : 0,
+							m->x,
+							m->y,
+							m->w,
+							m->h,
+							m->wx,
+							m->wy,
+							m->ww,
+							m->wh);
 
 			/* Clients */
 			fprintf(s->file, "\n\n# id:workspace ...\nwindows:");
@@ -1416,25 +1459,51 @@ void printstatus(Status *s, int freeable)
 				fprintf(s->file, " %s0x%08x:%d", c == selws->sel ? "*" : "", c->win, c->ws->num + 1);
 
 			/* Client settings */
-			fprintf(s->file, "\n\t# id title class instance ws x y width height bw hoff float full fakefull fixed stick urgent above callback trans_id");
+			fprintf(s->file, "\n\t# id title class instance ws x y width height bw hoff float full fakefull fixed stick urgent above hidden callback trans_id");
 			FOR_CLIENTS(c, ws)
-				fprintf(s->file, "\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d"
-						" %d %d %d %d %d %d %d %d %d %s 0x%08x",
-						c->win, c->title, c->class, c->inst, c->ws->num + 1, c->x, c->y, c->w, c->h, c->bw,
-						c->hoff, FLOATING(c), (c->state & STATE_FULLSCREEN) != 0,
-						(c->state & STATE_FAKEFULL) != 0, (c->state & STATE_FIXED) != 0,
-						(c->state & STATE_STICKY) != 0, (c->state & STATE_URGENT) != 0,
+				fprintf(s->file, "\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %s 0x%08x",
+						c->win,
+						c->title,
+						c->class,
+						c->inst,
+						c->ws->num + 1,
+						c->x,
+						c->y,
+						c->w,
+						c->h,
+						c->bw,
+						c->hoff,
+						FLOATING(c),
+						(c->state & STATE_FULLSCREEN) != 0,
+						(c->state & STATE_FAKEFULL) != 0,
+						(c->state & STATE_FIXED) != 0,
+						(c->state & STATE_STICKY) != 0,
+						(c->state & STATE_URGENT) != 0,
 						(c->state & STATE_ABOVE) != 0,
-						c->cb ? c->cb->name : "none", c->trans ? c->trans->win : 0);
+						(c->state & STATE_HIDDEN) != 0,
+						c->cb ? c->cb->name : "none",
+						c->trans ? c->trans->win : 0);
 
 			/* Rules */
 			if (rules) {
 				fprintf(s->file, "\n\n# title class instance workspace monitor float stick focus callback x y width height xgrav ygrav");
 				FOR_EACH(r, rules)
 					fprintf(s->file, "\nrule: \"%s\" \"%s\" \"%s\" %d %s %d %d %d %s %d %d %d %d %s %s",
-							r->title, r->class, r->inst, r->ws, r->mon, (r->state & STATE_FLOATING) !=0,
-							(r->state & STATE_STICKY) != 0, r->focus, r->cb ? r->cb->name : "",
-							r->x, r->y, r->w, r->h, gravities[r->xgrav], gravities[r->ygrav]);
+							r->title,
+							r->class,
+							r->inst,
+							r->ws,
+							r->mon,
+							(r->state & STATE_FLOATING) !=0,
+							(r->state & STATE_STICKY) != 0,
+							r->focus,
+							r->cb ? r->cb->name : "",
+							r->x,
+							r->y,
+							r->w,
+							r->h,
+							gravities[r->xgrav],
+							gravities[r->ygrav]);
 			}
 
 			/* Panels */
@@ -1446,8 +1515,19 @@ void printstatus(Status *s, int freeable)
 				/* Panel settings */
 				fprintf(s->file, "\n\t# id class instance monitor x y width height left right top bottom");
 				FOR_EACH(p, panels)
-					fprintf(s->file, "\n\t0x%08x \"%s\" \"%s\" %s %d %d %d %d %d %d %d %d", p->win, p->class, p->inst, p->mon->name,
-							p->x, p->y, p->w, p->h, p->l, p->r, p->t, p->b);
+					fprintf(s->file, "\n\t0x%08x \"%s\" \"%s\" %s %d %d %d %d %d %d %d %d",
+							p->win,
+							p->class,
+							p->inst,
+							p->mon->name,
+							p->x,
+							p->y,
+							p->w,
+							p->h,
+							p->l,
+							p->r,
+							p->t,
+							p->b);
 			}
 
 			break;
@@ -1828,7 +1908,12 @@ void showhide(Client *c)
 			c->x = CLAMP(c->x, m->x - globalcfg[GLB_MIN_XY].val, m->x + m->w - (c->w - globalcfg[GLB_MIN_XY].val));
 		if (c->y < m->y - (c->h + globalcfg[GLB_MIN_XY].val) || c->y > m->y + (m->h - globalcfg[GLB_MIN_XY].val))
 			c->y = CLAMP(c->y, m->y - globalcfg[GLB_MIN_XY].val, m->y + m->h - (c->h - globalcfg[GLB_MIN_XY].val));
-		clientmap(c);
+
+		if (c->state & STATE_HIDDEN)
+			clientunmap(c);
+		else
+			clientmap(c);
+
 		showhide(c->snext);
 	} else {
 		DBG("showhide: ws: %d -- hiding window : %s", c->ws->num + 1, c->title)

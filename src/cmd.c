@@ -244,6 +244,12 @@ int cmdcycle(__attribute__((unused)) char **argv)
 	return 0;
 }
 
+int cmdexit(__attribute__((unused)) char **argv)
+{
+	running = 0;
+	return 0;
+}
+
 int cmdfakefull(__attribute__((unused)) char **argv)
 {
 	Client *c = cmdc;
@@ -365,6 +371,19 @@ int cmdgappx(char **argv)
 		nparsed++;
 		adjustisetting(i, rel, &setws->gappx, border[BORD_WIDTH], 1);
 	}
+	return nparsed;
+}
+
+int cmdhide(char **argv)
+{
+	int nparsed = 0;
+	Client *c = cmdc;
+
+	c->state &= STATE_HIDDEN;
+	if (c == selws->sel) unfocus(c, 1);
+	showhide(c->ws->stack);
+	needsrefresh = 1;
+
 	return nparsed;
 }
 
@@ -524,12 +543,6 @@ badvalue:
 	}
 	return nparsed;
 #undef PAD
-}
-
-int cmdexit(__attribute__((unused)) char **argv)
-{
-	running = 0;
-	return 0;
 }
 
 int cmdresize(char **argv)
@@ -897,6 +910,19 @@ badvalue:
 	return nparsed;
 }
 
+int cmdshow(char **argv)
+{
+	int nparsed = 0;
+	Client *c = cmdc;
+
+	c->state &= ~STATE_HIDDEN;
+	focus(c);
+	showhide(c->ws->stack);
+	needsrefresh = 1;
+
+	return nparsed;
+}
+
 int cmdsplit(char **argv)
 {
 	int rel = 0;
@@ -1043,7 +1069,7 @@ int cmdwin(char **argv)
 			int match = 0;
 			for (unsigned int ui = 0; wincmds[ui].str; ui++)
 				if ((match = !strcmp(wincmds[ui].str, *argv))) {
-					if (cmdc && (e = wincmds[ui].func(argv + 1)) == -1) return -1;
+					if (!cmdc || (e = wincmds[ui].func(argv + 1)) == -1) return -1;
 					nparsed += e;
 					argv += e;
 					break;

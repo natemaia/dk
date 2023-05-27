@@ -123,6 +123,7 @@ enum States {
 	STATE_WASFLOATING  = 1 << 9,
 	STATE_IGNORECFG    = 1 << 10,
 	STATE_ABOVE        = 1 << 11,
+	STATE_HIDDEN       = 1 << 12,
 };
 
 enum Cursors {

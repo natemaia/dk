@@ -69,23 +69,21 @@ int main(int argc, char *argv[])
 
 	check(send(fd, buf, n, 0), "unable to send command");
 
-	if (strncmp(buf, "reload", 6)) {
-		ssize_t s;
-		while (poll(fds, 2, -1) > 0) {
-			if (fds[1].revents & (POLLERR | POLLHUP)) break;
-			if (fds[0].revents & POLLIN) {
-				if ((s = recv(fd, resp, sizeof(resp) - 1, 0)) > 0) {
-					resp[s] = '\0';
-					if ((ret = *resp == '!')) {
-						fprintf(stderr, "%s: error: %s\n", argv[0], resp + 1);
-						fflush(stderr);
-					} else {
-						fprintf(stdout, "%s\n", resp);
-						fflush(stdout);
-					}
+	ssize_t s;
+	while (poll(fds, 2, -1) > 0) {
+		if (fds[1].revents & (POLLERR | POLLHUP)) break;
+		if (fds[0].revents & POLLIN) {
+			if ((s = recv(fd, resp, sizeof(resp) - 1, 0)) > 0) {
+				resp[s] = '\0';
+				if ((ret = *resp == '!')) {
+					fprintf(stderr, "%s: error: %s\n", argv[0], resp + 1);
+					fflush(stderr);
 				} else {
-					break;
+					fprintf(stdout, "%s\n", resp);
+					fflush(stdout);
 				}
+			} else {
+				break;
 			}
 		}
 	}

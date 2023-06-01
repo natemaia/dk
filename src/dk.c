@@ -156,7 +156,9 @@ int main(int argc, char *argv[])
 
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "-s")) {
-			if (!(sockfd = strtol(argv[++i], &end, 0)) || *end != '\0') {
+			if (i + 1 >= argc) {
+				warnx("-s requires an additional argument");
+			} else if (!(sockfd = strtol(argv[++i], &end, 0)) || *end != '\0') {
 				warnx("invalid socket file descriptor: %s", argv[i]);
 				sockfd = 0;
 			}

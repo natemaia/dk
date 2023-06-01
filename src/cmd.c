@@ -377,7 +377,7 @@ int cmdgappx(char **argv)
 	return nparsed;
 }
 
-int cmdhide(char **argv)
+int cmdhide(__attribute__((unused)) char **argv)
 {
 	int nparsed = 0;
 	Client *c = cmdc;
@@ -913,7 +913,7 @@ badvalue:
 	return nparsed;
 }
 
-int cmdshow(char **argv)
+int cmdshow(__attribute__((unused)) char **argv)
 {
 	int nparsed = 0;
 	Client *c = cmdc;

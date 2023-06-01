@@ -94,7 +94,8 @@ int adjustwsormon(char **argv)
 	}
 
 	/* parse directions: next, prev, last, etc. */
-	if ((opt = parseopt(*argv, directions)) >= 0) {
+	if ((opt = parseopt(*argv, directions,
+			(int)(sizeof(directions) / sizeof(*directions)))) >= 0) {
 		if (opt == DIR_LAST) {
 			ws = cmdusemon
 				? (lastmon && lastmon->connected) ? lastmon->ws : cur
@@ -319,7 +320,9 @@ int cmdfocus(char **argv)
 		if (FLOATING(c)) restack(c->ws);
 		return nparsed;
 	}
-	if ((opt = parseopt(*argv, directions)) < 0 && (i = parseint(*argv, NULL, 0)) == INT_MIN) {
+	if ((opt = parseopt(*argv, directions,
+			(int)(sizeof(directions) / sizeof(*directions)))) < 0 &&
+			(i = parseint(*argv, NULL, 0)) == INT_MIN) {
 		respond(cmdresp, "!%s win focus: %s", ebadarg, *argv);
 		return -1;
 	}

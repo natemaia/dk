@@ -80,8 +80,8 @@ void buttonrelease(int move)
 	iferr(1, "failed to ungrab pointer",
 			xcb_request_check(con, xcb_ungrab_pointer_checked(con, XCB_CURRENT_TIME)));
 	if (!move) {
-		xcb_aux_sync(con);
 		ignore(XCB_ENTER_NOTIFY);
+		xcb_aux_sync(con);
 	}
 }
 
@@ -114,6 +114,8 @@ void clientmessage(xcb_generic_event_t *ev)
 			if (d[1] == netatom[NET_STATE_FULL] || d[2] == netatom[NET_STATE_FULL]) {
 				DBG("clientmessage: state fullscreen: %d", (d[0] == 1 || (d[0] == 2 && !(c->state & STATE_FULLSCREEN))))
 				setfullscreen(c, (d[0] == 1 || (d[0] == 2 && !(c->state & STATE_FULLSCREEN))));
+				ignore(XCB_ENTER_NOTIFY);
+				xcb_aux_sync(con);
 			} else if (d[1] == netatom[NET_STATE_ABOVE] || d[2] == netatom[NET_STATE_ABOVE]) {
 				int above = d[0] == 1 || (d[0] == 2 && !(c->state & STATE_FULLSCREEN));
 				DBG("clientmessage: state above: %d", above)
@@ -325,8 +327,13 @@ void ignore(uint8_t type)
 
 	xcb_flush(con);
 	while (running && (ev = xcb_poll_for_event(con))) {
-		if ((ev->response_type & 0x7f) != type)
+		if ((ev->response_type & 0x7f) != type) {
 			dispatch(ev);
+		} else {
+			DBG("ignore: %s", type == XCB_ENTER_NOTIFY
+					? "XCB_ENTER_NOTIFY" : type == XCB_CONFIGURE_REQUEST
+					? "XCB_CONFIGURE_REQUEST" : "UNKNOWN")
+		}
 		free(ev);
 	}
 }
@@ -562,7 +569,8 @@ void unmapnotify(xcb_generic_event_t *ev)
 	free(xcb_query_tree_reply(con, xcb_query_tree(con, e->window), &er));
 	if (er) { free(er); return; }
 
-	DBG("unmapnotify: withdrawing and un-managing window: 0x%08x", e->window)
-	setwinstate(e->window, XCB_ICCCM_WM_STATE_WITHDRAWN);
+	DBG("unmapnotify: un-managing window: 0x%08x", e->window)
 	unmanage(e->window, 0);
+	ignore(XCB_ENTER_NOTIFY);
+	xcb_aux_sync(con);
 }

@@ -889,6 +889,16 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	c->trans = wintoclient(wintrans(win));
 
 	winclass(win, c->class, c->inst, sizeof(c->class));
+
+	/* broken ass windows like new steam notifications we don't even bother managing :| */
+	if (!strncmp(c->class, "broken", sizeof(c->class))) {
+		DBG("initclient: not managing window: 0x%08x - %s", c->win, c->class)
+		free(c);
+		ignore(XCB_ENTER_NOTIFY);
+		xcb_aux_sync(con);
+		return;
+	}
+
 	pc = xcb_get_property(con, 0, c->win, wmatom[WM_MOTIF], wmatom[WM_MOTIF], 0, 5);
 	if ((pr = xcb_get_property_reply(con, pc, &e))
 			&& xcb_get_property_value_length(pr) >= 3) {
@@ -914,7 +924,7 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 
 	/* apply rules and set the client's workspace, when config focus_open=false
 	 * the new client is attached to the end of the stack, otherwise the head.
-	 * later in refresh(), focus(NULL) is called to focus the right client */
+	 * later in refresh(), focus(NULL) is called to focus the correct client */
 	DBG("initclient: rule setting: %s", c->title)
 	clientrule(c, NULL, !globalcfg[GLB_FOCUS_OPEN].val);
 
@@ -1225,14 +1235,17 @@ void manage(xcb_window_t win, int scan)
 	if (!(wa = winattr(win)) || !(g = wingeom(win))) goto end;
 	DBG("manage: 0x%08x - %d,%d @ %dx%d", win, g->x, g->y, g->width, g->height)
 	if (winprop(win, netatom[NET_WM_TYPE], &type)) {
+		DBG("manage: 0x%08x has NET_WM_TYPE", win);
 		if (type == netatom[NET_TYPE_DOCK])       initpanel(win, g);
 		else if (type == netatom[NET_TYPE_DESK])  initdesk(win, g);
 		else if (!wa->override_redirect)          goto client;
 
 		/* never reached for normal windows, only panels, desktops, and override_redirect windows */
 		setwinstate(win, XCB_ICCCM_WM_STATE_NORMAL);
+
 	} else if (!wa->override_redirect) {
 client:
+		DBG("manage: 0x%08x has no NET_WM_TYPE", win);
 		/* TODO: this could be a problem for restart if we want to use the iconic state the client is never initialized */
 		if (scan && !(wa->map_state == XCB_MAP_STATE_VIEWABLE
 					|| (winprop(win, wmatom[WM_STATE], &state) && state == XCB_ICCCM_WM_STATE_ICONIC)))
@@ -1602,9 +1615,11 @@ static int refresh(void)
 		}
 		restack(m->ws);
 	}
+	ignore(XCB_ENTER_NOTIFY);
+	xcb_aux_sync(con);
+
 	DBG("refresh: focusing first client: %s", selws->sel ? selws->sel->title : "NONE")
 	focus(NULL);
-	ignore(XCB_ENTER_NOTIFY);
 
 	return 0;
 #undef MAP
@@ -1685,6 +1700,7 @@ void restack(Workspace *ws)
 	Client *c;
 
 	if (!ws || !(c = ws->sel)) return;
+
 	FOR_EACH(p, panels)
 		if (p->mon == ws->mon)
 			setstackmode(p->win, XCB_STACK_MODE_BELOW);
@@ -1701,8 +1717,6 @@ void restack(Workspace *ws)
 		if ((c->state & STATE_ABOVE && ((c->state & STATE_FLOATING) || c->ws->layout->func == NULL))
 				|| (c->trans && FULLSCREEN(c->trans)))
 			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-	xcb_flush(con);
-	ignore(XCB_ENTER_NOTIFY);
 }
 
 static int rulecmp(Client *c, Rule *r)
@@ -2000,9 +2014,6 @@ void unmanage(xcb_window_t win, int destroyed)
 		wschange = c->ws->clients->next ? wschange : 1;
 		detach(c, 0);
 		detachstack(c);
-		focus(NULL);
-		xcb_aux_sync(con);
-		ignore(XCB_ENTER_NOTIFY);
 	} else if ((ptr = p = wintopanel(win))) {
 		Panel **pp = &panels;
 		DETACH(p, pp);
@@ -2242,7 +2253,7 @@ static void winclass(xcb_window_t win, char *class, char *inst, size_t len)
 	xcb_icccm_get_wm_class_reply_t p;
 
 	if (!xcb_icccm_get_wm_class_reply(con, xcb_icccm_get_wm_class(con, win), &p, &e)) {
-		iferr(0, "failed to get window class", e);
+		iferr(0, "unable to get window class", e);
 		if (class) strlcpy(class, "broken", len);
 		if (inst) strlcpy(inst, "broken", len);
 	} else {

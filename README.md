@@ -364,37 +364,37 @@ set tile_tohead=true
 ```
 ---
 
-`smart_gap` (boolean) remove gaps on workspaces with only one tiled window.
+`smart_gap` (boolean) whether gaps are disabled on workspaces with only one tiled window.
 ```
 set smart_gap=true
 ```
 ---
 
-`smart_border` (boolean) remove borders on workspaces with only one tiled window.
+`smart_border` (boolean) whether borders are disabled on workspaces with only one tiled window.
 ```
 set smart_border=true
 ```
 ---
 
-`focus_urgent` (boolean) focus windows that request it through client messages.
+`focus_urgent` (boolean) focus windows that request it.
 ```
 set focus_urgent=true
 ```
 ---
 
-`focus_open` (boolean) disable focus-on-open.
+`focus_open` (boolean) whether windows are focused when opened.
 ```
 set focus_open=false
 ```
 ---
 
-`focus_mouse` (boolean) disable focus-follows-mouse.
+`focus_mouse` (boolean) whether window focus follows the mouse.
 ```
 set focus_mouse=false
 ```
 ---
 
-`obey_motif` (boolean) ignore motif hints for drawing borders.
+`obey_motif` (boolean) whether to obey motif hints for borders.
 ```
 set obey_motif=false
 ```

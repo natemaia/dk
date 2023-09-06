@@ -97,6 +97,9 @@ fi
 	# define mouse mod and move/resize buttons
 	dkcmd set mouse mod=alt move=button1 resize=button3
 
+	# obey motif border hints on windows that draw their own (steam, easyeffects, etc.)
+	dkcmd set obey_motif=true
+
 
 	# borders
 	# ---------

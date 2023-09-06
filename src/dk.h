@@ -228,7 +228,8 @@ enum GlobalSettings {
 	GLB_SMART_GAP    = 8,
 	GLB_TILE_HINTS   = 9,
 	GLB_TILE_TOHEAD  = 10,
-	GLB_LAST         = 11,
+	GLB_OBEY_MOTIF   = 11,
+	GLB_LAST         = 12,
 };
 
 
@@ -287,6 +288,7 @@ typedef struct Client {
 	char title[256], class[64], inst[64];
 	int32_t x, y, w, h, bw, hoff, depth, old_x, old_y, old_w, old_h, old_bw;
 	int32_t max_w, max_h, min_w, min_h, base_w, base_h, inc_w, inc_h, hints;
+	int32_t has_motif;
 	float min_aspect, max_aspect;
 	uint32_t state, old_state;
 	xcb_window_t win;
@@ -384,6 +386,7 @@ int assignws(Workspace *ws, Monitor *new); //NOLINT
 void changews(Workspace *ws, int swap, int warp);
 void clientborder(Client *c, int focused);
 void clienthints(Client *c);
+void clientmotif(void);
 int clientname(Client *c);
 void clientrule(Client *c, Rule *wr, int nofocus);
 void clienttype(Client *c);

@@ -394,6 +394,12 @@ set focus_mouse=false
 ```
 ---
 
+`obey_motif` (boolean) ignore motif hints for drawing borders.
+```
+set obey_motif=false
+```
+---
+
 `win_minxy` (integer) amount of window (in pixels) to be kept on the screen when moving.
 ```
 set win_minxy=20

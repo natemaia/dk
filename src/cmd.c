@@ -880,13 +880,14 @@ int cmdset(char **argv)
 					case TYPE_BOOL:
 						if (!argv || (i = parsebool(*argv)) < 0) goto badvalue;
 						globalcfg[j].val = i;
+						if (j == GLB_OBEY_MOTIF) clientmotif();
 						break;
 					case TYPE_NUMWS:
 						if (!argv || (i = parseintclamp(*argv, NULL, 1, 99)) == INT_MIN) goto badvalue;
 						if (i > globalcfg[j].val) updworkspaces(i);
 						break;
 					case TYPE_INT:
-						if (!argv || (i = parseintclamp(*argv, NULL, 10, 1000)) == INT_MIN) goto badvalue;
+						if (!argv || (i = parseintclamp(*argv, NULL, 1, 10000)) == INT_MIN) goto badvalue;
 						globalcfg[j].val = i;
 						break;
 					}

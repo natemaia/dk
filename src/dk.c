@@ -509,22 +509,23 @@ void clientmap(Client *c)
 	xcb_aux_sync(con);
 }
 
-void clientunmap(Client *c)
+void clientmotif(void)
 {
-	DBG("clientunmap: %s", c->title)
-	xcb_get_window_attributes_reply_t *ra = winattr(root), *ca = winattr(c->win);
-	uint32_t rm = (ra->your_event_mask & ~XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY);
-	uint32_t cm = (ca->your_event_mask & ~XCB_EVENT_MASK_STRUCTURE_NOTIFY);
+	Client *c;
+	Workspace *ws;
 
-	xcb_grab_server(con);
-	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &rm);
-	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &cm);
-	xcb_unmap_window(con, c->win);
-	setwinstate(c->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
-	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &ra->your_event_mask);
-	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &ca->your_event_mask);
-	xcb_aux_sync(con);
-	xcb_ungrab_server(con);
+	FOR_CLIENTS(c, ws) {
+		if (c->has_motif) {
+			if (globalcfg[GLB_OBEY_MOTIF].val) {
+				c->state |= STATE_NOBORDER;
+				c->bw = 0;
+			} else {
+				c->state &= ~STATE_NOBORDER;
+				c->bw = border[BORD_WIDTH];
+			}
+			clientborder(c, c == selws->sel);
+		}
+	}
 }
 
 int clientname(Client *c)
@@ -592,6 +593,24 @@ void clienttype(Client *c)
 				&& (type == netatom[NET_TYPE_DIALOG] || type == netatom[NET_TYPE_SPLASH]))
 			|| c->trans || (c->trans = wintoclient(wintrans(c->win))))
 		c->state |= STATE_FLOATING;
+}
+
+void clientunmap(Client *c)
+{
+	DBG("clientunmap: %s", c->title)
+	xcb_get_window_attributes_reply_t *ra = winattr(root), *ca = winattr(c->win);
+	uint32_t rm = (ra->your_event_mask & ~XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY);
+	uint32_t cm = (ca->your_event_mask & ~XCB_EVENT_MASK_STRUCTURE_NOTIFY);
+
+	xcb_grab_server(con);
+	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &rm);
+	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &cm);
+	xcb_unmap_window(con, c->win);
+	setwinstate(c->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
+	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &ra->your_event_mask);
+	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &ca->your_event_mask);
+	xcb_aux_sync(con);
+	xcb_ungrab_server(con);
 }
 
 Monitor *coordtomon(int x, int y)
@@ -884,6 +903,7 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	c->w = c->old_w = g->width;
 	c->h = c->old_h = g->height;
 	c->bw = c->old_bw = border[BORD_WIDTH];
+	c->has_motif = 0;
 	c->state = STATE_NEEDSMAP;
 	c->old_state = STATE_NONE;
 	c->trans = wintoclient(wintrans(win));
@@ -903,8 +923,11 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	if ((pr = xcb_get_property_reply(con, pc, &e))
 			&& xcb_get_property_value_length(pr) >= 3) {
 		if (((xcb_atom_t *)xcb_get_property_value(pr))[2] == 0) {
-			c->bw = 0;
-			c->state |= STATE_NOBORDER;
+			c->has_motif = 1;
+			if (globalcfg[GLB_OBEY_MOTIF].val) {
+				c->bw = 0;
+				c->state |= STATE_NOBORDER;
+			}
 		}
 	} else {
 		iferr(0, "unable to get window motif hints reply", e);

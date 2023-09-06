@@ -29,6 +29,7 @@ GlobalCfg globalcfg[GLB_LAST] = {
 	[GLB_TILE_TOHEAD]  = { 0,   TYPE_BOOL,  "tile_tohead"  }, /* place new clients at the tail of the stack */
 	[GLB_WS_NUM]       = { 0,   TYPE_NUMWS, "numws"        }, /* number of workspaces currently allocated */
 	[GLB_WS_STATIC]    = { 0,   TYPE_BOOL,  "static_ws"    }, /* use static workspace assignment */
+	[GLB_OBEY_MOTIF]   = { 1,   TYPE_BOOL,  "obey_motif"   }, /* obey motif_wm_hints for border drawing on supported windows */
 };
 
 /* default modifier and buttons for mouse move/resize */

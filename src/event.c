@@ -217,10 +217,7 @@ void configrequest(xcb_generic_event_t *ev)
 			}
 			if (c->ws == m->ws) {
 				DBG("configrequest: visible window, performing resize: %d,%d %dx%d", c->x, c->y, c->w, c->h)
-				sizehints(c, 0);
-				applysizehints(c, &c->x, &c->y, &c->w, &c->h, c->bw, 0, 0);
-				MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
-				sendconfigure(c);
+				resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0, 0);
 			}
 		} else {
 			sendconfigure(c);

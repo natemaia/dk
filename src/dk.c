@@ -907,17 +907,7 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	c->state = STATE_NEEDSMAP;
 	c->old_state = STATE_NONE;
 	c->trans = wintoclient(wintrans(win));
-
 	winclass(win, c->class, c->inst, sizeof(c->class));
-
-	/* broken ass windows like new steam notifications we don't even bother managing :| */
-	if (!strncmp(c->class, "broken", sizeof(c->class))) {
-		DBG("initclient: not managing window: 0x%08x - %s", c->win, c->class)
-		free(c);
-		ignore(XCB_ENTER_NOTIFY);
-		xcb_aux_sync(con);
-		return;
-	}
 
 	pc = xcb_get_property(con, 0, c->win, wmatom[WM_MOTIF], wmatom[WM_MOTIF], 0, 5);
 	if ((pr = xcb_get_property_reply(con, pc, &e))

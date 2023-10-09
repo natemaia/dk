@@ -218,7 +218,8 @@ update:
 	}
 
 	for (i = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), i++) {
-		if (geo[i][3] <= globalcfg[GLB_MIN_WH].val) ret = -1; // NOLINT ?
+		if (geo[i][3] <= globalcfg[GLB_MIN_WH].val)
+			ret = -1;
 		resizehint(c, geo[i][0], geo[i][1], geo[i][2], geo[i][3],
 				!globalcfg[GLB_SMART_BORDER].val || n > 1 ? c->bw : 0, 0, 0);
 	}
@@ -352,7 +353,8 @@ update:
 	}
 
 	for (i = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), i++) {
-		if (geo[i][3] <= globalcfg[GLB_MIN_WH].val) ret = -1; // NOLINT ?
+		if (geo[i][3] <= globalcfg[GLB_MIN_WH].val)
+			ret = -1;
 		resizehint(c, geo[i][0], geo[i][1], geo[i][2], geo[i][3],
 				!globalcfg[GLB_SMART_BORDER].val || n > 1 ? c->bw : 0, 0, 0);
 	}

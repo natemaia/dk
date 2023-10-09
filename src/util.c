@@ -13,6 +13,7 @@
 #include <err.h>
 
 #include "util.h"
+#include "dk.h"
 
 void check(int i, char *msg)
 {
@@ -68,22 +69,12 @@ void respond(FILE *f, const char *fmt, ...)
 
 void sighandle(int sig)
 {
-	switch (sig) {
-	case SIGINT: /* FALLTHROUGH */
-	case SIGTERM: /* FALLTHROUGH */
-	case SIGHUP:
-#ifdef USES_XCB_CONNECTION
-		/* atexit(3) doesn't call freewm upon delivery of a signal so we do it manually
-		 * this only needs to happen for the window manager (not dkcmd), hence the #ifdef */
-		freewm();
-#endif
-		exit(1);
-		break;
-	case SIGCHLD:
+	if (sig == SIGCHLD) {
 		signal(sig, sighandle);
-		while (waitpid(-1, NULL, WNOHANG) > 0)
+		while (waitpid(-1, 0, WNOHANG) > 0)
 			;
-		break;
+	} else if (sig == SIGINT || sig == SIGTERM || sig == SIGHUP) {
+		running = 0;
 	}
 }
 

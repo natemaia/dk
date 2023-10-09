@@ -5,7 +5,6 @@
  * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
  */
 
-#define USES_XCB_CONNECTION
 #define _XOPEN_SOURCE 700
 #define _POSIX_C_SOURCE 200112L
 
@@ -15,6 +14,7 @@
 #endif
 
 #include <sys/un.h>
+#include <sys/wait.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 
@@ -46,10 +46,10 @@
 
 
 FILE *cmdresp;
-char *argv0, *sock = NULL;
+char *argv0, sock[256];
 unsigned int lockmask = 0;
-int scr_h, scr_w, sockfd, randrbase, cmdusemon, winchange, wschange, lytchange;
 int running, restart, needsrefresh, status_usingcmdresp, depth;
+int scr_h, scr_w, sockfd, randrbase, cmdusemon, winchange, wschange, lytchange;
 
 Desk *desks;
 Rule *rules;
@@ -122,8 +122,6 @@ const char *netatoms[] = {
 
 static void freestatus(Status *s);
 static void freews(Workspace *ws);
-static void initscan(void);
-static void initsock(void);
 static void initwm(void);
 static int refresh(void);
 static void relocatews(Workspace *ws, Monitor *old, int wasvis);
@@ -138,21 +136,24 @@ static int winprop(xcb_window_t win, xcb_atom_t prop, xcb_atom_t *ret);
 int main(int argc, char *argv[])
 {
 	ssize_t n;
+	unsigned int i;
+	char *end, buf[PIPE_BUF], *host = NULL;
+	int cmdfd, confd, nfds,  dsp = 0, scrn = 0;
 	Client *c = NULL;
 	Workspace *ws;
 	Status *s, *next;
 	fd_set read_fds;
 	xcb_window_t sel;
 	xcb_generic_event_t *ev;
-	char *end, buf[PIPE_BUF];
-	int cmdfd, confd, nfds;
+	xcb_generic_error_t *e;
+	xcb_query_tree_reply_t *rt;
+	static struct sockaddr_un addr;
 
-	depth = 0;
+	/* setup basics */
 	argv0 = argv[0];
 	randrbase = -1;
 	running = needsrefresh = 1;
-	sockfd = restart = cmdusemon = 0;
-	winchange = wschange = lytchange = 0;
+	depth = sockfd = restart = cmdusemon = winchange = wschange = lytchange = 0;
 
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "-s")) {
@@ -163,11 +164,13 @@ int main(int argc, char *argv[])
 				sockfd = 0;
 			}
 		} else if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "-h")) {
-			return usage(argv[0], VERSION, 0, argv[i][1], "[-hv] [-s SOCKET_FD]");
+			return usage(argv[0], VERSION, 0, argv[i][1], "[-hv]");
 		} else {
-			return usage(argv[0], VERSION, 1, 'h', "[-hv] [-s SOCKET_FD]");
+			return usage(argv[0], VERSION, 1, 'h', "[-hv]");
 		}
 	}
+
+	/* setup the xcb connection and root window */
 	if (xcb_connection_has_error((con = xcb_connect(NULL, NULL))))
 		err(1, "error connecting to X");
 	atexit(freewm);
@@ -180,12 +183,61 @@ int main(int argc, char *argv[])
 			xcb_request_check(con,
 				xcb_change_window_attributes_checked(con, root, XCB_CW_EVENT_MASK,
 					(uint32_t[]){ XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT })));
-
 	initwm();
-	initsock();
-	initscan();
+
+	/* setup the socket connection for commands and status */
+	if (sockfd <= 0) {
+		if (xcb_parse_display(NULL, &host, &dsp, &scrn)) {
+			snprintf(sock, sizeof(sock), "/tmp/dk_%s_%i_%i.socket", host, dsp, scrn);
+			free(host);
+		} else {
+			strlcpy(sock, "/tmp/dk.socket", sizeof(sock));
+		}
+		if (setenv("DKSOCK", sock, 1) < 0)
+			warn("unable to set DKSOCK environment variable");
+		addr.sun_family = AF_UNIX;
+		strlcpy(addr.sun_path, sock, sizeof(addr.sun_path));
+		check(sockfd = socket(AF_UNIX, SOCK_STREAM, 0), "unable to create socket");
+		unlink(sock);
+		check(bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)), "unable to bind socket");
+		check(listen(sockfd, SOMAXCONN), "unable to listen on socket");
+	}
+	fcntl(sockfd, F_SETFD, FD_CLOEXEC | fcntl(sockfd, F_GETFD));
+
+	/* setup signal handling */
+	struct sigaction sa;
+	int sigs[] = { SIGTERM, SIGINT, SIGHUP, SIGCHLD, SIGPIPE };
+	sa.sa_handler = sighandle;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = SA_NOCLDSTOP | SA_NOCLDWAIT | SA_RESTART;
+	for (i = 0; i < LEN(sigs); i++) {
+		if (sigs[i] == SIGPIPE)
+			sa.sa_handler = SIG_IGN;
+		check(sigaction(sigs[i], &sa, NULL), "unable to setup signal handler");
+	}
+	while (waitpid(-1, NULL, WNOHANG) > 0);
+
+	/* apply user settings and rules */
 	execcfg();
 
+	/* initialize existing windows AFTER config is loaded (rules, etc.) */
+	xcb_query_tree_cookie_t rc = xcb_query_tree(con, root);
+	if (!(rt = xcb_query_tree_reply(con, rc, &e))) {
+		iferr(1, "unable to query tree from root window", e);
+	} else if (rt->children_len) {
+		xcb_window_t *w = xcb_query_tree_children(rt);
+		for (i = 0; i < rt->children_len; i++)
+			if (!wintrans(w[i])) {
+				manage(w[i], 1);
+				w[i] = XCB_WINDOW_NONE;
+			}
+		for (i = 0; i < rt->children_len; i++)
+			if (w[i] != XCB_WINDOW_NONE)
+				manage(w[i], 1);
+	}
+	free(rt);
+
+	/* focus active window and/or move the pointer to be in the center */
 	if (winprop(root, netatom[NET_ACTIVE], &sel) && (c = wintoclient(sel))) {
 		focus(c);
 		xcb_warp_pointer(con, root, root, 0, 0, 0, 0, c->x + (c->w / 2), c->y + (c->h / 2));
@@ -204,13 +256,14 @@ int main(int argc, char *argv[])
 	}
 
 	confd = xcb_get_file_descriptor(con);
-	nfds = MAX(confd, sockfd) + 1;
 	while (running) {
 		xcb_flush(con);
 		FD_ZERO(&read_fds);
 		FD_SET(sockfd, &read_fds);
 		FD_SET(confd, &read_fds);
+		nfds = MAX(confd, sockfd) + 1;
 		if (select(nfds, &read_fds, NULL, NULL, NULL) > 0) {
+			/* socket commands */
 			if (FD_ISSET(sockfd, &read_fds)) {
 				cmdfd = accept(sockfd, NULL, 0);
 				if (cmdfd > 0 && (n = recv(cmdfd, buf, sizeof(buf) - 1, 0)) > 0) {
@@ -223,14 +276,21 @@ int main(int argc, char *argv[])
 					parsecmd(buf);
 				}
 			}
-			if (FD_ISSET(confd, &read_fds))
+			/* xcb events */
+			if (FD_ISSET(confd, &read_fds)) {
+				xcb_aux_sync(con);
 				while ((ev = xcb_poll_for_event(con))) {
 					dispatch(ev);
 					free(ev);
 				}
+			}
 		}
-		if (xcb_connection_has_error(con)) break;
-		if (needsrefresh) needsrefresh = refresh();
+		if (xcb_connection_has_error(con))
+			break;
+		if (needsrefresh)
+			needsrefresh = refresh();
+
+		/* handle dead status' and print existing ones if needed */
 		s = stats;
 		while (s) {
 			next = s->next;
@@ -740,8 +800,12 @@ void freewm(void)
 	while (panels) unmanage(panels->win, 0);
 	while (desks) unmanage(desks->win, 0);
 
-	FOR_CLIENTS(c, ws) clientmap(c);
-	xcb_aux_sync(con);
+	FOR_CLIENTS(c, ws) {
+		if (c->state & STATE_HIDDEN)
+			clientmap(c);
+		if (!restart)
+			MOVE(c->win, c->x, c->y);
+	}
 
 	while ((ws = workspaces)) {
 		while (ws->stack) unmanage(ws->stack->win, 0);
@@ -757,10 +821,9 @@ void freewm(void)
 	xcb_destroy_window(con, wmcheck);
 	xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT,
 			XCB_INPUT_FOCUS_POINTER_ROOT, XCB_CURRENT_TIME);
-
 	if (!restart)
 		xcb_delete_property(con, root, netatom[NET_ACTIVE]);
-	xcb_aux_sync(con);
+	xcb_flush(con);
 	xcb_disconnect(con);
 
 	if (restart) {
@@ -774,7 +837,6 @@ void freewm(void)
 
 	close(sockfd);
 	unlink(sock);
-	free(sock);
 }
 
 static void freews(Workspace *ws)
@@ -1034,7 +1096,7 @@ Rule *initrule(Rule *wr)
 #define FREEREG(str, wstr, reg) if (wstr) { regfree(reg); free(str); }
 
 	r = ecalloc(1, sizeof(Rule));
-	memcpy(r, wr, sizeof(Rule)); // NOLINT
+	memcpy(r, wr, sizeof(Rule));
 	if (wr->mon) { CPYSTR(r->mon, wr->mon); }
 	if (wr->title) { CPYSTR(r->title, wr->title); INITREG(r->title, &(r->titlereg)) }
 	if (wr->class) { CPYSTR(r->class, wr->class); INITREG(r->class, &(r->classreg)) }
@@ -1053,56 +1115,6 @@ error:
 #undef INITREG
 #undef FREEREG
 #undef CPYSTR
-}
-
-static void initscan(void)
-{
-	unsigned int i;
-	xcb_generic_error_t *e;
-	xcb_query_tree_reply_t *rt;
-
-	xcb_query_tree_cookie_t rc = xcb_query_tree(con, root);
-	if (!(rt = xcb_query_tree_reply(con, rc, &e))) {
-		iferr(1, "unable to query tree from root window", e);
-	} else if (rt->children_len) {
-		xcb_window_t *w = xcb_query_tree_children(rt);
-		for (i = 0; i < rt->children_len; i++)
-			if (!wintrans(w[i])) {
-				manage(w[i], 1);
-				w[i] = XCB_WINDOW_NONE;
-			}
-		for (i = 0; i < rt->children_len; i++)
-			if (w[i] != XCB_WINDOW_NONE)
-				manage(w[i], 1);
-	}
-	free(rt);
-}
-
-static void initsock(void)
-{
-	ssize_t len;
-	char *hostname = NULL;
-	int display = 0, screen = 0;
-	static struct sockaddr_un addr;
-
-	if (sockfd > 0) return;
-	if (xcb_parse_display(NULL, &hostname, &display, &screen)) {
-		len = snprintf(NULL, 0, "/tmp/dk_%s_%i_%i.socket", hostname, display, screen) + 1; // NOLINT
-		sock = ecalloc(1, len);
-		snprintf(sock, len, "/tmp/dk_%s_%i_%i.socket", hostname, display, screen); // NOLINT
-		free(hostname);
-	} else {
-		sock = ecalloc(1, (len = 15));
-		strlcpy(sock, "/tmp/dk.socket", len);
-	}
-	if (setenv("DKSOCK", sock, 1) < 0)
-		warn("unable to set DKSOCK environment variable");
-	addr.sun_family = AF_UNIX;
-	strlcpy(addr.sun_path, sock, sizeof(addr.sun_path));
-	check((sockfd = socket(AF_UNIX, SOCK_STREAM, 0)), "unable to create socket");
-	if (sock) unlink(sock);
-	check(bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)), "unable to bind socket");
-	check(listen(sockfd, SOMAXCONN), "unable to listen on socket");
 }
 
 Status *initstatus(Status *tmp)
@@ -1139,16 +1151,6 @@ static void initwm(void)
 	unsigned int i;
 	xcb_cursor_context_t *ctx;
 	const xcb_query_extension_reply_t *ext;
-	struct sigaction sa;
-	int sigs[] = { SIGTERM, SIGINT, SIGHUP, SIGCHLD };
-
-	sa.sa_handler = sighandle;
-	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = SA_RESTART;
-	for (i = 0; i < LEN(sigs); i++)
-		check(sigaction(sigs[i], &sa, NULL), "unable to setup signal handler");
-	/* ignore SIGPIPE otherwise write() on broken pipes will crash and burn */
-	signal(SIGPIPE, SIG_IGN);
 
 	check(xcb_cursor_context_new(con, scr, &ctx), "unable to create cursor context");
 	for (i = 0; i < LEN(cursors); i++)
@@ -1183,7 +1185,6 @@ static void initwm(void)
 	PROP(REPLACE, root, netatom[NET_WM_CHECK], XCB_ATOM_WINDOW, 32, 1, &wmcheck);
 	PROP(REPLACE, root, netatom[NET_SUPPORTED], XCB_ATOM_ATOM, 32, LEN(netatom), netatom);
 	xcb_delete_property(con, root, netatom[NET_CLIENTS]);
-
 
 	uint32_t rm = monitors->next ? (rootmask | XCB_EVENT_MASK_POINTER_MOTION) : rootmask;
 	uint32_t val[] = { rm, cursor[CURS_NORMAL] };
@@ -1249,13 +1250,14 @@ void manage(xcb_window_t win, int scan)
 	DBG("manage: 0x%08x - %d,%d @ %dx%d", win, g->x, g->y, g->width, g->height)
 	if (winprop(win, netatom[NET_WM_TYPE], &type)) {
 		DBG("manage: 0x%08x has NET_WM_TYPE", win);
-		if (type == netatom[NET_TYPE_DOCK])       initpanel(win, g);
-		else if (type == netatom[NET_TYPE_DESK])  initdesk(win, g);
-		else if (!wa->override_redirect)          goto client;
-
+		if (type == netatom[NET_TYPE_DOCK])
+			initpanel(win, g);
+		else if (type == netatom[NET_TYPE_DESK])
+			initdesk(win, g);
+		else if (!wa->override_redirect)
+			goto client;
 		/* never reached for normal windows, only panels, desktops, and override_redirect windows */
 		setwinstate(win, XCB_ICCCM_WM_STATE_NORMAL);
-
 	} else if (!wa->override_redirect) {
 client:
 		DBG("manage: 0x%08x has no NET_WM_TYPE", win);
@@ -1263,7 +1265,6 @@ client:
 		if (scan && !(wa->map_state == XCB_MAP_STATE_VIEWABLE
 					|| (winprop(win, wmatom[WM_STATE], &state) && state == XCB_ICCCM_WM_STATE_ICONIC)))
 			goto end;
-
 		initclient(win, g);
 		PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &win);
 	}
@@ -1633,6 +1634,10 @@ static int refresh(void)
 
 	DBG("refresh: focusing first client: %s", selws->sel ? selws->sel->title : "NONE")
 	focus(NULL);
+	/* if (selws->stack != selws->sel && FULLSCREEN(selws->sel)) */
+	/* 	focus(selws->sel); */
+	/* else */
+	/* 	focus(NULL); */
 
 	return 0;
 #undef MAP
@@ -1938,17 +1943,19 @@ void showhide(Client *c)
 		if (c->y < m->y - (c->h + globalcfg[GLB_MIN_XY].val) || c->y > m->y + (m->h - globalcfg[GLB_MIN_XY].val))
 			c->y = CLAMP(c->y, m->y - globalcfg[GLB_MIN_XY].val, m->y + m->h - (c->h - globalcfg[GLB_MIN_XY].val));
 
-		if (c->state & STATE_HIDDEN)
-			clientunmap(c);
+		if (c->state & STATE_FULLSCREEN && !(c->state & STATE_FAKEFULL) && (c->w != m->w || c->h != m->h))
+			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, 0);
+		else if (FLOATING(c))
+			resize(c, c->x, c->y, c->w, c->h, c->bw);
 		else
-			clientmap(c);
+			MOVE(c->win, c->x, c->y);
 
 		showhide(c->snext);
 	} else {
 		DBG("showhide: ws: %d -- hiding window : %s", c->ws->num + 1, c->title)
 		showhide(c->snext);
 		if (!(c->state & STATE_STICKY)) {
-			clientunmap(c);
+			MOVE(c->win, W(c) * -2, c->y);
 		} else if (c->ws != selws && m == selws->mon) {
 			Client *sel = lastws->sel == c ? c : selws->sel;
 			setworkspace(c, selws->num, 0);

@@ -6,5 +6,6 @@ tags
 src/tags
 .cache
 compile_commands.json
+.clang-format
 *.o
 *.bak

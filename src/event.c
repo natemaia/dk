@@ -169,7 +169,7 @@ void configrequest(xcb_generic_event_t *ev)
 		if (c->state & STATE_IGNORECFG || e->x == W(c) * -2
 				|| e->x <= (c->ws->mon->x - c->w) + globalcfg[GLB_MIN_WH].val)
 			return;
-		DBG("configrequest: managed %s client 0x%08x", FLOATING(c) ?"floating":"tiled", e->window)
+		DBG("configrequest: managed %s client 0x%08x", FLOATING(c) ? "floating" : "tiled", e->window)
 		if (e->value_mask & XCB_CONFIG_WINDOW_BORDER_WIDTH) {
 			DBG("configrequest: bw: %d -> %d", c->bw, e->border_width)
 			c->bw = e->border_width;

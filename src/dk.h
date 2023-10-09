@@ -34,19 +34,10 @@
 #endif
 
 #ifndef VERSION
-	#define VERSION "1.0"
+	#define VERSION "1.9"
 #endif
 
-#ifndef NAN
-	#ifdef __GNUC_PREREQ
-		#if __GNUC_PREREQ (3, 3)
-			#define NAN (__builtin_nanf(""))
-		#endif
-	#else
-		#define NAN (0.0f / 0.0f)
-	#endif
-#endif
-
+#define NAN                   (0.0f / 0.0f)
 #define LEN(x)                (sizeof(x) / sizeof(*x))
 #define MIN(a, b)             ((a) < (b) ? (a) : (b))
 #define MAX(a, b)             ((a) > (b) ? (a) : (b))

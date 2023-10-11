@@ -1,4 +1,5 @@
-/*	$OpenBSD: strlcpy.c,v/strlcat.c,v 1.16 2019/01/25 00:19:25 millert Exp $	*/
+/*	$OpenBSD: strlcpy.c,v/strlcat.c,v 1.16 2019/01/25 00:19:25 millert Exp $
+ */
 
 /*
  * Copyright (c) 1998, 2015 Todd C. Miller <Todd.Miller@courtesan.com>
@@ -19,7 +20,6 @@
 #include <sys/types.h>
 
 #include <string.h>
-
 
 size_t strlcat(char *dst, const char *src, size_t dsize)
 {

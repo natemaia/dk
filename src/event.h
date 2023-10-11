@@ -6,7 +6,6 @@
 
 #pragma once
 
-
 void buttonpress(xcb_generic_event_t *ev);
 void buttonrelease(int move);
 void clientmessage(xcb_generic_event_t *ev);

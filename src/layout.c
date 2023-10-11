@@ -22,7 +22,6 @@
 #include "layout.h"
 #include "parse.h"
 
-
 int dwindle(Workspace *ws)
 {
 	Client *c;
@@ -30,7 +29,8 @@ int dwindle(Workspace *ws)
 	unsigned int i, n, x, y;
 	int w, h, ww, g, f = 0, ret = 1;
 
-	if (!(n = tilecount(ws))) return 1;
+	if (!(n = tilecount(ws)))
+		return 1;
 
 	if (globalcfg[GLB_SMART_GAP].val && n == 1)
 		g = 0, ws->smartgap = 1;
@@ -47,7 +47,8 @@ int dwindle(Workspace *ws)
 		unsigned int ox = x, oy = y;
 		int *p = (i % 2) ? &h : &w;
 		int b = globalcfg[GLB_SMART_BORDER].val && n == 1 ? 0 : c->bw;
-		if (i < n - 1) *p /= 2;
+		if (i < n - 1)
+			*p /= 2;
 		switch (i % 4) {
 		case 0: y += h; break;
 		case 1: x += w; break;
@@ -62,12 +63,17 @@ int dwindle(Workspace *ws)
 			w = ww - ((ww * ws->msplit) + g / 2);
 		}
 		if (f || *p - g - (2 * b) < globalcfg[GLB_MIN_WH].val) {
-			if (f) { popfloat(c); continue; }
+			if (f) {
+				popfloat(c);
+				continue;
+			}
 			f = 1;
 			*p *= 2;
 			ret = -1;
-			if (i % 2) y = oy;
-			else       x = ox;
+			if (i % 2)
+				y = oy;
+			else
+				x = ox;
 		}
 		resizehint(c, x + g, y + g, w - g - (2 * b), h - g - (2 * b), b, 0, 0);
 	}
@@ -82,7 +88,8 @@ int grid(Workspace *ws)
 	int wx, wy, ww, wh;
 	int i, n, g, cols, rows, col, row;
 
-	if (!(n = tilecount(ws))) return 1;
+	if (!(n = tilecount(ws)))
+		return 1;
 	for (cols = 0; cols <= n / 2; cols++)
 		if (cols * cols >= n)
 			break;
@@ -100,7 +107,8 @@ int grid(Workspace *ws)
 	else
 		g = ws->gappx, ws->smartgap = 0;
 
-	for (i = col = row = 0, c = nexttiled(ws->clients); c; i++, c = nexttiled(c->next)) {
+	for (i = col = row = 0, c = nexttiled(ws->clients); c;
+		 i++, c = nexttiled(c->next)) {
 		if (i / MAX(1, rows) + 1 > cols - n % cols)
 			rows = n / cols + 1;
 		int b = globalcfg[GLB_SMART_BORDER].val && n == 1 ? 0 : c->bw;
@@ -126,7 +134,8 @@ int ltile(Workspace *ws)
 	int mw, my, sw, sy, ss, ssw, ssy, ns = 1;
 	int minh = globalcfg[GLB_MIN_WH].val;
 
-	if (!(n = tilecount(ws))) return 1;
+	if (!(n = tilecount(ws)))
+		return 1;
 	mw = ss = sw = ssw = 0;
 	int geo[n + 1][4];
 	int wx = m->wx + ws->padl;
@@ -152,7 +161,8 @@ int ltile(Workspace *ws)
 	if (!ws->nmaster)
 		ss = 0;
 
-	for (i = 0, my = sy = ssy = g, c = nexttiled(ws->clients); c; c = nexttiled(c->next), ++i) {
+	for (i = 0, my = sy = ssy = g, c = nexttiled(ws->clients); c;
+		 c = nexttiled(c->next), ++i) {
 		if (i < ws->nmaster) {
 			remain = MIN(n, ws->nmaster) - i;
 			x = g;
@@ -162,8 +172,9 @@ int ltile(Workspace *ws)
 			remain = MIN(n - ws->nmaster, ws->nstack) - (i - ws->nmaster);
 			x = mw + (g / ns);
 			y = &sy;
-			geo[i][2] = (sw - g * (5 - ns - ss) / 2)
-				+ (!ws->nmaster && n > ws->nmaster + ws->nstack ? g / 2 : 0);
+			geo[i][2] =
+				(sw - g * (5 - ns - ss) / 2) +
+				(!ws->nmaster && n > ws->nmaster + ws->nstack ? g / 2 : 0);
 		} else {
 			remain = n - i;
 			x = mw + sw + (g / ns) - (!ws->nmaster ? g / 2 : 0);
@@ -183,7 +194,8 @@ int ltile(Workspace *ws)
 		if (!c->hoff && geo[i][3] - (2 * bw) < minh) {
 			popfloat(c);
 			continue;
-		} else if (remain > 1 && (remain - 1) * (minh + g + (2 * bw)) > available) {
+		} else if (remain > 1 &&
+				   (remain - 1) * (minh + g + (2 * bw)) > available) {
 			geo[i][3] += available - ((remain - 1) * (minh + g + (2 * bw)));
 			ret = -1;
 		} else if (remain == 1 && *y + geo[i][3] != wh - g) {
@@ -191,7 +203,8 @@ int ltile(Workspace *ws)
 				if (geo[p][3] + available < minh + (2 * bw)) {
 					geo[p][3] = minh + (2 * pbw);
 					geo[i][1] = geo[p][1] + geo[p][3] + g + (2 * pbw);
-					geo[i][3] = (wh - (2 * g)) - (geo[p][1] + geo[p][3]) - (2 * pbw);
+					geo[i][3] =
+						(wh - (2 * g)) - (geo[p][1] + geo[p][3]) - (2 * pbw);
 					ret = -1;
 				} else if (geo[i][3] <= minh) {
 					geo[p][3] -= minh - geo[i][3] + (2 * bw);
@@ -221,7 +234,7 @@ update:
 		if (geo[i][3] <= globalcfg[GLB_MIN_WH].val)
 			ret = -1;
 		resizehint(c, geo[i][0], geo[i][1], geo[i][2], geo[i][3],
-				!globalcfg[GLB_SMART_BORDER].val || n > 1 ? c->bw : 0, 0, 0);
+				   !globalcfg[GLB_SMART_BORDER].val || n > 1 ? c->bw : 0, 0, 0);
 	}
 	xcb_aux_sync(con);
 	return ret;
@@ -241,9 +254,10 @@ int mono(Workspace *ws)
 		int b = globalcfg[GLB_SMART_BORDER].val ? 0 : ws->sel->bw;
 
 		for (c = nexttiled(ws->clients); c; c = nexttiled(c->next)) {
-			resizehint(c, ws->mon->wx + ws->padl + g, ws->mon->wy + ws->padt + g,
-					ws->mon->ww - ws->padl - ws->padr - (2 * g) - (2 * b),
-					ws->mon->wh - ws->padt - ws->padb - (2 * g) - (2 * b), b, 0, 0);
+			resizehint(
+				c, ws->mon->wx + ws->padl + g, ws->mon->wy + ws->padt + g,
+				ws->mon->ww - ws->padl - ws->padr - (2 * g) - (2 * b),
+				ws->mon->wh - ws->padt - ws->padb - (2 * g) - (2 * b), b, 0, 0);
 		}
 		xcb_aux_sync(con);
 	}
@@ -258,7 +272,8 @@ int rtile(Workspace *ws)
 	int mw, my, sw, sy, ss, ssw, ssy, ns = 1;
 	int minh = globalcfg[GLB_MIN_WH].val;
 
-	if (!(n = tilecount(ws))) return 1;
+	if (!(n = tilecount(ws)))
+		return 1;
 	mw = ss = sw = ssw = 0;
 	int geo[n + 1][4];
 	int wx = m->wx + ws->padl;
@@ -284,7 +299,8 @@ int rtile(Workspace *ws)
 	if (!ws->nmaster)
 		ss = 0;
 
-	for (i = 0, my = sy = ssy = g, c = nexttiled(ws->clients); c; c = nexttiled(c->next), ++i) {
+	for (i = 0, my = sy = ssy = g, c = nexttiled(ws->clients); c;
+		 c = nexttiled(c->next), ++i) {
 		if (i < ws->nmaster) {
 			remain = MIN(n, ws->nmaster) - i;
 			x = sw + ssw + (g / ns);
@@ -293,17 +309,21 @@ int rtile(Workspace *ws)
 		} else if (i - ws->nmaster < ws->nstack) {
 			remain = MIN(n - ws->nmaster, ws->nstack) - (i - ws->nmaster);
 			x = n <= ws->nmaster + ws->nstack
-				? g
-				: (ssw + g / ns) - (!ws->nmaster && n > ws->nmaster + ws->nstack ? g / 2 : 0);
+					? g
+					: (ssw + g / ns) -
+						  (!ws->nmaster && n > ws->nmaster + ws->nstack ? g / 2
+																		: 0);
 			y = &sy;
-			geo[i][2] = (sw - g * (5 - ns - ss) / 2)
-				+ (!ws->nmaster && n > ws->nmaster + ws->nstack ? g / 2 : 0);
+			geo[i][2] =
+				(sw - g * (5 - ns - ss) / 2) +
+				(!ws->nmaster && n > ws->nmaster + ws->nstack ? g / 2 : 0);
 		} else {
 			remain = n - i;
 			x = g;
 			y = &ssy;
 			geo[i][2] = ssw - g * (5 - ns) / 2;
-			if (!ws->nmaster) geo[i][2] += g / 2;
+			if (!ws->nmaster)
+				geo[i][2] += g / 2;
 		}
 		geo[i][0] = wx + x;
 		geo[i][1] = wy + *y;
@@ -318,7 +338,8 @@ int rtile(Workspace *ws)
 		if (!c->hoff && geo[i][3] - (2 * bw) < minh) {
 			popfloat(c);
 			continue;
-		} else if (remain > 1 && (remain - 1) * (minh + g + (2 * bw)) > available) {
+		} else if (remain > 1 &&
+				   (remain - 1) * (minh + g + (2 * bw)) > available) {
 			geo[i][3] += available - ((remain - 1) * (minh + g + (2 * bw)));
 			ret = -1;
 		} else if (remain == 1 && *y + geo[i][3] != wh - g) {
@@ -326,7 +347,8 @@ int rtile(Workspace *ws)
 				if (geo[p][3] + available < minh + (2 * bw)) {
 					geo[p][3] = minh + (2 * pbw);
 					geo[i][1] = geo[p][1] + geo[p][3] + g + (2 * pbw);
-					geo[i][3] = (wh - (2 * g)) - (geo[p][1] + geo[p][3]) - (2 * pbw);
+					geo[i][3] =
+						(wh - (2 * g)) - (geo[p][1] + geo[p][3]) - (2 * pbw);
 					ret = -1;
 				} else if (geo[i][3] <= minh) {
 					geo[p][3] -= minh - geo[i][3] + (2 * bw);
@@ -356,7 +378,7 @@ update:
 		if (geo[i][3] <= globalcfg[GLB_MIN_WH].val)
 			ret = -1;
 		resizehint(c, geo[i][0], geo[i][1], geo[i][2], geo[i][3],
-				!globalcfg[GLB_SMART_BORDER].val || n > 1 ? c->bw : 0, 0, 0);
+				   !globalcfg[GLB_SMART_BORDER].val || n > 1 ? c->bw : 0, 0, 0);
 	}
 	xcb_aux_sync(con);
 	return ret;
@@ -369,7 +391,8 @@ int spiral(Workspace *ws)
 	unsigned int i, n, x, y;
 	int w, h, ww, g, f = 0, ret = 1;
 
-	if (!(n = tilecount(ws))) return 1;
+	if (!(n = tilecount(ws)))
+		return 1;
 
 	if (globalcfg[GLB_SMART_GAP].val && n == 1)
 		g = 0, ws->smartgap = 1;
@@ -388,8 +411,10 @@ int spiral(Workspace *ws)
 		int b = globalcfg[GLB_SMART_BORDER].val && n == 1 ? 0 : c->bw;
 		if (i < n - 1) {
 			*p /= 2;
-			if (i % 4 == 2)      x += w;
-			else if (i % 4 == 3) y += h;
+			if (i % 4 == 2)
+				x += w;
+			else if (i % 4 == 3)
+				y += h;
 		}
 		switch (i % 4) {
 		case 0: y -= h; break;
@@ -406,12 +431,17 @@ int spiral(Workspace *ws)
 		}
 
 		if (f || *p - g - (2 * b) < globalcfg[GLB_MIN_WH].val) {
-			if (f) { popfloat(c); continue; }
+			if (f) {
+				popfloat(c);
+				continue;
+			}
 			f = 1;
 			*p *= 2;
 			ret = -1;
-			if (i % 2) y = oy;
-			else       x = ox;
+			if (i % 2)
+				y = oy;
+			else
+				x = ox;
 		}
 		resizehint(c, x + g, y + g, w - (2 * b) - g, h - (2 * b) - g, b, 0, 0);
 	}

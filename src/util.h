@@ -6,7 +6,7 @@
 
 #pragma once
 
-#define UNLIKELY(x)     __builtin_expect(!!(x), 0)
+#define UNLIKELY(x) __builtin_expect(!!(x), 0)
 
 void check(int i, char *msg);
 void *ecalloc(size_t elems, size_t elemsize);

@@ -28,8 +28,8 @@ int main(int argc, char *argv[])
 	char *sock, *equal = NULL, *space = NULL, buf[BUFSIZ], resp[BUFSIZ];
 	struct sockaddr_un addr;
 	struct pollfd fds[] = {
-		{ -1,            POLLIN,  0 },
-		{ STDOUT_FILENO, POLLHUP, 0 },
+		{-1,            POLLIN,  0},
+		{STDOUT_FILENO, POLLHUP, 0},
 	};
 
 	if (argc == 1)
@@ -45,9 +45,11 @@ int main(int argc, char *argv[])
 	strlcpy(addr.sun_path, sock, sizeof(addr.sun_path));
 	if (addr.sun_path[0] == '\0')
 		err(1, "unable to write socket path: %s", sock);
-	check(connect(fd, (struct sockaddr *)&addr, sizeof(addr)), "unable to connect socket");
+	check(connect(fd, (struct sockaddr *)&addr, sizeof(addr)),
+		  "unable to connect socket");
 
-	for (i = 1, j = 0, offs = 1; n + 1 < sizeof(buf) && i < argc; i++, j = 0, offs = 1) {
+	for (i = 1, j = 0, offs = 1; n + 1 < sizeof(buf) && i < argc;
+		 i++, j = 0, offs = 1) {
 		if ((space = strchr(argv[i], ' ')) || (space = strchr(argv[i], '\t'))) {
 			if (!(equal = strchr(argv[i], '=')) || space < equal)
 				buf[n++] = '"';
@@ -84,7 +86,8 @@ int main(int argc, char *argv[])
 				break;
 			}
 		}
-		if (fds[1].revents & (POLLERR | POLLHUP)) break;
+		if (fds[1].revents & (POLLERR | POLLHUP))
+			break;
 	}
 	close(fd);
 	return ret;

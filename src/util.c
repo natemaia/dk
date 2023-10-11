@@ -43,11 +43,13 @@ char *itoa(int n, char *s)
 {
 	int j, i = 0, sign = n;
 
-	if (sign < 0) n = -n;
+	if (sign < 0)
+		n = -n;
 	do {
 		s[i++] = n % 10 + '0';
 	} while ((n /= 10) > 0);
-	if (sign < 0) s[i++] = '-';
+	if (sign < 0)
+		s[i++] = '-';
 	s[i] = '\0';
 	for (j = i - 1, i = 0; i < j; i++, j--) {
 		char c = s[i];
@@ -61,7 +63,8 @@ void respond(FILE *f, const char *fmt, ...)
 {
 	va_list ap;
 
-	if (!f) return;
+	if (!f)
+		return;
 	va_start(ap, fmt);
 	vfprintf(f, fmt, ap);
 	va_end(ap);

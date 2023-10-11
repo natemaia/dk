@@ -42,14 +42,15 @@
 #include "event.h"
 #include "layout.h"
 
-
 int adjustisetting(int i, int rel, int *val, int other, int border)
 {
 	int n;
 	int max = setws->mon->wh - setws->padb - setws->padt;
 
-	if (!rel && !(i -= *val)) return -1;
-	n = CLAMP(*val + i, 0, border ? (max / 6) - other : max / globalcfg[GLB_MIN_WH].val);
+	if (!rel && !(i -= *val))
+		return -1;
+	n = CLAMP(*val + i, 0,
+			  border ? (max / 6) - other : max / globalcfg[GLB_MIN_WH].val);
 	if (n != *val) {
 		*val = n;
 		needsrefresh = 1;
@@ -79,7 +80,9 @@ int adjustwsormon(char **argv)
 			cm = cur->mon;
 			argv++, nparsed++;
 		} else if (e == -1) {
-			respond(cmdresp, "!invalid window id: %s\nexpected hex e.g. 0x001fefe7", *argv);
+			respond(cmdresp,
+					"!invalid window id: %s\nexpected hex e.g. 0x001fefe7",
+					*argv);
 			return e;
 		} else {
 			/* use the selected window otherwise */
@@ -94,12 +97,12 @@ int adjustwsormon(char **argv)
 	}
 
 	/* parse directions: next, prev, last, etc. */
-	if ((opt = parseopt(*argv, directions,
-			(int)(sizeof(directions) / sizeof(*directions)))) >= 0) {
+	if ((opt = parseopt(*argv, dirs, (int)(sizeof(dirs) / sizeof(*dirs)))) >=
+		0) {
 		if (opt == DIR_LAST) {
-			ws = cmdusemon
-				? (lastmon && lastmon->connected) ? lastmon->ws : cur
-				: lastws ? lastws : cur;
+			ws = cmdusemon ? (lastmon && lastmon->connected) ? lastmon->ws : cur
+				 : lastws  ? lastws
+						   : cur;
 		} else if (opt == DIR_NEXT && cmdusemon) {
 			if (!(m = nextmon(cm->next)))
 				m = nextmon(monitors);
@@ -107,12 +110,14 @@ int adjustwsormon(char **argv)
 		} else if (opt == DIR_NEXT) {
 			ws = cur->next ? cur->next : workspaces;
 		} else if (cmdusemon && opt == DIR_PREV) {
-			for (m = nextmon(monitors); m && nextmon(m->next)
-					&& nextmon(m->next) != cm; m = nextmon(m->next))
+			for (m = nextmon(monitors);
+				 m && nextmon(m->next) && nextmon(m->next) != cm;
+				 m = nextmon(m->next))
 				;
 			ws = m ? m->ws : selws;
 		} else if (opt == DIR_PREV) {
-			FIND_PREV(ws, cur, workspaces);
+			FIND_PREV (ws, cur, workspaces)
+				;
 		} else {
 			int r = 0;
 			Workspace *save = cur;
@@ -125,12 +130,14 @@ int adjustwsormon(char **argv)
 					} else
 						ws = cur->next ? cur->next : workspaces;
 				} else if (cmdusemon) {
-					for (m = nextmon(monitors); m && nextmon(m->next)
-							&& nextmon(m->next) != cm; m = nextmon(m->next))
+					for (m = nextmon(monitors);
+						 m && nextmon(m->next) && nextmon(m->next) != cm;
+						 m = nextmon(m->next))
 						;
 					ws = m ? m->ws : selws;
 				} else {
-					FIND_PREV(ws, cur, workspaces);
+					FIND_PREV (ws, cur, workspaces)
+						;
 				}
 				cur = ws;
 				cm = ws->mon;
@@ -140,24 +147,35 @@ int adjustwsormon(char **argv)
 			}
 		}
 	} else {
-		/* with no direction passed we search for workspace/monitor name or index */
+		/* with no direction passed we search for workspace/monitor name or
+		 * index */
 		ws = parsewsormon(*argv, cmdusemon);
 	}
 
 	if (ws) {
-		DBG("adjustwsormon: using workspace %d : monitor %s", ws->num + 1, ws->mon->name)
+		DBG("adjustwsormon: using workspace %d : monitor %s", ws->num + 1,
+			ws->mon->name)
 		nparsed++;
 		if ((cmdc && ws != cmdc->ws) || ws != selws || selws->mon != ws->mon) {
-			DBG("adjustwsormon: %s client: %s", fn == cmdsend ? "sending" : fn == cmdfollow ? "following" : "viewing", cmdc ? cmdc->title : "none");
+			DBG("adjustwsormon: %s client: %s",
+				fn == cmdsend     ? "sending"
+				: fn == cmdfollow ? "following"
+								  : "viewing",
+				cmdc ? cmdc->title : "none");
 			lytchange = fn != cmdsend && ws->layout != selws->layout;
 			fn(ws);
 			wschange = 1;
 		}
 	} else {
 		if (cmdusemon)
-			respond(cmdresp, "!%s mon: %s\nexpected integer or monitor name e.g. HDMI-A-0", ebadarg, *argv);
+			respond(
+				cmdresp,
+				"!%s mon: %s\nexpected integer or monitor name e.g. HDMI-A-0",
+				ebadarg, *argv);
 		else
-			respond(cmdresp, "!%s ws: %s\nexpected integer or workspace name e.g. 2", ebadarg, *argv);
+			respond(cmdresp,
+					"!%s ws: %s\nexpected integer or workspace name e.g. 2",
+					ebadarg, *argv);
 		return -1;
 	}
 	return nparsed;
@@ -168,19 +186,25 @@ int cmdborder(char **argv)
 	Client *c;
 	Workspace *ws;
 	int i, nparsed = 0, rel, col = 0, first;
-	int bw = border[BORD_WIDTH], old = border[BORD_WIDTH], ow = border[BORD_O_WIDTH];
+	int bw = border[BORD_WIDTH], old = border[BORD_WIDTH],
+		ow = border[BORD_O_WIDTH];
 
-#define COLOUR(type) if (!(++argv) || parsecolour(*argv, &border[BORD_##type]) < 0) goto badvalue
+#define COLOUR(type)                                                           \
+	if (!(++argv) || parsecolour(*argv, &border[BORD_##type]) < 0)             \
+	goto badvalue
 
 	while (*argv) {
 		int outer = 0;
-		if (!strcmp(*argv, "w") || !strcmp(*argv, "width") || (outer = !strcmp("ow", *argv)
-					|| !strcmp("outer", *argv) || !strcmp("outer_width", *argv)))
-		{
+		if (!strcmp(*argv, "w") || !strcmp(*argv, "width") ||
+			(outer = !strcmp("ow", *argv) || !strcmp("outer", *argv) ||
+					 !strcmp("outer_width", *argv))) {
 			col = 0, nparsed++, argv++;
-			if (!argv || (i = parseint(*argv, &rel, 1)) == INT_MIN) goto badvalue;
-			adjustisetting(i, rel, outer ? &ow : &bw, selws->gappx + (outer ? bw : 0), 1);
-		} else if (col || (first = !strcmp(*argv, "colour") || !strcmp(*argv, "color"))) {
+			if (!argv || (i = parseint(*argv, &rel, 1)) == INT_MIN)
+				goto badvalue;
+			adjustisetting(i, rel, outer ? &ow : &bw,
+						   selws->gappx + (outer ? bw : 0), 1);
+		} else if (col || (first = !strcmp(*argv, "colour") ||
+								   !strcmp(*argv, "color"))) {
 			if (!col)
 				col = 1, argv++, nparsed++;
 			if (!strcmp("f", *argv) || !strcmp("focus", *argv)) {
@@ -193,7 +217,8 @@ int cmdborder(char **argv)
 				COLOUR(O_FOCUS);
 			} else if (!strcmp("ou", *argv) || !strcmp("outer_urgent", *argv)) {
 				COLOUR(O_URGENT);
-			} else if (!strcmp("or", *argv) || !strcmp("outer_unfocus", *argv)) {
+			} else if (!strcmp("or", *argv) ||
+					   !strcmp("outer_unfocus", *argv)) {
 				COLOUR(O_UNFOCUS);
 			} else if (first) {
 				goto badvalue;
@@ -205,17 +230,19 @@ int cmdborder(char **argv)
 		} else {
 			break;
 badvalue:
-			respond(cmdresp, "!set border: invalid %s value: %s", *(argv - 1), *argv);
+			respond(cmdresp, "!set border: invalid %s value: %s", *(argv - 1),
+					*argv);
 			return -1;
 		}
 		argv++, nparsed++;
 	}
 	if (bw - ow < 1 && (unsigned int)ow != border[BORD_O_WIDTH])
-		respond(cmdresp, "!border outer exceeds limit: %d - maximum: %d", ow, bw - 1);
+		respond(cmdresp, "!border outer exceeds limit: %d - maximum: %d", ow,
+				bw - 1);
 	else if (bw - ow > 0)
 		border[BORD_O_WIDTH] = ow;
 	border[BORD_WIDTH] = bw;
-	FOR_CLIENTS(c, ws)
+	FOR_CLIENTS (c, ws)
 		if (!(c->state & STATE_NOBORDER) && c->bw == old)
 			c->bw = bw;
 	return nparsed;
@@ -228,11 +255,15 @@ int cmdcycle(__attribute__((unused)) char **argv)
 	Client *c = cmdc, *first;
 
 	if (FLOATING(c) || FULLSCREEN(c) || tilecount(c->ws) <= 1) {
-		respond(cmdresp, "!unable to cycle floating, fullscreen, or single tiled windows");
+		respond(
+			cmdresp,
+			"!unable to cycle floating, fullscreen, or single tiled windows");
 		return -1;
 	}
-	if (c == (first = nexttiled(selws->clients)) && !nexttiled(c->next)) return 0;
-	if (!(c = nexttiled(selws->sel->next))) c = first;
+	if (c == (first = nexttiled(selws->clients)) && !nexttiled(c->next))
+		return 0;
+	if (!(c = nexttiled(selws->sel->next)))
+		c = first;
 
 	/* TODO: avoid using focus() twice here, possibly just
 	 *
@@ -259,7 +290,8 @@ int cmdfakefull(__attribute__((unused)) char **argv)
 		if (c->w != c->ws->mon->w || c->h != c->ws->mon->h)
 			c->bw = c->old_bw;
 		if (!(c->state & STATE_FAKEFULL))
-			resize(c, c->ws->mon->x, c->ws->mon->y, c->ws->mon->w, c->ws->mon->h, c->bw);
+			resize(c, c->ws->mon->x, c->ws->mon->y, c->ws->mon->w,
+				   c->ws->mon->h, c->bw);
 		needsrefresh = 1;
 	}
 	return 0;
@@ -270,10 +302,11 @@ int cmdfloat(char **argv)
 	int nparsed = 0;
 	Client *c = cmdc;
 
-	if (!c || !c->ws->layout->func) return nparsed;
+	if (!c || !c->ws->layout->func)
+		return nparsed;
 	if (argv && *argv && !strcmp(*argv, "all")) {
 		nparsed++;
-		FOR_EACH(c, cmdc->ws->clients) {
+		FOR_EACH (c, cmdc->ws->clients) {
 			cmdc = c;
 			if (FLOATING(c) || c->state & STATE_WASFLOATING) {
 				if (FLOATING(c))
@@ -287,22 +320,27 @@ int cmdfloat(char **argv)
 	}
 
 	if (FULLSCREEN(c) || c->state & STATE_STICKY || c->state & STATE_FIXED) {
-		respond(cmdresp, "!unable to change floating state of fullscreen, sticky, or fixed size windows");
+		respond(cmdresp, "!unable to change floating state of fullscreen, "
+						 "sticky, or fixed size windows");
 		return nparsed;
 	}
 
 	if ((c->state ^= STATE_FLOATING) & STATE_FLOATING) {
 		Monitor *m = c->ws->mon;
 		DBG("cmdfloat: client state is now floating: %s", c->title)
-		if (c->old_x + c->old_y == m->wx + m->wy || c->old_x + c->old_y == m->x + m->y) {
-			DBG("cmdfloat: fitting within monitor bounds: %s - %d,%d %dx%d", m->name, m->wx, m->wy, m->ww, m->wh)
+		if (c->old_x + c->old_y == m->wx + m->wy ||
+			c->old_x + c->old_y == m->x + m->y) {
+			DBG("cmdfloat: fitting within monitor bounds: %s - %d,%d %dx%d",
+				m->name, m->wx, m->wy, m->ww, m->wh)
 			quadrant(c, &c->old_x, &c->old_y, &c->old_w, &c->old_h);
 		}
-		DBG("cmdfloat: resizing: %d,%d %dx%d", c->old_x, c->old_y, c->old_w, c->old_h)
+		DBG("cmdfloat: resizing: %d,%d %dx%d", c->old_x, c->old_y, c->old_w,
+			c->old_h)
 		resizehint(c, c->old_x, c->old_y, c->old_w, c->old_h, c->bw, 0, 0);
 	} else {
 		DBG("cmdfloat: client state is now tiled: %s", c->title)
-		DBG("cmdfloat: saving location and size: %d,%d %dx%d", c->x, c->y, c->w, c->h)
+		DBG("cmdfloat: saving location and size: %d,%d %dx%d", c->x, c->y, c->w,
+			c->h)
 		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 	}
 	needsrefresh = 1;
@@ -314,15 +352,17 @@ int cmdfocus(char **argv)
 	int i = 0, nparsed = 0, opt;
 	Client *c = cmdc;
 
-	if (FULLSCREEN(c) || !c->ws->clients->next) return nparsed;
+	if (FULLSCREEN(c) || !c->ws->clients->next)
+		return nparsed;
 	if (c != selws->sel) {
 		focus(c);
-		if (FLOATING(c)) restack(c->ws);
+		if (FLOATING(c))
+			restack(c->ws);
 		return nparsed;
 	}
-	if ((opt = parseopt(*argv, directions,
-			(int)(sizeof(directions) / sizeof(*directions)))) < 0 &&
-			(i = parseint(*argv, NULL, 0)) == INT_MIN) {
+	if ((opt = parseopt(*argv, dirs, (int)(sizeof(dirs) / sizeof(*dirs)))) <
+			0 &&
+		(i = parseint(*argv, NULL, 0)) == INT_MIN) {
 		respond(cmdresp, "!%s win focus: %s", ebadarg, *argv);
 		return -1;
 	}
@@ -333,12 +373,15 @@ int cmdfocus(char **argv)
 			c = selws->sel->next ? selws->sel->next : selws->clients;
 			direction--;
 		} else {
-			FIND_PREV(c, selws->sel, selws->clients);
+			FIND_PREV (c, selws->sel, selws->clients)
+				;
 			direction++;
 		}
-		if (c) focus(c);
+		if (c)
+			focus(c);
 	}
-	if (c && (FLOATING(c) || c->ws->layout->func == mono)) restack(c->ws);
+	if (c && (FLOATING(c) || c->ws->layout->func == mono))
+		restack(c->ws);
 	xcb_aux_sync(con);
 	ignore(XCB_ENTER_NOTIFY);
 	return nparsed;
@@ -347,7 +390,8 @@ int cmdfocus(char **argv)
 int cmdfollow(Workspace *ws)
 {
 	if (ws && cmdc && ws != cmdc->ws) {
-		DBG("cmdfollow: following client to workspace %d : monitor %s : %s", ws->num + 1, ws->mon->name, cmdc->title)
+		DBG("cmdfollow: following client to workspace %d : monitor %s : %s",
+			ws->num + 1, ws->mon->name, cmdc->title)
 		cmdsend(ws);
 		cmdview(ws);
 	}
@@ -368,7 +412,9 @@ int cmdgappx(char **argv)
 		respond(cmdresp, "!gap %s", enoargs);
 		return -1;
 	} else if ((i = parseint(*argv, &rel, 1)) == INT_MIN) {
-		respond(cmdresp, "!invalid value for gap: %s\n\nexpected integer e.g. 10", *argv);
+		respond(cmdresp,
+				"!invalid value for gap: %s\n\nexpected integer e.g. 10",
+				*argv);
 		return -1;
 	} else {
 		nparsed++;
@@ -383,7 +429,8 @@ int cmdhide(__attribute__((unused)) char **argv)
 	Client *c = cmdc;
 
 	c->state &= STATE_HIDDEN;
-	if (c == selws->sel) unfocus(c, 1);
+	if (c == selws->sel)
+		unfocus(c, 1);
 	showhide(c->ws->stack);
 	needsrefresh = 1;
 
@@ -410,7 +457,8 @@ int cmdlayout(char **argv)
 	for (unsigned int i = 0; layouts[i].name; i++)
 		if (!strcmp(layouts[i].name, *argv)) {
 			Client *c = NULL;
-			if (tilecount(setws) == 1) c = nexttiled(setws->clients);
+			if (tilecount(setws) == 1)
+				c = nexttiled(setws->clients);
 			if ((lytchange = &layouts[i] != setws->layout)) {
 				needsrefresh = 1;
 				if ((setws->layout = &layouts[i])->func == NULL && c) {
@@ -418,13 +466,14 @@ int cmdlayout(char **argv)
 					c->h = c->ws->mon->wh / 1.3;
 					gravitate(c, GRAV_CENTER, GRAV_CENTER, 0);
 					int x = c->x, y = c->y, w = c->w, h = c->h, bw = c->bw;
-					applysizehints(c, &x, &y, &w, &h, bw, 0 , 0);
+					applysizehints(c, &x, &y, &w, &h, bw, 0, 0);
 					resize(c, x, y, w, h, bw);
 				}
 			}
 			return 1;
 		}
-	respond(cmdresp, "!invalid layout name: %s\nexpected string e.g tile", *argv);
+	respond(cmdresp, "!invalid layout name: %s\nexpected string e.g tile",
+			*argv);
 	return -1;
 }
 
@@ -443,9 +492,11 @@ int cmdmors(char **argv)
 {
 	int i, rel = 1;
 
-	if ((i = parseint(*argv, &rel, 1)) == INT_MIN || adjustisetting(i, rel,
-				!strcmp("stack", *(argv - 1)) ? &setws->nstack : &setws->nmaster, 0, 0) == -1)
-	{
+	if ((i = parseint(*argv, &rel, 1)) == INT_MIN ||
+		adjustisetting(i, rel,
+					   !strcmp("stack", *(argv - 1)) ? &setws->nstack
+													 : &setws->nmaster,
+					   0, 0) == -1) {
 		return -1;
 	}
 	return 1;
@@ -482,13 +533,15 @@ int cmdmouse(char **argv)
 		} else {
 			break;
 badvalue:
-			respond(cmdresp, "!set mouse: invalid value for %s: %s", *(argv - 1), *argv);
+			respond(cmdresp, "!set mouse: invalid value for %s: %s",
+					*(argv - 1), *argv);
 			return -1;
 		}
 		argv++, nparsed++;
 	}
-	if (selws && selws->sel && (oldmove != mousemove
-				|| oldresize != mouseresize || oldmod != mousemod))
+	if (selws && selws->sel &&
+		(oldmove != mousemove || oldresize != mouseresize ||
+		 oldmod != mousemod))
 		grabbuttons(selws->sel);
 	return nparsed;
 }
@@ -497,7 +550,7 @@ int cmdmvstack(char **argv)
 {
 	char arg[8];
 	char *dir = "y";
-	char *newargv[] = { dir, arg, NULL };
+	char *newargv[] = {dir, arg, NULL};
 
 	if (!cmdc || FLOATING(cmdc) || FULLSCREEN(cmdc)) {
 		respond(cmdresp, "!no window available to move in the stack");
@@ -521,10 +574,11 @@ int cmdpad(char **argv)
 {
 	int i, rel, orig, nparsed = 0;
 
-#define PAD(v, max)                                                                       \
-	argv++, nparsed++, orig = v;                                                          \
-	if (!argv || (i = parseintclamp(*argv, &rel, v * -1, max)) == INT_MIN) goto badvalue; \
-	v = CLAMP(rel ? v + i : i, 0, max);                                                   \
+#define PAD(v, max)                                                            \
+	argv++, nparsed++, orig = v;                                               \
+	if (!argv || (i = parseintclamp(*argv, &rel, v * -1, max)) == INT_MIN)     \
+		goto badvalue;                                                         \
+	v = CLAMP(rel ? v + i : i, 0, max);                                        \
 	needsrefresh = needsrefresh || v != orig
 
 	while (*argv) {
@@ -539,7 +593,8 @@ int cmdpad(char **argv)
 		} else {
 			break;
 badvalue:
-			respond(cmdresp, "!set pad: invalid value for %s: %s", *(argv - 1), *argv);
+			respond(cmdresp, "!set pad: invalid value for %s: %s", *(argv - 1),
+					*argv);
 			return -1;
 		}
 		argv++, nparsed++;
@@ -558,9 +613,10 @@ int cmdresize(char **argv)
 	int x = INT_MIN, y = INT_MIN, w = INT_MIN, h = INT_MIN, bw = INT_MIN;
 	int ohoff, relx = 0, rely = 0, relw = 0, relh = 0, relbw = 0;
 
-#define ARG(val, rel, allowzero)                                                    \
-	argv++, nparsed++;                                                              \
-	if (!argv || (val = parseint(*argv, rel, allowzero)) == INT_MIN) goto badvalue; \
+#define ARG(val, rel, allowzero)                                               \
+	argv++, nparsed++;                                                         \
+	if (!argv || (val = parseint(*argv, rel, allowzero)) == INT_MIN)           \
+		goto badvalue;
 
 	if (!c) {
 		respond(cmdresp, "!no window available to resize");
@@ -572,10 +628,12 @@ int cmdresize(char **argv)
 	while (*argv) {
 		if (!strcmp("x", *argv)) {
 			argv++, nparsed++;
-			if (!argv || !parsegeom(*argv, 'x', &x, &relx, &xgrav)) goto badvalue;
+			if (!argv || !parsegeom(*argv, 'x', &x, &relx, &xgrav))
+				goto badvalue;
 		} else if (!strcmp("y", *argv)) {
 			argv++, nparsed++;
-			if (!argv || !parsegeom(*argv, 'y', &y, &rely, &ygrav)) goto badvalue;
+			if (!argv || !parsegeom(*argv, 'y', &y, &rely, &ygrav))
+				goto badvalue;
 		} else if (!strcmp("w", *argv) || !strcmp("width", *argv)) {
 			ARG(w, &relw, 0);
 		} else if (!strcmp("h", *argv) || !strcmp("height", *argv)) {
@@ -585,24 +643,29 @@ int cmdresize(char **argv)
 		} else {
 			break;
 badvalue:
-			respond(cmdresp, "!win resize: invalid value for %s: %s", *(argv - 1), *argv);
+			respond(cmdresp, "!win resize: invalid value for %s: %s",
+					*(argv - 1), *argv);
 			return -1;
 		}
 		argv++, nparsed++;
 	}
 
 	if (bw != INT_MIN) {
-		if (c->bw != (bw = CLAMP(relbw ? c->bw + bw : bw, 0, ws->mon->wh / 6))) {
-			if ((c->bw = bw) == 0) c->state |= STATE_NOBORDER;
+		if (c->bw !=
+			(bw = CLAMP(relbw ? c->bw + bw : bw, 0, ws->mon->wh / 6))) {
+			if ((c->bw = bw) == 0)
+				c->state |= STATE_NOBORDER;
 			needsrefresh = 1;
 		}
 	}
 
-	if (!FLOATING(c) && y != INT_MIN) movestack(y > 0 || ygrav == GRAV_BOTTOM ? 1 : -1);
+	if (!FLOATING(c) && y != INT_MIN)
+		movestack(y > 0 || ygrav == GRAV_BOTTOM ? 1 : -1);
 
 	if (!ws->layout->implements_resize) {
 		if (x != INT_MIN || w != INT_MIN || h != INT_MIN)
-			respond(cmdresp, "!unable to resize windows in %s layout", ws->layout->name);
+			respond(cmdresp, "!unable to resize windows in %s layout",
+					ws->layout->name);
 		goto end;
 	}
 
@@ -615,16 +678,21 @@ badvalue:
 		gravitate(c, xgrav, ygrav, 1);
 	} else if (ISTILE(ws)) {
 		if (w != INT_MIN) {
-			if (ws->layout->func == rtile) w += w * -2;
-			for (i = 0, t = nexttiled(ws->clients); t && t != c; t = nexttiled(t->next), i++)
+			if (ws->layout->func == rtile)
+				w += w * -2;
+			for (i = 0, t = nexttiled(ws->clients); t && t != c;
+				 t = nexttiled(t->next), i++)
 				;
-			sf = (ws->nmaster && i < ws->nmaster + ws->nstack) ? &ws->msplit : &ws->ssplit;
-			f = relw ? ((ws->mon->ww * *sf) + w) / ws->mon->ww : (float)w / ws->mon->ww;
+			sf = (ws->nmaster && i < ws->nmaster + ws->nstack) ? &ws->msplit
+															   : &ws->ssplit;
+			f = relw ? ((ws->mon->ww * *sf) + w) / ws->mon->ww
+					 : (float)w / ws->mon->ww;
 			if (f < 0.05 || f > 0.95) {
 				respond(cmdresp, "!width exceeded limit: %f", ws->mon->ww * f);
 			} else {
 				*sf = f;
-				if (h == INT_MIN) ws->layout->func(ws);
+				if (h == INT_MIN)
+					ws->layout->func(ws);
 			}
 		}
 		if (h != INT_MIN) {
@@ -635,13 +703,17 @@ badvalue:
 				c->hoff = ohoff;
 			}
 		}
-	} else if (w != INT_MIN || (h != INT_MIN && ws->layout->invert_split_direction)) {
+	} else if (w != INT_MIN ||
+			   (h != INT_MIN && ws->layout->invert_split_direction)) {
 		if (w != INT_MIN)
-			f = relw ? ((ws->mon->ww * ws->msplit) + w) / ws->mon->ww : (float)w / ws->mon->ww;
+			f = relw ? ((ws->mon->ww * ws->msplit) + w) / ws->mon->ww
+					 : (float)w / ws->mon->ww;
 		else
-			f = relh ? ((ws->mon->wh * ws->msplit) + h) / ws->mon->wh : (float)h / ws->mon->wh;
+			f = relh ? ((ws->mon->wh * ws->msplit) + h) / ws->mon->wh
+					 : (float)h / ws->mon->wh;
 		if (f < 0.05 || f > 0.95) {
-			respond(cmdresp, "!%s exceeded limit: %f", w != INT_MIN ? "width" : "height", ws->mon->ww * f);
+			respond(cmdresp, "!%s exceeded limit: %f",
+					w != INT_MIN ? "width" : "height", ws->mon->ww * f);
 		} else {
 			ws->msplit = f;
 			ws->layout->func(ws);
@@ -668,52 +740,76 @@ int cmdrule(char **argv)
 	int j, nparsed = 0, match;
 	unsigned int i, delete = 0, apply = 0;
 	Rule r = {
-		.x = -1, .y = -1, .w = -1, .h = -1, .ws = -1, .bw = -1,
-		.focus = 0, .state = STATE_NONE, .type = 0, .xgrav = GRAV_NONE, .ygrav = GRAV_NONE,
-		.cb = NULL, .mon = NULL, .inst = NULL, .class = NULL, .title = NULL,
+		.x = -1,
+		.y = -1,
+		.w = -1,
+		.h = -1,
+		.ws = -1,
+		.bw = -1,
+		.focus = 0,
+		.state = STATE_NONE,
+		.type = 0,
+		.xgrav = GRAV_NONE,
+		.ygrav = GRAV_NONE,
+		.cb = NULL,
+		.mon = NULL,
+		.inst = NULL,
+		.class = NULL,
+		.title = NULL,
 	};
 
-#define ARG(val)                                                           \
-	argv++, nparsed++;                                                     \
-	if (!argv || (j = parseint(*argv, NULL, 0)) == INT_MIN) goto badvalue; \
+#define ARG(val)                                                               \
+	argv++, nparsed++;                                                         \
+	if (!argv || (j = parseint(*argv, NULL, 0)) == INT_MIN)                    \
+		goto badvalue;                                                         \
 	val = j
-#define STR(val)                        \
-	argv++, nparsed++;                  \
-	if (!argv || !*argv) goto badvalue; \
+#define STR(val)                                                               \
+	argv++, nparsed++;                                                         \
+	if (!argv || !*argv)                                                       \
+		goto badvalue;                                                         \
 	val = *argv
-#define STATE(val)                                          \
-	argv++, nparsed++;                                      \
-	if (!argv || (j = parsebool(*argv)) < 0) goto badvalue; \
+#define STATE(val)                                                             \
+	argv++, nparsed++;                                                         \
+	if (!argv || (j = parsebool(*argv)) < 0)                                   \
+		goto badvalue;                                                         \
 	r.state |= j ? val : STATE_NONE
 
 	while (*argv) {
 		if (!strcmp(*argv, "class") || !strcmp(*argv, "match_class")) {
 			STR(r.class);
-		} else if (!strcmp(*argv, "instance") || !strcmp(*argv, "match_instance")) {
+		} else if (!strcmp(*argv, "instance") ||
+				   !strcmp(*argv, "match_instance")) {
 			STR(r.inst);
 		} else if (!strcmp(*argv, "title") || !strcmp(*argv, "match_title")) {
 			STR(r.title);
 		} else if (!strcmp(*argv, "type") || !strcmp(*argv, "match_type")) {
 			argv++, nparsed++;
-			if (!argv || !*argv) goto badvalue;
-			if (!strcmp(*argv, "splash"))      r.type = netatom[NET_TYPE_SPLASH];
-			else if (!strcmp(*argv, "dialog")) r.type = netatom[NET_TYPE_DIALOG];
-			else                               goto badvalue;
+			if (!argv || !*argv)
+				goto badvalue;
+			if (!strcmp(*argv, "splash"))
+				r.type = netatom[NET_TYPE_SPLASH];
+			else if (!strcmp(*argv, "dialog"))
+				r.type = netatom[NET_TYPE_DIALOG];
+			else
+				goto badvalue;
 
 		} else if (!strcmp(*argv, "mon")) {
 			STR(r.mon);
 		} else if (!strcmp(*argv, "ws")) {
 			argv++, nparsed++;
-			if (!argv) goto badvalue;
-			if ((r.ws = parseintclamp(*argv, NULL, 1, globalcfg[GLB_WS_NUM].val)) == INT_MIN) {
+			if (!argv)
+				goto badvalue;
+			if ((r.ws = parseintclamp(*argv, NULL, 1,
+									  globalcfg[GLB_WS_NUM].val)) == INT_MIN) {
 				r.ws = -1;
 				match = 0;
-				FOR_EACH(ws, workspaces)
+				FOR_EACH (ws, workspaces)
 					if ((match = !strcmp(ws->name, *argv))) {
 						r.ws = ws->num;
 						break;
 					}
-				if (!match) goto badvalue;
+				if (!match)
+					goto badvalue;
 			}
 		} else if (!strcmp(*argv, "callback")) {
 			argv++, nparsed++;
@@ -723,21 +819,27 @@ int cmdrule(char **argv)
 						r.cb = &callbacks[i];
 						break;
 					}
-			if (!r.cb) goto badvalue;
+			if (!r.cb)
+				goto badvalue;
 		} else if (!strcmp(*argv, "x")) {
 			argv++, nparsed++;
-			if (!argv || !parsegeom(*argv, 'x', &r.x, NULL, &r.xgrav)) goto badvalue;
+			if (!argv || !parsegeom(*argv, 'x', &r.x, NULL, &r.xgrav))
+				goto badvalue;
 		} else if (!strcmp(*argv, "y")) {
 			argv++, nparsed++;
-			if (!argv || !parsegeom(*argv, 'y', &r.y, NULL, &r.ygrav)) goto badvalue;
+			if (!argv || !parsegeom(*argv, 'y', &r.y, NULL, &r.ygrav))
+				goto badvalue;
 		} else if (!strcmp("w", *argv) || !strcmp("width", *argv)) {
 			ARG(r.w);
 		} else if (!strcmp("h", *argv) || !strcmp("height", *argv)) {
 			ARG(r.h);
 		} else if (!strcmp("bw", *argv) || !strcmp("border_width", *argv)) {
 			argv++, nparsed++;
-			if (!argv || (j = parseintclamp(*argv, NULL, 0, primary->h / 6)) == INT_MIN) goto badvalue;
-			if ((r.bw = j) == 0 && border[BORD_WIDTH]) r.state |= STATE_NOBORDER;
+			if (!argv ||
+				(j = parseintclamp(*argv, NULL, 0, primary->h / 6)) == INT_MIN)
+				goto badvalue;
+			if ((r.bw = j) == 0 && border[BORD_WIDTH])
+				r.state |= STATE_NOBORDER;
 		} else if (!strcmp(*argv, "float")) {
 			STATE(STATE_FLOATING);
 		} else if (!strcmp(*argv, "stick")) {
@@ -746,7 +848,8 @@ int cmdrule(char **argv)
 			STATE(STATE_IGNORECFG);
 		} else if (!strcmp(*argv, "focus")) {
 			argv++, nparsed++;
-			if (!argv || (j = parsebool(*argv)) < 0) goto badvalue;
+			if (!argv || (j = parsebool(*argv)) < 0)
+				goto badvalue;
 			r.focus = j;
 		} else if (!strcmp("apply", *argv)) {
 			apply = 1;
@@ -758,26 +861,30 @@ int cmdrule(char **argv)
 			delete = 1;
 			if (!strcmp("*", *(argv + 1))) {
 				nparsed += 2;
-				while (rules) freerule(rules);
+				while (rules)
+					freerule(rules);
 				return nparsed;
 			}
 		} else {
 			break;
 badvalue:
-			respond(cmdresp, "!rule: invalid value for %s: %s", *(argv - 1), *argv);
+			respond(cmdresp, "!rule: invalid value for %s: %s", *(argv - 1),
+					*argv);
 			return -1;
 		}
 		argv++, nparsed++;
 	}
 
-	if ((r.class || r.inst || r.title || r.type) && (r.ws != -1 || r.mon || r.focus || r.cb
-				|| r.state != STATE_NONE || r.x != -1 || r.y != -1 || r.w != -1
-				|| r.h != -1 || r.bw != -1 || r.xgrav != GRAV_NONE || r.ygrav != GRAV_NONE))
-	{
+	if ((r.class || r.inst || r.title || r.type) &&
+		(r.ws != -1 || r.mon || r.focus || r.cb || r.state != STATE_NONE ||
+		 r.x != -1 || r.y != -1 || r.w != -1 || r.h != -1 || r.bw != -1 ||
+		 r.xgrav != GRAV_NONE || r.ygrav != GRAV_NONE)) {
 #define M(a, b) (a == NULL || (b && !strcmp(a, b)))
 
-		FOR_EACH(pr, rules) { /* free any existing rule that uses the same matches */
-			if (M(r.class, pr->class) && M(r.inst, pr->inst) && M(r.title, pr->title)) {
+		FOR_EACH (
+			pr, rules) { /* free any existing rule that uses the same matches */
+			if (M(r.class, pr->class) && M(r.inst, pr->inst) &&
+				M(r.title, pr->title)) {
 				freerule(pr);
 				break;
 			}
@@ -786,9 +893,10 @@ badvalue:
 		if (!delete) {
 			if ((nr = initrule(&r)) && apply) {
 applyall:
-				FOR_CLIENTS(c, ws) {
+				FOR_CLIENTS (c, ws) {
 					clientrule(c, nr, 0);
-					if (c->cb) c->cb->func(c, 0);
+					if (c->cb)
+						c->cb->func(c, 0);
 				}
 				needsrefresh = 1;
 			}
@@ -805,16 +913,20 @@ int cmdsend(Workspace *ws)
 	Client *c = cmdc;
 
 	if (ws && c && ws != c->ws) {
-		DBG("cmdsend: sending client to workspace %d : monitor %s : %s", ws->num + 1, ws->mon->name, c->title)
+		DBG("cmdsend: sending client to workspace %d : monitor %s : %s",
+			ws->num + 1, ws->mon->name, c->title)
 		Monitor *old = c->ws->mon;
 		unfocus(c, 1);
 		setworkspace(c, ws->num, c != c->ws->sel);
 		if (ws->mon != old && ws->mon->ws == ws) {
-			DBG("cmdsend: relocating window: %s -- from %s to %s", c->title, old->name, ws->mon->name)
+			DBG("cmdsend: relocating window: %s -- from %s to %s", c->title,
+				old->name, ws->mon->name)
 			relocate(c, ws->mon, old);
 		}
 		if (FLOATING(c)) {
-			DBG("cmdsend: move/resize floating window: %s -- x: %d - y: %d - w: %d - h: %d", c->title, c->x, c->y, c->w, c->h)
+			DBG("cmdsend: move/resize floating window: %s -- x: %d - y: %d - "
+				"w: %d - h: %d",
+				c->title, c->x, c->y, c->w, c->h)
 			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
 		}
 		showhide(ws->stack);
@@ -840,11 +952,13 @@ int cmdset(char **argv)
 	while (*argv) {
 		if (!strcmp("ws", *argv)) {
 			argv++, nparsed++;
-			if (!argv) goto badvalue;
+			if (!argv)
+				goto badvalue;
 			if (!strcmp("_", *argv)) {
 				setws = &wsdef;
 				wsdef.mon = selmon;
-				if ((i = cmdws_(argv + 1)) == -1) return -1;
+				if ((i = cmdws_(argv + 1)) == -1)
+					return -1;
 				setws = selws;
 				argv += i + 1, nparsed += i + 1;
 				continue;
@@ -855,16 +969,20 @@ int cmdset(char **argv)
 		} else if (!strcmp("mon", *argv)) {
 			argv++, nparsed++;
 			if (!globalcfg[GLB_WS_STATIC].val) {
-				respond(cmdresp, "!unable to set workspace monitor without static_ws=true");
+				respond(
+					cmdresp,
+					"!unable to set workspace monitor without static_ws=true");
 				return -1;
 			} else if (!argv || !(ws = parsewsormon(*argv, 1))) {
-				respond(cmdresp, "!invalid monitor index or name: %s", argv ? *argv : NULL);
+				respond(cmdresp, "!invalid monitor index or name: %s",
+						argv ? *argv : NULL);
 				return -1;
 			}
 			assignws(setws, ws->mon);
 		} else if (!strcmp("name", *argv)) {
 			argv++, nparsed++;
-			if (!argv || !*argv) goto badvalue;
+			if (!argv || !*argv)
+				goto badvalue;
 			if (strcmp(setws->name, *argv)) {
 				strlcpy(setws->name, *argv, sizeof(setws->name));
 				names = 1;
@@ -878,16 +996,23 @@ int cmdset(char **argv)
 					needsrefresh = needsrefresh || globalcfg[j].val != i;
 					switch (globalcfg[j].type) {
 					case TYPE_BOOL:
-						if (!argv || (i = parsebool(*argv)) < 0) goto badvalue;
+						if (!argv || (i = parsebool(*argv)) < 0)
+							goto badvalue;
 						globalcfg[j].val = i;
-						if (j == GLB_OBEY_MOTIF) clientmotif();
+						if (j == GLB_OBEY_MOTIF)
+							clientmotif();
 						break;
 					case TYPE_NUMWS:
-						if (!argv || (i = parseintclamp(*argv, NULL, 1, 99)) == INT_MIN) goto badvalue;
-						if (i > globalcfg[j].val) updworkspaces(i);
+						if (!argv ||
+							(i = parseintclamp(*argv, NULL, 1, 99)) == INT_MIN)
+							goto badvalue;
+						if (i > globalcfg[j].val)
+							updworkspaces(i);
 						break;
 					case TYPE_INT:
-						if (!argv || (i = parseintclamp(*argv, NULL, 1, 10000)) == INT_MIN) goto badvalue;
+						if (!argv || (i = parseintclamp(*argv, NULL, 1,
+														10000)) == INT_MIN)
+							goto badvalue;
 						globalcfg[j].val = i;
 						break;
 					}
@@ -898,19 +1023,23 @@ int cmdset(char **argv)
 			if (!match)
 				for (j = 0; setcmds[j].str; j++)
 					if ((match = !strcmp(setcmds[j].str, *argv))) {
-						if ((i = setcmds[j].func(argv + 1)) == -1) return -1;
+						if ((i = setcmds[j].func(argv + 1)) == -1)
+							return -1;
 						argv += i + 1, nparsed += i + 1;
 						break;
 					}
-			if (match) continue;
+			if (match)
+				continue;
 			break;
 badvalue:
-			respond(cmdresp, "!set: invalid value for %s: %s", *(argv - 1), *argv);
+			respond(cmdresp, "!set: invalid value for %s: %s", *(argv - 1),
+					*argv);
 			return -1;
 		}
 		argv++, nparsed++;
 	}
-	if (names) setnetwsnames();
+	if (names)
+		setnetwsnames();
 	return nparsed;
 }
 
@@ -933,10 +1062,12 @@ int cmdsplit(char **argv)
 	float f = 0.0;
 
 	if ((f = parsefloat(*argv, &rel)) && f != NAN) {
-		float *ff = !strcmp("msplit", *(argv - 1)) ? &setws->msplit : &setws->ssplit;
+		float *ff =
+			!strcmp("msplit", *(argv - 1)) ? &setws->msplit : &setws->ssplit;
 		if (setws->layout->func && f != 0.0) {
 			float nf = rel ? CLAMP(f + *ff, 0.05, 0.95) : CLAMP(f, 0.05, 0.95);
-			if (nf != *ff) *ff = nf, needsrefresh = 1;
+			if (nf != *ff)
+				*ff = nf, needsrefresh = 1;
 		}
 		return 1;
 	}
@@ -946,38 +1077,51 @@ int cmdsplit(char **argv)
 int cmdstatus(char **argv)
 {
 	int i, nparsed = 0;
-	Status s = {
-		.num = -1, .type = STAT_BAR, .file = cmdresp, .path = NULL, .next = NULL
-	};
+	Status s = {.num = -1,
+				.type = STAT_BAR,
+				.file = cmdresp,
+				.path = NULL,
+				.next = NULL};
 
 	while (*argv) {
 		if (!strcmp("type", *argv)) {
 			argv++, nparsed++;
-			if (!strcmp("ws", *argv))          s.type = STAT_WS, wschange = 1;
-			else if (!strcmp("bar", *argv))    s.type = STAT_BAR;
-			else if (!strcmp("win", *argv))    s.type = STAT_WIN, winchange = 1;
-			else if (!strcmp("full", *argv))   s.type = STAT_FULL;
-			else if (!strcmp("layout", *argv)) s.type = STAT_LYT, lytchange = 1;
-			else                               goto badvalue;
+			if (!strcmp("ws", *argv))
+				s.type = STAT_WS, wschange = 1;
+			else if (!strcmp("bar", *argv))
+				s.type = STAT_BAR;
+			else if (!strcmp("win", *argv))
+				s.type = STAT_WIN, winchange = 1;
+			else if (!strcmp("full", *argv))
+				s.type = STAT_FULL;
+			else if (!strcmp("layout", *argv))
+				s.type = STAT_LYT, lytchange = 1;
+			else
+				goto badvalue;
 		} else if (!strcmp("num", *argv)) {
 			argv++, nparsed++;
-			if (!argv || (i = parseintclamp(*argv, NULL, -1, INT_MAX)) == INT_MIN) goto badvalue;
+			if (!argv ||
+				(i = parseintclamp(*argv, NULL, -1, INT_MAX)) == INT_MIN)
+				goto badvalue;
 			s.num = i;
 		} else if (!strcmp("file", *argv)) {
 			argv++, nparsed++;
-			if (!*argv) goto badvalue;
+			if (!*argv)
+				goto badvalue;
 			s.path = *argv;
 		} else {
 			break;
 badvalue:
-			respond(cmdresp, "!status: invalid value for %s: %s", *(argv - 1), *argv);
+			respond(cmdresp, "!status: invalid value for %s: %s", *(argv - 1),
+					*argv);
 			return -1;
 		}
 		argv++, nparsed++;
 	}
 
 	if (s.path && s.path[0] && !(s.file = fopen(s.path, "w")))
-		respond(cmdresp, "!unable to open file in write mode: %s: %s", s.path, strerror(errno));
+		respond(cmdresp, "!unable to open file in write mode: %s: %s", s.path,
+				strerror(errno));
 	if (s.file) {
 		if (s.num == 1) {
 			printstatus(&s, 0);
@@ -986,7 +1130,8 @@ badvalue:
 			printstatus(initstatus(&s), 1);
 		}
 	} else {
-		respond(cmdresp, "!unable to create status: %s", s.path ? s.path : "stdout");
+		respond(cmdresp, "!unable to create status: %s",
+				s.path ? s.path : "stdout");
 	}
 	return nparsed;
 }
@@ -997,17 +1142,20 @@ int cmdstick(__attribute__((unused)) char **argv)
 	Client *c = cmdc;
 
 	if (FULLSCREEN(c)) {
-		respond(cmdresp, "!unable to change sticky state of fullscreen windows");
+		respond(cmdresp,
+				"!unable to change sticky state of fullscreen windows");
 		return 0;
 	}
 	if (c->state & STATE_STICKY) {
 		ws = c->ws->num;
 		c->state &= ~STATE_STICKY;
-		PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL, 32, 1, &ws);
+		PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL, 32, 1,
+			 &ws);
 	} else {
 		cmdfloat(NULL);
 		c->state |= STATE_STICKY | STATE_FLOATING;
-		PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL, 32, 1, &ws);
+		PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL, 32, 1,
+			 &ws);
 	}
 	return 0;
 }
@@ -1017,25 +1165,31 @@ int cmdswap(__attribute__((unused)) char **argv)
 	static Client *last = NULL;
 	Client *c = cmdc, *old, *cur = NULL, *prev = NULL;
 
-	if (FLOATING(c) || (c->state & STATE_FULLSCREEN
-				&& c->w == c->ws->mon->w && c->h == c->ws->mon->h) || tilecount(c->ws) <= 1)
-	{
-		respond(cmdresp, "!unable to swap floating, fullscreen, or single tiled windows");
+	if (FLOATING(c) ||
+		(c->state & STATE_FULLSCREEN && c->w == c->ws->mon->w &&
+		 c->h == c->ws->mon->h) ||
+		tilecount(c->ws) <= 1) {
+		respond(
+			cmdresp,
+			"!unable to swap floating, fullscreen, or single tiled windows");
 		return 0;
 	}
 	if (c == nexttiled(c->ws->clients)) {
-		FIND_PREV(cur, last, c->ws->clients);
+		FIND_PREV (cur, last, c->ws->clients)
+			;
 		if (cur != c->ws->clients)
 			prev = nexttiled(cur->next);
 		if (!prev || prev != last) {
 			last = NULL;
-			if (!(c = nexttiled(c->next))) return 0;
+			if (!(c = nexttiled(c->next)))
+				return 0;
 		} else {
 			c = prev;
 		}
 	}
 	if (c != (old = nexttiled(c->ws->clients)) && !cur)
-		FIND_PREV(cur, c, c->ws->clients);
+		FIND_PREV (cur, c, c->ws->clients)
+			;
 	detach(c, 1);
 	if (c != old && cur && cur != c->ws->clients) {
 		last = old;
@@ -1051,9 +1205,11 @@ int cmdswap(__attribute__((unused)) char **argv)
 int cmdview(Workspace *ws)
 {
 	if (ws) {
-		DBG("cmdview: viewing workspace %d : monitor %s", ws->num + 1, ws->mon->name)
+		DBG("cmdview: viewing workspace %d : monitor %s", ws->num + 1,
+			ws->mon->name)
 		changews(ws, globalcfg[GLB_WS_STATIC].val ? 0 : !cmdusemon,
-				cmdusemon || (globalcfg[GLB_WS_STATIC].val && selws->mon != ws->mon));
+				 cmdusemon ||
+					 (globalcfg[GLB_WS_STATIC].val && selws->mon != ws->mon));
 	}
 	return 0;
 }
@@ -1067,18 +1223,22 @@ int cmdwin(char **argv)
 		if ((c = parseclient(*argv, &e))) {
 			cmdc = c;
 		} else if (e == -1) {
-			respond(cmdresp, "!invalid window id: %s\nexpected hex e.g. 0x001fefe7", *argv);
+			respond(cmdresp,
+					"!invalid window id: %s\nexpected hex e.g. 0x001fefe7",
+					*argv);
 			return -1;
 		} else {
 			int match = 0;
 			for (unsigned int ui = 0; wincmds[ui].str; ui++)
 				if ((match = !strcmp(wincmds[ui].str, *argv))) {
-					if (!cmdc || (e = wincmds[ui].func(argv + 1)) == -1) return -1;
+					if (!cmdc || (e = wincmds[ui].func(argv + 1)) == -1)
+						return -1;
 					nparsed += e;
 					argv += e;
 					break;
 				}
-			if (!match) break;
+			if (!match)
+				break;
 		}
 		argv++, nparsed++;
 	}
@@ -1109,34 +1269,42 @@ int cmdws_(char **argv)
 					wsdef.layout = &layouts[i];
 					break;
 				}
-			if (!match) goto badvalue;
-		} else if ((s = !strcmp(*argv, "master") ? &wsdef.nmaster
-					: !strcmp(*argv, "stack") ? &wsdef.nstack : NULL))
-		{
+			if (!match)
+				goto badvalue;
+		} else if ((s = !strcmp(*argv, "master")  ? &wsdef.nmaster
+						: !strcmp(*argv, "stack") ? &wsdef.nstack
+												  : NULL)) {
 			argv++, nparsed++;
-			if (!argv || (j = parseintclamp(*argv, NULL, 0, INT_MAX - 1)) == INT_MIN) goto badvalue;
+			if (!argv ||
+				(j = parseintclamp(*argv, NULL, 0, INT_MAX - 1)) == INT_MIN)
+				goto badvalue;
 			*s = j;
-		} else if ((ff = !strcmp(*argv, "msplit") ? &wsdef.msplit
-					: !strcmp(*argv, "ssplit") ? &wsdef.ssplit : NULL))
-		{
+		} else if ((ff = !strcmp(*argv, "msplit")   ? &wsdef.msplit
+						 : !strcmp(*argv, "ssplit") ? &wsdef.ssplit
+													: NULL)) {
 			argv++, nparsed++;
-			if (!argv || (f = parsefloat(*argv, NULL)) == NAN) goto badvalue;
+			if (!argv || (f = parsefloat(*argv, NULL)) == NAN)
+				goto badvalue;
 			*ff = CLAMP(f, 0.05, 0.95);
 		} else if (!strcmp(*argv, "gap")) {
 			argv++, nparsed++;
-			if (!argv || (j = parseintclamp(*argv, NULL, 0, primary->h / 6)) == INT_MIN) goto badvalue;
+			if (!argv ||
+				(j = parseintclamp(*argv, NULL, 0, primary->h / 6)) == INT_MIN)
+				goto badvalue;
 			wsdef.gappx = j;
 		} else if (!strcmp(*argv, "pad")) {
 			setws = &wsdef;
 			j = cmdpad(argv + 1);
 			setws = selws;
-			if (j == -1) return -1;
+			if (j == -1)
+				return -1;
 			nparsed += j;
 			argv += j;
 		} else {
 			break;
 badvalue:
-			respond(cmdresp, "!set ws=_: invalid value for %s: %s", *(argv - 1), *argv);
+			respond(cmdresp, "!set ws=_: invalid value for %s: %s", *(argv - 1),
+					*argv);
 			return -1;
 		}
 		argv++, nparsed++;
@@ -1144,7 +1312,7 @@ badvalue:
 
 	if (apply) {
 		Workspace *ws;
-		FOR_EACH(ws, workspaces) {
+		FOR_EACH (ws, workspaces) {
 			lytchange = lytchange || ws->layout != wsdef.layout;
 			ws->layout = wsdef.layout;
 			ws->gappx = wsdef.gappx;

@@ -280,9 +280,17 @@ rule MATCH float=true stick=true
 ```
 ---
 
-`ignore` (boolean) determine if the window should ignore configure request events.
+`ignore_cfg` (boolean) determine if the window should ignore configure request  
+events (size or location changes).
 ```
-rule MATCH ignore=true
+rule MATCH ignore_cfg=true
+```
+---
+
+`ignore_msg` (boolean) determine if the window should ignore client message  
+window activation events (grabbing focus).
+```
+rule MATCH ignore_msg=true
 ```
 ---
 

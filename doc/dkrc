@@ -133,9 +133,9 @@ fi
 	dkcmd rule class="^chromium$" mon="HDMI-A-0"
 
 	# open window(s) and use a callback function (user defined in config.h)
-	# we also ignore=true to stop the window from being resized on it's own from events
+	# we also ignore_cfg=true to stop the window from being resized on it's own from events
 	# eg. mpv --x11-name=albumart /path/to/media
-	dkcmd rule class="^mpv$" instance="^albumart$" float=true ignore=true callback=albumart bw=0
+	dkcmd rule class="^mpv$" instance="^albumart$" float=true ignore_cfg=true callback=albumart bw=0
 
 	# open window(s) in a floating state
 	dkcmd rule class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" float=true
@@ -143,8 +143,8 @@ fi
 	# open window(s) with a specific geometry and coordinates (floating only!)
 	dkcmd rule class="^google-chrome$" title="^open files$" float=true w=1280 h=720
 
-	# open window(s) with sticky and floating enabled to view on all workspaces.
-	dkcmd rule class="^stickyterm$" stick=true float=true w=1280 h=720
+	# open window(s) with ignore_msg=true to avoid focus being grabbed and changing workspace.
+	dkcmd rule class="^TelegramDesktop$" ignore_msg=true
 
 	# focus window and workspace on opening
 	dkcmd rule class="^firefox$" ws=1 focus=true
@@ -153,7 +153,7 @@ fi
 	dkcmd rule class="^firefox$" mon="HDMI-A-0"
 	dkcmd rule remove class="^firefox$"
 
-	# apply current rule set to all existing windows (useful for WM reload/restart)
+	# apply current rule set to all existing windows (used mainly for WM restart)
 	dkcmd rule apply '*'
 
 	# delete all rules

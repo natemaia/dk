@@ -122,8 +122,9 @@ enum States {
 	STATE_NEEDSMAP = 1 << 8,
 	STATE_WASFLOATING = 1 << 9,
 	STATE_IGNORECFG = 1 << 10,
-	STATE_ABOVE = 1 << 11,
-	STATE_HIDDEN = 1 << 12,
+	STATE_IGNOREMSG = 1 << 11,
+	STATE_ABOVE = 1 << 12,
+	STATE_HIDDEN = 1 << 13,
 };
 
 enum Cursors {

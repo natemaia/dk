@@ -150,7 +150,7 @@ void clientmessage(xcb_generic_event_t *ev)
 		} else if (e->type == netatom[NET_ACTIVE] && c != selws->sel) {
 			DBG("clientmessage: change NET_ACTIVE_WINDOW: %d", e->type)
 activate:
-			if (globalcfg[GLB_FOCUS_URGENT].val) {
+			if (globalcfg[GLB_FOCUS_URGENT].val && !(c->state & STATE_IGNOREMSG)) {
 				setnetstate(c->win, c->state);
 				if (c->ws != selws) {
 					unfocus(selws->sel, 1);

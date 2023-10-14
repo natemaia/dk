@@ -309,12 +309,21 @@ rule MATCH float=true stick=true
 \fR
 .fi
 .PP
-\fI\fCignore\fR (boolean) determine if the window should ignore configure
-request events.
+\fI\fCignore_cfg\fR (boolean) determine if the window should ignore configure
+request events (size or location changes).
 .IP
 .nf
 \fI\fC
-rule MATCH ignore=true
+rule MATCH ignore_cfg=true
+\fR
+.fi
+.PP
+\fI\fCignore_msg\fR (boolean) determine if the window should ignore client
+message window activation events (grabbing focus).
+.IP
+.nf
+\fI\fC
+rule MATCH ignore_msg=true
 \fR
 .fi
 .PP

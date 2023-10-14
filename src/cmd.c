@@ -772,7 +772,10 @@ int cmdrule(char **argv)
 	argv++, nparsed++;                                                         \
 	if (!argv || (j = parsebool(*argv)) < 0)                                   \
 		goto badvalue;                                                         \
-	r.state |= j ? val : STATE_NONE
+	if (j)                                                                     \
+		r.state |= val;                                                        \
+	else                                                                       \
+		r.state &= ~val
 
 	while (*argv) {
 		if (!strcmp(*argv, "class") || !strcmp(*argv, "match_class")) {
@@ -840,12 +843,16 @@ int cmdrule(char **argv)
 				goto badvalue;
 			if ((r.bw = j) == 0 && border[BORD_WIDTH])
 				r.state |= STATE_NOBORDER;
+			if (j)
+				r.state &= ~STATE_NOBORDER;
 		} else if (!strcmp(*argv, "float")) {
 			STATE(STATE_FLOATING);
 		} else if (!strcmp(*argv, "stick")) {
 			STATE(STATE_STICKY | STATE_FLOATING);
-		} else if (!strcmp(*argv, "ignore")) {
+		} else if (!strcmp(*argv, "ignore_cfg")) {
 			STATE(STATE_IGNORECFG);
+		} else if (!strcmp(*argv, "ignore_msg")) {
+			STATE(STATE_IGNOREMSG);
 		} else if (!strcmp(*argv, "focus")) {
 			argv++, nparsed++;
 			if (!argv || (j = parsebool(*argv)) < 0)

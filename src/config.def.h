@@ -5,49 +5,30 @@
 #pragma once
 
 uint32_t border[BORD_LAST] = {
-	[BORD_WIDTH] = 1,           /* int: total border width in pixels */
-	[BORD_FOCUS] = 0xFF6699cc,  /* hex: focused window border colour (inner) */
-	[BORD_URGENT] = 0xFFee5555, /* hex: urgent window border colour (inner) */
-	[BORD_UNFOCUS] =
-		0xFF444444,     /* hex: unfocused window border colour (inner) */
-	[BORD_O_WIDTH] = 0, /* int: outer border width in pixels */
-	[BORD_O_FOCUS] = 0xFF222222, /* hex: focused window border colour (outer) */
-	[BORD_O_URGENT] = 0xFF222222, /* hex: urgent window border colour (outer) */
-	[BORD_O_UNFOCUS] =
-		0xFF222222, /* hex: unfocused window border colour (outer) */
+	[BORD_WIDTH] = 1,              /* int: total border width in pixels */
+	[BORD_FOCUS] = 0xFF6699cc,     /* hex: focused window border colour (inner) */
+	[BORD_URGENT] = 0xFFee5555,    /* hex: urgent window border colour (inner) */
+	[BORD_UNFOCUS] = 0xFF444444,   /* hex: unfocused window border colour (inner) */
+	[BORD_O_WIDTH] = 0,            /* int: outer border width in pixels */
+	[BORD_O_FOCUS] = 0xFF222222,   /* hex: focused window border colour (outer) */
+	[BORD_O_URGENT] = 0xFF222222,  /* hex: urgent window border colour (outer) */
+	[BORD_O_UNFOCUS] = 0xFF222222, /* hex: unfocused window border colour (outer) */
 };
 
 GlobalCfg globalcfg[GLB_LAST] = {
-  /* setting           value,  type,       string */
-	[GLB_FOCUS_MOUSE] = {1,  TYPE_BOOL,
-						 "focus_mouse"               }, /* enable focus follows mouse */
-	[GLB_FOCUS_OPEN] = {1,  TYPE_BOOL,  "focus_open"}, /* enable focus on open */
-	[GLB_FOCUS_URGENT] = {1,  TYPE_BOOL,
-                         "focus_urgent"              }, /* enable focus urgent windows */
-	[GLB_MIN_WH] =
-		{50, TYPE_INT,
-						 "win_minwh"                 }, /* minimum window size allowed when resizing */
-	[GLB_MIN_XY] = {10, TYPE_INT,
-						 "win_minxy"                 }, /* minimum window area allowed inside the
-  screen when moving */
-	[GLB_SMART_BORDER] = {1,  TYPE_BOOL,
-                         "smart_border"              }, /* disable borders in layouts with
-  only one visible window */
-	[GLB_SMART_GAP] = {1,  TYPE_BOOL,
-						 "smart_gap"                 }, /* disable gaps in layouts with only one
-  visible window */
-	[GLB_TILE_HINTS] = {0,  TYPE_BOOL,
-						 "tile_hints"                }, /* respect size hints in tiled layouts */
-	[GLB_TILE_TOHEAD] =
-		{0,  TYPE_BOOL,
-						 "tile_tohead"               }, /* place new clients at the tail of the stack */
-	[GLB_WS_NUM] = {0,  TYPE_NUMWS,
-						 "numws"                     }, /* number of workspaces currently allocated */
-	[GLB_WS_STATIC] = {0,  TYPE_BOOL,
-						 "static_ws"                 }, /* use static workspace assignment */
-	[GLB_OBEY_MOTIF] = {1,  TYPE_BOOL,
-						 "obey_motif"                }, /* obey motif_wm_hints for border drawing
-  on supported windows */
+	  /* setting         value,  type,       string */
+	[GLB_FOCUS_MOUSE]  = {1,  TYPE_BOOL,  "focus_mouse"},  /* enable focus follows mouse */
+	[GLB_FOCUS_OPEN]   = {1,  TYPE_BOOL,  "focus_open"},   /* enable focus on open */
+	[GLB_FOCUS_URGENT] = {1,  TYPE_BOOL,  "focus_urgent"}, /* enable focus urgent windows */
+	[GLB_MIN_WH]       = {50, TYPE_INT,   "win_minwh"},    /* minimum window size allowed when resizing */
+	[GLB_MIN_XY]       = {10, TYPE_INT,   "win_minxy"},    /* minimum window area allowed inside the screen when moving */
+	[GLB_SMART_BORDER] = {1,  TYPE_BOOL,  "smart_border"}, /* disable borders in layouts with only one visible window */
+	[GLB_SMART_GAP]    = {1,  TYPE_BOOL,  "smart_gap"},    /* disable gaps in layouts with only one visible window */
+	[GLB_TILE_HINTS]   = {0,  TYPE_BOOL,  "tile_hints"},   /* respect size hints in tiled layouts */
+	[GLB_TILE_TOHEAD]  = {0,  TYPE_BOOL,  "tile_tohead"},  /* place new clients at the tail of the stack */
+	[GLB_WS_NUM]       = {0,  TYPE_NUMWS, "numws"},        /* number of workspaces currently allocated */
+	[GLB_WS_STATIC]    = {0,  TYPE_BOOL,  "static_ws"},    /* use static workspace assignment */
+	[GLB_OBEY_MOTIF]   = {1,  TYPE_BOOL,  "obey_motif"},   /* obey motif_wm_hints for border drawing on supported windows */
 };
 
 /* default modifier and buttons for mouse move/resize */

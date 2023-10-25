@@ -4,7 +4,7 @@ A list based tiling window manager in the vein of dwm, bspwm, and xmonad.
 
 Some basics:
 
-- Fully scriptable.
+- Heavily scriptable.
 - Dynamic workspaces.
 - More dynamic tile layout.
 - Gaps, fancy borders, extra layouts and more.

@@ -161,6 +161,10 @@ int ltile(Workspace *ws)
 	if (!ws->nmaster)
 		ss = 0;
 
+	/* We use an array to store client geometries so we can change the size of
+	 * the previous client if needed. There's a lot of messy maths to adjust
+	 * the size of each window using it's height offset and stack split ratio.
+	 */
 	for (i = 0, my = sy = ssy = g, c = nexttiled(ws->clients); c;
 		 c = nexttiled(c->next), ++i) {
 		if (i < ws->nmaster) {
@@ -230,6 +234,9 @@ update:
 		pbw = bw;
 	}
 
+	/* Do the actual resizing, if a client goes below the minimum allowed size
+	 * we return -1 to signify the layout exceeded it.
+	 */
 	for (i = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), i++) {
 		if (geo[i][3] <= globalcfg[GLB_MIN_WH].val)
 			ret = -1;

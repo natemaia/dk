@@ -1,12 +1,12 @@
 # TODOs and issues for dk
 
-1. When I enter full screen mode and open other windows, dk does not automatically
+1. When entering full screen mode and open other windows, dk does not automatically
    exit full screen mode and this causes various glitches. I believe that if the
    application is in full screen mode, then when opening windows of any kind (tiled,
    floating, pop-up), the application should automatically exit the full screen mode.
 
-2. I'm using a tile layout and noticed that I can only change the width of the master
-   window, and the stack windows can only be changed in height.
+2. In tile layout we can only change the width of the master window, and the stack
+   windows can only be changed in height.
 
 3. There is a free game war thunder in steam which for some reason does not go into
    full screen mode automatically. It's not hard for me to press the keyboard
@@ -14,13 +14,11 @@
    and it doesn't have this problem. I think that the problem does not apply to a
    single game and can be deeper and appear in a different use case.
 
-4. Also coming from problem 4, I noticed that there is no full-screen rule in dk.
-
-5. In the gparted program, when confirming operations, nothing is visible in the
+4. In the gparted program, when confirming operations, nothing is visible in the
    pop-up window that appears showing the progress of operations; there is also a
    problem with the border (I will attach a screenshot).
 
-6. Regarding the fact that the dk does not exit full-screen mode when opening other
+5. Regarding the fact that the dk does not exit full-screen mode when opening other
    windows. Strictly speaking, this is not a bug, but the problem is that when a new
    window opens, it receives focus but the window itself is not visible, so you have
    to return to the previous window and manually exit the fullscreen, or alternatively,
@@ -28,7 +26,7 @@
    such as i3, bspwm, hyprland implement automatic exit from full-screen mode when
    opening another window, it seems to me that this is the best solution.
 
-7. I will also clarify that it is impossible to resize windows when the stack window
+6. I will also clarify that it is impossible to resize windows when the stack window
    is in focus: I use the tile layout with the following parameters
    ```dkcmd set ws=_ apply layout=tile master=1 stack=0 gap=6 msplit=0.55 ssplit=0.50```
    that is, in the stack has only one window vertically, like in vanilla dwm. So I

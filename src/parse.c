@@ -260,7 +260,7 @@ Workspace *parsewsormon(char *arg, int mon)
 		for (m = nextmon(monitors); m; m = nextmon(m->next), n++)
 			;
 	if ((i = parseintclamp(arg, NULL, 1,
-						   mon ? n : globalcfg[GLB_WS_NUM].val)) == INT_MIN ||
+						   mon ? n : globalcfg[GLB_NUM_WS].val)) == INT_MIN ||
 		i <= 0)
 		return NULL;
 	return mon ? ((m = nextmon(itomon(i - 1))) ? m->ws : cws) : itows(i - 1);

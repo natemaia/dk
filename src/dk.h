@@ -218,7 +218,7 @@ enum CfgType {
 };
 
 enum GlobalSettings {
-	GLB_WS_NUM = 0,
+	GLB_NUM_WS = 0,
 	GLB_WS_STATIC = 1,
 	GLB_FOCUS_MOUSE = 2,
 	GLB_FOCUS_OPEN = 3,

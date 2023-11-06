@@ -121,7 +121,7 @@ int adjustwsormon(char **argv)
 		} else {
 			int r = 0;
 			Workspace *save = cur;
-			while (!ws && r < globalcfg[GLB_WS_NUM].val) {
+			while (!ws && r < globalcfg[GLB_NUM_WS].val) {
 				if (opt == DIR_NEXTNE) {
 					if (cmdusemon) {
 						if (!(m = nextmon(cm)))
@@ -803,7 +803,7 @@ int cmdrule(char **argv)
 			if (!argv)
 				goto badvalue;
 			if ((r.ws = parseintclamp(*argv, NULL, 1,
-									  globalcfg[GLB_WS_NUM].val)) == INT_MIN) {
+									  globalcfg[GLB_NUM_WS].val)) == INT_MIN) {
 				r.ws = -1;
 				match = 0;
 				FOR_EACH (ws, workspaces)
@@ -847,6 +847,10 @@ int cmdrule(char **argv)
 				r.state &= ~STATE_NOBORDER;
 		} else if (!strcmp(*argv, "float")) {
 			STATE(STATE_FLOATING);
+		} else if (!strcmp(*argv, "full")) {
+			STATE(STATE_FULLSCREEN);
+		} else if (!strcmp(*argv, "fakefull")) {
+			STATE(STATE_FAKEFULL);
 		} else if (!strcmp(*argv, "stick")) {
 			STATE(STATE_STICKY | STATE_FLOATING);
 		} else if (!strcmp(*argv, "ignore_cfg")) {

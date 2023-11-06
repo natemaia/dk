@@ -4,13 +4,13 @@ A list based tiling window manager in the vein of dwm, bspwm, and xmonad.
 
 Some basics:
 
-- Heavily scriptable.
-- Dynamic workspaces.
-- More dynamic tile layout.
-- Gaps, fancy borders, extra layouts and more.
-- Better support for mouse and floating windows.
+- Heavily scriptable and tinker friendly.
+- Dynamic workspaces, any workspace on any monitor.
+- More dynamic tile layout with multiple stacks and window resizing.
+- Gaps, double borders, additional layouts, padding and more.
+- Better support for mouse and floating windows, resize tiles with mouse.
 - Startup script for configuration and running programs.
-- Status info is output to a file for use in bars or scripts.
+- Status info can be output to a file or piped for use in bars or scripts.
 - No built-in extras *(bar, font drawing, or key bindings)*.
 - Sane support for
 [icccm](https://www.x.org/releases/X11R7.6/doc/xorg-docs/specs/ICCCM/icccm.html#client_to_window_manager_communication),
@@ -616,25 +616,29 @@ status num=1 [TYPE] [FILE]  # output once
 
 ### Todo
 
-- Simplification.
+- Simplification and code quality improvement.
+- See ISSSUE.md for current problems and possible additions.
+- `grep -n 'TODO' src/*` will give some code I'm not happy with.
 
 
 ### Contributing
 
-I'm very open to contributions or ideas.
+I'm very open to contributions or ideas, please feel free to email me or open 
+an issue/PR. For myself I have various builds that can help finding issues or 
+provide some insight. These include:
 
 
-To enable internal stderr debug output
+stderr debug output
 ```
 make debug
 ```
 
-Te enable debug and get function calls
+debug output and function calls
 ```
 make fdebug
 ```
 
-To leave debug symbols in *(for gdb, valgrind, etc.)*.
+don't strip debug symbols *(for gdb, valgrind, etc.)*.
 ```
 make nostrip
 ```
@@ -644,11 +648,13 @@ make nostrip
 
 See the LICENSE file for a list of authors/contributors.
 
-Huge thanks to Kjetil Molteberg *(@badkarma)* on the Archlabs forum for the logo.
+Huge thanks to Kjetil Molteberg *(@badkarma)* for the logo.
 
 Non contributors that I owe a huge thanks to:
-[dwm](https://dmw.suckless.org), [bspwm](https://github.com/baskerville/bspwm),
-[xmonad](https://xmonad.org), [evilwm](http://www.6809.org.uk/evilwm/),
-[monsterwm-xcb](https://github.com/Cloudef/monsterwm-xcb),
-[4wm](https://github.com/dct2012/4wm), and [frankenwm](https://github.com/sulami/FrankenWM).
+- [dwm](https://dmw.suckless.org)
+- [bspwm](https://github.com/baskerville/bspwm)
+- [xmonad](https://xmonad.org)
+- [evilwm](http://www.6809.org.uk/evilwm/)
+- [monsterwm-xcb](https://github.com/Cloudef/monsterwm-xcb)
+- [frankenwm](https://github.com/sulami/FrankenWM).
 

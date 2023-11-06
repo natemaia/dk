@@ -22,11 +22,11 @@ GlobalCfg globalcfg[GLB_LAST] = {
 	[GLB_FOCUS_URGENT] = {1,  TYPE_BOOL,  "focus_urgent"}, /* enable focus urgent windows */
 	[GLB_MIN_WH]       = {50, TYPE_INT,   "win_minwh"},    /* minimum window size allowed when resizing */
 	[GLB_MIN_XY]       = {10, TYPE_INT,   "win_minxy"},    /* minimum window area allowed inside the screen when moving */
+	[GLB_NUM_WS]       = {0,  TYPE_NUMWS, "numws"},        /* number of workspaces currently allocated */
 	[GLB_SMART_BORDER] = {1,  TYPE_BOOL,  "smart_border"}, /* disable borders in layouts with only one visible window */
 	[GLB_SMART_GAP]    = {1,  TYPE_BOOL,  "smart_gap"},    /* disable gaps in layouts with only one visible window */
 	[GLB_TILE_HINTS]   = {0,  TYPE_BOOL,  "tile_hints"},   /* respect size hints in tiled layouts */
 	[GLB_TILE_TOHEAD]  = {0,  TYPE_BOOL,  "tile_tohead"},  /* place new clients at the tail of the stack */
-	[GLB_WS_NUM]       = {0,  TYPE_NUMWS, "numws"},        /* number of workspaces currently allocated */
 	[GLB_WS_STATIC]    = {0,  TYPE_BOOL,  "static_ws"},    /* use static workspace assignment */
 	[GLB_OBEY_MOTIF]   = {1,  TYPE_BOOL,  "obey_motif"},   /* obey motif_wm_hints for border drawing on supported windows */
 };

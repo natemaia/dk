@@ -352,15 +352,15 @@ static void applyrule(Client *c, Rule *r, xcb_atom_t curws, int nofocus)
 							break;
 						}
 					}
-			} else if (r->ws > 0 && r->ws <= globalcfg[GLB_WS_NUM].val) {
+			} else if (r->ws > 0 && r->ws <= globalcfg[GLB_NUM_WS].val) {
 				ws = r->ws - 1;
 			}
 		}
 	}
 
-	if (ws + 1 > globalcfg[GLB_WS_NUM].val && ws <= 99)
+	if (ws + 1 > globalcfg[GLB_NUM_WS].val && ws <= 99)
 		updworkspaces(ws + 1);
-	setworkspace(c, MIN(ws, globalcfg[GLB_WS_NUM].val), nofocus);
+	setworkspace(c, MIN(ws, globalcfg[GLB_NUM_WS].val), nofocus);
 
 	if (!dofocus && nofocus && !globalcfg[GLB_FOCUS_URGENT].val)
 		seturgent(c, 1);
@@ -368,6 +368,10 @@ static void applyrule(Client *c, Rule *r, xcb_atom_t curws, int nofocus)
 		cmdview(c->ws);
 	if (xgrav != GRAV_NONE || ygrav != GRAV_NONE)
 		gravitate(c, xgrav, ygrav, 1);
+	if (c->state & STATE_FULLSCREEN) {
+		c->state &= ~STATE_FULLSCREEN;
+		setfullscreen(c, 1);
+	}
 	cmdusemon = 0;
 }
 
@@ -1279,7 +1283,7 @@ static void initwm(void)
 		initmon(0, "default", 0, 0, 0, scr_w, scr_h);
 
 	cws = winprop(root, netatom[NET_DESK_CUR], &r) && r < 100 ? r : 0;
-	updworkspaces(MAX(cws + 1, globalcfg[GLB_WS_NUM].val));
+	updworkspaces(MAX(cws + 1, globalcfg[GLB_NUM_WS].val));
 	selws = workspaces;
 	selmon = selws->mon;
 	changews((ws = itows(cws)) ? ws : workspaces, globalcfg[GLB_WS_STATIC].val,
@@ -1543,7 +1547,7 @@ void printstatus(Status *s, int freeable)
 				"win_minxy: %d\n"
 				"win_minwh: %d\n"
 				"active_window: 0x%08x",
-				globalcfg[GLB_WS_NUM].val, globalcfg[GLB_SMART_BORDER].val,
+				globalcfg[GLB_NUM_WS].val, globalcfg[GLB_SMART_BORDER].val,
 				globalcfg[GLB_SMART_GAP].val, globalcfg[GLB_FOCUS_URGENT].val,
 				globalcfg[GLB_FOCUS_MOUSE].val, globalcfg[GLB_FOCUS_OPEN].val,
 				globalcfg[GLB_TILE_HINTS].val, globalcfg[GLB_TILE_TOHEAD].val,
@@ -1628,16 +1632,21 @@ void printstatus(Status *s, int freeable)
 			/* Rules */
 			if (rules) {
 				fprintf(s->file, "\n\n# title class instance workspace monitor "
-								 "float stick focus "
-								 "callback x y width height xgrav ygrav");
+								 "float full fakefull stick ignore_cfg ignore_msg "
+								 "focus callback x y width height xgrav ygrav");
 				FOR_EACH (r, rules)
 					fprintf(s->file,
-							"\nrule: \"%s\" \"%s\" \"%s\" %d %s %d %d %d %s %d "
-							"%d %d %d %s %s",
+							"\nrule: \"%s\" \"%s\" \"%s\" %d %s %d %d %d %d %d %d "
+							"%d %s %d %d %d %d %s %s",
 							r->title, r->class, r->inst, r->ws, r->mon,
 							(r->state & STATE_FLOATING) != 0,
-							(r->state & STATE_STICKY) != 0, r->focus,
-							r->cb ? r->cb->name : "", r->x, r->y, r->w, r->h,
+							(r->state & STATE_FULLSCREEN) != 0,
+							(r->state & STATE_FAKEFULL) != 0,
+							(r->state & STATE_STICKY) != 0,
+							(r->state & STATE_IGNORECFG) != 0,
+							(r->state & STATE_IGNOREMSG) != 0,
+							r->focus, r->cb ? r->cb->name : "",
+							r->x, r->y, r->w, r->h,
 							gravs[r->xgrav], gravs[r->ygrav]);
 			}
 
@@ -2250,7 +2259,7 @@ static void updnetworkspaces(void)
 	v[0] = scr_w, v[1] = scr_h;
 	PROP(REPLACE, root, netatom[NET_DESK_GEOM], XCB_ATOM_CARDINAL, 32, 2, &v);
 	PROP(REPLACE, root, netatom[NET_DESK_NUM], XCB_ATOM_CARDINAL, 32, 1,
-		 &globalcfg[GLB_WS_NUM]);
+		 &globalcfg[GLB_NUM_WS]);
 	FOR_EACH (ws, workspaces) {
 		if (!ws->mon)
 			ws->mon = primary;
@@ -2420,10 +2429,10 @@ void updworkspaces(int needed)
 					: "allocating too many workspaces: max 99");
 		return;
 	}
-	while (n > globalcfg[GLB_WS_NUM].val ||
-		   needed > globalcfg[GLB_WS_NUM].val) {
-		initws(globalcfg[GLB_WS_NUM].val);
-		globalcfg[GLB_WS_NUM].val++;
+	while (n > globalcfg[GLB_NUM_WS].val ||
+		   needed > globalcfg[GLB_NUM_WS].val) {
+		initws(globalcfg[GLB_NUM_WS].val);
+		globalcfg[GLB_NUM_WS].val++;
 	}
 
 	m = nextmon(monitors);

@@ -142,9 +142,7 @@ void clientmessage(xcb_generic_event_t *ev)
 			} else if ((d[1] == netatom[NET_STATE_DEMANDATT] ||
 						d[2] == netatom[NET_STATE_DEMANDATT]) &&
 					   c != selws->sel) {
-				DBG("clientmessage: state demands attention: %d",
-					(d[1] == netatom[NET_STATE_DEMANDATT] ||
-					 d[2] == netatom[NET_STATE_DEMANDATT]))
+				DBG("clientmessage: state demands attention: %d", 1)
 				goto activate;
 			}
 		} else if (e->type == netatom[NET_ACTIVE] && c != selws->sel) {
@@ -281,7 +279,7 @@ void dispatch(xcb_generic_event_t *ev)
 				   ((xcb_randr_screen_change_notify_event_t *)ev)->root ==
 					   root) {
 			if (updrandr(0))
-				updworkspaces(globalcfg[GLB_WS_NUM].val);
+				updworkspaces(globalcfg[GLB_NUM_WS].val);
 			updstruts();
 		}
 	} else {

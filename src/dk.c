@@ -682,16 +682,35 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 	applyrule(c, NULL, curws, nofocus);
 }
 
+void clientstate(Client *c)
+{
+	xcb_atom_t *state;
+	xcb_generic_error_t *e;
+	xcb_get_property_cookie_t rc;
+	xcb_get_property_reply_t *r = NULL;
+
+	rc = xcb_get_property(con, 0, c->win, netatom[NET_WM_STATE], XCB_ATOM_ANY,
+						  0, 3);
+	if ((r = xcb_get_property_reply(con, rc, &e))) {
+		if (r->value_len && r->format == 32) {
+			state = xcb_get_property_value(r);
+			for (uint32_t i = 0; i < r->value_len; i++) {
+				if (state[i] == netatom[NET_STATE_FULL])
+					setfullscreen(c, 1);
+				else if (state[i] == netatom[NET_STATE_ABOVE])
+					c->state |= STATE_ABOVE | STATE_FLOATING;
+			}
+		}
+	} else {
+		iferr(0, "unable to get window property reply", e);
+	}
+	free(r);
+}
+
 void clienttype(Client *c)
 {
-	xcb_atom_t type, state;
+	xcb_atom_t type;
 
-	if (winprop(c->win, netatom[NET_WM_STATE], &state)) {
-		if (state == netatom[NET_STATE_FULL])
-			setfullscreen(c, 1);
-		else if (state == netatom[NET_STATE_ABOVE])
-			c->state |= STATE_ABOVE | STATE_FLOATING;
-	}
 	if ((winprop(c->win, netatom[NET_WM_TYPE], &type) &&
 		 (type == netatom[NET_TYPE_DIALOG] ||
 		  type == netatom[NET_TYPE_SPLASH])) ||
@@ -1069,8 +1088,9 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	free(pr);
 
 	clientname(c);
-	sizehints(c, 1);
+	clientstate(c);
 	clienttype(c);
+	sizehints(c, 1);
 	clienthints(c);
 
 	DBG("initclient: %s", c->title)
@@ -1631,23 +1651,24 @@ void printstatus(Status *s, int freeable)
 
 			/* Rules */
 			if (rules) {
-				fprintf(s->file, "\n\n# title class instance workspace monitor "
-								 "float full fakefull stick ignore_cfg ignore_msg "
-								 "focus callback x y width height xgrav ygrav");
+				fprintf(s->file,
+						"\n\n# title class instance workspace monitor "
+						"float full fakefull stick ignore_cfg ignore_msg "
+						"focus callback x y width height xgrav ygrav");
 				FOR_EACH (r, rules)
-					fprintf(s->file,
-							"\nrule: \"%s\" \"%s\" \"%s\" %d %s %d %d %d %d %d %d "
-							"%d %s %d %d %d %d %s %s",
-							r->title, r->class, r->inst, r->ws, r->mon,
-							(r->state & STATE_FLOATING) != 0,
-							(r->state & STATE_FULLSCREEN) != 0,
-							(r->state & STATE_FAKEFULL) != 0,
-							(r->state & STATE_STICKY) != 0,
-							(r->state & STATE_IGNORECFG) != 0,
-							(r->state & STATE_IGNOREMSG) != 0,
-							r->focus, r->cb ? r->cb->name : "",
-							r->x, r->y, r->w, r->h,
-							gravs[r->xgrav], gravs[r->ygrav]);
+					fprintf(
+						s->file,
+						"\nrule: \"%s\" \"%s\" \"%s\" %d %s %d %d %d %d %d %d "
+						"%d %s %d %d %d %d %s %s",
+						r->title, r->class, r->inst, r->ws, r->mon,
+						(r->state & STATE_FLOATING) != 0,
+						(r->state & STATE_FULLSCREEN) != 0,
+						(r->state & STATE_FAKEFULL) != 0,
+						(r->state & STATE_STICKY) != 0,
+						(r->state & STATE_IGNORECFG) != 0,
+						(r->state & STATE_IGNOREMSG) != 0, r->focus,
+						r->cb ? r->cb->name : "", r->x, r->y, r->w, r->h,
+						gravs[r->xgrav], gravs[r->ygrav]);
 			}
 
 			/* Panels */
@@ -2503,8 +2524,7 @@ static int winprop(xcb_window_t win, xcb_atom_t prop, xcb_atom_t *ret)
 	xcb_get_property_reply_t *r = NULL;
 
 	c = xcb_get_property(con, 0, win, prop, XCB_ATOM_ANY, 0, 1);
-	if ((r = xcb_get_property_reply(con, c, &e)) &&
-		xcb_get_property_value_length(r)) {
+	if ((r = xcb_get_property_reply(con, c, &e)) && r->value_len) {
 		*ret = *(xcb_atom_t *)xcb_get_property_value(r);
 		free(r);
 		return 1;

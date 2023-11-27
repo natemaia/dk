@@ -58,6 +58,17 @@ Client *cmdc;
 Monitor *monitors, *primary, *selmon, *lastmon;
 Workspace *workspaces, *setws, *selws, *lastws;
 
+Workspace scratch = {
+	.nmaster = 0, .nstack = 0,
+	.gappx = 0, .smartgap = 0, .num = -1,
+	.padl = 0, .padr = 0, .padt = 0, .padb = 0,
+	.msplit = 0, .ssplit = 0,
+	.layout = &layouts[0],
+	.name = "scratch",
+	.mon = NULL, .next = NULL, .sel = NULL,
+	.stack = NULL, .clients = NULL
+};
+
 xcb_screen_t *scr;
 xcb_connection_t *con;
 xcb_window_t root, wmcheck;
@@ -122,6 +133,7 @@ static void initwm(void);
 static int refresh(void);
 static void relocatews(Workspace *ws, Monitor *old, int wasvis);
 static int rulecmp(Client *c, Rule *r);
+static void sighandle(int sig);
 static void updnetworkspaces(void);
 static xcb_get_window_attributes_reply_t *winattr(xcb_window_t win);
 static void winclass(xcb_window_t win, char *class, char *inst, size_t len);
@@ -248,7 +260,7 @@ int main(int argc, char *argv[])
 						 primary->y + (primary->h / 2));
 	}
 
-	/* TODO: fix this shit hack to avoid various issues when restarting */
+	/* TODO: fix these shit hacks to avoid various issues when restarting */
 	FOR_EACH (ws, workspaces) {
 		FOR_EACH (c, ws->clients)
 			if (FLOATING(c))
@@ -258,6 +270,8 @@ int main(int argc, char *argv[])
 			ws->layout->func(ws); /* border issues on tiled clients */
 		showhide(ws->stack); /* show only windows on the active workspace */
 	}
+	ignore(XCB_ENTER_NOTIFY); /* wrong windows grabbing focus */
+	xcb_aux_sync(con);
 
 	confd = xcb_get_file_descriptor(con);
 	while (running) {
@@ -360,7 +374,7 @@ static void applyrule(Client *c, Rule *r, xcb_atom_t curws, int nofocus)
 
 	if (ws + 1 > globalcfg[GLB_NUM_WS].val && ws <= 99)
 		updworkspaces(ws + 1);
-	setworkspace(c, MIN(ws, globalcfg[GLB_NUM_WS].val), nofocus);
+	setworkspace(c, itows(MIN(ws, globalcfg[GLB_NUM_WS].val)), nofocus);
 
 	if (!dofocus && nofocus && !globalcfg[GLB_FOCUS_URGENT].val)
 		seturgent(c, 1);
@@ -432,7 +446,7 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw,
 	return *x != c->x || *y != c->y || *w != c->w || *h != c->h || bw != c->bw;
 }
 
-static void attach(Client *c, int tohead)
+void attach(Client *c, int tohead)
 {
 	Client *tail = NULL;
 
@@ -445,7 +459,7 @@ static void attach(Client *c, int tohead)
 		ATTACH(c, c->ws->clients);
 }
 
-static void attachstack(Client *c)
+void attachstack(Client *c)
 {
 	c->snext = c->ws->stack;
 	c->ws->stack = c;
@@ -532,7 +546,6 @@ void changews(Workspace *ws, int swap, int warp)
 	ignore(XCB_CONFIGURE_REQUEST);
 	PROP(REPLACE, root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1,
 		 &ws->num);
-	xcb_flush(con);
 	needsrefresh = 1;
 	wschange = 1;
 }
@@ -617,18 +630,26 @@ void clientmotif(void)
 	Client *c;
 	Workspace *ws;
 
-	FOR_CLIENTS (c, ws) {
-		if (c->has_motif) {
-			if (globalcfg[GLB_OBEY_MOTIF].val) {
-				c->state |= STATE_NOBORDER;
-				c->bw = 0;
-			} else {
-				c->state &= ~STATE_NOBORDER;
-				c->bw = border[BORD_WIDTH];
-			}
-			clientborder(c, c == selws->sel);
-		}
+#define CHECK(c)                             \
+	if (c->has_motif) {                      \
+		if (globalcfg[GLB_OBEY_MOTIF].val) { \
+			c->state |= STATE_NOBORDER;      \
+			c->bw = 0;                       \
+		} else {                             \
+			c->state &= ~STATE_NOBORDER;     \
+			c->bw = border[BORD_WIDTH];      \
+		}                                    \
+		clientborder(c, c == selws->sel);    \
 	}
+
+	FOR_CLIENTS (c, ws) {
+		CHECK(c)
+	}
+	FOR_EACH (c, scratch.clients) {
+		CHECK(c)
+	}
+
+#undef CHECK
 }
 
 int clientname(Client *c)
@@ -759,7 +780,7 @@ void detach(Client *c, int reattach)
 		ATTACH(c, c->ws->clients);
 }
 
-static void detachstack(Client *c)
+void detachstack(Client *c)
 {
 	Client **cc = &c->ws->stack;
 
@@ -892,7 +913,10 @@ void freewm(void)
 		unmanage(panels->win, 0);
 	while (desks)
 		unmanage(desks->win, 0);
-
+	FOR_EACH (c, scratch.clients) {
+		clientmap(c);
+		unmanage(c->win, 0);
+	}
 	FOR_CLIENTS (c, ws) {
 		if (c->state & STATE_HIDDEN)
 			clientmap(c);
@@ -1402,7 +1426,7 @@ void manage(xcb_window_t win, int scan)
 		setwinstate(win, XCB_ICCCM_WM_STATE_NORMAL);
 	} else if (!wa->override_redirect) {
 client:
-		DBG("manage: 0x%08x has no NET_WM_TYPE", win);
+		DBG("manage: 0x%08x has no NET_WM_TYPE, assuming NORMAL", win);
 		/* TODO: this could be a problem for restart if we want to use the
 		 * iconic state the client is never initialized */
 		if (scan && !(wa->map_state == XCB_MAP_STATE_VIEWABLE ||
@@ -1625,18 +1649,19 @@ void printstatus(Status *s, int freeable)
 			FOR_CLIENTS (c, ws)
 				fprintf(s->file, " %s0x%08x:%d", c == selws->sel ? "*" : "",
 						c->win, c->ws->num + 1);
+			FOR_EACH (c, scratch.clients)
+				fprintf(s->file, " 0x%08x:%d", c->win, c->ws->num);
 
 			/* Client settings */
 			fprintf(
 				s->file,
 				"\n\t# id title class instance ws x y width height bw hoff "
-				"float full "
-				"fakefull fixed stick urgent above hidden callback trans_id");
+				"float full fakefull fixed stick urgent above hidden scratch "
+				"callback trans_id");
 			FOR_CLIENTS (c, ws)
 				fprintf(s->file,
 						"\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d "
-						"%d %d %d %d %d %d %d "
-						"%d %s 0x%08x",
+						"%d %d %d %d %d %d %d %d %d %s 0x%08x",
 						c->win, c->title, c->class, c->inst, c->ws->num + 1,
 						c->x, c->y, c->w, c->h, c->bw, c->hoff, FLOATING(c),
 						(c->state & STATE_FULLSCREEN) != 0,
@@ -1646,6 +1671,23 @@ void printstatus(Status *s, int freeable)
 						(c->state & STATE_URGENT) != 0,
 						(c->state & STATE_ABOVE) != 0,
 						(c->state & STATE_HIDDEN) != 0,
+						(c->state & STATE_SCRATCH) != 0,
+						c->cb ? c->cb->name : "none",
+						c->trans ? c->trans->win : 0);
+			FOR_EACH (c, scratch.clients)
+				fprintf(s->file,
+						"\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d "
+						"%d %d %d %d %d %d %d %d %d %s 0x%08x",
+						c->win, c->title, c->class, c->inst, c->ws->num,
+						c->x, c->y, c->w, c->h, c->bw, c->hoff, FLOATING(c),
+						(c->state & STATE_FULLSCREEN) != 0,
+						(c->state & STATE_FAKEFULL) != 0,
+						(c->state & STATE_FIXED) != 0,
+						(c->state & STATE_STICKY) != 0,
+						(c->state & STATE_URGENT) != 0,
+						(c->state & STATE_ABOVE) != 0,
+						(c->state & STATE_HIDDEN) != 0,
+						(c->state & STATE_SCRATCH) != 0,
 						c->cb ? c->cb->name : "none",
 						c->trans ? c->trans->win : 0);
 
@@ -1767,22 +1809,14 @@ static int refresh(void)
 			if (c->state & STATE_NEEDSMAP)
 				clientmap(c);
 			if (FLOATING(c))
-				MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
+				resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0, 0);
 			clientborder(c, c == selws->sel);
 		}
 		restack(m->ws);
 	}
 	ignore(XCB_ENTER_NOTIFY);
 	xcb_aux_sync(con);
-
-	DBG("refresh: focusing first client: %s",
-		selws->sel ? selws->sel->title : "NONE")
 	focus(NULL);
-	/* if (selws->stack != selws->sel && FULLSCREEN(selws->sel)) */
-	/* 	focus(selws->sel); */
-	/* else */
-	/* 	focus(NULL); */
-
 	return 0;
 #undef MAP
 }
@@ -1794,7 +1828,7 @@ void relocate(Client *c, Monitor *mon, Monitor *old)
 		return;
 	if (c->state & STATE_STICKY) {
 		Client *sel = lastws->sel == c ? c : selws->sel;
-		setworkspace(c, old->ws->num, 0);
+		setworkspace(c, old->ws, 0);
 		focus(sel);
 		return;
 	}
@@ -2080,16 +2114,13 @@ void setwinstate(xcb_window_t win, uint32_t state)
 		 (const void *)data);
 }
 
-void setworkspace(Client *c, int num, int stacktail)
+void setworkspace(Client *c, Workspace *ws, int stacktail)
 {
-	Workspace *ws;
 	Client *tail = NULL;
 
-	/* TODO: why are we using itows here rather than the caller, this would also
-	 * be better for error handling */
-	if (!(ws = itows(num)) || ws == c->ws)
+	if (ws == c->ws)
 		return;
-	DBG("setworkspace: %s -> %d", c->title, num)
+	DBG("setworkspace: %s -> %d", c->title, ws->num + 1)
 	if (c->ws) {
 		detach(c, 0);
 		detachstack(c);
@@ -2107,8 +2138,6 @@ void setworkspace(Client *c, int num, int stacktail)
 	} else {
 		attachstack(c);
 	}
-	/* update workspace status when this is the only window on the ws
-	 * (unoccupied -> occupied) */
 	wschange = c->ws->clients->next ? wschange : 1;
 }
 
@@ -2134,10 +2163,9 @@ void showhide(Client *c)
 			(c->w != m->w || c->h != m->h))
 			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, 0);
 		else if (FLOATING(c))
-			resize(c, c->x, c->y, c->w, c->h, c->bw);
+			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
 		else
 			MOVE(c->win, c->x, c->y);
-
 		showhide(c->snext);
 	} else {
 		DBG("showhide: ws: %d -- hiding window : %s", c->ws->num + 1, c->title)
@@ -2146,9 +2174,20 @@ void showhide(Client *c)
 			MOVE(c->win, W(c) * -2, c->y);
 		} else if (c->ws != selws && m == selws->mon) {
 			Client *sel = lastws->sel == c ? c : selws->sel;
-			setworkspace(c, selws->num, 0);
+			setworkspace(c, selws, 0);
 			focus(sel);
 		}
+	}
+}
+
+void sighandle(int sig)
+{
+	if (sig == SIGCHLD) {
+		signal(sig, sighandle);
+		while (waitpid(-1, 0, WNOHANG) > 0)
+			;
+	} else if (sig == SIGINT || sig == SIGTERM || sig == SIGHUP) {
+		running = 0;
 	}
 }
 
@@ -2258,6 +2297,9 @@ void unmanage(xcb_window_t win, int destroyed)
 		free(ptr);
 		xcb_delete_property(con, root, netatom[NET_CLIENTS]);
 		FOR_CLIENTS (c, ws)
+			PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1,
+				 &c->win);
+		FOR_EACH (c, scratch.clients)
 			PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1,
 				 &c->win);
 		FOR_EACH (p, panels)
@@ -2540,7 +2582,15 @@ Client *wintoclient(xcb_window_t win)
 	Client *c;
 	Workspace *ws;
 
-	WINTO(FOR_CLIENTS, win, c, ws);
+	if (win == XCB_WINDOW_NONE || win == root)
+		return NULL;
+	FOR_CLIENTS(c, ws)
+		if (c->win == win)
+			return c;
+	FOR_EACH(c, scratch.clients)
+		if (c->win == win)
+			return c;
+	return NULL;
 }
 
 Panel *wintopanel(xcb_window_t win)

@@ -96,6 +96,7 @@ void buttonrelease(int move)
 void clientmessage(xcb_generic_event_t *ev)
 {
 	Client *c;
+	Workspace *ws;
 	xcb_client_message_event_t *e = (xcb_client_message_event_t *)ev;
 	uint32_t *d = e->data.data32;
 
@@ -111,11 +112,11 @@ void clientmessage(xcb_generic_event_t *ev)
 		DBG("clientmessage: managed window: %s", c->title)
 		if (e->type == netatom[NET_WM_DESK]) {
 			DBG("clientmessage: change desktop: %d", e->type)
-			if (!itows(d[0])) {
+			if (!(ws = itows(d[0]))) {
 				warnx("invalid workspace index: %d", d[0]);
 				return;
 			}
-			setworkspace(c, d[0], c != c->ws->sel);
+			setworkspace(c, ws, c != c->ws->sel);
 			wschange = winchange = needsrefresh = 1;
 		} else if (e->type == netatom[NET_WM_STATE]) {
 			DBG("clientmessage: change state: %d", e->type)
@@ -149,7 +150,8 @@ void clientmessage(xcb_generic_event_t *ev)
 			DBG("clientmessage: change NET_ACTIVE_WINDOW: %d", e->type)
 activate:
 			if (globalcfg[GLB_FOCUS_URGENT].val &&
-				!(c->state & STATE_IGNOREMSG)) {
+				!(c->state & STATE_IGNOREMSG) &&
+				!(c->state & STATE_SCRATCH)) {
 				setnetstate(c->win, c->state);
 				if (c->ws != selws) {
 					unfocus(selws->sel, 1);
@@ -377,6 +379,8 @@ void mappingnotify(xcb_generic_event_t *ev)
 		xcb_refresh_keyboard_mapping(keysyms, e);
 		FOR_CLIENTS (c, ws)
 			grabbuttons(c);
+		FOR_EACH (c, scratch.clients)
+			grabbuttons(c);
 	}
 }
 
@@ -451,7 +455,7 @@ void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 					restack(selws);
 				}
 				if ((m = coordtomon(e->root_x, e->root_y)) && m->ws != c->ws) {
-					setworkspace(c, m->ws->num, 0);
+					setworkspace(c, m->ws, 0);
 					changews(m->ws, 0, 0);
 					focus(c);
 				}

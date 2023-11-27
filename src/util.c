@@ -70,17 +70,6 @@ void respond(FILE *f, const char *fmt, ...)
 	va_end(ap);
 }
 
-void sighandle(int sig)
-{
-	if (sig == SIGCHLD) {
-		signal(sig, sighandle);
-		while (waitpid(-1, 0, WNOHANG) > 0)
-			;
-	} else if (sig == SIGINT || sig == SIGTERM || sig == SIGHUP) {
-		running = 0;
-	}
-}
-
 int usage(char *prog, char *ver, int e, char flag, char *flagstr)
 {
 	switch (flag) {

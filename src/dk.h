@@ -125,6 +125,7 @@ enum States {
 	STATE_IGNOREMSG = 1 << 11,
 	STATE_ABOVE = 1 << 12,
 	STATE_HIDDEN = 1 << 13,
+	STATE_SCRATCH = 1 << 14,
 };
 
 enum Cursors {
@@ -349,7 +350,7 @@ extern Panel *panels;
 extern Status *stats;
 extern Client *cmdc;
 extern Monitor *monitors, *primary, *selmon, *lastmon;
-extern Workspace *workspaces, *setws, *selws, *lastws;
+extern Workspace *workspaces, *setws, *selws, *lastws, scratch;
 
 /* extern xcb_screen_t *scr; */
 extern xcb_connection_t *con;
@@ -381,16 +382,21 @@ extern Workspace wsdef;
 
 int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw,
 				   int usermotion, int mouse);
+void attach(Client *c, int tohead);
+void attachstack(Client *c);
 int assignws(Workspace *ws, Monitor *mon);
 void changews(Workspace *ws, int swap, int warp);
 void clientborder(Client *c, int focused);
 void clienthints(Client *c);
+void clientmap(Client *c);
 void clientmotif(void);
 int clientname(Client *c);
 void clientrule(Client *c, Rule *wr, int nofocus);
 void clienttype(Client *c);
+void clientunmap(Client *c);
 Monitor *coordtomon(int x, int y);
 void detach(Client *c, int reattach);
+void detachstack(Client *c);
 void execcfg(void);
 void fillstruts(Panel *p);
 void focus(Client *c);
@@ -424,7 +430,7 @@ void setnetwsnames(void);
 void setstackmode(xcb_window_t win, uint32_t mode);
 void seturgent(Client *c, int urg);
 void setwinstate(xcb_window_t win, uint32_t state);
-void setworkspace(Client *c, int num, int stacktail);
+void setworkspace(Client *c, Workspace *ws, int stacktail);
 void showhide(Client *c);
 void sizehints(Client *c, int uss);
 int tilecount(Workspace *ws);

@@ -42,6 +42,8 @@
 #include "event.h"
 #include "layout.h"
 
+int cmdc_passed = 0;
+
 int adjustisetting(int i, int rel, int *val, int other, int border)
 {
 	int n;
@@ -245,6 +247,9 @@ badvalue:
 	FOR_CLIENTS (c, ws)
 		if (!(c->state & STATE_NOBORDER) && c->bw == old)
 			c->bw = bw;
+	FOR_EACH (c, scratch.clients)
+		if (!(c->state & STATE_NOBORDER) && c->bw == old)
+			c->bw = bw;
 	return nparsed;
 
 #undef COLOUR
@@ -420,20 +425,6 @@ int cmdgappx(char **argv)
 		nparsed++;
 		adjustisetting(i, rel, &setws->gappx, border[BORD_WIDTH], 1);
 	}
-	return nparsed;
-}
-
-int cmdhide(__attribute__((unused)) char **argv)
-{
-	int nparsed = 0;
-	Client *c = cmdc;
-
-	c->state &= STATE_HIDDEN;
-	if (c == selws->sel)
-		unfocus(c, 1);
-	showhide(c->ws->stack);
-	needsrefresh = 1;
-
 	return nparsed;
 }
 
@@ -919,6 +910,89 @@ applyall:
 #undef M
 }
 
+int cmdscratch(char **argv)
+{
+	int nparsed = 0;
+	Client *c = cmdc;
+
+	if (argv && *argv) {
+		if (!strcmp("pop", *argv)) {
+			argv++, nparsed++;
+pop:
+			/* retain old SCRATCH state when popping from other workspace */
+			c->old_state = c->state | STATE_SCRATCH;
+			c->state &= ~(STATE_SCRATCH | STATE_HIDDEN);
+			setworkspace(c, selws, 0);
+			clientmap(c);
+			showhide(selws->stack);
+		} else if (!strcmp("push", *argv)) {
+			argv++, nparsed++;
+push:
+			if (FULLSCREEN(c)) {
+				respond(cmdresp, "!unable to scratch fullscreen windows");
+				return nparsed;
+			}
+
+			if (c == selws->sel)
+				unfocus(c, 1);
+
+			if (!FLOATING(c)) {
+				Monitor *m = c->ws->mon;
+				c->state |= STATE_FLOATING;
+				resizehint(c, m->wx + m->ww / 3, m->wy, m->ww / 3, m->wh / 3,
+						c->bw, 0, 0);
+			}
+
+			c->state |= STATE_SCRATCH | STATE_HIDDEN | STATE_FLOATING;
+
+			/* setworkspace wont work for scratch push so we do our own swap */
+			detach(c, 0);
+			detachstack(c);
+			c->ws = &scratch;
+			attach(c, 1);
+			attachstack(c);
+			PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL,
+					32, 0, (const void *)0);
+
+			clientunmap(c);
+		}
+	} else if (cmdc_passed) {
+		/* when passed a client but no other args we do a toggle */
+		if (c->state & STATE_SCRATCH)
+			goto pop;
+		goto push;
+	} else if (scratch.clients) {
+		/* when passed no arguments we first try to empty the scratch */
+		c = scratch.clients;
+		goto pop;
+	} else {
+		Workspace *ws;
+		Client *sc = NULL;
+		/* when there are no clients in the scratch we look for recently
+		 * popped windows to push back or bring to the current workspace */
+		FOR_CLIENTS(sc, ws)
+			if (sc->old_state & STATE_SCRATCH &&
+					FLOATING(sc) && !FULLSCREEN(sc)) {
+				c = sc;
+				/* if the window is on our current workspace we push */
+				if (c->ws == selws)
+					goto push;
+				/* on another workspace so bring it to us */
+				goto pop;
+			}
+
+		/* if all else fails we push the active window */
+		if (selws->sel) {
+			c = selws->sel;
+			goto push;
+		}
+	}
+
+	xcb_flush(con);
+	needsrefresh = winchange = wschange = 1;
+	return nparsed;
+}
+
 int cmdsend(Workspace *ws)
 {
 	Client *c = cmdc;
@@ -928,7 +1002,7 @@ int cmdsend(Workspace *ws)
 			ws->num + 1, ws->mon->name, c->title)
 		Monitor *old = c->ws->mon;
 		unfocus(c, 1);
-		setworkspace(c, ws->num, c != c->ws->sel);
+		setworkspace(c, ws, c != c->ws->sel);
 		if (ws->mon != old && ws->mon->ws == ws) {
 			DBG("cmdsend: relocating window: %s -- from %s to %s", c->title,
 				old->name, ws->mon->name)
@@ -1051,19 +1125,6 @@ badvalue:
 	}
 	if (names)
 		setnetwsnames();
-	return nparsed;
-}
-
-int cmdshow(__attribute__((unused)) char **argv)
-{
-	int nparsed = 0;
-	Client *c = cmdc;
-
-	c->state &= ~STATE_HIDDEN;
-	focus(c);
-	showhide(c->ws->stack);
-	needsrefresh = 1;
-
 	return nparsed;
 }
 
@@ -1229,10 +1290,12 @@ int cmdwin(char **argv)
 {
 	Client *c;
 	int e = 0, nparsed = 0;
+	cmdc_passed = 0;
 
 	while (*argv) {
 		if ((c = parseclient(*argv, &e))) {
 			cmdc = c;
+			cmdc_passed = 1;
 		} else if (e == -1) {
 			respond(cmdresp,
 					"!invalid window id: %s\nexpected hex e.g. 0x001fefe7",

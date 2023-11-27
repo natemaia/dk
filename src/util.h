@@ -13,5 +13,4 @@ void *ecalloc(size_t elems, size_t elemsize);
 void *erealloc(void *p, size_t size);
 char *itoa(int n, char *s);
 void respond(FILE *f, const char *fmt, ...);
-void sighandle(int sig);
 int usage(char *prog, char *ver, int e, char flag, char *flagstr);

@@ -918,6 +918,10 @@ int cmdscratch(char **argv)
 	if (argv && *argv) {
 		if (!strcmp("pop", *argv)) {
 			argv++, nparsed++;
+			if (!scratch.clients) {
+				respond(cmdresp, "!no scratch clients to pop");
+				return nparsed;
+			}
 pop:
 			/* retain old SCRATCH state when popping from other workspace */
 			c->old_state = c->state | STATE_SCRATCH;
@@ -927,24 +931,24 @@ pop:
 			showhide(selws->stack);
 		} else if (!strcmp("push", *argv)) {
 			argv++, nparsed++;
+			if (!c) {
+				respond(cmdresp, "!no clients to scratch push");
+				return nparsed;
+			}
 push:
 			if (FULLSCREEN(c)) {
 				respond(cmdresp, "!unable to scratch fullscreen windows");
 				return nparsed;
 			}
-
 			if (c == selws->sel)
 				unfocus(c, 1);
-
 			if (!FLOATING(c)) {
 				Monitor *m = c->ws->mon;
 				c->state |= STATE_FLOATING;
 				resizehint(c, m->wx + m->ww / 3, m->wy, m->ww / 3, m->wh / 3,
 						c->bw, 0, 0);
 			}
-
 			c->state |= STATE_SCRATCH | STATE_HIDDEN | STATE_FLOATING;
-
 			/* setworkspace wont work for scratch push so we do our own swap */
 			detach(c, 0);
 			detachstack(c);
@@ -953,7 +957,6 @@ push:
 			attachstack(c);
 			PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL,
 					32, 0, (const void *)0);
-
 			clientunmap(c);
 		}
 	} else if (cmdc_passed) {

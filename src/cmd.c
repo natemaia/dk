@@ -339,6 +339,10 @@ int cmdfloat(char **argv)
 				m->name, m->wx, m->wy, m->ww, m->wh)
 			quadrant(c, &c->old_x, &c->old_y, &c->old_w, &c->old_h);
 		}
+		if (W(c) >= c->ws->mon->ww && H(c) >= c->ws->mon->wh) {
+			c->h -= c->h / 10, c->w -= c->h / 10;
+			gravitate(c, GRAV_CENTER, GRAV_CENTER, 1);
+		}
 		DBG("cmdfloat: resizing: %d,%d %dx%d", c->old_x, c->old_y, c->old_w,
 			c->old_h)
 		resizehint(c, c->old_x, c->old_y, c->old_w, c->old_h, c->bw, 0, 0);
@@ -447,19 +451,9 @@ int cmdlayout(char **argv)
 {
 	for (unsigned int i = 0; layouts[i].name; i++)
 		if (!strcmp(layouts[i].name, *argv)) {
-			Client *c = NULL;
-			if (tilecount(setws) == 1)
-				c = nexttiled(setws->clients);
 			if ((lytchange = &layouts[i] != setws->layout)) {
+				setws->layout = &layouts[i];
 				needsrefresh = 1;
-				if ((setws->layout = &layouts[i])->func == NULL && c) {
-					c->w = c->ws->mon->ww / 1.5;
-					c->h = c->ws->mon->wh / 1.3;
-					gravitate(c, GRAV_CENTER, GRAV_CENTER, 0);
-					int x = c->x, y = c->y, w = c->w, h = c->h, bw = c->bw;
-					applysizehints(c, &x, &y, &w, &h, bw, 0, 0);
-					resize(c, x, y, w, h, bw);
-				}
 			}
 			return 1;
 		}
@@ -619,11 +613,11 @@ int cmdresize(char **argv)
 	while (*argv) {
 		if (!strcmp("x", *argv)) {
 			argv++, nparsed++;
-			if (!argv || !parsegeom(*argv, 'x', &x, &relx, &xgrav))
+			if (!argv || !parsecoord(*argv, 'x', &x, &relx, &xgrav))
 				goto badvalue;
 		} else if (!strcmp("y", *argv)) {
 			argv++, nparsed++;
-			if (!argv || !parsegeom(*argv, 'y', &y, &rely, &ygrav))
+			if (!argv || !parsecoord(*argv, 'y', &y, &rely, &ygrav))
 				goto badvalue;
 		} else if (!strcmp("w", *argv) || !strcmp("width", *argv)) {
 			ARG(w, &relw, 0);
@@ -745,7 +739,7 @@ int cmdrule(char **argv)
 		.cb = NULL,
 		.mon = NULL,
 		.inst = NULL,
-		.class = NULL,
+		.clss = NULL,
 		.title = NULL,
 	};
 
@@ -770,7 +764,7 @@ int cmdrule(char **argv)
 
 	while (*argv) {
 		if (!strcmp(*argv, "class") || !strcmp(*argv, "match_class")) {
-			STR(r.class);
+			STR(r.clss);
 		} else if (!strcmp(*argv, "instance") ||
 				   !strcmp(*argv, "match_instance")) {
 			STR(r.inst);
@@ -817,11 +811,11 @@ int cmdrule(char **argv)
 				goto badvalue;
 		} else if (!strcmp(*argv, "x")) {
 			argv++, nparsed++;
-			if (!argv || !parsegeom(*argv, 'x', &r.x, NULL, &r.xgrav))
+			if (!argv || !parsecoord(*argv, 'x', &r.x, NULL, &r.xgrav))
 				goto badvalue;
 		} else if (!strcmp(*argv, "y")) {
 			argv++, nparsed++;
-			if (!argv || !parsegeom(*argv, 'y', &r.y, NULL, &r.ygrav))
+			if (!argv || !parsecoord(*argv, 'y', &r.y, NULL, &r.ygrav))
 				goto badvalue;
 		} else if (!strcmp("w", *argv) || !strcmp("width", *argv)) {
 			ARG(r.w);
@@ -877,7 +871,7 @@ badvalue:
 		argv++, nparsed++;
 	}
 
-	if ((r.class || r.inst || r.title || r.type) &&
+	if ((r.clss || r.inst || r.title || r.type) &&
 		(r.ws != -1 || r.mon || r.focus || r.cb || r.state != STATE_NONE ||
 		 r.x != -1 || r.y != -1 || r.w != -1 || r.h != -1 || r.bw != -1 ||
 		 r.xgrav != GRAV_NONE || r.ygrav != GRAV_NONE)) {
@@ -885,7 +879,7 @@ badvalue:
 
 		FOR_EACH (
 			pr, rules) { /* free any existing rule that uses the same matches */
-			if (M(r.class, pr->class) && M(r.inst, pr->inst) &&
+			if (M(r.clss, pr->clss) && M(r.inst, pr->inst) &&
 				M(r.title, pr->title)) {
 				freerule(pr);
 				break;
@@ -896,7 +890,7 @@ badvalue:
 			if ((nr = initrule(&r)) && apply) {
 applyall:
 				FOR_CLIENTS (c, ws) {
-					clientrule(c, nr, 0);
+					clientrule(c, nr, 1);
 					if (c->cb)
 						c->cb->func(c, 0);
 				}
@@ -929,6 +923,7 @@ pop:
 			setworkspace(c, selws, 0);
 			clientmap(c);
 			showhide(selws->stack);
+			goto end;
 		} else if (!strcmp("push", *argv)) {
 			argv++, nparsed++;
 			if (!c) {
@@ -958,7 +953,11 @@ push:
 			PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL,
 					32, 0, (const void *)0);
 			clientunmap(c);
+			goto end;
 		}
+		respond(cmdresp, "!invalid scratch command: %s\nexpected pop or push",
+				*argv);
+		return -1;
 	} else if (cmdc_passed) {
 		/* when passed a client but no other args we do a toggle */
 		if (c->state & STATE_SCRATCH)
@@ -980,8 +979,7 @@ push:
 				/* if the window is on our current workspace we push */
 				if (c->ws == selws)
 					goto push;
-				/* on another workspace so bring it to us */
-				goto pop;
+				goto pop; /* on another workspace so bring it to us */
 			}
 
 		/* if all else fails we push the active window */
@@ -991,6 +989,7 @@ push:
 		}
 	}
 
+end:
 	xcb_flush(con);
 	needsrefresh = winchange = wschange = 1;
 	return nparsed;

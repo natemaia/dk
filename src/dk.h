@@ -49,9 +49,9 @@
 
 #define W(c)        (c->w + (2 * c->bw))
 #define H(c)        (c->h + (2 * c->bw))
-#define FLOATING(c) (c->state & STATE_FLOATING || !c->ws->layout->func)
+#define FLOATING(c) ((c->state & STATE_FLOATING) || !c->ws->layout->func)
 #define FULLSCREEN(c)                                                          \
-	(c->state & STATE_FULLSCREEN && !(c->state & STATE_FAKEFULL))
+	((c->state & STATE_FULLSCREEN) && !(c->state & STATE_FAKEFULL))
 
 #define FOR_EACH(v, list)                                                      \
 	if (list)                                                                  \
@@ -249,6 +249,7 @@ typedef struct Monitor {
 
 typedef struct Desk {
 	uint32_t state;
+	char clss[64], inst[64];
 	xcb_window_t win;
 	struct Desk *next;
 	Monitor *mon;
@@ -260,9 +261,9 @@ typedef struct Rule {
 	int ws, focus;
 	uint32_t state;
 	xcb_atom_t type;
-	char *title, *class, *inst, *mon;
+	char *title, *clss, *inst, *mon;
 	const Callback *cb;
-	regex_t titlereg, classreg, instreg;
+	regex_t titlereg, clssreg, instreg;
 	struct Rule *next;
 } Rule;
 
@@ -270,7 +271,7 @@ typedef struct Panel {
 	int x, y, w, h;
 	int l, r, t, b; /* struts */
 	uint32_t state;
-	char class[64], inst[64];
+	char clss[64], inst[64];
 	xcb_window_t win;
 	struct Panel *next;
 	Monitor *mon;
@@ -285,7 +286,7 @@ typedef struct Status {
 } Status;
 
 typedef struct Client {
-	char title[256], class[64], inst[64];
+	char title[256], clss[64], inst[64];
 	int32_t x, y, w, h, bw, hoff, depth, old_x, old_y, old_w, old_h, old_bw;
 	int32_t max_w, max_h, min_w, min_h, base_w, base_h, inc_w, inc_h, hints;
 	int32_t has_motif;
@@ -322,7 +323,7 @@ typedef struct GlobalCfg {
 
 struct Callback {
 	const char *name;
-	void (*func)(Client *, int);
+	void (*func)(Client *c, int closed);
 };
 
 struct Workspace {
@@ -391,7 +392,7 @@ void clienthints(Client *c);
 void clientmap(Client *c);
 void clientmotif(void);
 int clientname(Client *c);
-void clientrule(Client *c, Rule *wr, int nofocus);
+void clientrule(Client *c, Rule *wr, int focus);
 void clienttype(Client *c);
 void clientunmap(Client *c);
 Monitor *coordtomon(int x, int y);
@@ -420,6 +421,7 @@ void relocate(Client *c, Monitor *mon, Monitor *old);
 void resize(Client *c, int x, int y, int w, int h, int bw);
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion,
 				int mouse);
+void resizehintf(Client *c, int x, int y, int w, int h, int bw);
 void restack(Workspace *ws);
 void sendconfigure(Client *c);
 int sendwmproto(Client *c, int wmproto);

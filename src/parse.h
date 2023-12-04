@@ -11,7 +11,7 @@ Client *parseclient(char *arg, int *ebadwin);
 void parsecmd(char *buf);
 int parsecolour(char *arg, unsigned int *result);
 float parsefloat(char *arg, int *rel);
-int parsegeom(char *arg, char type, int *i, int *rel, int *grav);
+int parsecoord(char *arg, char type, int *i, int *rel, int *grav);
 int parseint(char *arg, int *rel, int allowzero);
 int parseintclamp(char *arg, int *rel, int min, int max);
 int parseopt(char *arg, const char **optarr, int len_optarr);

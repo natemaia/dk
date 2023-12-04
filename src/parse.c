@@ -202,7 +202,7 @@ int parseopt(char *arg, const char **optarr, int len_optarr)
 	return -1;
 }
 
-int parsegeom(char *arg, char type, int *i, int *rel, int *grav)
+int parsecoord(char *arg, char type, int *i, int *rel, int *grav)
 {
 	int j;
 

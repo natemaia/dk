@@ -19,6 +19,7 @@
 
 #include "dk.h"
 #include "cmd.h"
+#include "event.h"
 #include "layout.h"
 #include "parse.h"
 
@@ -26,8 +27,8 @@ int dwindle(Workspace *ws)
 {
 	Client *c;
 	Monitor *m = ws->mon;
-	unsigned int i, n, x, y;
-	int w, h, ww, g, f = 0, ret = 1;
+	unsigned int i, n;
+	int x, y, w, h, ww, g, f = 0, ret = 1;
 
 	if (!(n = tilecount(ws)))
 		return 1;
@@ -65,6 +66,7 @@ int dwindle(Workspace *ws)
 		if (f || *p - g - (2 * b) < globalcfg[GLB_MIN_WH].val) {
 			if (f) {
 				popfloat(c);
+				ret = -1;
 				continue;
 			}
 			f = 1;
@@ -197,6 +199,7 @@ int ltile(Workspace *ws)
 		int available = wh - (*y + geo[i][3] + g);
 		if (!c->hoff && geo[i][3] - (2 * bw) < minh) {
 			popfloat(c);
+			ret = -1;
 			continue;
 		} else if (remain > 1 &&
 				   (remain - 1) * (minh + g + (2 * bw)) > available) {
@@ -241,7 +244,7 @@ update:
 		if (geo[i][3] <= globalcfg[GLB_MIN_WH].val)
 			ret = -1;
 		resizehint(c, geo[i][0], geo[i][1], geo[i][2], geo[i][3],
-				   !globalcfg[GLB_SMART_BORDER].val || n > 1 ? c->bw : 0, 0, 0);
+				!globalcfg[GLB_SMART_BORDER].val || n > 1 ? c->bw : 0, 0, 0);
 	}
 	xcb_aux_sync(con);
 	return ret;
@@ -252,22 +255,22 @@ int mono(Workspace *ws)
 	int g;
 	Client *c;
 
-	if (ws->sel) {
-		if (globalcfg[GLB_SMART_GAP].val)
-			g = 0, ws->smartgap = 1;
-		else
-			g = ws->gappx, ws->smartgap = 0;
+	if (!ws->sel)
+		return 1;
+	if (globalcfg[GLB_SMART_GAP].val)
+		g = 0, ws->smartgap = 1;
+	else
+		g = ws->gappx, ws->smartgap = 0;
 
-		int b = globalcfg[GLB_SMART_BORDER].val ? 0 : ws->sel->bw;
+	int b = globalcfg[GLB_SMART_BORDER].val ? 0 : ws->sel->bw;
 
-		for (c = nexttiled(ws->clients); c; c = nexttiled(c->next)) {
-			resizehint(
+	for (c = nexttiled(ws->clients); c; c = nexttiled(c->next)) {
+		resizehint(
 				c, ws->mon->wx + ws->padl + g, ws->mon->wy + ws->padt + g,
 				ws->mon->ww - ws->padl - ws->padr - (2 * g) - (2 * b),
 				ws->mon->wh - ws->padt - ws->padb - (2 * g) - (2 * b), b, 0, 0);
-		}
-		xcb_aux_sync(con);
 	}
+	xcb_aux_sync(con);
 	return 1;
 }
 
@@ -344,6 +347,7 @@ int rtile(Workspace *ws)
 		int available = wh - (*y + geo[i][3] + g);
 		if (!c->hoff && geo[i][3] - (2 * bw) < minh) {
 			popfloat(c);
+			ret = -1;
 			continue;
 		} else if (remain > 1 &&
 				   (remain - 1) * (minh + g + (2 * bw)) > available) {
@@ -385,7 +389,7 @@ update:
 		if (geo[i][3] <= globalcfg[GLB_MIN_WH].val)
 			ret = -1;
 		resizehint(c, geo[i][0], geo[i][1], geo[i][2], geo[i][3],
-				   !globalcfg[GLB_SMART_BORDER].val || n > 1 ? c->bw : 0, 0, 0);
+				!globalcfg[GLB_SMART_BORDER].val || n > 1 ? c->bw : 0, 0, 0);
 	}
 	xcb_aux_sync(con);
 	return ret;
@@ -395,8 +399,8 @@ int spiral(Workspace *ws)
 {
 	Client *c;
 	Monitor *m = ws->mon;
-	unsigned int i, n, x, y;
-	int w, h, ww, g, f = 0, ret = 1;
+	unsigned int i, n;
+	int x, y, w, h, ww, g, f = 0, ret = 1;
 
 	if (!(n = tilecount(ws)))
 		return 1;
@@ -430,16 +434,17 @@ int spiral(Workspace *ws)
 		case 3: x -= w; break;
 		}
 		if (!i) {
-			w = n > 1 ? (ww * ws->msplit) - g / 2 : ww - g;
+			w = n > 1 ? (ww * ws->msplit) - (float)g / 2 : ww - g;
 			h -= g;
 			y = m->wy + ws->padt;
 		} else if (i == 1) {
-			w = ww - ((ww * ws->msplit) + g / 2);
+			w = ww - ((ww * ws->msplit) + (float)g / 2);
 		}
 
 		if (f || *p - g - (2 * b) < globalcfg[GLB_MIN_WH].val) {
 			if (f) {
 				popfloat(c);
+				ret = -1;
 				continue;
 			}
 			f = 1;

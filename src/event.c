@@ -245,11 +245,12 @@ void configrequest(xcb_generic_event_t *ev)
 				DBG("configrequest: visible window, performing resize: %d,%d "
 					"%dx%d",
 					c->x, c->y, c->w, c->h)
-				resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0, 0);
+				resizehintf(c, c->x, c->y, c->w, c->h, c->bw);
 			}
 		} else {
 			sendconfigure(c);
 		}
+		clientborder(c, c == selws->sel);
 	} else {
 		DBG("configrequest: 0x%08x - %d,%d @ %dx%d", e->window, e->x, e->y,
 			e->width, e->height)
@@ -574,7 +575,6 @@ void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 						restack(selws);
 					}
 					resizehint(c, c->x, c->y, nw, nh, c->bw, 1, 1);
-					xcb_flush(con);
 				}
 				break;
 			case XCB_BUTTON_RELEASE:

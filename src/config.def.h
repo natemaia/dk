@@ -49,7 +49,8 @@ void albumart(Client *c, int closed)
 	 * basic example of a user-defined callback
 	 *
 	 * on open: apply padding, gravitate the window to the right-center, and
-	 * avoid focus grab on close: remove padding
+	 *          avoid focus grab
+	 * on close: remove padding
 	 */
 
 	if (closed) {
@@ -70,8 +71,8 @@ void popfull(__attribute__((unused)) Client *c, int closed)
 	 * on close: nothing
 	 */
 
-	if (!closed && selws->sel)
-		setfullscreen(selws->sel, 0);
+	if (!closed && c->ws->sel && FULLSCREEN(c->ws->sel))
+		setfullscreen(c->ws->sel, 0);
 }
 
 int focusmaster(__attribute__((unused)) char **argv)

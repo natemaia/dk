@@ -559,7 +559,6 @@ void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 					} else {
 						selws->layout->func(selws);
 					}
-
 				} else {
 					nw = ow + (e->root_x - mx);
 					nh = oh + (e->root_y - my);
@@ -575,6 +574,7 @@ void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 						restack(selws);
 					}
 					resizehint(c, c->x, c->y, nw, nh, c->bw, 1, 1);
+					xcb_flush(con);
 				}
 				break;
 			case XCB_BUTTON_RELEASE:

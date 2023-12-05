@@ -2019,13 +2019,20 @@ void setfullscreen(Client *c, int fullscreen)
 		c->state |= STATE_FULLSCREEN | STATE_FLOATING | STATE_NOBORDER;
 		c->old_bw = c->bw;
 		c->bw = 0;
-		MOVERESIZE(c->win, m->x, m->y, m->w, m->h, 0);
-		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+		if (c->ws == m->ws) {
+			MOVERESIZE(c->win, m->x, m->y, m->w, m->h, 0);
+			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+		} else {
+			c->x = m->x, c->y = m->y, c->w = m->w, c->h = m->h;
+		}
 	} else if (!fullscreen && (c->state & STATE_FULLSCREEN)) {
 		PROP(REPLACE, c->win, state, XCB_ATOM_ATOM, 32, 0, (const void *)0);
 		c->state = c->old_state;
 		c->bw = c->old_bw;
-		resizehintf(c, c->old_x, c->old_y, c->old_w, c->old_h, c->bw);
+		if (c->ws == m->ws)
+			resizehintf(c, c->old_x, c->old_y, c->old_w, c->old_h, c->bw);
+		else
+			c->x = c->old_x, c->y = c->old_y, c->w = c->old_w, c->h = c->old_h;
 	}
 	ignore(XCB_ENTER_NOTIFY);
 	xcb_aux_sync(con);

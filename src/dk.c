@@ -515,8 +515,8 @@ void changews(Workspace *ws, int swap, int warp)
 
 	if (!ws || ws == selws)
 		return;
-	DBG("changews: %d:%s -> %d:%s - swap: %d - warp: %d", selws->num,
-		selws->mon->name, ws->num, ws->mon->name, swap, warp)
+	DBG("changews: %d:%s -> %d:%s - swap: %d - warp: %d", selws->num + 1,
+		selws->mon->name, ws->num + 1, ws->mon->name, swap, warp)
 	int dowarp = !swap && warp && selws->mon != ws->mon;
 	int vis = ws == ws->mon->ws;
 	lastws = selws;
@@ -1818,8 +1818,7 @@ static void refresh(void)
 			if (c->state & STATE_NEEDSMAP)
 				clientmap(c);
 			if (FULLSCREEN(c))
-				MOVERESIZE(c->win, c->ws->mon->x, c->ws->mon->y,
-						c->ws->mon->w, c->ws->mon->h, 0);
+				MOVERESIZE(c->win, m->x, m->y, m->w, m->h, 0);
 			else if (FLOATING(c))
 				resizehintf(c, c->x, c->y, c->w, c->h, c->bw);
 		}
@@ -1890,8 +1889,8 @@ static void relocatews(Workspace *ws, Monitor *old, int wasvis)
 
 	if (!(mon = ws->mon) || mon == old || ws != ws->mon->ws || !wasvis)
 		return;
-	DBG("relocatews: %d:%s -> %d:%s", old->ws->num, old->name, mon->ws->num,
-		mon->name)
+	DBG("relocatews: %d:%s -> %d:%s", old->ws->num + 1, old->name,
+			mon->ws->num + 1, mon->name)
 	FOR_EACH (c, ws->clients)
 		relocate(c, mon, old);
 }
@@ -1927,6 +1926,8 @@ void restack(Workspace *ws)
 
 	if (!ws || !(c = ws->sel))
 		return;
+
+	DBG("restack: workspace: %d", ws->num + 1)
 
 	FOR_EACH (p, panels)
 		if (p->mon == ws->mon)
@@ -2016,8 +2017,9 @@ void setfullscreen(Client *c, int fullscreen)
 			 &netatom[NET_STATE_FULL]);
 		c->old_state = c->state;
 		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
-		c->state |= STATE_FULLSCREEN | STATE_FLOATING | STATE_NOBORDER;
-		c->old_bw = c->bw;
+		c->state |= STATE_FULLSCREEN | STATE_FLOATING;
+		if (c->bw || (c->state == STATE_NOBORDER))
+			c->old_bw = c->bw;
 		c->bw = 0;
 		if (c->ws == m->ws) {
 			MOVERESIZE(c->win, m->x, m->y, m->w, m->h, 0);
@@ -2034,8 +2036,6 @@ void setfullscreen(Client *c, int fullscreen)
 		else
 			c->x = c->old_x, c->y = c->old_y, c->w = c->old_w, c->h = c->old_h;
 	}
-	ignore(XCB_ENTER_NOTIFY);
-	xcb_aux_sync(con);
 	needsrefresh = 1;
 }
 
@@ -2177,6 +2177,7 @@ void showhide(Client *c)
 	m = c->ws->mon;
 	if (c->ws == m->ws) {
 		DBG("showhide: ws: %d -- showing window : %s", c->ws->num + 1, c->title)
+		setwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
 		MOVE(c->win, c->x, c->y);
 		if (FLOATING(c) && !FULLSCREEN(c))
 			resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0, 0);
@@ -2185,6 +2186,7 @@ void showhide(Client *c)
 		DBG("showhide: ws: %d -- hiding window : %s", c->ws->num + 1, c->title)
 		showhide(c->snext);
 		if (!(c->state & STATE_STICKY)) {
+			setwinstate(c->win, XCB_ICCCM_WM_STATE_ICONIC);
 			MOVE(c->win, W(c) * -2, c->y);
 		} else if (c->ws != selws && m == selws->mon) {
 			Client *sel = lastws->sel == c ? c : selws->sel;

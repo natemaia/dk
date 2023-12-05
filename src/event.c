@@ -128,8 +128,6 @@ void clientmessage(xcb_generic_event_t *ev)
 				setfullscreen(c,
 							  (d[0] == 1 ||
 							   (d[0] == 2 && !(c->state & STATE_FULLSCREEN))));
-				ignore(XCB_ENTER_NOTIFY);
-				xcb_aux_sync(con);
 			} else if (d[1] == netatom[NET_STATE_ABOVE] ||
 					   d[2] == netatom[NET_STATE_ABOVE]) {
 				int above =
@@ -242,9 +240,12 @@ void configrequest(xcb_generic_event_t *ev)
 				sendconfigure(c);
 			}
 			if (c->ws == m->ws) {
+				c->w = CLAMP(c->w, globalcfg[GLB_MIN_WH].val, m->w);
+				c->h = CLAMP(c->h, globalcfg[GLB_MIN_WH].val, m->h);
+				c->x = (c->w == m->w) ? m->x : CLAMP(c->x, m->x, m->x + (m->w - c->w));
+				c->y = (c->h == m->h) ? m->y : CLAMP(c->y, m->y, m->y + (m->h - c->h));
 				DBG("configrequest: visible window, performing resize: %d,%d "
-					"%dx%d",
-					c->x, c->y, c->w, c->h)
+					"%dx%d", c->x, c->y, c->w, c->h)
 				resizehintf(c, c->x, c->y, c->w, c->h, c->bw);
 			}
 		} else {

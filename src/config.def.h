@@ -195,6 +195,7 @@ Cmd wincmds[] = {
 	{"full",     cmdfull    },
 	{"cycle",    cmdcycle   },
 	{"stick",    cmdstick   },
+	{"scratch",  cmdscratch },
 	{"fakefull", cmdfakefull},
 	{"focusm",   focusmaster},
 

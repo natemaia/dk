@@ -265,15 +265,12 @@ int main(int argc, char *argv[])
 	/* TODO: fix these shit hacks to avoid various issues when restarting */
 	FOR_EACH (ws, workspaces) {
 		FOR_EACH (c, ws->clients)
-			if (FLOATING(c))
-				resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0,
-						   0); /* floating windows being the wrong size */
+			if (FLOATING(c)) /* floating windows being the wrong size */
+				resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0, 0);
 		if (ws->layout->func)
 			ws->layout->func(ws); /* border issues on tiled clients */
 		showhide(ws->stack); /* show only windows on the active workspace */
 	}
-	ignore(XCB_ENTER_NOTIFY); /* wrong windows grabbing focus */
-	xcb_aux_sync(con);
 
 	confd = xcb_get_file_descriptor(con);
 	while (running) {
@@ -568,6 +565,9 @@ void clientborder(Client *c, int focused)
 	uint32_t in = border[focused ? BORD_FOCUS
 								 : ((c->state & STATE_URGENT) ? BORD_URGENT
 															  : BORD_UNFOCUS)];
+	DBG("clientborder: %s - 0x%08x %s, width=%d, outer_width=%d",
+			focused ? "focus" : "unfocus", c->win, c->title, b, o)
+
 	if (b - o > 0) {
 		uint32_t out =
 			border[focused ? BORD_O_FOCUS
@@ -626,7 +626,7 @@ void clienthints(Client *c)
 
 void clientmap(Client *c)
 {
-	DBG("clientmap: %s", c->title)
+	DBG("clientmap: 0x%08x %s", c->win, c->title)
 	setwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
 	xcb_map_window(con, c->win);
 	c->state &= ~STATE_NEEDSMAP;
@@ -749,7 +749,7 @@ void clienttype(Client *c)
 
 void clientunmap(Client *c)
 {
-	DBG("clientunmap: %s", c->title)
+	DBG("clientunmap: 0x%08x %s", c->win, c->title)
 	xcb_get_window_attributes_reply_t *ra = winattr(root),
 									  *ca = winattr(c->win);
 	uint32_t rm = (ra->your_event_mask & ~XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY);
@@ -847,11 +847,9 @@ void fillstruts(Panel *p)
 
 void focus(Client *c)
 {
-	if (!selws)
-		selws = workspaces;
 	if (!c)
 		c = selws ? selws->stack : NULL;
-	if (selws && selws->sel)
+	if (selws && selws->sel && (!c || c != selws->sel))
 		unfocus(selws->sel, 0);
 	if (c) {
 		if (c->state & STATE_URGENT)
@@ -865,8 +863,7 @@ void focus(Client *c)
 		cmdc = c;
 	} else {
 		unfocus(NULL, 1);
-		if (selws)
-			selws->sel = NULL;
+		selws->sel = NULL;
 	}
 	winchange = 1;
 }
@@ -1143,7 +1140,6 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		} else if (c->x == c->ws->mon->x && c->y == c->ws->mon->y) {
 			quadrant(c, &c->x, &c->y, &c->w, &c->h);
 		}
-		resizehintf(c, c->x, c->y, c->w, c->h, c->bw);
 	}
 	if (c->cb)
 		c->cb->func(c, 0);
@@ -1815,20 +1811,27 @@ static void refresh(void)
 		MAP(d, desks)
 
 	FOR_EACH (m, monitors) {
-		if (m->ws->layout->func && m->ws->layout->func(m->ws) == -1)
-			m->ws->layout->func(m->ws);
+		DBG("refresh: workspace: %d, monitor: %s layout: %s",
+				m->ws->num + 1, m->name, m->ws->layout->name)
 		FOR_EACH (c, m->ws->clients) {
 			if (c->state & STATE_NEEDSMAP)
 				clientmap(c);
 			if (FULLSCREEN(c))
 				MOVERESIZE(c->win, m->x, m->y, m->w, m->h, 0);
 			else if (FLOATING(c))
-				resizehintf(c, c->x, c->y, c->w, c->h, c->bw);
+				resize(c, c->x, c->y, c->w, c->h, c->bw);
 		}
+		if (m->ws->layout->func && m->ws->layout->func(m->ws) == -1)
+			m->ws->layout->func(m->ws);
 		restack(m->ws);
 	}
+	ignore(XCB_ENTER_NOTIFY);
+	xcb_aux_sync(con);
 	focus(NULL);
 	needsrefresh = 0;
+	DBG("refresh: finished - focused window: 0x%08x %s",
+			selws->sel ? selws->sel->win : 0,
+			selws->sel ? selws->sel->title : "none")
 #undef MAP
 }
 
@@ -1843,15 +1846,14 @@ void relocate(Client *c, Monitor *mon, Monitor *old)
 		focus(sel);
 		return;
 	}
-	DBG("relocate: window: %s -- from %s to %s -- x: %d - y: %d - w: %d - h: "
-		"%d",
-		c->title, old->name, mon->name, c->x, c->y, c->w, c->h)
+	DBG("relocate: window: 0x%08x %s -- from %s to %s -- "
+			"x: %d - y: %d - w: %d - h: %d",
+			c->win, c->title, old->name, mon->name, c->x, c->y, c->w, c->h)
 
 	if (c->state & STATE_FULLSCREEN && c->w == old->w && c->h == old->h) {
-		DBG("relocate: fullscreen window: %s -- x: %d -> %d - y: %d -> %d - w: "
-			"%d -> %d - h: %d -> "
-			"%d",
-			c->title, c->x, mon->x, c->y, mon->y, c->w, mon->w, c->h, mon->h)
+		DBG("relocate: fullscreen window: 0x%08x %s -- x: %d -> %d - y: %d -> %d - w: "
+			"%d -> %d - h: %d -> %d",
+			c->win, c->title, c->x, mon->x, c->y, mon->y, c->w, mon->w, c->h, mon->h)
 		c->x = mon->x, c->y = mon->y, c->w = mon->w, c->h = mon->h;
 		return;
 	}
@@ -1867,8 +1869,8 @@ void relocate(Client *c, Monitor *mon, Monitor *old)
 		mon->h > old->h ? (c->y - old->y) * yscale : (c->y - old->y) / yscale;
 
 	DBG("relocate: nx: %d - ny: %d xscale: %f - yscale: %f - x: %d -> %d - y: "
-		"%d -> %d",
-		nx, ny, xscale, yscale, c->x, mon->x + nx, c->y, mon->y + ny)
+			"%d -> %d",
+			nx, ny, xscale, yscale, c->x, mon->x + nx, c->y, mon->y + ny)
 	c->w = mon->w > old->w ? c->w * xscale : c->w / xscale;
 	c->h = mon->h > old->h ? c->h * yscale : c->h / yscale;
 	c->x = mon->x + nx;
@@ -1880,9 +1882,9 @@ void relocate(Client *c, Monitor *mon, Monitor *old)
 		c->y = mon->y;
 	if (!corner && c->x == mon->x && c->y == mon->y)
 		gravitate(c, GRAV_CENTER, GRAV_CENTER, 1);
-	DBG("relocate: finale size/location of window: %s -- x: %d - y: %d - w: %d "
-		"- h: %d",
-		c->title, c->x, c->y, c->w, c->h)
+	DBG("relocate: finale size/location of window: 0x%08x %s -- "
+			"x: %d - y: %d - w: %d - h: %d",
+			c->win, c->title, c->x, c->y, c->w, c->h)
 }
 
 static void relocatews(Workspace *ws, Monitor *old, int wasvis)
@@ -1915,12 +1917,6 @@ void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion,
 		resize(c, x, y, w, h, bw);
 }
 
-void resizehintf(Client *c, int x, int y, int w, int h, int bw)
-{
-	applysizehints(c, &x, &y, &w, &h, bw, 0, 0);
-	resize(c, x, y, w, h, bw);
-}
-
 void restack(Workspace *ws)
 {
 	Desk *d;
@@ -1930,7 +1926,7 @@ void restack(Workspace *ws)
 	if (!ws || !(c = ws->sel))
 		return;
 
-	DBG("restack: workspace: %d", ws->num + 1)
+	DBG("restack: starting workspace: %d", ws->num + 1)
 
 	FOR_EACH (p, panels)
 		if (p->mon == ws->mon)
@@ -1950,6 +1946,7 @@ void restack(Workspace *ws)
 			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	ignore(XCB_ENTER_NOTIFY);
 	xcb_aux_sync(con);
+	DBG("restack: finished workspace: %d", ws->num + 1)
 }
 
 static int rulecmp(Client *c, Rule *r)
@@ -2024,20 +2021,11 @@ void setfullscreen(Client *c, int fullscreen)
 		if (c->bw || (c->state == STATE_NOBORDER))
 			c->old_bw = c->bw;
 		c->bw = 0;
-		if (c->ws == m->ws) {
-			MOVERESIZE(c->win, m->x, m->y, m->w, m->h, 0);
-			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-		} else {
-			c->x = m->x, c->y = m->y, c->w = m->w, c->h = m->h;
-		}
 	} else if (!fullscreen && (c->state & STATE_FULLSCREEN)) {
 		PROP(REPLACE, c->win, state, XCB_ATOM_ATOM, 32, 0, (const void *)0);
 		c->state = c->old_state;
 		c->bw = c->old_bw;
-		if (c->ws == m->ws)
-			resizehintf(c, c->old_x, c->old_y, c->old_w, c->old_h, c->bw);
-		else
-			c->x = c->old_x, c->y = c->old_y, c->w = c->old_w, c->h = c->old_h;
+		c->x = c->old_x, c->y = c->old_y, c->w = c->old_w, c->h = c->old_h;
 	}
 	needsrefresh = 1;
 }
@@ -2077,8 +2065,8 @@ void setstackmode(xcb_window_t win, uint32_t mode)
 #ifdef DEBUG
 	Client *c = wintoclient(win);
 	if (c)
-		DBG("setstackmode: stacking window %s: %s",
-			mode == XCB_STACK_MODE_ABOVE ? "above" : "below", c->title)
+		DBG("setstackmode: stacking window %s: 0x%08x %s",
+			mode == XCB_STACK_MODE_ABOVE ? "above" : "below", c->win, c->title)
 	else
 		DBG("setstackmode: stacking window %s: 0x%08x",
 			mode == XCB_STACK_MODE_ABOVE ? "above" : "below", win)
@@ -2091,7 +2079,7 @@ void setnetstate(xcb_window_t win, uint32_t state)
 #ifdef DEBUG
 	Client *c = wintoclient(win);
 	if (c)
-		DBG("setnetstate: window %s: %s", c->title,
+		DBG("setnetstate: window 0x%08x %s: %s", c->win, c->title,
 			(state & STATE_FULLSCREEN) ? "fullscreen" : "none")
 	else
 		DBG("setnetstate: window 0x%08x: %s", win,
@@ -2132,7 +2120,7 @@ void setwinstate(xcb_window_t win, uint32_t state)
 #ifdef DEBUG
 	Client *c = wintoclient(win);
 	if (c)
-		DBG("setwinstate: window %s: %s", c->title,
+		DBG("setwinstate: window 0x%08x %s: %s", c->win, c->title,
 			state == XCB_ICCCM_WM_STATE_NORMAL ? "NORMAL" : "WITHDRAWN")
 	else
 		DBG("setwinstate: window 0x%08x: %s", win,
@@ -2141,7 +2129,6 @@ void setwinstate(xcb_window_t win, uint32_t state)
 	uint32_t data[] = {state, XCB_ATOM_NONE};
 	PROP(REPLACE, win, wmatom[WM_STATE], wmatom[WM_STATE], 32, 2,
 		 (const void *)data);
-	xcb_flush(con);
 }
 
 void setworkspace(Client *c, Workspace *ws, int stacktail)
@@ -2150,7 +2137,7 @@ void setworkspace(Client *c, Workspace *ws, int stacktail)
 
 	if (ws == c->ws)
 		return;
-	DBG("setworkspace: %s -> %d", c->title, ws->num + 1)
+	DBG("setworkspace: 0x%08x %s -> %d", c->win, c->title, ws->num + 1)
 	if (c->ws) {
 		detach(c, 0);
 		detachstack(c);
@@ -2179,19 +2166,23 @@ void showhide(Client *c)
 		return;
 	m = c->ws->mon;
 	if (c->ws == m->ws) {
-		DBG("showhide: ws: %d -- showing window : %s", c->ws->num + 1, c->title)
+		DBG("showhide: ws: %d - showing window : 0x%08x %s", c->ws->num + 1,
+				c->win, c->title)
 		setwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
 		MOVE(c->win, c->x, c->y);
 		if (FLOATING(c) && !FULLSCREEN(c))
 			resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0, 0);
 		showhide(c->snext);
 	} else {
-		DBG("showhide: ws: %d -- hiding window : %s", c->ws->num + 1, c->title)
 		showhide(c->snext);
 		if (!(c->state & STATE_STICKY)) {
+			DBG("showhide: ws: %d - hiding window : 0x%08x %s", c->ws->num + 1,
+					c->win, c->title)
 			setwinstate(c->win, XCB_ICCCM_WM_STATE_ICONIC);
 			MOVE(c->win, W(c) * -2, c->y);
 		} else if (c->ws != selws && m == selws->mon) {
+			DBG("showhide: ws: %d -- not hiding sticky window : 0x%08x %s",
+					c->ws->num + 1, c->win, c->title)
 			Client *sel = lastws->sel == c ? c : selws->sel;
 			setworkspace(c, selws, 0);
 			focus(sel);

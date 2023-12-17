@@ -421,7 +421,6 @@ void relocate(Client *c, Monitor *mon, Monitor *old);
 void resize(Client *c, int x, int y, int w, int h, int bw);
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion,
 				int mouse);
-void resizehintf(Client *c, int x, int y, int w, int h, int bw);
 void restack(Workspace *ws);
 void sendconfigure(Client *c);
 int sendwmproto(Client *c, int wmproto);

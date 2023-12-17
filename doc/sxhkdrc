@@ -59,17 +59,14 @@ alt + {q,space,Tab}
 alt + shift + {space,s}
 	dkcmd win {float,stick}
 
-# move window, signed (+/-) for relative changes
+# move window, signed (+/-) for relative changes, for tiled windows
+# y coord changes will move the window up/down the stack
 alt + shift + {h,j,k,l}
 	dkcmd win resize {x=-20,y=+20,y=-20,x=+20}
 
 # resize window, signed (+/-) for relative changes
 alt + ctrl + {h,j,k,l}
 	dkcmd win resize {w=-20,h=+20,h=-20,w=+20}
-
-# move the active window up/down the stack
-alt + {Up,Down}
-	dkcmd win mvstack {up,down}
 
 # view, send, or follow to a workspace (by number)
 alt + {_,shift + ,ctrl + }{1-9,0}
@@ -84,9 +81,9 @@ alt + {_,shift + ,ctrl + }{bracketleft,bracketright,BackSpace,Left,Right}
 alt + {_,shift + ,ctrl + }{comma,period,backslash}
 	dkcmd mon {view,send,follow} {prev,next,last}
 
-# change active workspace layout
-alt + {t,r,m,g,s,w,f,u}
-	dkcmd set layout {tile,rtile,mono,grid,spiral,dwindle,none,tstack}
+# change active workspace layout or cycle between them
+alt + {t,r,m,g,s,w,f,u,c}
+	dkcmd set layout {tile,rtile,mono,grid,spiral,dwindle,none,tstack,cycle}
 
 # change number of windows in master or first stack
 alt + {_,shift + }{i,d}

@@ -159,10 +159,10 @@ int adjustwsormon(char **argv)
 			ws->mon->name)
 		nparsed++;
 		if ((cmdc && ws != cmdc->ws) || ws != selws || selws->mon != ws->mon) {
-			DBG("adjustwsormon: %s client: %s",
+			DBG("adjustwsormon: %s client: 0x%08x %s",
 				fn == cmdsend     ? "sending"
 				: fn == cmdfollow ? "following"
-								  : "viewing",
+								  : "viewing", cmdc ? cmdc->win : 0,
 				cmdc ? cmdc->title : "none");
 			lytchange = fn != cmdsend && ws->layout != selws->layout;
 			fn(ws);
@@ -332,24 +332,16 @@ int cmdfloat(char **argv)
 
 	if ((c->state ^= STATE_FLOATING) & STATE_FLOATING) {
 		Monitor *m = c->ws->mon;
-		DBG("cmdfloat: client state is now floating: %s", c->title)
 		if (c->old_x + c->old_y == m->wx + m->wy ||
 			c->old_x + c->old_y == m->x + m->y) {
-			DBG("cmdfloat: fitting within monitor bounds: %s - %d,%d %dx%d",
-				m->name, m->wx, m->wy, m->ww, m->wh)
 			quadrant(c, &c->old_x, &c->old_y, &c->old_w, &c->old_h);
 		}
 		if (W(c) >= c->ws->mon->ww && H(c) >= c->ws->mon->wh) {
 			c->h -= c->h / 10, c->w -= c->h / 10;
 			gravitate(c, GRAV_CENTER, GRAV_CENTER, 1);
 		}
-		DBG("cmdfloat: resizing: %d,%d %dx%d", c->old_x, c->old_y, c->old_w,
-			c->old_h)
 		resizehint(c, c->old_x, c->old_y, c->old_w, c->old_h, c->bw, 0, 0);
 	} else {
-		DBG("cmdfloat: client state is now tiled: %s", c->title)
-		DBG("cmdfloat: saving location and size: %d,%d %dx%d", c->x, c->y, c->w,
-			c->h)
 		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 	}
 	needsrefresh = 1;
@@ -358,7 +350,7 @@ int cmdfloat(char **argv)
 
 int cmdfocus(char **argv)
 {
-	int i = 0, nparsed = 0, opt;
+	int i = 0, nparsed = 0;
 	Client *c = cmdc;
 
 	if (FULLSCREEN(c) || !c->ws->clients->next)
@@ -366,12 +358,11 @@ int cmdfocus(char **argv)
 	if (c != selws->sel) {
 		focus(c);
 		if (FLOATING(c))
-			restack(c->ws);
+			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 		return nparsed;
 	}
-	if ((opt = parseopt(*argv, dirs, (int)(sizeof(dirs) / sizeof(*dirs)))) <
-			0 &&
-		(i = parseint(*argv, NULL, 0)) == INT_MIN) {
+	int opt = parseopt(*argv, dirs, (int)(sizeof(dirs) / sizeof(*dirs)));
+	if (opt < 0 && (i = parseint(*argv, NULL, 0)) == INT_MIN) {
 		respond(cmdresp, "!%s win focus: %s", ebadarg, *argv);
 		return -1;
 	}
@@ -390,7 +381,7 @@ int cmdfocus(char **argv)
 			focus(c);
 	}
 	if (c && (FLOATING(c) || c->ws->layout->func == mono))
-		restack(c->ws);
+		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	xcb_aux_sync(con);
 	ignore(XCB_ENTER_NOTIFY);
 	return nparsed;
@@ -1014,20 +1005,20 @@ int cmdsend(Workspace *ws)
 	Client *c = cmdc;
 
 	if (ws && c && ws != c->ws) {
-		DBG("cmdsend: sending client to workspace %d : monitor %s : %s",
-			ws->num + 1, ws->mon->name, c->title)
+		DBG("cmdsend: sending client: 0x%08x %s -- to workspace %d monitor %s",
+				c->win, c->title, ws->num + 1, ws->mon->name)
 		Monitor *old = c->ws->mon;
 		unfocus(c, 1);
 		setworkspace(c, ws, c != c->ws->sel);
 		if (ws->mon != old && ws->mon->ws == ws) {
-			DBG("cmdsend: relocating window: %s -- from %s to %s", c->title,
-				old->name, ws->mon->name)
+			DBG("cmdsend: relocating window: 0x%08x %s -- from %s to %s",
+					c->win, c->title, old->name, ws->mon->name)
 			relocate(c, ws->mon, old);
 		}
 		if (FLOATING(c)) {
-			DBG("cmdsend: move/resize floating window: %s -- x: %d - y: %d - "
-				"w: %d - h: %d",
-				c->title, c->x, c->y, c->w, c->h)
+			DBG("cmdsend: resizing floating window: 0x%08x %s x=%d, y=%d, "
+					"w=%d, h=%d",
+				c->win, c->title, c->x, c->y, c->w, c->h)
 			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
 		}
 		showhide(ws->stack);

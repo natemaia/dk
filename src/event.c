@@ -218,40 +218,36 @@ void configrequest(xcb_generic_event_t *ev)
 				 c->x > m->x + m->w - globalcfg[GLB_MIN_XY].val) &&
 				c->state & STATE_FLOATING) {
 				DBG("configrequest: x is out of monitor bounds, centering: %d "
-					"-> %d",
-					c->x, m->x + (m->w / 2 - W(c) / 2))
+					"-> %d", c->x, m->x + (m->w / 2 - W(c) / 2))
 				c->x = m->x + (m->w / 2 - W(c) / 2);
 			}
 			if ((c->y + c->h < m->y + globalcfg[GLB_MIN_XY].val ||
 				 c->y > m->y + m->h - globalcfg[GLB_MIN_XY].val) &&
 				c->state & STATE_FLOATING) {
 				DBG("configrequest: y is out of monitor bounds, centering: %d "
-					"-> %d",
-					c->y, m->y + (m->h / 2 - H(c) / 2))
+					"-> %d", c->y, m->y + (m->h / 2 - H(c) / 2))
 				c->y = m->y + (m->h / 2 - H(c) / 2);
 			}
 			if (e->value_mask & (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y) &&
 				!(e->value_mask &
 				  (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT))) {
 				DBG("configrequest: changing x/y but not width/height, sending "
-					"configure notify: "
-					"%d,%d",
-					c->x, c->y)
+					"configure notify: %d,%d", c->x, c->y)
 				sendconfigure(c);
 			}
 			if (c->ws == m->ws) {
 				c->w = CLAMP(c->w, globalcfg[GLB_MIN_WH].val, m->w);
 				c->h = CLAMP(c->h, globalcfg[GLB_MIN_WH].val, m->h);
-				c->x = (c->w == m->w) ? m->x : CLAMP(c->x, m->x, m->x + (m->w - c->w));
-				c->y = (c->h == m->h) ? m->y : CLAMP(c->y, m->y, m->y + (m->h - c->h));
-				DBG("configrequest: visible window, performing resize: %d,%d "
-					"%dx%d", c->x, c->y, c->w, c->h)
-				resizehintf(c, c->x, c->y, c->w, c->h, c->bw);
+				c->x = (c->w == m->w) ? m->x :
+					CLAMP(c->x, m->x, m->x + (m->w - c->w));
+				c->y = (c->h == m->h) ? m->y :
+					CLAMP(c->y, m->y, m->y + (m->h - c->h));
+				DBG("configrequest: visible window new size: %d,%d %dx%d",
+						c->x, c->y, c->w, c->h)
 			}
 		} else {
 			sendconfigure(c);
 		}
-		clientborder(c, c == selws->sel);
 	} else {
 		DBG("configrequest: 0x%08x - %d,%d @ %dx%d", e->window, e->x, e->y,
 			e->width, e->height)
@@ -265,6 +261,7 @@ void configrequest(xcb_generic_event_t *ev)
 		xcb_aux_configure_window(con, e->window, e->value_mask, &wc);
 	}
 	xcb_flush(con);
+	needsrefresh = 1;
 }
 
 void destroynotify(xcb_generic_event_t *ev)

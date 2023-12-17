@@ -141,7 +141,7 @@ int tstack(Workspace *ws)
 	return 1;
 }
 
-/* New commands and callbacks must be added to the below arrays if you want to
+/* New commands and callbacks must be added to the below arrays in order to
  * use them */
 
 Callback callbacks[] = {

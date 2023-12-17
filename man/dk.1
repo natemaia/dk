@@ -534,11 +534,10 @@ screen.
 .IP \[bu] 2
 \fI\fCtstack\fR windows are grouped into a master area on the bottom and
 one horizontal stack area on top.
-screen
 .IP \[bu] 2
-\fI\fCnone\fR floating layout, windows can be freely moved and resized,
-those that don't have a location hint are arranged into a grid like layout
-and attempting to not overlap other windows.
+\fI\fCnone\fR floating layout, windows can be freely moved and resized.
+.IP \[bu] 2
+\fI\fCcycle\fR switch between available layouts.
 .IP
 .nf
 \fI\fC
@@ -717,6 +716,32 @@ win [CLIENT] kill
 win CLIENT focus
 win focus next
 win focus +2
+\fR
+.fi
+.PP
+\fI\fCscratch\fR (integer/string) show or hide a scratchpad window.
+.IP \[bu] 2
+\fI\fCpop\fR show a window in the scratch.
+.IP \[bu] 2
+\fI\fCpush\fR hide a window in the scratch.
+.IP
+With no arguments \fI\fCscratch\fR will do the following
+.IP \[bu] 2
+If there are window(s) in the scratch it will continue to pop them
+out until empty.
+.IP \[bu] 2
+If there is a window on any workspace (other than the current workspace)
+that has been recently popped, it will be brought to the current
+workspace. If it's on the current workspace it is instead pushed.
+.IP \[bu] 2
+If there are no window(s) in the scratch and no windows that have
+been there previously it will push the active window into the scratch.
+.IP
+.nf
+\fI\fC
+win scratch
+win [CLIENT] scratch # same toggle behaviour but on the passed window
+win [CLIENT] scratch push # push the given window or the active window.
 \fR
 .fi
 .PP

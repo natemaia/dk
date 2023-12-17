@@ -434,8 +434,10 @@ set ws=_ apply SETTING
 - `grid` all windows try to occupy equal space
 - `spiral` windows shrink by 1/2 towards the center of the screen
 - `dwindle` windows shrink by 1/2 towards the bottom right of the screen
-- `none` floating, no layout
-
+- `tstack` windows are grouped into a master area on the bottom and
+  one horizontal stack area on top.
+- `none` floating layout, windows can be freely moved and resized.
+- `cycle` switch between available layouts.
 ```
 set [WS] layout mono
 ```
@@ -549,6 +551,27 @@ win CLIENT focus  # focus window by id
 win focus next    # focus the next window
 win focus +2      # focus two windows ahead
 ```
+---
+
+`scratch` view or hide a scratchpad window.
+
+- `pop` show a window in the scratch.
+- `push` hide a window in the scratch.
+
+With no other arguments
+- If there are window(s) in the scratch it will continue to pop them out until empty.
+- If there is a window on any workspace (other than the current workspace)
+  that has been recently popped, it will be brought to the current
+  workspace. If it's on the current workspace it is instead pushed.
+- If there are no window(s) in the scratch and no windows that have
+  been there previously it will push the active window into the scratch.
+
+```
+win scratch
+win [CLIENT] scratch # same toggle behaviour but on the passed window
+win [CLIENT] scratch push # push the given window or the active window.
+```
+
 ---
 
 `mvstack` (integer/string) move a tiled window around the stack.

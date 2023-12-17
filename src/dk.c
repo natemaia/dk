@@ -1589,16 +1589,19 @@ void printstatus(Status *s, int freeable)
 				"tile_tohead: %d\n"
 				"win_minxy: %d\n"
 				"win_minwh: %d\n"
-				"active_window: 0x%08x\n"
 				"static_ws: %d\n"
-				"obey_motif: %d",
+				"obey_motif: %d\n"
+				"active_window: 0x%08x\n",
 				globalcfg[GLB_NUM_WS].val, globalcfg[GLB_SMART_BORDER].val,
 				globalcfg[GLB_SMART_GAP].val, globalcfg[GLB_FOCUS_URGENT].val,
 				globalcfg[GLB_FOCUS_MOUSE].val, globalcfg[GLB_FOCUS_OPEN].val,
 				globalcfg[GLB_TILE_HINTS].val, globalcfg[GLB_TILE_TOHEAD].val,
 				globalcfg[GLB_MIN_XY].val, globalcfg[GLB_MIN_WH].val,
-				selws->sel ? selws->sel->win : 0, globalcfg[GLB_WS_STATIC].val,
-				globalcfg[GLB_OBEY_MOTIF].val);
+				globalcfg[GLB_WS_STATIC].val, globalcfg[GLB_OBEY_MOTIF].val,
+				selws->sel ? selws->sel->win : 0);
+			fprintf(s->file, "layouts:");
+			for (Layout *l = layouts; l && l->name; l++)
+				fprintf(s->file, " %s", l->name);
 
 			/* Borders */
 			fprintf(s->file,

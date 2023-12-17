@@ -69,7 +69,7 @@ int adjustwsormon(char **argv)
 
 	if (*argv) {
 		/* find which command function we'll be using: view, follow, send */
-		for (unsigned int i = 0; wscmds[i].str; i++)
+		for (uint32_t i = 0; wscmds[i].str; i++)
 			if (!strcmp(wscmds[i].str, *argv)) {
 				fn = wscmds[i].func;
 				argv++, nparsed++;
@@ -238,7 +238,7 @@ badvalue:
 		}
 		argv++, nparsed++;
 	}
-	if (bw - ow < 1 && (unsigned int)ow != border[BORD_O_WIDTH])
+	if (bw - ow < 1 && (uint32_t)ow != border[BORD_O_WIDTH])
 		respond(cmdresp, "!border outer exceeds limit: %d - maximum: %d", ow,
 				bw - 1);
 	else if (bw - ow > 0)
@@ -449,7 +449,21 @@ int cmdkill(__attribute__((unused)) char **argv)
 
 int cmdlayout(char **argv)
 {
-	for (unsigned int i = 0; layouts[i].name; i++)
+	if (!strcmp("cycle", *argv)) {
+		for (uint32_t i = 0; layouts[i].name; i++) {
+			if (&layouts[i] == setws->layout) {
+				uint32_t nlyt;
+				for (nlyt = 0; layouts[nlyt].name; nlyt++)
+					;
+				i = (i + 1) % nlyt;
+				setws->layout = &layouts[i];
+				needsrefresh = lytchange = 1;
+			}
+		}
+		return 1;
+	}
+
+	for (uint32_t i = 0; layouts[i].name; i++)
 		if (!strcmp(layouts[i].name, *argv)) {
 			if ((lytchange = &layouts[i] != setws->layout)) {
 				setws->layout = &layouts[i];
@@ -723,7 +737,7 @@ int cmdrule(char **argv)
 	Workspace *ws;
 	Rule *pr, *nr = NULL;
 	int j, nparsed = 0, match;
-	unsigned int i, delete = 0, apply = 0;
+	uint32_t i, delete = 0, apply = 0;
 	Rule r = {
 		.x = -1,
 		.y = -1,
@@ -1026,7 +1040,7 @@ int cmdsend(Workspace *ws)
 
 int cmdset(char **argv)
 {
-	unsigned int j;
+	uint32_t j;
 	Workspace *ws = NULL;
 	int i = -1, nparsed = 0, names = 0;
 
@@ -1305,7 +1319,7 @@ int cmdwin(char **argv)
 			return -1;
 		} else {
 			int match = 0;
-			for (unsigned int ui = 0; wincmds[ui].str; ui++)
+			for (uint32_t ui = 0; wincmds[ui].str; ui++)
 				if ((match = !strcmp(wincmds[ui].str, *argv))) {
 					if (!cmdc || (e = wincmds[ui].func(argv + 1)) == -1)
 						return -1;
@@ -1329,7 +1343,7 @@ int cmdws(char **argv)
 int cmdws_(char **argv)
 {
 	float f;
-	unsigned int i;
+	uint32_t i;
 	int j, nparsed = 0, apply = 0;
 
 	while (*argv) {

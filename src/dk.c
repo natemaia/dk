@@ -447,8 +447,7 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw,
 		if (c->max_h)
 			*h = MIN(*h, c->max_h);
 	}
-	return *x != c->x || *y != c->y || *w != c->w || *h != c->h ||
-		bw != c->bw || W(c) >= c->ws->mon->ww || H(c) >= c->ws->mon->wh;
+	return *x != c->x || *y != c->y || *w != c->w || *h != c->h || bw != c->bw;
 }
 
 void attach(Client *c, int tohead)
@@ -1140,6 +1139,17 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		} else if (c->x == c->ws->mon->x && c->y == c->ws->mon->y) {
 			quadrant(c, &c->x, &c->y, &c->w, &c->h);
 		}
+	} else {
+		/* TODO: Fix this shit hack to force newly tiled windows to be
+		 *       resized, mainly to fix border issues with some windows,
+		 *       this only happens when we have gaps, smart border and
+		 *       smart gaps disabled. Still it's not always consistent.
+		 *       See: https://github.com/natemaia/dk/issues/1
+		 */
+		if (c->ws == c->ws->mon->ws)
+			resize(c, c->x, c->y, c->w, c->h, c->bw);
+		else
+			c->x++, c->y++;
 	}
 	if (c->cb)
 		c->cb->func(c, 0);

@@ -655,7 +655,6 @@ void clientmotif(void)
 	FOR_EACH (c, scratch.clients) {
 		CHECK(c)
 	}
-
 #undef CHECK
 }
 
@@ -1139,7 +1138,7 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		} else if (c->x == c->ws->mon->x && c->y == c->ws->mon->y) {
 			quadrant(c, &c->x, &c->y, &c->w, &c->h);
 		}
-	} else {
+	} else if (!c->ws->clients->next) {
 		/* TODO: Fix this shit hack to force newly tiled windows to be
 		 *       resized, mainly to fix border issues with some windows,
 		 *       this only happens when we have gaps, smart border and
@@ -1582,38 +1581,22 @@ void printstatus(Status *s, int freeable)
 			break;
 		case STAT_FULL:
 			/* Globals */
-			fprintf(
-				s->file,
-				"# globals - key: value ...\n"
-				"numws: %d\n"
-				"smart_border: %d\n"
-				"smart_gap: %d\n"
-				"focus_urgent: %d\n"
-				"focus_mouse: %d\n"
-				"focus_open: %d\n"
-				"tile_hints: %d\n"
-				"tile_tohead: %d\n"
-				"win_minxy: %d\n"
-				"win_minwh: %d\n"
-				"static_ws: %d\n"
-				"obey_motif: %d\n"
-				"active_window: 0x%08x\n",
-				globalcfg[GLB_NUM_WS].val, globalcfg[GLB_SMART_BORDER].val,
-				globalcfg[GLB_SMART_GAP].val, globalcfg[GLB_FOCUS_URGENT].val,
-				globalcfg[GLB_FOCUS_MOUSE].val, globalcfg[GLB_FOCUS_OPEN].val,
-				globalcfg[GLB_TILE_HINTS].val, globalcfg[GLB_TILE_TOHEAD].val,
-				globalcfg[GLB_MIN_XY].val, globalcfg[GLB_MIN_WH].val,
-				globalcfg[GLB_WS_STATIC].val, globalcfg[GLB_OBEY_MOTIF].val,
-				selws->sel ? selws->sel->win : 0);
+			fprintf(s->file, "# globals - key: value ...\n");
+			for (uint32_t i = 0; i < LEN(globalcfg); i++)
+				fprintf(s->file, "%s: %d\n", globalcfg[i].str,globalcfg[i].val);
+			fprintf(s->file, "active_window: 0x%08x\n",
+					selws->sel ? selws->sel->win : 0);
 			fprintf(s->file, "layouts:");
 			for (Layout *l = layouts; l && l->name; l++)
 				fprintf(s->file, " %s", l->name);
+			fprintf(s->file, "\ncallbacks:");
+			for (Callback *cb = callbacks; cb && cb->name; cb++)
+				fprintf(s->file, " %s", cb->name);
 
 			/* Borders */
 			fprintf(s->file,
 					"\n\n# width outer_width focus urgent unfocus outer_focus "
-					"outer_urgent "
-					"outer_unfocus\n"
+					"outer_urgent outer_unfocus\n"
 					"border: %u %u 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x",
 					border[BORD_WIDTH], border[BORD_O_WIDTH],
 					border[BORD_FOCUS], border[BORD_URGENT],
@@ -1628,8 +1611,7 @@ void printstatus(Status *s, int freeable)
 
 			/* Workspace settings */
 			fprintf(s->file, "\n\t# number:name active_window nmaster nstack "
-							 "msplit ssplit gappx "
-							 "smartgap padl padr padt padb");
+					"msplit ssplit gappx smartgap padl padr padt padb");
 			FOR_EACH (ws, workspaces)
 				fprintf(s->file,
 						"\n\t%d:%s 0x%08x %d %d %0.2f %0.2f %d %d %d %d %d %d",
@@ -1664,43 +1646,32 @@ void printstatus(Status *s, int freeable)
 				fprintf(s->file, " 0x%08x:%d", c->win, c->ws->num);
 
 			/* Client settings */
+#define PRINT_CLIENT                                                         \
+			fprintf(s->file,                                                 \
+					"\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d "  \
+					"%d %d %d %d %d %d %d %d %d %s 0x%08x",                  \
+					c->win, c->title, c->clss, c->inst, c->ws->num + 1,      \
+					c->x, c->y, c->w, c->h, c->bw, c->hoff, FLOATING(c),     \
+					(c->state & STATE_FULLSCREEN) != 0,                      \
+					(c->state & STATE_FAKEFULL) != 0,                        \
+					(c->state & STATE_FIXED) != 0,                           \
+					(c->state & STATE_STICKY) != 0,                          \
+					(c->state & STATE_URGENT) != 0,                          \
+					(c->state & STATE_ABOVE) != 0,                           \
+					(c->state & STATE_HIDDEN) != 0,                          \
+					(c->state & STATE_SCRATCH) != 0,                         \
+					c->cb ? c->cb->name : "none",                            \
+					c->trans ? c->trans->win : 0)
 			fprintf(
 				s->file,
 				"\n\t# id title class instance ws x y width height bw hoff "
 				"float full fakefull fixed stick urgent above hidden scratch "
 				"callback trans_id");
 			FOR_CLIENTS (c, ws)
-				fprintf(s->file,
-						"\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d "
-						"%d %d %d %d %d %d %d %d %d %s 0x%08x",
-						c->win, c->title, c->clss, c->inst, c->ws->num + 1,
-						c->x, c->y, c->w, c->h, c->bw, c->hoff, FLOATING(c),
-						(c->state & STATE_FULLSCREEN) != 0,
-						(c->state & STATE_FAKEFULL) != 0,
-						(c->state & STATE_FIXED) != 0,
-						(c->state & STATE_STICKY) != 0,
-						(c->state & STATE_URGENT) != 0,
-						(c->state & STATE_ABOVE) != 0,
-						(c->state & STATE_HIDDEN) != 0,
-						(c->state & STATE_SCRATCH) != 0,
-						c->cb ? c->cb->name : "none",
-						c->trans ? c->trans->win : 0);
+				PRINT_CLIENT;
 			FOR_EACH (c, scratch.clients)
-				fprintf(s->file,
-						"\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d "
-						"%d %d %d %d %d %d %d %d %d %s 0x%08x",
-						c->win, c->title, c->clss, c->inst, c->ws->num,
-						c->x, c->y, c->w, c->h, c->bw, c->hoff, FLOATING(c),
-						(c->state & STATE_FULLSCREEN) != 0,
-						(c->state & STATE_FAKEFULL) != 0,
-						(c->state & STATE_FIXED) != 0,
-						(c->state & STATE_STICKY) != 0,
-						(c->state & STATE_URGENT) != 0,
-						(c->state & STATE_ABOVE) != 0,
-						(c->state & STATE_HIDDEN) != 0,
-						(c->state & STATE_SCRATCH) != 0,
-						c->cb ? c->cb->name : "none",
-						c->trans ? c->trans->win : 0);
+				PRINT_CLIENT;
+#undef PRINT_CLIENT
 
 			/* Rules */
 			if (rules) {
@@ -1823,6 +1794,8 @@ static void refresh(void)
 	FOR_EACH (m, monitors) {
 		DBG("refresh: workspace: %d, monitor: %s layout: %s",
 				m->ws->num + 1, m->name, m->ws->layout->name)
+		if (m->ws->layout->func && m->ws->layout->func(m->ws) == -1)
+			m->ws->layout->func(m->ws);
 		FOR_EACH (c, m->ws->clients) {
 			if (c->state & STATE_NEEDSMAP)
 				clientmap(c);
@@ -1831,8 +1804,6 @@ static void refresh(void)
 			else if (FLOATING(c))
 				resize(c, c->x, c->y, c->w, c->h, c->bw);
 		}
-		if (m->ws->layout->func && m->ws->layout->func(m->ws) == -1)
-			m->ws->layout->func(m->ws);
 		restack(m->ws);
 	}
 	ignore(XCB_ENTER_NOTIFY);
@@ -2031,12 +2002,20 @@ void setfullscreen(Client *c, int fullscreen)
 		if (c->bw || (c->state == STATE_NOBORDER))
 			c->old_bw = c->bw;
 		c->bw = 0;
+		if (c->ws == m->ws) {
+			MOVERESIZE(c->win, m->x, m->y, m->w, m->h, 0);
+			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+		}
 	} else if (!fullscreen && (c->state & STATE_FULLSCREEN)) {
 		PROP(REPLACE, c->win, state, XCB_ATOM_ATOM, 32, 0, (const void *)0);
 		c->state = c->old_state;
 		c->bw = c->old_bw;
-		c->x = c->old_x, c->y = c->old_y, c->w = c->old_w, c->h = c->old_h;
+		if (c->ws == m->ws)
+			resizehint(c, c->old_x, c->old_y, c->old_w, c->old_h, c->bw, 0, 0);
+		else
+			c->x = c->old_x, c->y = c->old_y, c->w = c->old_w, c->h = c->old_h;
 	}
+	xcb_flush(con);
 	needsrefresh = 1;
 }
 

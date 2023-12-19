@@ -183,7 +183,7 @@ void configrequest(xcb_generic_event_t *ev)
 
 	if ((c = wintoclient(e->window))) {
 		if (c->state & STATE_IGNORECFG || e->x == W(c) * -2 ||
-			e->x <= (c->ws->mon->x - c->w) + globalcfg[GLB_MIN_WH].val)
+			e->x <= (MON(c)->x - c->w) + globalcfg[GLB_MIN_WH].val)
 			return;
 		DBG("configrequest: managed %s client 0x%08x",
 			FLOATING(c) ? "floating" : "tiled", e->window)
@@ -191,7 +191,7 @@ void configrequest(xcb_generic_event_t *ev)
 			DBG("configrequest: bw: %d -> %d", c->bw, e->border_width)
 			c->bw = e->border_width;
 		} else if (FLOATING(c)) {
-			m = c->ws->mon;
+			m = MON(c);
 			if (e->value_mask & XCB_CONFIG_WINDOW_X) {
 				DBG("configrequest: x: %d - > %d", c->x, m->x + e->x)
 				c->old_x = c->x;
@@ -435,17 +435,17 @@ void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 						w = MIN(c->w, c->max_w);
 					if (c->max_h)
 						h = MIN(c->h, c->max_h);
-					if (w == c->ws->mon->ww)
-						w = c->ws->mon->w * 0.75;
-					if (h == c->ws->mon->wh)
-						h = c->ws->mon->h * 0.75;
-					x = CLAMP(x, c->ws->mon->x,
-							  c->ws->mon->x + c->ws->mon->w - W(c));
-					y = CLAMP(y, c->ws->mon->y,
-							  c->ws->mon->y + c->ws->mon->h - H(c));
-					if (x + y == c->ws->mon->x + c->ws->mon->y) {
-						x += c->ws->mon->w - ((c->ws->mon->w * 0.75) / 2);
-						y += c->ws->mon->h - ((c->ws->mon->h * 0.75) / 2);
+					if (w == MON(c)->ww)
+						w = MON(c)->w * 0.75;
+					if (h == MON(c)->wh)
+						h = MON(c)->h * 0.75;
+					x = CLAMP(x, MON(c)->x,
+							  MON(c)->x + MON(c)->w - W(c));
+					y = CLAMP(y, MON(c)->y,
+							  MON(c)->y + MON(c)->h - H(c));
+					if (x + y == MON(c)->x + MON(c)->y) {
+						x += MON(c)->w - ((MON(c)->w * 0.75) / 2);
+						y += MON(c)->h - ((MON(c)->h * 0.75) / 2);
 					}
 					DBG("mousemotion: popping float -- new: %d,%d", c->x, c->y)
 					resizehint(c, x, y, w, h, c->bw, 1, 1);

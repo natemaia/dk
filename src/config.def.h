@@ -137,6 +137,7 @@ int tstack(Workspace *ws)
 			sx += W(c) + g;
 		}
 	}
+	xcb_aux_sync(con);
 	return 1;
 }
 

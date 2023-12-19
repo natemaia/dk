@@ -79,6 +79,7 @@ int dwindle(Workspace *ws)
 		}
 		resizehint(c, x + g, y + g, w - g - (2 * b), h - g - (2 * b), b, 0, 0);
 	}
+	xcb_aux_sync(con);
 	return ret;
 }
 
@@ -123,6 +124,7 @@ int grid(Workspace *ws)
 			col++;
 		}
 	}
+	xcb_aux_sync(con);
 	return 1;
 }
 
@@ -244,6 +246,7 @@ update:
 		resizehint(c, geo[i][0], geo[i][1], geo[i][2], geo[i][3],
 				!globalcfg[GLB_SMART_BORDER].val || n > 1 ? c->bw : 0, 0, 0);
 	}
+	xcb_aux_sync(con);
 	return ret;
 }
 
@@ -267,6 +270,7 @@ int mono(Workspace *ws)
 				ws->mon->ww - ws->padl - ws->padr - (2 * g) - (2 * b),
 				ws->mon->wh - ws->padt - ws->padb - (2 * g) - (2 * b), b, 0, 0);
 	}
+	xcb_aux_sync(con);
 	return 1;
 }
 
@@ -387,6 +391,7 @@ update:
 		resizehint(c, geo[i][0], geo[i][1], geo[i][2], geo[i][3],
 				!globalcfg[GLB_SMART_BORDER].val || n > 1 ? c->bw : 0, 0, 0);
 	}
+	xcb_aux_sync(con);
 	return ret;
 }
 
@@ -452,5 +457,6 @@ int spiral(Workspace *ws)
 		}
 		resizehint(c, x + g, y + g, w - (2 * b) - g, h - (2 * b) - g, b, 0, 0);
 	}
+	xcb_aux_sync(con);
 	return ret;
 }

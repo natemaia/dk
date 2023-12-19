@@ -47,7 +47,7 @@
 FILE *cmdresp;
 char *argv0, sock[256];
 unsigned int lockmask = 0;
-int running, restart, needsrefresh, status_usingcmdresp, depth;
+int running, restart, needsrefresh, needev, status_usingcmdresp, depth;
 int scr_h, scr_w, sockfd, randrbase, cmdusemon, winchange, wschange, lytchange;
 
 Desk *desks;
@@ -161,7 +161,7 @@ int main(int argc, char *argv[])
 	/* setup basics */
 	argv0 = argv[0];
 	randrbase = -1;
-	running = needsrefresh = 1;
+	running = needsrefresh = needev = 1;
 	depth = sockfd = restart = cmdusemon = winchange = wschange = lytchange = 0;
 
 	for (int i = 1; i < argc; i++) {
@@ -271,6 +271,8 @@ int main(int argc, char *argv[])
 			ws->layout->func(ws); /* border issues on tiled clients */
 		showhide(ws->stack); /* show only windows on the active workspace */
 	}
+	ignore(XCB_ENTER_NOTIFY);
+	xcb_aux_sync(con);
 
 	confd = xcb_get_file_descriptor(con);
 	while (running) {
@@ -385,7 +387,7 @@ static void applyrule(Client *c, Rule *r, xcb_atom_t curws, int focus)
 	if (c->state & STATE_FULLSCREEN) {
 		c->state &= ~STATE_FULLSCREEN;
 		setfullscreen(c, 1);
-	} else if (FLOATING(c) && W(c) >= c->ws->mon->ww && H(c) >= c->ws->mon->wh) {
+	} else if (FLOATING(c) && W(c) >= MON(c)->ww && H(c) >= MON(c)->wh) {
 		c->h -= c->h / 10;
 		c->w -= c->h / 10;
 		gravitate(c, GRAV_CENTER, GRAV_CENTER, 1);
@@ -396,7 +398,7 @@ static void applyrule(Client *c, Rule *r, xcb_atom_t curws, int focus)
 int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw,
 				   int usermotion, int mouse)
 {
-	Monitor *m = c->ws->mon;
+	Monitor *m = MON(c);
 	int baseismin, min = globalcfg[GLB_MIN_XY].val;
 
 	*w = MAX(1, *w);
@@ -546,7 +548,6 @@ void changews(Workspace *ws, int swap, int warp)
 	} else {
 		showhide(lastws->stack);
 	}
-	ignore(XCB_ENTER_NOTIFY);
 	ignore(XCB_CONFIGURE_REQUEST);
 	PROP(REPLACE, root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1,
 		 &ws->num);
@@ -847,7 +848,7 @@ void focus(Client *c)
 {
 	if (!c)
 		c = selws ? selws->stack : NULL;
-	if (selws && selws->sel && (!c || c != selws->sel))
+	if (selws->sel && (!c || c != selws->sel))
 		unfocus(selws->sel, 0);
 	if (c) {
 		if (c->state & STATE_URGENT)
@@ -1028,8 +1029,8 @@ void gravitate(Client *c, int xgrav, int ygrav, int matchgap)
 		monw = c->trans->w, monh = c->trans->h;
 	} else {
 		gap = matchgap ? c->ws->gappx : 0;
-		monx = c->ws->mon->wx, mony = c->ws->mon->wy;
-		monw = c->ws->mon->ww, monh = c->ws->mon->wh;
+		monx = MON(c)->wx, mony = MON(c)->wy;
+		monw = MON(c)->ww, monh = MON(c)->wh;
 	}
 	switch (xgrav) {
 	case GRAV_LEFT: x = monx + gap; break;
@@ -1043,7 +1044,7 @@ void gravitate(Client *c, int xgrav, int ygrav, int matchgap)
 	}
 	DBG("gravitate: changing window location: %d, %d -> %d, %d", c->x, c->y, x, y)
 	c->x = x, c->y = y;
-	if (c->ws == c->ws->mon->ws)
+	if (VISIBLE(c))
 		MOVE(c->win, x, y);
 }
 
@@ -1128,28 +1129,30 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	grabbuttons(c);
 
 	if ((c->state & STATE_FIXED) || (FLOATING(c) && !FULLSCREEN(c))) {
-		c->w = CLAMP(c->w, globalcfg[GLB_MIN_WH].val, c->ws->mon->ww);
-		c->h = CLAMP(c->h, globalcfg[GLB_MIN_WH].val, c->ws->mon->wh);
+		c->w = CLAMP(c->w, globalcfg[GLB_MIN_WH].val, MON(c)->ww);
+		c->h = CLAMP(c->h, globalcfg[GLB_MIN_WH].val, MON(c)->wh);
 		if (c->trans) {
 			if (FULLSCREEN(c->trans))
 				c->state |= STATE_ABOVE;
 			c->x = c->trans->x + ((W(c->trans) - W(c)) / 2);
 			c->y = c->trans->y + ((H(c->trans) - H(c)) / 2);
-		} else if (c->x == c->ws->mon->x && c->y == c->ws->mon->y) {
+		} else if (c->x == MON(c)->x && c->y == MON(c)->y) {
 			quadrant(c, &c->x, &c->y, &c->w, &c->h);
 		}
-	} else if (!c->ws->clients->next) {
+	} else if (!c->ws->clients->next && !FULLSCREEN(c)) {
 		/* TODO: Fix this shit hack to force newly tiled windows to be
 		 *       resized, mainly to fix border issues with some windows,
 		 *       this only happens when we have gaps, smart border and
 		 *       smart gaps disabled. Still it's not always consistent.
 		 *       See: https://github.com/natemaia/dk/issues/1
 		 */
-		if (c->ws == c->ws->mon->ws)
+		if (VISIBLE(c))
 			resize(c, c->x, c->y, c->w, c->h, c->bw);
 		else
 			c->x++, c->y++;
 	}
+	if (!FLOATING(c) && VISIBLE(c) && tilecount(c->ws) <= 2)
+		needev = 1;
 	if (c->cb)
 		c->cb->func(c, 0);
 	wschange = c->ws->clients->next ? wschange : 1;
@@ -1437,7 +1440,6 @@ client:
 			goto end;
 		initclient(win, g);
 		PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &win);
-		xcb_flush(con);
 	}
 	needsrefresh = 1;
 end:
@@ -1513,8 +1515,8 @@ void popfloat(Client *c)
 
 	c->state |= STATE_FLOATING;
 	x = c->x, y = c->y;
-	w = CLAMP(c->w, c->ws->mon->ww / 5, c->ws->mon->ww / 3);
-	h = CLAMP(c->h, c->ws->mon->wh / 5, c->ws->mon->wh / 3);
+	w = CLAMP(c->w, MON(c)->ww / 5, MON(c)->ww / 3);
+	h = CLAMP(c->h, MON(c)->wh / 5, MON(c)->wh / 3);
 	quadrant(c, &x, &y, &w, &h);
 	setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	resizehint(c, x, y, w, h, c->bw, 0, 0);
@@ -1742,7 +1744,7 @@ void printstatus(Status *s, int freeable)
 
 void quadrant(Client *c, int *x, int *y, const int *w, const int *h)
 {
-	Monitor *m = c->ws->mon;
+	Monitor *m = MON(c);
 	static int index = 0;
 	static Workspace *ws = NULL;
 	unsigned int i = 0;
@@ -1797,18 +1799,22 @@ static void refresh(void)
 		if (m->ws->layout->func && m->ws->layout->func(m->ws) == -1)
 			m->ws->layout->func(m->ws);
 		FOR_EACH (c, m->ws->clients) {
-			if (c->state & STATE_NEEDSMAP)
-				clientmap(c);
 			if (FULLSCREEN(c))
 				MOVERESIZE(c->win, m->x, m->y, m->w, m->h, 0);
 			else if (FLOATING(c))
 				resize(c, c->x, c->y, c->w, c->h, c->bw);
+			if (c->state & STATE_NEEDSMAP)
+				clientmap(c);
 		}
 		restack(m->ws);
 	}
+	focus(NULL);
 	ignore(XCB_ENTER_NOTIFY);
 	xcb_aux_sync(con);
-	focus(NULL);
+	/* if (needev && selws->sel) { */
+	/* 	sendconfigure(selws->sel); */
+	/* 	needev = 0; */
+	/* } */
 	needsrefresh = 0;
 	DBG("refresh: finished - focused window: 0x%08x %s",
 			selws->sel ? selws->sel->win : 0,
@@ -1883,12 +1889,15 @@ static void relocatews(Workspace *ws, Monitor *old, int wasvis)
 
 void resize(Client *c, int x, int y, int w, int h, int bw)
 {
+	int changed = w != c->w || h != c->h || bw != c->bw;
+
 	if (FLOATING(c) && !FULLSCREEN(c))
 		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 	c->x = x, c->y = y, c->w = w, c->h = h;
 	MOVERESIZE(c->win, x, y, w, h, bw);
+	if (changed) /* only need to update the border when the size changed */
+		clientborder(c, c == selws->sel);
 	sendconfigure(c);
-	clientborder(c, c == selws->sel);
 }
 
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion,
@@ -1952,6 +1961,7 @@ void sendconfigure(Client *c)
 		.override_redirect = 0,
 	};
 	xcb_send_event(con, 0, c->win, XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char *)&e);
+	xcb_flush(con);
 }
 
 int sendwmproto(Client *c, int wmproto)
@@ -1991,7 +2001,7 @@ void setfullscreen(Client *c, int fullscreen)
 	Monitor *m;
 	xcb_atom_t state = netatom[NET_WM_STATE];
 
-	if (!c->ws || !(m = c->ws->mon))
+	if (!c->ws || !(m = MON(c)))
 		m = selws->mon;
 	if (fullscreen && !(c->state & STATE_FULLSCREEN)) {
 		PROP(REPLACE, c->win, state, XCB_ATOM_ATOM, 32, 1,
@@ -2026,7 +2036,6 @@ void setinputfocus(Client *c)
 							XCB_CURRENT_TIME);
 		PROP(REPLACE, root, netatom[NET_ACTIVE], XCB_ATOM_WINDOW, 32, 1,
 			 &c->win);
-		xcb_flush(con);
 	}
 	sendwmproto(c, WM_FOCUS);
 }
@@ -2149,12 +2158,10 @@ void setworkspace(Client *c, Workspace *ws, int stacktail)
 
 void showhide(Client *c)
 {
-	Monitor *m;
 
 	if (!c)
 		return;
-	m = c->ws->mon;
-	if (c->ws == m->ws) {
+	if (c->ws == MON(c)->ws) {
 		DBG("showhide: ws: %d - showing window : 0x%08x %s", c->ws->num + 1,
 				c->win, c->title)
 		setwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
@@ -2169,13 +2176,17 @@ void showhide(Client *c)
 					c->win, c->title)
 			setwinstate(c->win, XCB_ICCCM_WM_STATE_ICONIC);
 			MOVE(c->win, W(c) * -2, c->y);
-		} else if (c->ws != selws && m == selws->mon) {
+		} else if (c->ws != selws && MON(c) == selws->mon) {
 			DBG("showhide: ws: %d -- not hiding sticky window : 0x%08x %s",
 					c->ws->num + 1, c->win, c->title)
 			Client *sel = lastws->sel == c ? c : selws->sel;
 			setworkspace(c, selws, 0);
 			focus(sel);
 		}
+	}
+	if (!c->snext) {
+		ignore(XCB_ENTER_NOTIFY);
+		xcb_aux_sync(con);
 	}
 }
 

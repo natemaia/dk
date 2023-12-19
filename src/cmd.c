@@ -292,11 +292,10 @@ int cmdfakefull(__attribute__((unused)) char **argv)
 	Client *c = cmdc;
 
 	if ((c->state ^= STATE_FAKEFULL) & STATE_FULLSCREEN) {
-		if (c->w != c->ws->mon->w || c->h != c->ws->mon->h)
+		if (c->w != MON(c)->w || c->h != MON(c)->h)
 			c->bw = c->old_bw;
 		if (!(c->state & STATE_FAKEFULL))
-			resize(c, c->ws->mon->x, c->ws->mon->y, c->ws->mon->w,
-				   c->ws->mon->h, c->bw);
+			resize(c, MON(c)->x, MON(c)->y, MON(c)->w, MON(c)->h, 0);
 		needsrefresh = 1;
 	}
 	return 0;
@@ -331,12 +330,12 @@ int cmdfloat(char **argv)
 	}
 
 	if ((c->state ^= STATE_FLOATING) & STATE_FLOATING) {
-		Monitor *m = c->ws->mon;
+		Monitor *m = MON(c);
 		if (c->old_x + c->old_y == m->wx + m->wy ||
 			c->old_x + c->old_y == m->x + m->y) {
 			quadrant(c, &c->old_x, &c->old_y, &c->old_w, &c->old_h);
 		}
-		if (W(c) >= c->ws->mon->ww && H(c) >= c->ws->mon->wh) {
+		if (W(c) >= m->ww && H(c) >= m->wh) {
 			c->h -= c->h / 10, c->w -= c->h / 10;
 			gravitate(c, GRAV_CENTER, GRAV_CENTER, 1);
 		}
@@ -943,7 +942,7 @@ push:
 			if (c == selws->sel)
 				unfocus(c, 1);
 			if (!FLOATING(c)) {
-				Monitor *m = c->ws->mon;
+				Monitor *m = MON(c);
 				c->state |= STATE_FLOATING;
 				resizehint(c, m->wx + m->ww / 3, m->wy, m->ww / 3, m->wh / 3,
 						c->bw, 0, 0);
@@ -1007,7 +1006,7 @@ int cmdsend(Workspace *ws)
 	if (ws && c && ws != c->ws) {
 		DBG("cmdsend: sending client: 0x%08x %s -- to workspace %d monitor %s",
 				c->win, c->title, ws->num + 1, ws->mon->name)
-		Monitor *old = c->ws->mon;
+		Monitor *old = MON(c);
 		unfocus(c, 1);
 		setworkspace(c, ws, c != c->ws->sel);
 		if (ws->mon != old && ws->mon->ws == ws) {
@@ -1245,11 +1244,9 @@ int cmdswap(__attribute__((unused)) char **argv)
 	Client *c = cmdc, *old, *cur = NULL, *prev = NULL;
 
 	if (FLOATING(c) ||
-		(c->state & STATE_FULLSCREEN && c->w == c->ws->mon->w &&
-		 c->h == c->ws->mon->h) ||
-		tilecount(c->ws) <= 1) {
-		respond(
-			cmdresp,
+			(c->state & STATE_FULLSCREEN && c->w == MON(c)->w &&
+			 c->h == MON(c)->h) || tilecount(c->ws) <= 1) {
+		respond(cmdresp,
 			"!unable to swap floating, fullscreen, or single tiled windows");
 		return 0;
 	}
@@ -1328,7 +1325,7 @@ int cmdwin(char **argv)
 
 int cmdws(char **argv)
 {
-	return (workspaces && workspaces->next) ? adjustwsormon(argv) : 0;
+	return (workspaces->next) ? adjustwsormon(argv) : 0;
 }
 
 int cmdws_(char **argv)

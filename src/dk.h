@@ -49,6 +49,8 @@
 
 #define W(c)        (c->w + (2 * c->bw))
 #define H(c)        (c->h + (2 * c->bw))
+#define MON(c)      c->ws->mon
+#define VISIBLE(c)  (c->ws == c->ws->mon->ws)
 #define FLOATING(c) ((c->state & STATE_FLOATING) || !c->ws->layout->func)
 #define FULLSCREEN(c)                                                          \
 	((c->state & STATE_FULLSCREEN) && !(c->state & STATE_FAKEFULL))

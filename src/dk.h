@@ -47,13 +47,13 @@
 
 #define ISTILE(ws)  (ws->layout->func == ltile || ws->layout->func == rtile)
 
-#define W(c)        (c->w + (2 * c->bw))
-#define H(c)        (c->h + (2 * c->bw))
-#define MON(c)      c->ws->mon
-#define VISIBLE(c)  (c->ws == c->ws->mon->ws)
-#define FLOATING(c) ((c->state & STATE_FLOATING) || !c->ws->layout->func)
-#define FULLSCREEN(c)                                                          \
-	((c->state & STATE_FULLSCREEN) && !(c->state & STATE_FAKEFULL))
+#define W(c)          (c->w + (2 * c->bw))
+#define H(c)          (c->h + (2 * c->bw))
+#define MON(c)        (c)->ws->mon
+#define STATE(c, s)   (c->state & STATE_##s)
+#define VISIBLE(c)    (c->ws == MON(c)->ws)
+#define FLOATING(c)   (STATE(c, FLOATING) || !c->ws->layout->func)
+#define FULLSCREEN(c) (STATE(c, FULLSCREEN) && !STATE(c, FAKEFULL))
 
 #define FOR_EACH(v, list)                                                      \
 	if (list)                                                                  \
@@ -251,8 +251,8 @@ typedef struct Monitor {
 
 typedef struct Desk {
 	uint32_t state;
-	char clss[64], inst[64];
 	xcb_window_t win;
+	char clss[64], inst[64];
 	struct Desk *next;
 	Monitor *mon;
 } Desk;
@@ -394,7 +394,7 @@ void clienthints(Client *c);
 void clientmap(Client *c);
 void clientmotif(void);
 int clientname(Client *c);
-void clientrule(Client *c, Rule *wr, int focus);
+void clientrule(Client *c, Rule *wr, int nofocus);
 void clienttype(Client *c);
 void clientunmap(Client *c);
 Monitor *coordtomon(int x, int y);

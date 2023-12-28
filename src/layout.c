@@ -19,7 +19,6 @@
 
 #include "dk.h"
 #include "cmd.h"
-#include "event.h"
 #include "layout.h"
 #include "parse.h"
 
@@ -27,7 +26,7 @@ int dwindle(Workspace *ws)
 {
 	Client *c;
 	Monitor *m = ws->mon;
-	unsigned int i, n;
+	uint32_t i, n;
 	int x, y, w, h, ww, g, f = 0, ret = 1;
 
 	if (!(n = tilecount(ws)))
@@ -45,7 +44,7 @@ int dwindle(Workspace *ws)
 	ww = w;
 
 	for (i = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), i++) {
-		unsigned int ox = x, oy = y;
+		uint32_t ox = x, oy = y;
 		int *p = (i % 2) ? &h : &w;
 		int b = globalcfg[GLB_SMART_BORDER].val && n == 1 ? 0 : c->bw;
 		if (i < n - 1)
@@ -199,7 +198,6 @@ int ltile(Workspace *ws)
 		int available = wh - (*y + geo[i][3] + g);
 		if (!c->hoff && geo[i][3] - (2 * bw) < minh) {
 			popfloat(c);
-			ret = -1;
 			continue;
 		} else if (remain > 1 &&
 				   (remain - 1) * (minh + g + (2 * bw)) > available) {
@@ -399,7 +397,7 @@ int spiral(Workspace *ws)
 {
 	Client *c;
 	Monitor *m = ws->mon;
-	unsigned int i, n;
+	uint32_t i, n;
 	int x, y, w, h, ww, g, f = 0, ret = 1;
 
 	if (!(n = tilecount(ws)))
@@ -417,7 +415,7 @@ int spiral(Workspace *ws)
 	ww = w;
 
 	for (i = 0, c = nexttiled(ws->clients); c; c = nexttiled(c->next), i++) {
-		unsigned int ox = x, oy = y;
+		uint32_t ox = x, oy = y;
 		int *p = (i % 2) ? &h : &w;
 		int b = globalcfg[GLB_SMART_BORDER].val && n == 1 ? 0 : c->bw;
 		if (i < n - 1) {

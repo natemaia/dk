@@ -155,6 +155,43 @@ int parsecolour(char *arg, unsigned int *result)
 	return -1;
 }
 
+int parsecoord(char *arg, char type, int *i, int *rel, int *grav)
+{
+	int j;
+
+	if (!arg)
+		return 0;
+	if ((j = parseint(arg, rel, type == 'x' || type == 'y' ? 1 : 0)) !=
+		INT_MIN) {
+		*i = j;
+	} else if (grav) {
+		if (!strcmp("center", arg))
+			*grav = GRAV_CENTER;
+		else
+			switch (type) {
+			case 'x':
+				if (!strcmp("left", arg))
+					*grav = GRAV_LEFT;
+				else if (!strcmp("right", arg))
+					*grav = GRAV_RIGHT;
+				else
+					return 0;
+				break;
+			case 'y':
+				if (!strcmp("top", arg))
+					*grav = GRAV_TOP;
+				else if (!strcmp("bottom", arg))
+					*grav = GRAV_BOTTOM;
+				else
+					return 0;
+				break;
+			case 'w': /* FALLTHROUGH */
+			case 'h': return 0;
+			}
+	}
+	return 1;
+}
+
 float parsefloat(char *arg, int *rel)
 {
 	float f;
@@ -200,43 +237,6 @@ int parseopt(char *arg, const char **optarr, int len_optarr)
 			if (!strcmp(*optarr, arg))
 				return i;
 	return -1;
-}
-
-int parsecoord(char *arg, char type, int *i, int *rel, int *grav)
-{
-	int j;
-
-	if (!arg)
-		return 0;
-	if ((j = parseint(arg, rel, type == 'x' || type == 'y' ? 1 : 0)) !=
-		INT_MIN) {
-		*i = j;
-	} else if (grav) {
-		if (!strcmp("center", arg))
-			*grav = GRAV_CENTER;
-		else
-			switch (type) {
-			case 'x':
-				if (!strcmp("left", arg))
-					*grav = GRAV_LEFT;
-				else if (!strcmp("right", arg))
-					*grav = GRAV_RIGHT;
-				else
-					return 0;
-				break;
-			case 'y':
-				if (!strcmp("top", arg))
-					*grav = GRAV_TOP;
-				else if (!strcmp("bottom", arg))
-					*grav = GRAV_BOTTOM;
-				else
-					return 0;
-				break;
-			case 'w': /* FALLTHROUGH */
-			case 'h': return 0;
-			}
-	}
-	return 1;
 }
 
 Workspace *parsewsormon(char *arg, int mon)

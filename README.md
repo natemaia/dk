@@ -438,6 +438,7 @@ set ws=_ apply SETTING
   one horizontal stack area on top.
 - `none` floating layout, windows can be freely moved and resized.
 - `cycle` switch between available layouts.
+
 ```
 set [WS] layout mono
 ```

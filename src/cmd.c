@@ -336,7 +336,8 @@ int cmdfloat(char **argv)
 			quadrant(c, &c->old_x, &c->old_y, &c->old_w, &c->old_h);
 		}
 		if (W(c) >= m->ww && H(c) >= m->wh) {
-			c->h -= c->h / 10, c->w -= c->h / 10;
+			c->h = m->ww - (m->ww / 8);
+			c->w = m->wh - (m->wh / 8);
 			gravitate(c, GRAV_CENTER, GRAV_CENTER, 1);
 		}
 		resizehint(c, c->old_x, c->old_y, c->old_w, c->old_h, c->bw, 0, 0);
@@ -349,7 +350,7 @@ int cmdfloat(char **argv)
 
 int cmdfocus(char **argv)
 {
-	int i = 0, nparsed = 0;
+	int i = 0, nparsed = 0, opt;
 	Client *c = cmdc;
 
 	if (FULLSCREEN(c) || !c->ws->clients->next)
@@ -357,11 +358,11 @@ int cmdfocus(char **argv)
 	if (c != selws->sel) {
 		focus(c);
 		if (FLOATING(c))
-			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+			restack(c->ws);
 		return nparsed;
 	}
-	int opt = parseopt(*argv, dirs, (int)(sizeof(dirs) / sizeof(*dirs)));
-	if (opt < 0 && (i = parseint(*argv, NULL, 0)) == INT_MIN) {
+	if ((opt = parseopt(*argv, dirs, LEN(dirs))) < 0 &&
+			(i = parseint(*argv, NULL, 0)) == INT_MIN) {
 		respond(cmdresp, "!%s win focus: %s", ebadarg, *argv);
 		return -1;
 	}
@@ -380,7 +381,7 @@ int cmdfocus(char **argv)
 			focus(c);
 	}
 	if (c && (FLOATING(c) || c->ws->layout->func == mono))
-		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+		restack(c->ws);
 	xcb_aux_sync(con);
 	ignore(XCB_ENTER_NOTIFY);
 	return nparsed;
@@ -453,15 +454,16 @@ int cmdlayout(char **argv)
 		return 1;
 	}
 
-	for (uint32_t i = 0; layouts[i].name; i++)
+	for (uint32_t i = 0; layouts[i].name; i++) {
 		if (!strcmp(layouts[i].name, *argv)) {
-			if ((lytchange = &layouts[i] != setws->layout)) {
+			if (&layouts[i] != setws->layout) {
 				setws->layout = &layouts[i];
-				needsrefresh = 1;
+				needsrefresh = lytchange = 1;
 			}
 			return 1;
 		}
-	respond(cmdresp, "!invalid layout name: %s\nexpected string e.g tile",
+	}
+	respond(cmdresp, "!invalid layout argument: %s\nexpected string e.g tile",
 			*argv);
 	return -1;
 }
@@ -757,7 +759,7 @@ int cmdrule(char **argv)
 	if (!argv || !*argv)                                                       \
 		goto badvalue;                                                         \
 	val = *argv
-#define STATE(val)                                                             \
+#define CSTATE(val)                                                               \
 	argv++, nparsed++;                                                         \
 	if (!argv || (j = parsebool(*argv)) < 0)                                   \
 		goto badvalue;                                                         \
@@ -835,17 +837,17 @@ int cmdrule(char **argv)
 			if (j)
 				r.state &= ~STATE_NOBORDER;
 		} else if (!strcmp(*argv, "float")) {
-			STATE(STATE_FLOATING);
+			CSTATE(STATE_FLOATING);
 		} else if (!strcmp(*argv, "full")) {
-			STATE(STATE_FULLSCREEN);
+			CSTATE(STATE_FULLSCREEN);
 		} else if (!strcmp(*argv, "fakefull")) {
-			STATE(STATE_FAKEFULL);
+			CSTATE(STATE_FAKEFULL);
 		} else if (!strcmp(*argv, "stick")) {
-			STATE(STATE_STICKY | STATE_FLOATING);
+			CSTATE(STATE_STICKY | STATE_FLOATING);
 		} else if (!strcmp(*argv, "ignore_cfg")) {
-			STATE(STATE_IGNORECFG);
+			CSTATE(STATE_IGNORECFG);
 		} else if (!strcmp(*argv, "ignore_msg")) {
-			STATE(STATE_IGNOREMSG);
+			CSTATE(STATE_IGNOREMSG);
 		} else if (!strcmp(*argv, "focus")) {
 			argv++, nparsed++;
 			if (!argv || (j = parsebool(*argv)) < 0)
@@ -894,7 +896,7 @@ badvalue:
 			if ((nr = initrule(&r)) && apply) {
 applyall:
 				FOR_CLIENTS (c, ws) {
-					clientrule(c, nr, 1);
+					clientrule(c, nr, 0);
 					if (c->cb)
 						c->cb->func(c, 0);
 				}
@@ -903,6 +905,7 @@ applyall:
 		}
 	}
 	return nparsed;
+#undef CSTATE
 #undef ARG
 #undef STR
 #undef M
@@ -1244,8 +1247,8 @@ int cmdswap(__attribute__((unused)) char **argv)
 	Client *c = cmdc, *old, *cur = NULL, *prev = NULL;
 
 	if (FLOATING(c) ||
-			(c->state & STATE_FULLSCREEN && c->w == MON(c)->w &&
-			 c->h == MON(c)->h) || tilecount(c->ws) <= 1) {
+		(c->state & STATE_FULLSCREEN && c->w == MON(c)->w && c->h == MON(c)->h)
+			|| tilecount(c->ws) <= 1) {
 		respond(cmdresp,
 			"!unable to swap floating, fullscreen, or single tiled windows");
 		return 0;
@@ -1325,7 +1328,7 @@ int cmdwin(char **argv)
 
 int cmdws(char **argv)
 {
-	return (workspaces->next) ? adjustwsormon(argv) : 0;
+	return (workspaces && workspaces->next) ? adjustwsormon(argv) : 0;
 }
 
 int cmdws_(char **argv)

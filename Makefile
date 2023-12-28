@@ -1,8 +1,6 @@
 # dk window manager
 # see license file for copyright and license details
 
-VERSION = 1.9
-
 # install paths
 VPATH   = src
 PREFIX ?= /usr/local
@@ -10,12 +8,17 @@ MAN    ?= ${PREFIX}/share/man
 DOC    ?= ${PREFIX}/share/doc/dk
 SES    ?= /usr/share/xsessions
 
+ifeq ($(PREFIX),/usr/local)
+	VERSION = $(shell git describe --tags | sed 's+-+.r+' | tr - . | cut -c2-)
+else
+	VERSION = 1.9
+endif
+
 # source and object files
 SRC  = dk.c cmd.c event.c layout.c parse.c strl.c util.c
 OBJ  = ${SRC:.c=.o}
 CSRC = dkcmd.c strl.c util.c
 COBJ = ${CSRC:.c=.o}
-
 
 # compiler and linker flags
 OPTLVL = -O3

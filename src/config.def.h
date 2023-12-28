@@ -49,7 +49,7 @@ void albumart(Client *c, int closed)
 	 * basic example of a user-defined callback
 	 *
 	 * on open: apply padding, gravitate the window to the right-center, and
-	 *          avoid focus grab
+	 *          avoid focus grab.
 	 * on close: remove padding
 	 */
 

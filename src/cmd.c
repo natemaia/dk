@@ -245,10 +245,10 @@ badvalue:
 		border[BORD_O_WIDTH] = ow;
 	border[BORD_WIDTH] = bw;
 	FOR_CLIENTS (c, ws)
-		if (!(c->state & STATE_NOBORDER) && c->bw == old)
+		if (!STATE(c, NOBORDER) && c->bw == old)
 			c->bw = bw;
 	FOR_EACH (c, scratch.clients)
-		if (!(c->state & STATE_NOBORDER) && c->bw == old)
+		if (!STATE(c, NOBORDER) && c->bw == old)
 			c->bw = bw;
 	return nparsed;
 
@@ -294,7 +294,7 @@ int cmdfakefull(__attribute__((unused)) char **argv)
 	if ((c->state ^= STATE_FAKEFULL) & STATE_FULLSCREEN) {
 		if (c->w != MON(c)->w || c->h != MON(c)->h)
 			c->bw = c->old_bw;
-		if (!(c->state & STATE_FAKEFULL))
+		if (!STATE(c, FAKEFULL))
 			resize(c, MON(c)->x, MON(c)->y, MON(c)->w, MON(c)->h, 0);
 		needsrefresh = 1;
 	}
@@ -312,7 +312,7 @@ int cmdfloat(char **argv)
 		nparsed++;
 		FOR_EACH (c, cmdc->ws->clients) {
 			cmdc = c;
-			if (FLOATING(c) || c->state & STATE_WASFLOATING) {
+			if (FLOATING(c) || STATE(c, WASFLOATING)) {
 				if (FLOATING(c))
 					c->state |= STATE_WASFLOATING;
 				else
@@ -323,7 +323,7 @@ int cmdfloat(char **argv)
 		return nparsed;
 	}
 
-	if (FULLSCREEN(c) || c->state & STATE_STICKY || c->state & STATE_FIXED) {
+	if (FULLSCREEN(c) || STATE(c, STICKY) || STATE(c, FIXED)) {
 		respond(cmdresp, "!unable to change floating state of fullscreen, "
 						 "sticky, or fixed size windows");
 		return nparsed;
@@ -400,7 +400,7 @@ int cmdfollow(Workspace *ws)
 
 int cmdfull(__attribute__((unused)) char **argv)
 {
-	setfullscreen(cmdc, !(cmdc->state & STATE_FULLSCREEN));
+	setfullscreen(cmdc, !STATE(cmdc, FULLSCREEN));
 	return 0;
 }
 
@@ -967,7 +967,7 @@ push:
 		return -1;
 	} else if (cmdc_passed) {
 		/* when passed a client but no other args we do a toggle */
-		if (c->state & STATE_SCRATCH)
+		if (STATE(c, SCRATCH))
 			goto pop;
 		goto push;
 	} else if (scratch.clients) {
@@ -1227,7 +1227,7 @@ int cmdstick(__attribute__((unused)) char **argv)
 				"!unable to change sticky state of fullscreen windows");
 		return 0;
 	}
-	if (c->state & STATE_STICKY) {
+	if (STATE(c, STICKY)) {
 		ws = c->ws->num;
 		c->state &= ~STATE_STICKY;
 		PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL, 32, 1,
@@ -1247,7 +1247,7 @@ int cmdswap(__attribute__((unused)) char **argv)
 	Client *c = cmdc, *old, *cur = NULL, *prev = NULL;
 
 	if (FLOATING(c) ||
-		(c->state & STATE_FULLSCREEN && c->w == MON(c)->w && c->h == MON(c)->h)
+		(STATE(c, FULLSCREEN) && c->w == MON(c)->w && c->h == MON(c)->h)
 			|| tilecount(c->ws) <= 1) {
 		respond(cmdresp,
 			"!unable to swap floating, fullscreen, or single tiled windows");

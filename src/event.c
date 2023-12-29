@@ -48,10 +48,9 @@ void buttonpress(xcb_generic_event_t *ev)
 		focus(c);
 	if (FLOATING(c) && (e->detail == mousemove || e->detail == mouseresize)) {
 		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-		if (!(c->state & STATE_ABOVE))
+		if (!STATE(c, ABOVE))
 			for (v = c->ws->stack; v; v = v->snext)
-				if (v->state & STATE_ABOVE && ((v->state & STATE_FLOATING) ||
-											   v->ws->layout->func == NULL))
+				if (STATE(v, ABOVE) && FLOATING(v))
 					setstackmode(v->win, XCB_STACK_MODE_ABOVE);
 		xcb_flush(con);
 	}
@@ -59,8 +58,7 @@ void buttonpress(xcb_generic_event_t *ev)
 	if ((e->state & ~(lockmask | XCB_MOD_MASK_LOCK)) ==
 			(mousemod & ~(lockmask | XCB_MOD_MASK_LOCK)) &&
 		(e->detail == mousemove || e->detail == mouseresize)) {
-		if (FULLSCREEN(c) ||
-			((c->state & STATE_FIXED) && e->detail != mousemove))
+		if (FULLSCREEN(c) || (STATE(c, FIXED) && e->detail != mousemove))
 			return;
 		DBG("buttonpress: %s - 0x%08x",
 			e->detail == mousemove ? "move" : "resize", e->event)
@@ -123,21 +121,18 @@ void clientmessage(xcb_generic_event_t *ev)
 			if (d[1] == netatom[NET_STATE_FULL] ||
 				d[2] == netatom[NET_STATE_FULL]) {
 				DBG("clientmessage: state fullscreen: %d",
-					(d[0] == 1 ||
-					 (d[0] == 2 && !(c->state & STATE_FULLSCREEN))))
-				setfullscreen(c,
-							  (d[0] == 1 ||
-							   (d[0] == 2 && !(c->state & STATE_FULLSCREEN))));
+					(d[0] == 1 || (d[0] == 2 && !STATE(c, FULLSCREEN))))
+				setfullscreen(c, (d[0] == 1 ||
+							(d[0] == 2 && !STATE(c, FULLSCREEN))));
 				ignore(XCB_ENTER_NOTIFY);
 				xcb_aux_sync(con);
 			} else if (d[1] == netatom[NET_STATE_ABOVE] ||
 					   d[2] == netatom[NET_STATE_ABOVE]) {
-				int above =
-					d[0] == 1 || (d[0] == 2 && !(c->state & STATE_FULLSCREEN));
+				int above = d[0] == 1 || (d[0] == 2 && !STATE(c, ABOVE));
 				DBG("clientmessage: state above: %d", above)
-				if (above && !(c->state & STATE_ABOVE))
+				if (above && !STATE(c, ABOVE))
 					c->state |= STATE_ABOVE | STATE_FLOATING;
-				else if (!above && (c->state & STATE_ABOVE))
+				else if (!above && STATE(c, ABOVE))
 					c->state &= ~STATE_ABOVE;
 				needsrefresh = 1;
 			} else if ((d[1] == netatom[NET_STATE_DEMANDATT] ||
@@ -150,8 +145,7 @@ void clientmessage(xcb_generic_event_t *ev)
 			DBG("clientmessage: change NET_ACTIVE_WINDOW: %d", e->type)
 activate:
 			if (globalcfg[GLB_FOCUS_URGENT].val &&
-				!(c->state & STATE_IGNOREMSG) &&
-				!(c->state & STATE_SCRATCH)) {
+					!STATE(c, IGNOREMSG) && !STATE(c, SCRATCH)) {
 				setnetstate(c->win, c->state);
 				if (c->ws != selws) {
 					unfocus(selws->sel, 1);
@@ -184,71 +178,48 @@ void configrequest(xcb_generic_event_t *ev)
 	xcb_configure_request_event_t *e = (xcb_configure_request_event_t *)ev;
 
 	if ((c = wintoclient(e->window))) {
-		if (c->state & STATE_IGNORECFG || e->x == W(c) * -2 ||
-			e->x <= (MON(c)->x - c->w) + globalcfg[GLB_MIN_WH].val)
+		if (STATE(c, IGNORECFG) || e->x == W(c) * -2 ||
+				e->x <= (MON(c)->x - c->w) + globalcfg[GLB_MIN_WH].val)
 			return;
-		DBG("configrequest: managed %s client 0x%08x",
-			FLOATING(c) ? "floating" : "tiled", e->window)
 		if (e->value_mask & XCB_CONFIG_WINDOW_BORDER_WIDTH) {
-			DBG("configrequest: bw: %d -> %d", c->bw, e->border_width)
 			c->bw = e->border_width;
 		} else if (FLOATING(c)) {
 			m = MON(c);
 			if (e->value_mask & XCB_CONFIG_WINDOW_X) {
-				DBG("configrequest: x: %d - > %d", c->x, m->x + e->x)
 				c->old_x = c->x;
 				c->x = m->x + e->x;
 			}
 			if (e->value_mask & XCB_CONFIG_WINDOW_Y) {
-				DBG("configrequest: y: %d - > %d", c->y, m->y + e->y)
 				c->old_y = c->y;
 				c->y = m->y + e->y;
 			}
-			if (e->value_mask & XCB_CONFIG_WINDOW_WIDTH &&
-				!(c->state & STATE_FIXED)) {
-				DBG("configrequest: w: %d - > %d", c->w, e->width)
+			if (e->value_mask & XCB_CONFIG_WINDOW_WIDTH) {
 				c->old_w = c->w;
 				c->w = CLAMP(e->width, globalcfg[GLB_MIN_WH].val, m->w);
 			}
-			if (e->value_mask & XCB_CONFIG_WINDOW_HEIGHT &&
-				!(c->state & STATE_FIXED)) {
-				DBG("configrequest: h: %d - > %d", c->h, e->height)
+			if (e->value_mask & XCB_CONFIG_WINDOW_HEIGHT) {
 				c->old_h = c->h;
 				c->h = CLAMP(e->height, globalcfg[GLB_MIN_WH].val, m->h);
 			}
-			if ((c->x + c->w < m->x + globalcfg[GLB_MIN_XY].val ||
-				 c->x > m->x + m->w - globalcfg[GLB_MIN_XY].val) &&
-				c->state & STATE_FLOATING) {
-				DBG("configrequest: x is out of monitor bounds, centering: %d "
-					"-> %d", c->x, m->x + (m->w / 2 - W(c) / 2))
+			if (c->x + c->w < m->x + globalcfg[GLB_MIN_XY].val ||
+					c->x > m->x + m->w - globalcfg[GLB_MIN_XY].val) {
 				c->x = m->x + (m->w / 2 - W(c) / 2);
 			}
-			if ((c->y + c->h < m->y + globalcfg[GLB_MIN_XY].val ||
-				 c->y > m->y + m->h - globalcfg[GLB_MIN_XY].val) &&
-				c->state & STATE_FLOATING) {
-				DBG("configrequest: y is out of monitor bounds, centering: %d "
-					"-> %d", c->y, m->y + (m->h / 2 - H(c) / 2))
+			if (c->y + c->h < m->y + globalcfg[GLB_MIN_XY].val ||
+					c->y > m->y + m->h - globalcfg[GLB_MIN_XY].val) {
 				c->y = m->y + (m->h / 2 - H(c) / 2);
 			}
-			if (e->value_mask & (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y) &&
+			if (VISIBLE(c)) {
+				resize(c, c->x, c->y, c->w, c->h, c->bw);
+			} else if (e->value_mask & (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y) &&
 				!(e->value_mask &
 				  (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT))) {
-				DBG("configrequest: changing x/y but not width/height, sending "
-					"configure notify: %d,%d", c->x, c->y)
 				sendconfigure(c);
-			}
-			if (VISIBLE(c)) {
-				DBG("configrequest: visible window, performing resize: %d,%d "
-					"%dx%d", c->x, c->y, c->w, c->h)
-				c->x += 10;
-				resizehint(c, c->x - 10, c->y, c->w, c->h, c->bw, 0, 0);
 			}
 		} else {
 			sendconfigure(c);
 		}
 	} else {
-		DBG("configrequest: 0x%08x - %d,%d @ %dx%d", e->window, e->x, e->y,
-			e->width, e->height)
 		xcb_params_configure_window_t wc = {.x = e->x,
 											.y = e->y,
 											.width = e->width,
@@ -421,9 +392,8 @@ void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 				ny = oy + (e->root_y - my);
 				if (nx == c->x && ny == c->y)
 					break;
-				if (!FLOATING(c) ||
-					(c->state & STATE_FULLSCREEN && c->state & STATE_FAKEFULL &&
-					 !(c->old_state & STATE_FLOATING))) {
+				if (!FLOATING(c) || (STATE(c, FULLSCREEN) && STATE(c, FAKEFULL) &&
+							!(c->old_state & STATE_FLOATING))) {
 					DBG("mousemotion: popping float: %d,%d", c->x, c->y)
 					int x = c->x, y = c->y, w = c->w, h = c->h;
 					c->state |= STATE_FLOATING;
@@ -488,7 +458,7 @@ void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 					break;
 				last = e->time;
 
-				if (!(c->state & STATE_FLOATING) && ISTILE(selws)) {
+				if (!STATE(c, FLOATING) && ISTILE(selws)) {
 					/* TODO: fix this shit, surely there's a better way that I'm
 					 * not seeing this whole block is just calculating the split
 					 * ratio and height offset of the current tiled client based
@@ -560,9 +530,8 @@ void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 					nh = oh + (e->root_y - my);
 					if (nw == c->w && nh == c->h)
 						break;
-					if (!FLOATING(c) || (c->state & STATE_FULLSCREEN &&
-										 c->state & STATE_FAKEFULL &&
-										 !(c->old_state & STATE_FLOATING))) {
+					if (!FLOATING(c) || (STATE(c, FULLSCREEN) && STATE(c, FAKEFULL) &&
+								!(c->old_state & STATE_FLOATING))) {
 						c->state |= STATE_FLOATING;
 						c->old_state |= STATE_FLOATING;
 						if (selws->layout->func)

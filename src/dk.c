@@ -85,8 +85,7 @@ static uint32_t clientmask =
 	XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_FOCUS_CHANGE |
 	XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
 const char *ebadarg = "invalid argument for";
-const char *enoargs =
-	"command requires additional arguments but none were given";
+const char *enoargs = "command requires additional arguments but none were given";
 const char *gravs[] = {
 	[GRAV_NONE] = "none",     [GRAV_LEFT] = "left", [GRAV_RIGHT] = "right",
 	[GRAV_CENTER] = "center", [GRAV_TOP] = "top",   [GRAV_BOTTOM] = "bottom",
@@ -264,9 +263,7 @@ int main(int argc, char *argv[])
 	FOR_EACH (ws, workspaces) {
 		FOR_EACH (c, ws->clients)
 			if (FLOATING(c)) /* floating windows being the wrong size */
-				resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0, 0);
-		if (ws->layout->func)
-			ws->layout->func(ws); /* border issues on tiled clients */
+				resize(c, c->x, c->y, c->w, c->h, c->bw);
 		showhide(ws->stack); /* show only windows on the active workspace */
 	}
 	ignore(XCB_ENTER_NOTIFY); /* wrong windows grabbing focus */
@@ -388,8 +385,7 @@ static void applyrule(Client *c, Rule *r, xcb_atom_t curws, int nofocus)
 	cmdusemon = 0;
 }
 
-int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw,
-				   int usermotion, int mouse)
+int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse)
 {
 	Monitor *m = MON(c);
 	int baseismin, min = globalcfg[GLB_MIN_XY].val;
@@ -462,7 +458,6 @@ void attachstack(Client *c)
 {
 	c->snext = c->ws->stack;
 	c->ws->stack = c;
-	c->ws->sel = c;
 }
 
 int assignws(Workspace *ws, Monitor *mon)
@@ -849,7 +844,8 @@ void focus(Client *c)
 	if (selws && selws->sel)
 		unfocus(selws->sel, 0);
 	if (c) {
-		if (c->state & STATE_URGENT)
+		DBG("focus: 0x%08x %s", c->win, c->title)
+		if (STATE(c, URGENT))
 			seturgent(c, 0);
 		detachstack(c);
 		attachstack(c);
@@ -921,7 +917,7 @@ void freewm(void)
 		unmanage(c->win, 0);
 	}
 	FOR_CLIENTS (c, ws) {
-		if (c->state & STATE_HIDDEN)
+		if (STATE(c, HIDDEN))
 			clientmap(c);
 		if (!restart)
 			MOVE(c->win, c->x, c->y);
@@ -1129,13 +1125,11 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	grabbuttons(c);
 	if (FULLSCREEN(c)) {
 		DBG("initclient: fullscreen: 0x%08x - %s", c->win, c->title)
-	} else if (FLOATING(c) || (c->state & STATE_FIXED)) {
+	} else if (FLOATING(c) || STATE(c, FIXED)) {
 		DBG("initclient: floating or fixed: 0x%08x - %s", c->win, c->title)
 		c->w = CLAMP(c->w, globalcfg[GLB_MIN_WH].val, MON(c)->ww);
 		c->h = CLAMP(c->h, globalcfg[GLB_MIN_WH].val, MON(c)->wh);
 		if (c->trans) {
-			if (FULLSCREEN(c->trans))
-				c->state |= STATE_ABOVE;
 			c->x = c->trans->x + ((W(c->trans) - W(c)) / 2);
 			c->y = c->trans->y + ((H(c->trans) - H(c)) / 2);
 		}
@@ -1144,18 +1138,6 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		if (c->x == MON(c)->x && c->y == MON(c)->y)
 			quadrant(c, &c->x, &c->y, &c->w, &c->h);
 		MOVERESIZE(win, c->x, c->y, c->w, c->h, c->bw);
-	} else if (!nexttiled(c->next)) {
-		DBG("initclient: only tiled: 0x%08x - %s", c->win, c->title)
-		/* TODO: Fix this shit hack to force newly tiled windows to be
-		 *       resized, mainly to fix border issues with some windows,
-		 *       this only happens when we have gaps, smart border and
-		 *       smart gaps disabled. Still it's not always consistent.
-		 *       See: https://github.com/natemaia/dk/issues/1
-		 */
-		if (VISIBLE(c))
-			resize(c, c->x, c->y, c->w, c->h, c->bw);
-		else
-			c->x += 10, c->y += 10;
 	}
 	if (c->cb)
 		c->cb->func(c, 0);
@@ -1181,8 +1163,7 @@ static void initdesk(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	setstackmode(d->win, XCB_STACK_MODE_BELOW);
 }
 
-static void initmon(int num, char *name, xcb_randr_output_t id, int x, int y,
-					int w, int h)
+static void initmon(int num, char *name, xcb_randr_output_t id, int x, int y, int w, int h)
 {
 	Monitor *m, *tail;
 
@@ -1437,11 +1418,9 @@ void manage(xcb_window_t win, int scan)
 		setwinstate(win, XCB_ICCCM_WM_STATE_NORMAL);
 	} else if (!wa->override_redirect) {
 client:
-		/* TODO: this could be a problem for restart if we want to use the
-		 * iconic state the client is never initialized */
 		if (scan && !(wa->map_state == XCB_MAP_STATE_VIEWABLE ||
-					  (winprop(win, wmatom[WM_STATE], &state) &&
-					   state == XCB_ICCCM_WM_STATE_ICONIC)))
+					(winprop(win, wmatom[WM_STATE], &state) &&
+					 state == XCB_ICCCM_WM_STATE_ICONIC)))
 			goto end;
 		initclient(win, g);
 		PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &win);
@@ -1526,7 +1505,7 @@ void popfloat(Client *c)
 	setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	resizehint(c, x, y, w, h, c->bw, 0, 0);
 	for (c = c->ws->stack; c; c = c->snext)
-		if (c->state & STATE_ABOVE && FLOATING(c))
+		if (STATE(c, ABOVE) && FLOATING(c))
 			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	ignore(XCB_ENTER_NOTIFY);
 	xcb_aux_sync(con);
@@ -1582,7 +1561,7 @@ void printstatus(Status *s, int freeable)
 				fprintf(s->file, fmt, ws->name);
 			}
 			fprintf(s->file, "\nL%s\nA%s", selws->layout->name,
-					selws->sel && !(selws->sel->state & STATE_HIDDEN)
+					selws->sel && !STATE(selws->sel, HIDDEN)
 						? selws->sel->title
 						: "");
 			break;
@@ -1659,15 +1638,16 @@ void printstatus(Status *s, int freeable)
 					"\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d "  \
 					"%d %d %d %d %d %d %d %d %d %s 0x%08x",                  \
 					c->win, c->title, c->clss, c->inst, c->ws->num + 1,      \
-					c->x, c->y, c->w, c->h, c->bw, c->hoff, FLOATING(c),     \
-					(c->state & STATE_FULLSCREEN) != 0,                      \
-					(c->state & STATE_FAKEFULL) != 0,                        \
-					(c->state & STATE_FIXED) != 0,                           \
-					(c->state & STATE_STICKY) != 0,                          \
-					(c->state & STATE_URGENT) != 0,                          \
-					(c->state & STATE_ABOVE) != 0,                           \
-					(c->state & STATE_HIDDEN) != 0,                          \
-					(c->state & STATE_SCRATCH) != 0,                         \
+					c->x, c->y, c->w, c->h, c->bw, c->hoff,                  \
+					STATE(c, FLOATING) != 0,                                 \
+					STATE(c, FULLSCREEN) != 0,                               \
+					STATE(c, FAKEFULL) != 0,                                 \
+					STATE(c, FIXED) != 0,                                    \
+					STATE(c, STICKY) != 0,                                   \
+					STATE(c, URGENT) != 0,                                   \
+					STATE(c, ABOVE) != 0,                                    \
+					STATE(c, HIDDEN) != 0,                                   \
+					STATE(c, SCRATCH) != 0,                                  \
 					c->cb ? c->cb->name : "none",                            \
 					c->trans ? c->trans->win : 0)
 			fprintf(s->file,
@@ -1691,12 +1671,12 @@ void printstatus(Status *s, int freeable)
 						"\nrule: \"%s\" \"%s\" \"%s\" %d %s %d %d %d %d %d %d "
 						"%d %s %d %d %d %d %s %s",
 						r->title, r->clss, r->inst, r->ws, r->mon,
-						(r->state & STATE_FLOATING) != 0,
-						(r->state & STATE_FULLSCREEN) != 0,
-						(r->state & STATE_FAKEFULL) != 0,
-						(r->state & STATE_STICKY) != 0,
-						(r->state & STATE_IGNORECFG) != 0,
-						(r->state & STATE_IGNOREMSG) != 0, r->focus,
+						STATE(r, FLOATING) != 0,
+						STATE(r, FULLSCREEN) != 0,
+						STATE(r, FAKEFULL) != 0,
+						STATE(r, STICKY) != 0,
+						STATE(r, IGNORECFG) != 0,
+						STATE(r, IGNOREMSG) != 0, r->focus,
 						r->cb ? r->cb->name : "", r->x, r->y, r->w, r->h,
 						gravs[r->xgrav], gravs[r->ygrav]);
 			}
@@ -1783,7 +1763,7 @@ static int refresh(void)
 
 #define MAP(v, list)                                                           \
 	FOR_EACH (v, list)                                                         \
-		if (v->state & STATE_NEEDSMAP) {                                       \
+		if (STATE(v, NEEDSMAP)) {                                              \
 			v->state &= ~STATE_NEEDSMAP;                                       \
 			setwinstate(v->win, XCB_ICCCM_WM_STATE_NORMAL);                    \
 			xcb_map_window(con, v->win);                                       \
@@ -1796,16 +1776,21 @@ static int refresh(void)
 	FOR_EACH (m, monitors) {
 		DBG("refresh: workspace: %d, monitor: %s layout: %s",
 				m->ws->num + 1, m->name, m->ws->layout->name)
+
+		/* TODO: when a layout returns -1 it means something exceeded a
+		 * limit (resize, too many windows, etc.) and a window was popped
+		 * floating. The layout code has an error and the current solution
+		 * calls the layout again to fix it. */
 		if (m->ws->layout->func && m->ws->layout->func(m->ws) == -1)
 			m->ws->layout->func(m->ws);
+
 		FOR_EACH (c, m->ws->clients) {
-			if (c->state & STATE_NEEDSMAP)
-				clientmap(c);
 			if (FULLSCREEN(c))
 				MOVERESIZE(c->win, m->x, m->y, m->w, m->h, 0);
 			else if (FLOATING(c))
-				resizehint(c, c->x, c->y, c->w, c->h, c->bw, 0, 0);
-			clientborder(c, c == selws->sel);
+				resize(c, c->x, c->y, c->w, c->h, c->bw);
+			if (STATE(c, NEEDSMAP))
+				clientmap(c);
 		}
 		restack(m->ws);
 	}
@@ -1882,17 +1867,17 @@ static void relocatews(Workspace *ws, Monitor *old, int wasvis)
 
 void resize(Client *c, int x, int y, int w, int h, int bw)
 {
+	int changed = c->w != w || c->h != h;
 	if (FLOATING(c) && !FULLSCREEN(c))
 		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 	c->x = x, c->y = y, c->w = w, c->h = h;
 	MOVERESIZE(c->win, x, y, w, h, bw);
-	clientborder(c, c == selws->sel);
+	if (changed)
+		clientborder(c, c == selws->sel);
 	sendconfigure(c);
-	xcb_flush(con);
 }
 
-void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion,
-				int mouse)
+void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, int mouse)
 {
 	if (applysizehints(c, &x, &y, &w, &h, bw, usermotion, mouse))
 		resize(c, x, y, w, h, bw);
@@ -1903,30 +1888,49 @@ void restack(Workspace *ws)
 	Desk *d;
 	Panel *p;
 	Client *c;
+	Monitor *m;
 
-	if (!ws || !(c = ws->sel))
+	if (!ws || !(c = ws->sel) || !(m = ws->mon))
 		return;
 
-	DBG("restack: starting workspace: %d", ws->num + 1)
-
 	FOR_EACH (p, panels)
-		if (p->mon == ws->mon)
+		if (p->mon == m->ws->mon)
 			setstackmode(p->win, XCB_STACK_MODE_BELOW);
-	if (FLOATING(c))
-		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-	if (ws->layout->func && ws == ws->mon->ws)
-		for (c = ws->stack; c; c = c->snext)
+
+	if (FLOATING(c)) {
+		if (c->trans) {
+			uint32_t v[] = { c->trans->win, XCB_STACK_MODE_ABOVE };
+			setstackmode(c->trans->win, XCB_STACK_MODE_ABOVE);
+			xcb_configure_window(con, c->win,
+					XCB_CONFIG_WINDOW_SIBLING | XCB_CONFIG_WINDOW_STACK_MODE,
+					v);
+		} else {
+			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+		}
+	}
+
+	/* handle floating transient and STATE_ABOVE clients */
+	for (c = m->ws->stack; c; c = c->snext) {
+		if (FLOATING(c)) {
+			if (c->trans) {
+				uint32_t v[] = { c->trans->win, XCB_STACK_MODE_ABOVE };
+				xcb_configure_window(con, c->win,
+						XCB_CONFIG_WINDOW_SIBLING | XCB_CONFIG_WINDOW_STACK_MODE,
+						v);
+			} else if (STATE(c, ABOVE)) {
+				setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+			}
+		}
+	}
+
+	if (m->ws->layout->func)
+		for (c = m->ws->stack; c; c = c->snext)
 			if (!(STATE(c, FLOATING)))
 				setstackmode(c->win, XCB_STACK_MODE_BELOW);
-	FOR_EACH (d, desks)
-		if (d->mon == ws->mon)
-			setstackmode(d->win, XCB_STACK_MODE_BELOW);
-	for (c = ws->stack; c; c = c->snext)
-		if ((STATE(c, ABOVE) && FLOATING(c)) ||
-				(c->trans && FULLSCREEN(c->trans)))
-			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 
-	DBG("restack: finished workspace: %d", ws->num + 1)
+	FOR_EACH (d, desks)
+		if (d->mon == m->ws->mon)
+			setstackmode(d->win, XCB_STACK_MODE_BELOW);
 }
 
 static int rulecmp(Client *c, Rule *r)
@@ -2154,15 +2158,6 @@ void showhide(Client *c)
 		Monitor *m = MON(c);
 		DBG("showhide: ws: %d - showing window : 0x%08x %s", c->ws->num + 1,
 				c->win, c->title)
-		if (c->x < m->x - (c->w + globalcfg[GLB_MIN_XY].val) ||
-			c->x > m->x + (m->w - globalcfg[GLB_MIN_XY].val))
-			c->x = CLAMP(c->x, m->x - globalcfg[GLB_MIN_XY].val,
-						 m->x + m->w - (c->w - globalcfg[GLB_MIN_XY].val));
-		if (c->y < m->y - (c->h + globalcfg[GLB_MIN_XY].val) ||
-			c->y > m->y + (m->h - globalcfg[GLB_MIN_XY].val))
-			c->y = CLAMP(c->y, m->y - globalcfg[GLB_MIN_XY].val,
-						 m->y + m->h - (c->h - globalcfg[GLB_MIN_XY].val));
-
 		setwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
 		if (FULLSCREEN(c))
 			MOVERESIZE(c->win, m->x, m->y, m->w, m->h, 0);
@@ -2250,8 +2245,10 @@ int tilecount(Workspace *ws)
 
 void unfocus(Client *c, int focusroot)
 {
-	if (c)
+	if (c) {
+		DBG("unfocus: 0x%08x %s", c->win, c->title)
 		clientborder(c, 0);
+	}
 	if (focusroot) {
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, root,
 							XCB_CURRENT_TIME);

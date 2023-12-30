@@ -49,7 +49,7 @@
 
 #define W(c)          (c->w + (2 * c->bw))
 #define H(c)          (c->h + (2 * c->bw))
-#define MON(c)        (c)->ws->mon
+#define MON(c)        c->ws->mon
 #define STATE(c, s)   (c->state & STATE_##s)
 #define VISIBLE(c)    (c->ws == MON(c)->ws)
 #define FLOATING(c)   (STATE(c, FLOATING) || !c->ws->layout->func)
@@ -383,8 +383,7 @@ extern Layout layouts[];
 extern WsCmd wscmds[];
 extern Workspace wsdef;
 
-int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw,
-				   int usermotion, int mouse);
+int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse);
 void attach(Client *c, int tohead);
 void attachstack(Client *c);
 int assignws(Workspace *ws, Monitor *mon);
@@ -421,8 +420,7 @@ void printstatus(Status *s, int freeable);
 void quadrant(Client *c, int *x, int *y, const int *w, const int *h);
 void relocate(Client *c, Monitor *mon, Monitor *old);
 void resize(Client *c, int x, int y, int w, int h, int bw);
-void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion,
-				int mouse);
+void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, int mouse);
 void restack(Workspace *ws);
 void sendconfigure(Client *c);
 int sendwmproto(Client *c, int wmproto);

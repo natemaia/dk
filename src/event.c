@@ -37,7 +37,7 @@ static void (*handlers[XCB_NO_OPERATION + 1])(xcb_generic_event_t *) = {
 
 void buttonpress(xcb_generic_event_t *ev)
 {
-	Client *c, *v;
+	Client *c;
 	xcb_generic_error_t *er;
 	xcb_grab_pointer_cookie_t pc;
 	xcb_button_press_event_t *e = (xcb_button_press_event_t *)ev;
@@ -47,11 +47,7 @@ void buttonpress(xcb_generic_event_t *ev)
 	if (c != selws->sel)
 		focus(c);
 	if (FLOATING(c) && (e->detail == mousemove || e->detail == mouseresize)) {
-		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-		if (!STATE(c, ABOVE))
-			for (v = c->ws->stack; v; v = v->snext)
-				if (STATE(v, ABOVE) && FLOATING(v))
-					setstackmode(v->win, XCB_STACK_MODE_ABOVE);
+		restack(c->ws);
 		xcb_flush(con);
 	}
 	xcb_allow_events(con, XCB_ALLOW_REPLAY_POINTER, e->time);
@@ -152,7 +148,8 @@ activate:
 					cmdview(c->ws);
 				}
 				focus(c);
-				restack(c->ws);
+				if (FLOATING(c) || c->ws->layout->func == mono)
+					restack(c->ws);
 			} else {
 				seturgent(c, 1);
 			}
@@ -392,33 +389,13 @@ void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 				ny = oy + (e->root_y - my);
 				if (nx == c->x && ny == c->y)
 					break;
-				if (!FLOATING(c) || (STATE(c, FULLSCREEN) && STATE(c, FAKEFULL) &&
-							!(c->old_state & STATE_FLOATING))) {
+				if (!FLOATING(c) || (STATE(c, FULLSCREEN) && STATE(c, FAKEFULL))) {
 					DBG("mousemotion: popping float: %d,%d", c->x, c->y)
-					int x = c->x, y = c->y, w = c->w, h = c->h;
 					c->state |= STATE_FLOATING;
 					c->old_state |= STATE_FLOATING;
-					if (c->max_w)
-						w = MIN(c->w, c->max_w);
-					if (c->max_h)
-						h = MIN(c->h, c->max_h);
-					if (w == MON(c)->ww)
-						w = MON(c)->w * 0.75;
-					if (h == MON(c)->wh)
-						h = MON(c)->h * 0.75;
-					x = CLAMP(x, MON(c)->x,
-							  MON(c)->x + MON(c)->w - W(c));
-					y = CLAMP(y, MON(c)->y,
-							  MON(c)->y + MON(c)->h - H(c));
-					if (x + y == MON(c)->x + MON(c)->y) {
-						x += MON(c)->w - ((MON(c)->w * 0.75) / 2);
-						y += MON(c)->h - ((MON(c)->h * 0.75) / 2);
-					}
-					DBG("mousemotion: popping float -- new: %d,%d", c->x, c->y)
-					resizehint(c, x, y, w, h, c->bw, 1, 1);
 					if (selws->layout->func)
 						selws->layout->func(selws);
-					restack(selws);
+					restack(c->ws);
 				}
 				if ((m = coordtomon(e->root_x, e->root_y)) && m->ws != c->ws) {
 					setworkspace(c, m->ws, 0);
@@ -530,13 +507,12 @@ void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 					nh = oh + (e->root_y - my);
 					if (nw == c->w && nh == c->h)
 						break;
-					if (!FLOATING(c) || (STATE(c, FULLSCREEN) && STATE(c, FAKEFULL) &&
-								!(c->old_state & STATE_FLOATING))) {
+					if (!FLOATING(c) || (STATE(c, FULLSCREEN) && STATE(c, FAKEFULL))) {
 						c->state |= STATE_FLOATING;
 						c->old_state |= STATE_FLOATING;
 						if (selws->layout->func)
 							selws->layout->func(selws);
-						restack(selws);
+						restack(c->ws);
 					}
 					resizehint(c, c->x, c->y, nw, nh, c->bw, 1, 1);
 					xcb_flush(con);

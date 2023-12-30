@@ -56,8 +56,8 @@ alt + {q,space,Tab}
 	dkcmd win {full,fakefull}
 
 # toggle floating or sticky
-alt + shift + {space,s}
-	dkcmd win {float,stick}
+alt + shift + {space,s,h}
+	dkcmd win {float,stick,scratch}
 
 # move window, signed (+/-) for relative changes, for tiled windows
 # y coord changes will move the window up/down the stack

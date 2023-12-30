@@ -355,9 +355,9 @@ int cmdfocus(char **argv)
 
 	if (FULLSCREEN(c) || !c->ws->clients->next)
 		return nparsed;
-	if (c != selws->sel) {
+	if (cmdc_passed) {
 		focus(c);
-		if (FLOATING(c))
+		if (FLOATING(c) || c->ws->layout->func == mono)
 			restack(c->ws);
 		return nparsed;
 	}
@@ -443,11 +443,10 @@ int cmdlayout(char **argv)
 	if (!strcmp("cycle", *argv)) {
 		for (uint32_t i = 0; layouts[i].name; i++) {
 			if (&layouts[i] == setws->layout) {
-				uint32_t nlyt;
-				for (nlyt = 0; layouts[nlyt].name; nlyt++)
+				uint32_t n;
+				for (n = 0; layouts[n].name; n++)
 					;
-				i = (i + 1) % nlyt;
-				setws->layout = &layouts[i];
+				setws->layout = &layouts[(i + 1) % n];
 				needsrefresh = lytchange = 1;
 			}
 		}
@@ -951,14 +950,12 @@ push:
 						c->bw, 0, 0);
 			}
 			c->state |= STATE_SCRATCH | STATE_HIDDEN | STATE_FLOATING;
-			/* setworkspace wont work for scratch push so we do our own swap */
+			/* setworkspace() wont work for scratch push so we do our own swap */
 			detach(c, 0);
 			detachstack(c);
 			c->ws = &scratch;
 			attach(c, 1);
 			attachstack(c);
-			PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL,
-					32, 0, (const void *)0);
 			clientunmap(c);
 			goto end;
 		}
@@ -980,8 +977,8 @@ push:
 		/* when there are no clients in the scratch we look for recently
 		 * popped windows to push back or bring to the current workspace */
 		FOR_CLIENTS(sc, ws)
-			if (sc->old_state & STATE_SCRATCH &&
-					FLOATING(sc) && !FULLSCREEN(sc)) {
+			if ((sc->old_state & STATE_SCRATCH) && FLOATING(sc) &&
+					!FULLSCREEN(sc)) {
 				c = sc;
 				/* if the window is on our current workspace we push */
 				if (c->ws == selws)
@@ -1219,7 +1216,6 @@ badvalue:
 
 int cmdstick(__attribute__((unused)) char **argv)
 {
-	uint32_t ws = 0xffffffff;
 	Client *c = cmdc;
 
 	if (FULLSCREEN(c)) {
@@ -1228,15 +1224,14 @@ int cmdstick(__attribute__((unused)) char **argv)
 		return 0;
 	}
 	if (STATE(c, STICKY)) {
-		ws = c->ws->num;
 		c->state &= ~STATE_STICKY;
 		PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL, 32, 1,
-			 &ws);
+			 &c->ws->num);
 	} else {
 		cmdfloat(NULL);
 		c->state |= STATE_STICKY | STATE_FLOATING;
 		PROP(REPLACE, c->win, netatom[NET_WM_DESK], XCB_ATOM_CARDINAL, 32, 1,
-			 &ws);
+			 &(uint32_t){0xffffffff});
 	}
 	return 0;
 }

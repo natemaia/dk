@@ -55,8 +55,8 @@ alt + {q,space,Tab}
 {_,alt + }F11
 	dkcmd win {full,fakefull}
 
-# toggle floating or sticky
-alt + shift + {space,s,h}
+# toggle floating, sticky, or scratchpad
+alt + shift + {space,s,u}
 	dkcmd win {float,stick,scratch}
 
 # move window, signed (+/-) for relative changes, for tiled windows

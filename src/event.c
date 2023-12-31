@@ -46,10 +46,8 @@ void buttonpress(xcb_generic_event_t *ev)
 		return;
 	if (c != selws->sel)
 		focus(c);
-	if (FLOATING(c) && (e->detail == mousemove || e->detail == mouseresize)) {
+	if (FLOATING(c) && (e->detail == mousemove || e->detail == mouseresize))
 		restack(c->ws);
-		xcb_flush(con);
-	}
 	xcb_allow_events(con, XCB_ALLOW_REPLAY_POINTER, e->time);
 	if ((e->state & ~(lockmask | XCB_MOD_MASK_LOCK)) ==
 			(mousemod & ~(lockmask | XCB_MOD_MASK_LOCK)) &&
@@ -148,7 +146,7 @@ activate:
 					cmdview(c->ws);
 				}
 				focus(c);
-				if (FLOATING(c) || c->ws->layout->func == mono)
+				if (FLOATING(c))
 					restack(c->ws);
 			} else {
 				seturgent(c, 1);
@@ -583,6 +581,4 @@ void unmapnotify(xcb_generic_event_t *ev)
 
 	DBG("unmapnotify: un-managing window: 0x%08x", e->window)
 	unmanage(e->window, 0);
-	ignore(XCB_ENTER_NOTIFY);
-	xcb_aux_sync(con);
 }

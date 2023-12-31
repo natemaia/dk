@@ -158,7 +158,8 @@ int main(int argc, char *argv[])
 	/* setup basics */
 	argv0 = argv[0];
 	randrbase = -1;
-	running = needsrefresh = 1;
+	running = 1;
+	needsrefresh = 0;
 	depth = sockfd = restart = cmdusemon = winchange = wschange = lytchange = 0;
 
 	for (int i = 1; i < argc; i++) {
@@ -264,6 +265,8 @@ int main(int argc, char *argv[])
 		FOR_EACH (c, ws->clients)
 			if (FLOATING(c)) /* floating windows being the wrong size */
 				resize(c, c->x, c->y, c->w, c->h, c->bw);
+		if (ws->layout->func)
+			ws->layout->func(ws); /* border issues on tiled clients */
 		showhide(ws->stack); /* show only windows on the active workspace */
 	}
 	ignore(XCB_ENTER_NOTIFY); /* wrong windows grabbing focus */
@@ -536,9 +539,6 @@ void changews(Workspace *ws, int swap, int warp)
 	} else {
 		showhide(lastws->stack);
 	}
-	ignore(XCB_ENTER_NOTIFY);
-	ignore(XCB_CONFIGURE_REQUEST);
-	xcb_aux_sync(con);
 	PROP(REPLACE, root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1,
 		 &ws->num);
 	needsrefresh = 1;
@@ -587,10 +587,8 @@ void clientborder(Client *c, int focused)
 		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXMAP, &pmap);
 		xcb_free_pixmap(con, pmap);
 		xcb_free_gc(con, gc);
-		xcb_aux_sync(con);
 	} else {
 		xcb_change_window_attributes(con, c->win, XCB_CW_BORDER_PIXEL, &in);
-		xcb_flush(con);
 	}
 }
 
@@ -854,6 +852,14 @@ void focus(Client *c)
 		setinputfocus(c);
 		selws->sel = c;
 		cmdc = c;
+		if (selws->layout->func == mono) {
+			/* resizehint won't move the window when nothing has changed
+			 * so we force it on this window by incrementing the width */
+			c->w++;
+			mono(selws);
+			ignore(XCB_ENTER_NOTIFY);
+			xcb_aux_sync(con);
+		}
 	} else {
 		unfocus(NULL, 1);
 		if (selws)
@@ -1037,6 +1043,8 @@ void gravitate(Client *c, int xgrav, int ygrav, int matchgap)
 	case GRAV_BOTTOM: y = mony + monh - H(c) - gap; break;
 	case GRAV_CENTER: y = (mony + monh - H(c)) / 2; break;
 	}
+	if (c->x == x && c->y == y)
+		return;
 	DBG("gravitate: moving window: %d, %d -> %d, %d", c->x, c->y, x, y)
 	c->x = x, c->y = y;
 	if (VISIBLE(c))
@@ -1138,6 +1146,11 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		if (c->x == MON(c)->x && c->y == MON(c)->y)
 			quadrant(c, &c->x, &c->y, &c->w, &c->h);
 		MOVERESIZE(win, c->x, c->y, c->w, c->h, c->bw);
+	} else if (!nexttiled(c->next)) {
+		/* resizehint won't move the window when nothing has changed
+		 * so we force it on this window by incrementing the width
+		 * See: https://github.com/natemaia/dk/issues/1 */
+		c->w++;
 	}
 	if (c->cb)
 		c->cb->func(c, 0);
@@ -1502,13 +1515,8 @@ void popfloat(Client *c)
 	w = CLAMP(c->w, MON(c)->ww / 8, MON(c)->ww / 3);
 	h = CLAMP(c->h, MON(c)->wh / 8, MON(c)->wh / 3);
 	quadrant(c, &x, &y, &w, &h);
-	setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	resizehint(c, x, y, w, h, c->bw, 0, 0);
-	for (c = c->ws->stack; c; c = c->snext)
-		if (STATE(c, ABOVE) && FLOATING(c))
-			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-	ignore(XCB_ENTER_NOTIFY);
-	xcb_aux_sync(con);
+	restack(c->ws);
 }
 
 void printstatus(Status *s, int freeable)
@@ -1794,8 +1802,6 @@ static int refresh(void)
 		}
 		restack(m->ws);
 	}
-	ignore(XCB_ENTER_NOTIFY);
-	xcb_aux_sync(con);
 	focus(NULL);
 	return 0;
 #undef MAP
@@ -1931,6 +1937,9 @@ void restack(Workspace *ws)
 	FOR_EACH (d, desks)
 		if (d->mon == m->ws->mon)
 			setstackmode(d->win, XCB_STACK_MODE_BELOW);
+
+	ignore(XCB_ENTER_NOTIFY);
+	xcb_aux_sync(con);
 }
 
 static int rulecmp(Client *c, Rule *r)
@@ -2163,7 +2172,7 @@ void showhide(Client *c)
 			MOVERESIZE(c->win, m->x, m->y, m->w, m->h, 0);
 		else if (FLOATING(c))
 			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
-		else
+		else if (c == c->ws->sel || c->ws->layout->func != mono)
 			MOVE(c->win, c->x, c->y);
 		showhide(c->snext);
 	} else {
@@ -2180,6 +2189,10 @@ void showhide(Client *c)
 			setworkspace(c, selws, 0);
 			focus(sel);
 		}
+	}
+	if (!c->snext) {
+		ignore(XCB_ENTER_NOTIFY);
+		xcb_aux_sync(con);
 	}
 }
 

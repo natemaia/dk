@@ -357,7 +357,7 @@ int cmdfocus(char **argv)
 		return nparsed;
 	if (cmdc_passed) {
 		focus(c);
-		if (FLOATING(c) || c->ws->layout->func == mono)
+		if (FLOATING(c))
 			restack(c->ws);
 		return nparsed;
 	}
@@ -380,10 +380,8 @@ int cmdfocus(char **argv)
 		if (c)
 			focus(c);
 	}
-	if (c && (FLOATING(c) || c->ws->layout->func == mono))
+	if (c && FLOATING(c))
 		restack(c->ws);
-	xcb_aux_sync(con);
-	ignore(XCB_ENTER_NOTIFY);
 	return nparsed;
 }
 
@@ -665,7 +663,8 @@ badvalue:
 		w = w == INT_MIN ? c->w : (relw ? c->w + w : w);
 		h = h == INT_MIN ? c->h : (relh ? c->h + h : h);
 		resizehint(c, x, y, w, h, c->bw, 1, 0);
-		gravitate(c, xgrav, ygrav, 1);
+		if (xgrav != GRAV_NONE || ygrav != GRAV_NONE)
+			gravitate(c, xgrav, ygrav, 1);
 	} else if (ISTILE(ws)) {
 		if (w != INT_MIN) {
 			if (ws->layout->func == rtile)

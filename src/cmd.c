@@ -118,8 +118,7 @@ int adjustwsormon(char **argv)
 				;
 			ws = m ? m->ws : selws;
 		} else if (opt == DIR_PREV) {
-			FIND_PREV (ws, cur, workspaces)
-				;
+			PREV(ws, cur, workspaces);
 		} else {
 			int r = 0;
 			Workspace *save = cur;
@@ -138,8 +137,7 @@ int adjustwsormon(char **argv)
 						;
 					ws = m ? m->ws : selws;
 				} else {
-					FIND_PREV (ws, cur, workspaces)
-						;
+					PREV(ws, cur, workspaces);
 				}
 				cur = ws;
 				cm = ws->mon;
@@ -373,8 +371,7 @@ int cmdfocus(char **argv)
 			c = selws->sel->next ? selws->sel->next : selws->clients;
 			direction--;
 		} else {
-			FIND_PREV (c, selws->sel, selws->clients)
-				;
+			PREV(c, selws->sel, selws->clients);
 			direction++;
 		}
 		if (c)
@@ -1240,16 +1237,13 @@ int cmdswap(__attribute__((unused)) char **argv)
 	static Client *last = NULL;
 	Client *c = cmdc, *old, *cur = NULL, *prev = NULL;
 
-	if (FLOATING(c) ||
-		(STATE(c, FULLSCREEN) && c->w == MON(c)->w && c->h == MON(c)->h)
-			|| tilecount(c->ws) <= 1) {
+	if (FLOATING(c) || FULLSCREEN(c) || tilecount(c->ws) <= 1) {
 		respond(cmdresp,
 			"!unable to swap floating, fullscreen, or single tiled windows");
 		return 0;
 	}
 	if (c == nexttiled(c->ws->clients)) {
-		FIND_PREV (cur, last, c->ws->clients)
-			;
+		PREV(cur, last, c->ws->clients);
 		if (cur != c->ws->clients)
 			prev = nexttiled(cur->next);
 		if (!prev || prev != last) {
@@ -1261,8 +1255,7 @@ int cmdswap(__attribute__((unused)) char **argv)
 		}
 	}
 	if (c != (old = nexttiled(c->ws->clients)) && !cur)
-		FIND_PREV (cur, c, c->ws->clients)
-			;
+		PREV(cur, c, c->ws->clients);
 	detach(c, 1);
 	if (c != old && cur && cur != c->ws->clients) {
 		last = old;

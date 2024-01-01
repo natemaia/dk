@@ -211,6 +211,7 @@ void configrequest(xcb_generic_event_t *ev)
 				  (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT))) {
 				sendconfigure(c);
 			}
+			c->hints = 0;
 		} else {
 			sendconfigure(c);
 		}

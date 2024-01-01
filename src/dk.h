@@ -62,8 +62,8 @@
 	FOR_EACH (ws, workspaces)                                                  \
 		FOR_EACH (c, ws->clients)
 
-#define FIND_TAIL(v, list) for (v = list; v && v->next; v = v->next)
-#define FIND_PREV(v, cur, list)                                                \
+#define TAIL(v, list) for (v = list; v && v->next; v = v->next)
+#define PREV(v, cur, list)                                                     \
 	for (v = list; v && v->next && v->next != cur; v = v->next)
 
 #define WINTO(for_macro, win, ptr, arr)                                        \

@@ -449,8 +449,7 @@ void attach(Client *c, int tohead)
 	Client *tail = NULL;
 
 	if (!tohead)
-		FIND_TAIL (tail, c->ws->clients)
-			;
+		TAIL(tail, c->ws->clients);
 	if (tail)
 		ATTACH(c, tail->next);
 	else
@@ -1189,8 +1188,7 @@ static void initmon(int num, char *name, xcb_randr_output_t id, int x, int y, in
 	m->w = m->ww = w;
 	m->h = m->wh = h;
 	strlcpy(m->name, name, sizeof(m->name));
-	FIND_TAIL (tail, monitors)
-		;
+	TAIL(tail, monitors);
 	if (tail)
 		tail->next = m;
 	else
@@ -1293,8 +1291,7 @@ Status *initstatus(Status *tmp)
 	case STAT_LYT: lytchange = 1; break;
 	default: wschange = winchange = lytchange = 1; break;
 	}
-	FIND_TAIL (tail, stats)
-		;
+	TAIL(tail, stats);
 	if (tail)
 		tail->next = s;
 	else
@@ -1380,8 +1377,7 @@ static Workspace *initws(int num)
 	ws->padr = MAX(0, wsdef.padr);
 	ws->padt = MAX(0, wsdef.padt);
 	ws->padb = MAX(0, wsdef.padb);
-	FIND_TAIL (tail, workspaces)
-		;
+	TAIL(tail, workspaces);
 	if (tail)
 		tail->next = ws;
 	else
@@ -1471,8 +1467,7 @@ void movestack(int direction)
 				detach(c, (i = (t == nexttiled(c->ws->clients)) ? 1 : 0));
 				if (!i) {
 					c->next = t;
-					FIND_PREV (t, c->next, c->ws->clients)
-						;
+					PREV(t, c->next, c->ws->clients);
 					t->next = c;
 				}
 			}
@@ -1896,50 +1891,40 @@ void restack(Workspace *ws)
 	Client *c;
 	Monitor *m;
 
+	/* handle focused, transient, and STATE_ABOVE clients */
+#define STACK(c, focused)                                                     \
+	if (FLOATING(c)) {                                                        \
+		if (c->trans && c->trans->ws == c->ws) {                              \
+			uint32_t v[] = { c->trans->win, XCB_STACK_MODE_ABOVE };           \
+			setstackmode(c->trans->win, XCB_STACK_MODE_ABOVE);                \
+			xcb_configure_window(con, c->win,                                 \
+					XCB_CONFIG_WINDOW_SIBLING | XCB_CONFIG_WINDOW_STACK_MODE, \
+					v);                                                       \
+		} else if (focused || STATE(c, ABOVE))                                \
+			setstackmode(c->win, XCB_STACK_MODE_ABOVE);                       \
+	}
+
 	if (!ws || !(c = ws->sel) || !(m = ws->mon))
 		return;
 
 	FOR_EACH (p, panels)
 		if (p->mon == m->ws->mon)
 			setstackmode(p->win, XCB_STACK_MODE_BELOW);
-
-	if (FLOATING(c)) {
-		if (c->trans) {
-			uint32_t v[] = { c->trans->win, XCB_STACK_MODE_ABOVE };
-			setstackmode(c->trans->win, XCB_STACK_MODE_ABOVE);
-			xcb_configure_window(con, c->win,
-					XCB_CONFIG_WINDOW_SIBLING | XCB_CONFIG_WINDOW_STACK_MODE,
-					v);
-		} else {
-			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-		}
-	}
-
-	/* handle floating transient and STATE_ABOVE clients */
-	for (c = m->ws->stack; c; c = c->snext) {
-		if (FLOATING(c)) {
-			if (c->trans) {
-				uint32_t v[] = { c->trans->win, XCB_STACK_MODE_ABOVE };
-				xcb_configure_window(con, c->win,
-						XCB_CONFIG_WINDOW_SIBLING | XCB_CONFIG_WINDOW_STACK_MODE,
-						v);
-			} else if (STATE(c, ABOVE)) {
-				setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-			}
-		}
-	}
-
+	STACK(c, 1);
+	for (c = m->ws->stack; c; c = c->snext)
+		if (c != ws->sel)
+			STACK(c, 0);
 	if (m->ws->layout->func)
 		for (c = m->ws->stack; c; c = c->snext)
 			if (!(STATE(c, FLOATING)))
 				setstackmode(c->win, XCB_STACK_MODE_BELOW);
-
 	FOR_EACH (d, desks)
 		if (d->mon == m->ws->mon)
 			setstackmode(d->win, XCB_STACK_MODE_BELOW);
-
 	ignore(XCB_ENTER_NOTIFY);
 	xcb_aux_sync(con);
+
+#undef STACK
 }
 
 static int rulecmp(Client *c, Rule *r)
@@ -2243,6 +2228,8 @@ void sizehints(Client *c, int uss)
 	}
 	if (c->max_w && c->max_w == c->min_w && c->max_h && c->max_h == c->min_h)
 		c->state |= STATE_FIXED | STATE_FLOATING;
+	else
+		c->state &= ~STATE_FIXED;
 	c->hints = 1;
 }
 

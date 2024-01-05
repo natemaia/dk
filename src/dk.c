@@ -263,8 +263,10 @@ int main(int argc, char *argv[])
 	/* TODO: fix these shit hacks to avoid various issues when restarting */
 	FOR_EACH (ws, workspaces) {
 		FOR_EACH (c, ws->clients)
-			if (FLOATING(c)) /* floating windows being the wrong size */
+			if (FLOATING(c)) { /* floating windows being the wrong size */
+				applysizehints(c, &c->x, &c->y, &c->w, &c->h, c->bw, 0 ,0);
 				resize(c, c->x, c->y, c->w, c->h, c->bw);
+			}
 		if (ws->layout->func)
 			ws->layout->func(ws); /* border issues on tiled clients */
 		showhide(ws->stack); /* show only windows on the active workspace */
@@ -924,9 +926,11 @@ void freewm(void)
 	FOR_CLIENTS (c, ws) {
 		if (STATE(c, HIDDEN))
 			clientmap(c);
-		if (!restart)
-			MOVE(c->win, c->x, c->y);
+		else
+			setwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
+		MOVE(c->win, c->x, c->y);
 	}
+	xcb_flush(con);
 
 	while ((ws = workspaces)) {
 		while (ws->stack)
@@ -1144,6 +1148,7 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		c->y = CLAMP(c->y, MON(c)->y, MON(c)->y + MON(c)->h - H(c));
 		if (c->x == MON(c)->x && c->y == MON(c)->y)
 			quadrant(c, &c->x, &c->y, &c->w, &c->h);
+		if (!STATE(c, FIXED)) c->h += 10;
 		MOVERESIZE(win, c->x, c->y, c->w, c->h, c->bw);
 	} else if (!nexttiled(c->next)) {
 		/* resizehint won't move the window when nothing has changed
@@ -1511,7 +1516,7 @@ void popfloat(Client *c)
 	h = CLAMP(c->h, MON(c)->wh / 8, MON(c)->wh / 3);
 	quadrant(c, &x, &y, &w, &h);
 	resizehint(c, x, y, w, h, c->bw, 0, 0);
-	restack(c->ws);
+	setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 }
 
 void printstatus(Status *s, int freeable)
@@ -1779,25 +1784,43 @@ static int refresh(void)
 	FOR_EACH (m, monitors) {
 		DBG("refresh: workspace: %d, monitor: %s layout: %s",
 				m->ws->num + 1, m->name, m->ws->layout->name)
-
 		/* TODO: when a layout returns -1 it means something exceeded a
 		 * limit (resize, too many windows, etc.) and a window was popped
 		 * floating. The layout code has an error and the current solution
 		 * calls the layout again to fix it. */
 		if (m->ws->layout->func && m->ws->layout->func(m->ws) == -1)
 			m->ws->layout->func(m->ws);
-
 		FOR_EACH (c, m->ws->clients) {
 			if (FULLSCREEN(c))
 				MOVERESIZE(c->win, m->x, m->y, m->w, m->h, 0);
-			else if (FLOATING(c))
+			else if (FLOATING(c) || STATE(c, FIXED))
 				resize(c, c->x, c->y, c->w, c->h, c->bw);
 			if (STATE(c, NEEDSMAP))
 				clientmap(c);
 		}
-		restack(m->ws);
+
+		if (!(c = m->ws->sel))
+			continue;
+		FOR_EACH (p, panels)
+			if (p->mon == m->ws->mon)
+				setstackmode(p->win, XCB_STACK_MODE_BELOW);
+		if (FLOATING(c))
+			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+		for (c = m->ws->stack; c; c = c->snext) {
+			if (!FLOATING(c))
+				setstackmode(c->win, XCB_STACK_MODE_BELOW);
+			else if (STATE(c, ABOVE) && c != m->ws->sel)
+				setstackmode(c->trans->win, XCB_STACK_MODE_ABOVE);
+		}
+		FOR_EACH (d, desks)
+			if (d->mon == m->ws->mon)
+				setstackmode(d->win, XCB_STACK_MODE_BELOW);
 	}
 	focus(NULL);
+	if (selws->sel && FLOATING(selws->sel))
+		setstackmode(selws->sel->win, XCB_STACK_MODE_ABOVE);
+	ignore(XCB_ENTER_NOTIFY);
+	xcb_aux_sync(con);
 	return 0;
 #undef MAP
 }
@@ -1868,7 +1891,7 @@ static void relocatews(Workspace *ws, Monitor *old, int wasvis)
 
 void resize(Client *c, int x, int y, int w, int h, int bw)
 {
-	int changed = c->w != w || c->h != h;
+	int changed = c->w != w || c->h != h || bw != c->bw;
 	if (FLOATING(c) && !FULLSCREEN(c))
 		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 	c->x = x, c->y = y, c->w = w, c->h = h;
@@ -1876,55 +1899,13 @@ void resize(Client *c, int x, int y, int w, int h, int bw)
 	if (changed)
 		clientborder(c, c == selws->sel);
 	sendconfigure(c);
+	xcb_flush(con);
 }
 
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, int mouse)
 {
 	if (applysizehints(c, &x, &y, &w, &h, bw, usermotion, mouse))
 		resize(c, x, y, w, h, bw);
-}
-
-void restack(Workspace *ws)
-{
-	Desk *d;
-	Panel *p;
-	Client *c;
-	Monitor *m;
-
-	/* handle focused, transient, and STATE_ABOVE clients */
-#define STACK(c, focused)                                                     \
-	if (FLOATING(c)) {                                                        \
-		if (c->trans && c->trans->ws == c->ws) {                              \
-			uint32_t v[] = { c->trans->win, XCB_STACK_MODE_ABOVE };           \
-			setstackmode(c->trans->win, XCB_STACK_MODE_ABOVE);                \
-			xcb_configure_window(con, c->win,                                 \
-					XCB_CONFIG_WINDOW_SIBLING | XCB_CONFIG_WINDOW_STACK_MODE, \
-					v);                                                       \
-		} else if (focused || STATE(c, ABOVE))                                \
-			setstackmode(c->win, XCB_STACK_MODE_ABOVE);                       \
-	}
-
-	if (!ws || !(c = ws->sel) || !(m = ws->mon))
-		return;
-
-	FOR_EACH (p, panels)
-		if (p->mon == m->ws->mon)
-			setstackmode(p->win, XCB_STACK_MODE_BELOW);
-	STACK(c, 1);
-	for (c = m->ws->stack; c; c = c->snext)
-		if (c != ws->sel)
-			STACK(c, 0);
-	if (m->ws->layout->func)
-		for (c = m->ws->stack; c; c = c->snext)
-			if (!(STATE(c, FLOATING)))
-				setstackmode(c->win, XCB_STACK_MODE_BELOW);
-	FOR_EACH (d, desks)
-		if (d->mon == m->ws->mon)
-			setstackmode(d->win, XCB_STACK_MODE_BELOW);
-	ignore(XCB_ENTER_NOTIFY);
-	xcb_aux_sync(con);
-
-#undef STACK
 }
 
 static int rulecmp(Client *c, Rule *r)
@@ -1949,7 +1930,6 @@ void sendconfigure(Client *c)
 		.override_redirect = 0,
 	};
 	xcb_send_event(con, 0, c->win, XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char *)&e);
-	xcb_flush(con);
 }
 
 int sendwmproto(Client *c, int wmproto)
@@ -2198,6 +2178,7 @@ void sizehints(Client *c, int uss)
 	xcb_generic_error_t *e;
 	xcb_get_property_cookie_t pc;
 
+	DBG("sizehints: client: 0x%08x %s", c->win, c->title)
 	pc = xcb_icccm_get_wm_normal_hints(con, c->win);
 	c->inc_w = c->inc_h = 0;
 	c->max_aspect = c->min_aspect = 0.0;
@@ -2226,10 +2207,12 @@ void sizehints(Client *c, int uss)
 	} else {
 		iferr(0, "unable to get wm normal hints", e);
 	}
-	if (c->max_w && c->max_w == c->min_w && c->max_h && c->max_h == c->min_h)
-		c->state |= STATE_FIXED | STATE_FLOATING;
-	else
-		c->state &= ~STATE_FIXED;
+	DBG("sizehints: client: 0x%08x %s -- max_w = %d, max_h = %d, min_w = %d, min_h = %d",
+			c->win, c->title, c->max_w, c->max_h, c->min_w, c->min_h)
+	if (c->max_w && c->max_w == c->min_w && c->max_h && c->max_h == c->min_h) {
+		DBG("sizehints: FIXED client: 0x%08x %s", c->win, c->title)
+		c->state |= (STATE_FIXED | STATE_FLOATING);
+	}
 	c->hints = 1;
 }
 

@@ -421,7 +421,6 @@ void quadrant(Client *c, int *x, int *y, const int *w, const int *h);
 void relocate(Client *c, Monitor *mon, Monitor *old);
 void resize(Client *c, int x, int y, int w, int h, int bw);
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, int mouse);
-void restack(Workspace *ws);
 void sendconfigure(Client *c);
 int sendwmproto(Client *c, int wmproto);
 void setfullscreen(Client *c, int fullscreen);

@@ -356,7 +356,7 @@ int cmdfocus(char **argv)
 	if (cmdc_passed) {
 		focus(c);
 		if (FLOATING(c))
-			restack(c->ws);
+			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 		return nparsed;
 	}
 	if ((opt = parseopt(*argv, dirs, LEN(dirs))) < 0 &&
@@ -378,7 +378,7 @@ int cmdfocus(char **argv)
 			focus(c);
 	}
 	if (c && FLOATING(c))
-		restack(c->ws);
+		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	return nparsed;
 }
 

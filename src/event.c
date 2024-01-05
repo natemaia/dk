@@ -47,7 +47,7 @@ void buttonpress(xcb_generic_event_t *ev)
 	if (c != selws->sel)
 		focus(c);
 	if (FLOATING(c) && (e->detail == mousemove || e->detail == mouseresize))
-		restack(c->ws);
+		setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 	xcb_allow_events(con, XCB_ALLOW_REPLAY_POINTER, e->time);
 	if ((e->state & ~(lockmask | XCB_MOD_MASK_LOCK)) ==
 			(mousemod & ~(lockmask | XCB_MOD_MASK_LOCK)) &&
@@ -147,7 +147,7 @@ activate:
 				}
 				focus(c);
 				if (FLOATING(c))
-					restack(c->ws);
+					setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 			} else {
 				seturgent(c, 1);
 			}
@@ -225,11 +225,12 @@ void configrequest(xcb_generic_event_t *ev)
 											.border_width = e->border_width};
 		xcb_aux_configure_window(con, e->window, e->value_mask, &wc);
 	}
-	xcb_flush(con);
+	xcb_aux_sync(con);
 }
 
 void destroynotify(xcb_generic_event_t *ev)
 {
+	DBG("destroynotify: 0x%08x", ((xcb_destroy_notify_event_t *)ev)->window)
 	unmanage(((xcb_destroy_notify_event_t *)ev)->window, 1);
 }
 
@@ -394,7 +395,7 @@ void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 					c->old_state |= STATE_FLOATING;
 					if (selws->layout->func)
 						selws->layout->func(selws);
-					restack(c->ws);
+					setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 				}
 				if ((m = coordtomon(e->root_x, e->root_y)) && m->ws != c->ws) {
 					setworkspace(c, m->ws, 0);
@@ -511,7 +512,7 @@ void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 						c->old_state |= STATE_FLOATING;
 						if (selws->layout->func)
 							selws->layout->func(selws);
-						restack(c->ws);
+						setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 					}
 					resizehint(c, c->x, c->y, nw, nh, c->bw, 1, 1);
 					xcb_flush(con);

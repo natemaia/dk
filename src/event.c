@@ -175,8 +175,7 @@ void configrequest(xcb_generic_event_t *ev)
 	xcb_configure_request_event_t *e = (xcb_configure_request_event_t *)ev;
 
 	if ((c = wintoclient(e->window))) {
-		if (STATE(c, IGNORECFG) || e->x == W(c) * -2 ||
-				e->x <= (MON(c)->x - c->w) + globalcfg[GLB_MIN_WH].val)
+		if (!VISIBLE(c) || STATE(c, IGNORECFG))
 			return;
 		if (e->value_mask & XCB_CONFIG_WINDOW_BORDER_WIDTH) {
 			c->bw = e->border_width;
@@ -206,14 +205,7 @@ void configrequest(xcb_generic_event_t *ev)
 					c->y > m->y + m->h - globalcfg[GLB_MIN_XY].val) {
 				c->y = m->y + (m->h / 2 - H(c) / 2);
 			}
-			if (VISIBLE(c)) {
-				resize(c, c->x, c->y, c->w, c->h, c->bw);
-			} else if (e->value_mask & (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y) &&
-				!(e->value_mask &
-				  (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT))) {
-				sendconfigure(c);
-			}
-			c->hints = 0;
+			resize(c, c->x, c->y, c->w, c->h, c->bw);
 		} else {
 			sendconfigure(c);
 		}

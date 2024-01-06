@@ -116,10 +116,12 @@ void clientmessage(xcb_generic_event_t *ev)
 				d[2] == netatom[NET_STATE_FULL]) {
 				DBG("clientmessage: state fullscreen: %d",
 					(d[0] == 1 || (d[0] == 2 && !STATE(c, FULLSCREEN))))
-				setfullscreen(c, (d[0] == 1 ||
-							(d[0] == 2 && !STATE(c, FULLSCREEN))));
-				ignore(XCB_ENTER_NOTIFY);
-				xcb_aux_sync(con);
+				if (VISIBLE(c)) {
+					setfullscreen(c, (d[0] == 1 ||
+								(d[0] == 2 && !STATE(c, FULLSCREEN))));
+					ignore(XCB_ENTER_NOTIFY);
+					xcb_aux_sync(con);
+				}
 			} else if (d[1] == netatom[NET_STATE_ABOVE] ||
 					   d[2] == netatom[NET_STATE_ABOVE]) {
 				int above = d[0] == 1 || (d[0] == 2 && !STATE(c, ABOVE));

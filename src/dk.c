@@ -1971,7 +1971,6 @@ void setfullscreen(Client *c, int fullscreen)
 
 	if (!c->ws || !(m = MON(c)))
 		m = selws->mon;
-
 	if (fullscreen && !STATE(c, FULLSCREEN)) {
 		PROP(REPLACE, c->win, state, XCB_ATOM_ATOM, 32, 1,
 			 &netatom[NET_STATE_FULL]);

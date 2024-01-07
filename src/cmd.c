@@ -919,8 +919,6 @@ int cmdscratch(char **argv)
 				return nparsed;
 			}
 pop:
-			/* retain old SCRATCH state when popping from other workspace */
-			c->old_state = c->state | STATE_SCRATCH;
 			c->state &= ~(STATE_SCRATCH | STATE_HIDDEN);
 			setworkspace(c, selws, 0);
 			clientmap(c);
@@ -942,6 +940,7 @@ push:
 			if (!FLOATING(c)) {
 				Monitor *m = MON(c);
 				c->state |= STATE_FLOATING;
+
 				resizehint(c, m->wx + m->ww / 3, m->wy, m->ww / 3, m->wh / 3,
 						c->bw, 0, 0);
 			}
@@ -962,6 +961,8 @@ push:
 		/* when passed a client but no other args we do a toggle */
 		if (STATE(c, SCRATCH))
 			goto pop;
+		if (c->ws != selws) /* save state when toggling from another workspace */
+			c->old_state = c->state | STATE_SCRATCH;
 		goto push;
 	} else if (scratch.clients) {
 		/* when passed no arguments we first try to empty the scratch */
@@ -972,16 +973,18 @@ push:
 		Client *sc = NULL;
 		/* when there are no clients in the scratch we look for recently
 		 * popped windows to push back or bring to the current workspace */
-		FOR_CLIENTS(sc, ws)
+		FOR_CLIENTS(sc, ws) {
 			if ((sc->old_state & STATE_SCRATCH) && FLOATING(sc) &&
 					!FULLSCREEN(sc)) {
 				c = sc;
 				/* if the window is on our current workspace we push */
 				if (c->ws == selws)
 					goto push;
+				/* retain old SCRATCH state when popping from other workspace */
+				c->old_state = c->state | STATE_SCRATCH;
 				goto pop; /* on another workspace so bring it to us */
 			}
-
+		}
 		/* if all else fails we push the active window */
 		if (selws->sel) {
 			c = selws->sel;

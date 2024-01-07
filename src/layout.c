@@ -264,7 +264,7 @@ int mono(Workspace *ws)
 				c, ws->mon->wx + ws->padl + g, ws->mon->wy + ws->padt + g,
 				ws->mon->ww - ws->padl - ws->padr - (2 * g) - (2 * b),
 				ws->mon->wh - ws->padt - ws->padb - (2 * g) - (2 * b), b, 0, 0);
-		if (c != c->ws->sel)
+		if (c != c->ws->sel) /* hide inactive windows */
 			MOVE(c->win, W(c) * -2, c->y);
 	}
 	return 1;

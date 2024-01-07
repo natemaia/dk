@@ -443,7 +443,8 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 		if (c->max_h)
 			*h = MIN(*h, c->max_h);
 	}
-	return *x != c->x || *y != c->y || *w != c->w || *h != c->h || bw != c->bw;
+	return *x != c->x || *y != c->y || *w != c->w || *h != c->h
+			|| bw != c->bw || STATE(c, NEEDSMAP);
 }
 
 void attach(Client *c, int tohead)
@@ -1134,9 +1135,7 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 
 	xcb_change_window_attributes(con, win, XCB_CW_EVENT_MASK, &clientmask);
 	grabbuttons(c);
-	if (FULLSCREEN(c)) {
-		DBG("initclient: fullscreen: 0x%08x - %s", c->win, c->title)
-	} else if (FLOATING(c) || STATE(c, FIXED)) {
+	if (!FULLSCREEN(c) && (FLOATING(c) || STATE(c, FIXED))) {
 		DBG("initclient: floating or fixed: 0x%08x - %s", c->win, c->title)
 		c->w = CLAMP(c->w, globalcfg[GLB_MIN_WH].val, MON(c)->ww);
 		c->h = CLAMP(c->h, globalcfg[GLB_MIN_WH].val, MON(c)->wh);
@@ -1148,13 +1147,6 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		c->y = CLAMP(c->y, MON(c)->y, MON(c)->y + MON(c)->h - H(c));
 		if (c->x == MON(c)->x && c->y == MON(c)->y)
 			quadrant(c, &c->x, &c->y, &c->w, &c->h);
-		if (!STATE(c, FIXED)) c->h += 10;
-		MOVERESIZE(win, c->x, c->y, c->w, c->h, c->bw);
-	} else if (!nexttiled(c->next)) {
-		/* resizehint won't move the window when nothing has changed
-		 * so we force it on this window by incrementing the width
-		 * See: https://github.com/natemaia/dk/issues/1 */
-		c->w++;
 	}
 	if (c->cb)
 		c->cb->func(c, 0);
@@ -1768,6 +1760,7 @@ static int refresh(void)
 	Panel *p;
 	Client *c;
 	Monitor *m;
+	int x, y, w, h;
 
 #define MAP(v, list)                                                           \
 	FOR_EACH (v, list)                                                         \
@@ -1793,24 +1786,19 @@ static int refresh(void)
 		FOR_EACH (c, m->ws->clients) {
 			if (FULLSCREEN(c))
 				MOVERESIZE(c->win, m->x, m->y, m->w, m->h, 0);
-			else if (FLOATING(c) || STATE(c, FIXED))
-				resize(c, c->x, c->y, c->w, c->h, c->bw);
+			else if (FLOATING(c))
+				resizehint(c, (x = c->x), (y = c->y), (w = c->w), (h = c->h), c->bw, 0, 0);
 			if (STATE(c, NEEDSMAP))
 				clientmap(c);
 		}
-
-		if (!(c = m->ws->sel))
-			continue;
 		FOR_EACH (p, panels)
 			if (p->mon == m->ws->mon)
 				setstackmode(p->win, XCB_STACK_MODE_BELOW);
-		if (FLOATING(c))
-			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 		for (c = m->ws->stack; c; c = c->snext) {
 			if (!FLOATING(c))
 				setstackmode(c->win, XCB_STACK_MODE_BELOW);
-			else if (STATE(c, ABOVE) && c != m->ws->sel)
-				setstackmode(c->trans->win, XCB_STACK_MODE_ABOVE);
+			else if (STATE(c, ABOVE))
+				setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 		}
 		FOR_EACH (d, desks)
 			if (d->mon == m->ws->mon)
@@ -1891,13 +1879,11 @@ static void relocatews(Workspace *ws, Monitor *old, int wasvis)
 
 void resize(Client *c, int x, int y, int w, int h, int bw)
 {
-	int changed = c->w != w || c->h != h || bw != c->bw;
 	if (FLOATING(c) && !FULLSCREEN(c))
 		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
 	c->x = x, c->y = y, c->w = w, c->h = h;
 	MOVERESIZE(c->win, x, y, w, h, bw);
-	if (changed)
-		clientborder(c, c == selws->sel);
+	clientborder(c, c == selws->sel);
 	sendconfigure(c);
 	xcb_flush(con);
 }

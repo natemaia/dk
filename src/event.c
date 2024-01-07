@@ -219,7 +219,7 @@ void configrequest(xcb_generic_event_t *ev)
 											.border_width = e->border_width};
 		xcb_aux_configure_window(con, e->window, e->value_mask, &wc);
 	}
-	xcb_aux_sync(con);
+	xcb_flush(con);
 }
 
 void destroynotify(xcb_generic_event_t *ev)
@@ -367,7 +367,7 @@ void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 	xcb_timestamp_t last = 0;
 	xcb_motion_notify_event_t *e;
 	xcb_generic_event_t *ev = NULL;
-	int ox = c->x, oy = c->y;
+	int ox = c->x, oy = c->y, x, y, w, h;
 
 	if (button == mousemove) {
 		int nx, ny;
@@ -396,8 +396,13 @@ void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 					changews(m->ws, 0, 0);
 					focus(c);
 				}
-				resizehint(c, nx, ny, c->w, c->h, c->bw, 1, 1);
-				xcb_flush(con);
+				w = c->w, h = c->h;
+				if (applysizehints(c, &nx, &ny, &w, &h, c->bw, 1, 1)) {
+					c->x = nx, c->y = ny, c->w = w, c->h = h;
+					MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
+					sendconfigure(c);
+					xcb_flush(con);
+				}
 				break;
 			case XCB_BUTTON_RELEASE:
 				released = 1;
@@ -508,8 +513,14 @@ void mousemotion(Client *c, xcb_button_t button, int mx, int my)
 							selws->layout->func(selws);
 						setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 					}
-					resizehint(c, c->x, c->y, nw, nh, c->bw, 1, 1);
-					xcb_flush(con);
+					x = c->x, y = c->y;
+					if (applysizehints(c, &x, &y, &nw, &nh, c->bw, 1, 1)) {
+						c->x = x, c->y = y, c->w = nw, c->h = nh;
+						MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
+						clientborder(c, c == selws->sel);
+						sendconfigure(c);
+						xcb_flush(con);
+					}
 				}
 				break;
 			case XCB_BUTTON_RELEASE:
@@ -535,9 +546,16 @@ void propertynotify(xcb_generic_event_t *ev)
 		return;
 	if ((c = wintoclient(e->window))) {
 		switch (e->atom) {
-		case XCB_ATOM_WM_HINTS: clienthints(c); break;
-		case XCB_ATOM_WM_NORMAL_HINTS: c->hints = 0; break;
+		case XCB_ATOM_WM_HINTS:
+			DBG("propertynotify: 0x%08x %s -- WM_HINTS (input & urgency)", c->win, c->title)
+			clienthints(c);
+			break;
+		case XCB_ATOM_WM_NORMAL_HINTS:
+			DBG("propertynotify: 0x%08x %s -- WM_NORMAL_HINTS (size hints)", c->win, c->title)
+			c->hints = 0;
+			break;
 		case XCB_ATOM_WM_TRANSIENT_FOR:
+			DBG("propertynotify: 0x%08x %s -- WM_TRANSIENT_FOR (parent window)", c->win, c->title)
 			if ((c->trans = wintoclient(wintrans(c->win))) && !FLOATING(c)) {
 				c->state |= STATE_FLOATING;
 				needsrefresh = 1;
@@ -546,9 +564,11 @@ void propertynotify(xcb_generic_event_t *ev)
 		default:
 			if (e->atom == XCB_ATOM_WM_NAME ||
 				e->atom == netatom[NET_WM_NAME]) {
+				DBG("propertynotify: 0x%08x %s -- NET_WM_NAME (window name)", c->win, c->title)
 				if (clientname(c))
 					winchange = 1;
 			} else if (e->atom == netatom[NET_WM_TYPE]) {
+				DBG("propertynotify: 0x%08x %s -- NET_WM_TYPE (window type)", c->win, c->title)
 				clienttype(c);
 			}
 			break;
@@ -556,6 +576,7 @@ void propertynotify(xcb_generic_event_t *ev)
 	} else if ((e->atom == netatom[NET_WM_STRUTP] ||
 				e->atom == netatom[NET_WM_STRUT]) &&
 			   (p = wintopanel(e->window))) {
+		DBG("propertynotify: PANEL 0x%08x %s -- NET_WM_STRUT (panel struts)", p->win, p->clss)
 		fillstruts(p);
 		updstruts();
 		needsrefresh = 1;

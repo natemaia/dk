@@ -1530,24 +1530,30 @@ void printstatus(Status *s, int freeable)
 		next = s->next;
 		switch (s->type) {
 		case STAT_WIN:
-			if (winchange)
+			if (winchange) {
+				winchange = 0;
 				fprintf(s->file, "%s", selws->sel ? selws->sel->title : "");
+			}
 			break;
 		case STAT_LYT:
-			if (lytchange)
+			if (lytchange) {
+				lytchange = 0;
 				fprintf(s->file, "%s", selws->layout->name);
+			}
 			break;
 		case STAT_WS:
-			if (wschange)
+			if (wschange) {
+				wschange = 0;
 				FOR_EACH (ws, workspaces) {
 					char fmt[5] = "i%s:";
 					fmt[0] = (ws == selws) ? ws->clients ? 'A' : 'I'
-							 : ws->clients ? 'a'
-										   : 'i';
+						: ws->clients ? 'a'
+						: 'i';
 					if (!ws->next)
 						fmt[3] = '\0';
 					fprintf(s->file, fmt, ws->name);
 				}
+			}
 			break;
 		case STAT_BAR:
 			fprintf(s->file, "W");
@@ -1564,6 +1570,7 @@ void printstatus(Status *s, int freeable)
 					selws->sel && !STATE(selws->sel, HIDDEN)
 						? selws->sel->title
 						: "");
+			winchange = lytchange = wschange = 0;
 			break;
 		case STAT_FULL:
 			/* Globals */
@@ -1632,7 +1639,6 @@ void printstatus(Status *s, int freeable)
 				fprintf(s->file, " 0x%08x:%d", c->win, c->ws->num);
 
 			/* Client settings */
-
 #define PRINT_CLIENT()                                                       \
 			fprintf(s->file,                                                 \
 					"\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d "  \
@@ -1710,6 +1716,7 @@ void printstatus(Status *s, int freeable)
 							d->win, d->clss, d->inst, d->mon->name);
 			}
 
+			winchange = lytchange = wschange = 0;
 			break;
 		}
 		fflush(s->file);
@@ -1720,7 +1727,6 @@ void printstatus(Status *s, int freeable)
 			break;
 		s = next;
 	}
-	winchange = lytchange = wschange = 0;
 }
 
 void quadrant(Client *c, int *x, int *y, const int *w, const int *h)

@@ -262,17 +262,10 @@ int main(int argc, char *argv[])
 
 	/* TODO: fix these shit hacks to avoid various issues when restarting */
 	FOR_EACH (ws, workspaces) {
-		FOR_EACH (c, ws->clients)
-			if (FLOATING(c)) { /* floating windows being the wrong size */
-				applysizehints(c, &c->x, &c->y, &c->w, &c->h, c->bw, 0 ,0);
-				resize(c, c->x, c->y, c->w, c->h, c->bw);
-			}
 		if (ws->layout->func)
 			ws->layout->func(ws); /* border issues on tiled clients */
 		showhide(ws->stack); /* show only windows on the active workspace */
 	}
-	ignore(XCB_ENTER_NOTIFY); /* wrong windows grabbing focus */
-	xcb_aux_sync(con);
 
 	confd = xcb_get_file_descriptor(con);
 	while (running) {
@@ -299,7 +292,7 @@ int main(int argc, char *argv[])
 			}
 			/* xcb events */
 			if (FD_ISSET(confd, &read_fds)) {
-				xcb_aux_sync(con);
+				xcb_flush(con);
 				while ((ev = xcb_poll_for_event(con))) {
 					dispatch(ev);
 					free(ev);

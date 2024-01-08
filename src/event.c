@@ -175,7 +175,9 @@ void configrequest(xcb_generic_event_t *ev)
 	xcb_configure_request_event_t *e = (xcb_configure_request_event_t *)ev;
 
 	if ((c = wintoclient(e->window))) {
-		if (!VISIBLE(c) || STATE(c, IGNORECFG))
+		if (!VISIBLE(c) || STATE(c, IGNORECFG) ||
+				((e->value_mask & XCB_CONFIG_WINDOW_X) &&
+				 (c->x + 1 <= e->x || c->x + 1 >= e->x)))
 			return;
 		if (e->value_mask & XCB_CONFIG_WINDOW_BORDER_WIDTH) {
 			c->bw = e->border_width;

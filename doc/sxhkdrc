@@ -96,3 +96,6 @@ alt + {equal,minus}
 # change border widths
 alt + ctrl + {_,shift + }{equal,minus}
 	dkcmd set border {width,outer_width} {+1,-1}
+
+
+# vim:ft=sxhkdrc

@@ -645,21 +645,22 @@ void clientmotif(void)
 int clientname(Client *c)
 {
 	xcb_generic_error_t *e;
+	xcb_get_property_cookie_t rc;
 	xcb_icccm_get_text_property_reply_t r;
 
-	if (!xcb_icccm_get_text_property_reply(
-			con, xcb_icccm_get_text_property(con, c->win, netatom[NET_WM_NAME]),
-			&r, &e)) {
+	c->title[0] = '\0';
+	rc = xcb_icccm_get_text_property(con, c->win, netatom[NET_WM_NAME]);
+	if (!xcb_icccm_get_text_property_reply(con, rc, &r, &e)) {
 		iferr(0, "unable to get NET_WM_NAME text property reply", e);
-		if (!xcb_icccm_get_text_property_reply(
-				con, xcb_icccm_get_text_property(con, c->win, XCB_ATOM_WM_NAME),
-				&r, &e)) {
+		rc = xcb_icccm_get_text_property(con, c->win, XCB_ATOM_WM_NAME);
+		if (!xcb_icccm_get_text_property_reply(con, rc, &r, &e)) {
 			iferr(0, "unable to get WM_NAME text property reply", e);
 			strlcpy(c->title, "broken", sizeof(c->title));
 			return 0;
 		}
 	}
-	if (r.name_len > 0)
+
+	if (r.name_len > 0 && r.encoding == XCB_ATOM_STRING && r.name[0] != '\0')
 		strlcpy(c->title, r.name, MIN(sizeof(c->title), r.name_len + 1));
 	else
 		strlcpy(c->title, "broken", sizeof(c->title));
@@ -700,16 +701,16 @@ void clientstate(Client *c)
 	xcb_get_property_cookie_t rc;
 	xcb_get_property_reply_t *r = NULL;
 
-	rc = xcb_get_property(con, 0, c->win, netatom[NET_WM_STATE], XCB_ATOM_ANY,
-						  0, 3);
+	rc = xcb_get_property(con, 0, c->win, netatom[NET_WM_STATE], XCB_ATOM_ANY, 0, 3);
 	if ((r = xcb_get_property_reply(con, rc, &e))) {
 		if (r->value_len && r->format == 32) {
 			state = xcb_get_property_value(r);
 			for (uint32_t i = 0; i < r->value_len; i++) {
-				if (state[i] == netatom[NET_STATE_FULL])
+				if (state[i] == netatom[NET_STATE_FULL]) {
 					setfullscreen(c, 1);
-				else if (state[i] == netatom[NET_STATE_ABOVE])
+				} else if (state[i] == netatom[NET_STATE_ABOVE]) {
 					c->state |= STATE_ABOVE | STATE_FLOATING;
+				}
 			}
 		}
 	} else {
@@ -723,8 +724,7 @@ void clienttype(Client *c)
 	xcb_atom_t type;
 
 	if ((winprop(c->win, netatom[NET_WM_TYPE], &type) &&
-				(type == netatom[NET_TYPE_DIALOG] ||
-				 type == netatom[NET_TYPE_SPLASH])) ||
+		(type == netatom[NET_TYPE_DIALOG] || type == netatom[NET_TYPE_SPLASH])) ||
 			c->trans || (c->trans = wintoclient(wintrans(c->win)))) {
 		c->state |= STATE_FLOATING;
 	}
@@ -743,10 +743,8 @@ void clientunmap(Client *c)
 	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &cm);
 	xcb_unmap_window(con, c->win);
 	setwinstate(c->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
-	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK,
-								 &ra->your_event_mask);
-	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK,
-								 &ca->your_event_mask);
+	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &ra->your_event_mask);
+	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &ca->your_event_mask);
 	xcb_aux_sync(con);
 	xcb_ungrab_server(con);
 }
@@ -810,20 +808,18 @@ void fillstruts(Panel *p)
 {
 	int *s;
 	xcb_generic_error_t *err;
+	xcb_get_property_cookie_t rc;
 	xcb_get_property_reply_t *prop = NULL;
-	xcb_get_property_cookie_t rc = xcb_get_property(
-		con, 0, p->win, netatom[NET_WM_STRUTP], XCB_ATOM_CARDINAL, 0, 4);
 
+	rc = xcb_get_property(con, 0, p->win, netatom[NET_WM_STRUTP], XCB_ATOM_CARDINAL, 0, 4);
 	if (!(prop = xcb_get_property_reply(con, rc, &err)) ||
 		prop->type == XCB_NONE) {
-		rc = xcb_get_property(con, 0, p->win, netatom[NET_WM_STRUT],
-							  XCB_ATOM_CARDINAL, 0, 4);
+		rc = xcb_get_property(con, 0, p->win, netatom[NET_WM_STRUT], XCB_ATOM_CARDINAL, 0, 4);
 		iferr(0, "unable to get _NET_WM_STRUT_PARTIAL reply from window", err);
 		if (!(prop = xcb_get_property_reply(con, rc, &err)))
 			iferr(0, "unable to get _NET_WM_STRUT reply from window", err);
 	}
-	if (prop && xcb_get_property_value_length(prop) >= 4 &&
-		(s = xcb_get_property_value(prop)))
+	if (prop && xcb_get_property_value_length(prop) >= 4 && (s = xcb_get_property_value(prop)))
 		p->l = s[0], p->r = s[1], p->t = s[2], p->b = s[3];
 	free(prop);
 }
@@ -1424,7 +1420,7 @@ client:
 		initclient(win, g);
 		PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &win);
 	}
-	needsrefresh = 1;
+	needsrefresh = refresh();
 end:
 	free(wa);
 	free(g);
@@ -2280,7 +2276,7 @@ void unmanage(xcb_window_t win, int destroyed)
 		FOR_EACH (d, desks)
 			PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1,
 				 &d->win);
-		needsrefresh = 1;
+		needsrefresh = refresh();
 	}
 }
 

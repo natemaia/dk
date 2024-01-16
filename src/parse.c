@@ -17,10 +17,7 @@
 
 #include "dk.h"
 #include "parse.h"
-#include "strl.h"
 #include "util.h"
-#include "cmd.h"
-#include "layout.h"
 
 int parsebool(char *arg)
 {
@@ -53,7 +50,6 @@ static char *parsetoken(char **src)
 	 * *unsafe* modifies src replace separator with null terminator
 	 * handles both strong and weak quoted strings
 	 */
-	size_t n = 0;
 	int qoute, strongquote = 0;
 	char *s, *t, *head, *tail;
 
@@ -79,7 +75,7 @@ static char *parsetoken(char **src)
 		if (qoute && !strongquote && *s == '\\' && *(s + 1) == '"')
 			s++;
 		else
-			n++, *t++ = *s++;
+			*t++ = *s++;
 	}
 	*t = '\0';
 	*src = tail ? ++tail : '\0';

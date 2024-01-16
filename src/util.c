@@ -13,7 +13,6 @@
 #include <err.h>
 
 #include "util.h"
-#include "dk.h"
 
 void check(int i, char *msg)
 {

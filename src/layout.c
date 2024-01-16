@@ -4,11 +4,6 @@
  * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
  */
 
-#include <regex.h>
-#include <stdio.h>
-#include <string.h>
-#include <time.h>
-
 #ifdef DEBUG
 #include <err.h>
 #endif
@@ -18,9 +13,7 @@
 #include <xcb/xcb_keysyms.h>
 
 #include "dk.h"
-#include "cmd.h"
 #include "layout.h"
-#include "parse.h"
 
 int dwindle(Workspace *ws)
 {

@@ -16,7 +16,6 @@
 
 #include "dk.h"
 #include "cmd.h"
-#include "parse.h"
 #include "layout.h"
 #include "event.h"
 

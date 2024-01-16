@@ -14,9 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <limits.h>
 #include <regex.h>
-#include <signal.h>
 #include <fcntl.h>
 #include <err.h>
 

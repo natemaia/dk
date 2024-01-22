@@ -32,27 +32,29 @@ int main(int argc, char *argv[])
 		{STDOUT_FILENO, POLLHUP, 0},
 	};
 
-	if (argc == 1)
+	if (argc == 1) {
 		return usage(argv[0], VERSION, 1, 'h', "[-hv] <COMMAND>");
-	else if (!strcmp(argv[1], "-v") || !strcmp(argv[1], "-h"))
+	} else if (!strcmp(argv[1], "-v") || !strcmp(argv[1], "-h")) {
 		return usage(argv[0], VERSION, 0, argv[1][1], "[-hv] <COMMAND>");
+	}
 
-	if (!(sock = getenv("DKSOCK")))
+	if (!(sock = getenv("DKSOCK"))) {
 		err(1, "unable to get socket path from environment");
+	}
 	addr.sun_family = AF_UNIX;
 	check((fd = socket(AF_UNIX, SOCK_STREAM, 0)), "unable to create socket");
 	fds[0].fd = fd;
 	strlcpy(addr.sun_path, sock, sizeof(addr.sun_path));
-	if (addr.sun_path[0] == '\0')
+	if (addr.sun_path[0] == '\0') {
 		err(1, "unable to write socket path: %s", sock);
-	check(connect(fd, (struct sockaddr *)&addr, sizeof(addr)),
-		  "unable to connect socket");
+	}
+	check(connect(fd, (struct sockaddr *)&addr, sizeof(addr)), "unable to connect socket");
 
-	for (i = 1, j = 0, offs = 1; n + 1 < sizeof(buf) && i < argc;
-		 i++, j = 0, offs = 1) {
+	for (i = 1, j = 0, offs = 1; n + 1 < sizeof(buf) && i < argc; i++, j = 0, offs = 1) {
 		if ((space = strchr(argv[i], ' ')) || (space = strchr(argv[i], '\t'))) {
-			if (!(equal = strchr(argv[i], '=')) || space < equal)
+			if (!(equal = strchr(argv[i], '=')) || space < equal) {
 				buf[n++] = '"';
+			}
 			offs++;
 		}
 		while (n + offs + 1 < sizeof(buf) && argv[i][j]) {
@@ -62,8 +64,9 @@ int main(int argc, char *argv[])
 				equal = NULL;
 			}
 		}
-		if (offs > 1)
+		if (offs > 1) {
 			buf[n++] = '"';
+		}
 		buf[n++] = ' ';
 	}
 	buf[n - 1] = '\0';
@@ -86,8 +89,9 @@ int main(int argc, char *argv[])
 				break;
 			}
 		}
-		if (fds[1].revents & (POLLERR | POLLHUP))
+		if (fds[1].revents & (POLLERR | POLLHUP)) {
 			break;
+		}
 	}
 	close(fd);
 	return ret;

@@ -35,79 +35,70 @@
 #define VERSION "1.9"
 #endif
 
-#define NAN                (0.0f / 0.0f)
-#define LEN(x)             (sizeof(x) / sizeof(*x))
-#define MIN(a, b)          ((a) < (b) ? (a) : (b))
-#define MAX(a, b)          ((a) > (b) ? (a) : (b))
-#define CLAMP(x, min, max) (MIN(MAX((x), (min)), (max)))
-#define INRECT(x, y, w, h, rx, ry, rw, rh)                                     \
-	(x >= rx && x + w <= rx + rw && y >= ry && y + h <= ry + rh)
+#define NAN                                (0.0f / 0.0f)
+#define LEN(x)                             (sizeof(x) / sizeof(*x))
+#define MIN(a, b)                          ((a) < (b) ? (a) : (b))
+#define MAX(a, b)                          ((a) > (b) ? (a) : (b))
+#define CLAMP(x, min, max)                 (MIN(MAX((x), (min)), (max)))
+#define INRECT(x, y, w, h, rx, ry, rw, rh) (x >= rx && x + w <= rx + rw && y >= ry && y + h <= ry + rh)
 
-#define ISTILE(ws)  (ws->layout->func == ltile || ws->layout->func == rtile)
+#define ISTILE(ws)                         (ws->layout->func == ltile || ws->layout->func == rtile)
 
-#define W(c)          (c->w + (2 * c->bw))
-#define H(c)          (c->h + (2 * c->bw))
-#define MON(c)        c->ws->mon
-#define STATE(c, s)   (c->state & STATE_##s)
-#define VISIBLE(c)    (c->ws == MON(c)->ws)
-#define FLOATING(c)   (STATE(c, FLOATING) || !c->ws->layout->func)
-#define FULLSCREEN(c) (STATE(c, FULLSCREEN) && !STATE(c, FAKEFULL))
+#define W(c)                               (c->w + (2 * c->bw))
+#define H(c)                               (c->h + (2 * c->bw))
+#define MON(c)                             c->ws->mon
+#define STATE(c, s)                        (c->state & STATE_##s)
+#define VISIBLE(c)                         (c->ws == MON(c)->ws)
+#define FLOATING(c)                        (STATE(c, FLOATING) || !c->ws->layout->func)
+#define FULLSCREEN(c)                      (STATE(c, FULLSCREEN) && !STATE(c, FAKEFULL))
 
-#define FOR_EACH(v, list)                                                      \
-	if (list)                                                                  \
+#define FOR_EACH(v, list)                                                                                    \
+	if (list)                                                                                                \
 		for (v = list; v; v = v->next)
-#define FOR_CLIENTS(c, ws)                                                     \
-	FOR_EACH (ws, workspaces)                                                  \
+#define FOR_CLIENTS(c, ws)                                                                                   \
+	FOR_EACH (ws, workspaces)                                                                                \
 		FOR_EACH (c, ws->clients)
 
-#define TAIL(v, list) for (v = list; v && v->next; v = v->next)
-#define PREV(v, cur, list)                                                     \
-	for (v = list; v && v->next && v->next != cur; v = v->next)
+#define TAIL(v, list)      for (v = list; v && v->next; v = v->next)
+#define PREV(v, cur, list) for (v = list; v && v->next && v->next != cur; v = v->next)
 
-#define WINTO(for_macro, win, ptr, arr)                                        \
-	do {                                                                       \
-		if (win != XCB_WINDOW_NONE && win != root)                             \
-			for_macro(ptr, arr) if (ptr->win == win) return ptr;               \
-		return NULL;                                                           \
+#define WINTO(for_macro, win, ptr, arr)                                                                      \
+	do {                                                                                                     \
+		if (win != XCB_WINDOW_NONE && win != root) for_macro(ptr, arr) if (ptr->win == win) return ptr;      \
+		return NULL;                                                                                         \
 	} while (0)
 
-#define ATTACH(v, list)                                                        \
-	do {                                                                       \
-		v->next = list;                                                        \
-		list = v;                                                              \
+#define ATTACH(v, list)                                                                                      \
+	do {                                                                                                     \
+		v->next = list;                                                                                      \
+		list = v;                                                                                            \
 	} while (0)
 
-#define DETACH(v, listptr)                                                     \
-	do {                                                                       \
-		while (*(listptr) && *(listptr) != v)                                  \
-			(listptr) = &(*(listptr))->next;                                   \
-		*(listptr) = v->next;                                                  \
+#define DETACH(v, listptr)                                                                                   \
+	do {                                                                                                     \
+		while (*(listptr) && *(listptr) != v) (listptr) = &(*(listptr))->next;                               \
+		*(listptr) = v->next;                                                                                \
 	} while (0)
 
-#define PROP(mode, win, atom, type, membsize, nmemb, value)                    \
-	xcb_change_property(con, XCB_PROP_MODE_##mode, win, atom, type,            \
-						(membsize), (nmemb), (const void *)value)
+#define PROP(mode, win, atom, type, membsize, nmemb, value)                                                  \
+	xcb_change_property(con, XCB_PROP_MODE_##mode, win, atom, type, (membsize), (nmemb), (const void *)value)
 
-#define GET(win, val, error, type, functtype)                                  \
-	do {                                                                       \
-		if (win == XCB_WINDOW_NONE)                                            \
-			return val;                                                        \
-		if (!(val = xcb_get_##functtype##_reply(                               \
-				  con, xcb_get_##functtype(con, win), &error)))                \
-			iferr(0, "unable to get window " type " reply", error);            \
+#define GET(win, val, error, type, functtype)                                                                \
+	do {                                                                                                     \
+		if (win == XCB_WINDOW_NONE) return val;                                                              \
+		if (!(val = xcb_get_##functtype##_reply(con, xcb_get_##functtype(con, win), &error)))                \
+			iferr(0, "unable to get window " type " reply", error);                                          \
 	} while (0)
 
-#define MOVE(win, x, y)                                                        \
-	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y,  \
-						 (uint32_t[]) {(x), (y)})
+#define MOVE(win, x, y)                                                                                      \
+	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, (uint32_t[]){(x), (y)})
 
-#define MOVERESIZE(win, x, y, w, h, bw)                                        \
-	xcb_configure_window(                                                      \
-		con, win,                                                              \
-		XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH |  \
-			XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_BORDER_WIDTH,         \
-		(uint32_t[]) {(x), (y), MAX((w), globalcfg[GLB_MIN_WH].val),           \
-					  MAX((h), globalcfg[GLB_MIN_WH].val), (bw)})
+#define MOVERESIZE(win, x, y, w, h, bw)                                                                      \
+	xcb_configure_window(con, win,                                                                           \
+						 XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH |               \
+							 XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_BORDER_WIDTH,                      \
+						 (uint32_t[]){(x), (y), MAX((w), globalcfg[GLB_MIN_WH].val),                         \
+									  MAX((h), globalcfg[GLB_MIN_WH].val), (bw)})
 
 enum States {
 	STATE_NONE = 0,
@@ -147,14 +138,7 @@ enum Borders {
 	BORD_LAST = 8,
 };
 
-enum DirOpts {
-	DIR_NEXT = 0,
-	DIR_PREV = 1,
-	DIR_LAST = 2,
-	DIR_NEXTNE = 3,
-	DIR_PREVNE = 4,
-	DIR_END = 5
-};
+enum DirOpts { DIR_NEXT = 0, DIR_PREV = 1, DIR_LAST = 2, DIR_NEXTNE = 3, DIR_PREVNE = 4, DIR_END = 5 };
 
 enum WMAtoms {
 	WM_DELETE = 0,
@@ -443,8 +427,6 @@ Panel *wintopanel(xcb_window_t win);
 xcb_window_t wintrans(xcb_window_t win);
 
 #ifdef FUNCDEBUG
-void __cyg_profile_func_enter(void *fn, void *caller)
-	__attribute__((no_instrument_function));
-void __cyg_profile_func_exit(void *fn, void *caller)
-	__attribute__((no_instrument_function));
+void __cyg_profile_func_enter(void *fn, void *caller) __attribute__((no_instrument_function));
+void __cyg_profile_func_exit(void *fn, void *caller) __attribute__((no_instrument_function));
 #endif

@@ -237,7 +237,7 @@ void dispatch(xcb_generic_event_t *ev)
 {
 	short type;
 
-	if ((type = ev->response_type & 0x7f)) {
+	if ((type = XCB_EVENT_RESPONSE_TYPE(ev))) {
 		if (handlers[type]) {
 			handlers[type](ev);
 		} else if (ev->response_type == randrbase + XCB_RANDR_SCREEN_CHANGE_NOTIFY &&
@@ -318,11 +318,11 @@ void ignore(uint8_t type)
 
 	xcb_flush(con);
 	while (running && (ev = xcb_poll_for_event(con))) {
-		if ((ev->response_type & 0x7f) != type) {
+		if (XCB_EVENT_RESPONSE_TYPE(ev) != type) {
 			dispatch(ev);
 #ifdef DEBUG
 		} else {
-			DBG("ignore: %s", xcb_event_get_label((ev->response_type & 0x7f)))
+			DBG("ignore: %s", xcb_event_get_label(XCB_EVENT_RESPONSE_TYPE(ev)))
 #endif
 		}
 		free(ev);
@@ -374,7 +374,7 @@ static void mousemotion_move(Client *c, int mx, int my)
 	/* single pass to ensure the border is drawn and the client is floating */
 	if (!FLOATING(c) || (STATE(c, FULLSCREEN) && STATE(c, FAKEFULL))) {
 		while (running && !released && (ev = xcb_wait_for_event(con))) {
-			switch (ev->response_type & 0x7f) {
+			switch (XCB_EVENT_RESPONSE_TYPE(ev)) {
 				case XCB_MOTION_NOTIFY:
 					e = (xcb_motion_notify_event_t *)ev;
 					if (e->time - last < 1000 / 60) {
@@ -408,7 +408,7 @@ static void mousemotion_move(Client *c, int mx, int my)
 	}
 primary_loop:
 	while (running && !released && (ev = xcb_wait_for_event(con))) {
-		switch (ev->response_type & 0x7f) {
+		switch (XCB_EVENT_RESPONSE_TYPE(ev)) {
 			case XCB_MOTION_NOTIFY:
 				e = (xcb_motion_notify_event_t *)ev;
 				if (e->time - last < 1000 / 60) {
@@ -453,7 +453,7 @@ static void mousemotion_resize(Client *c, int mx, int my)
 	;
 
 	while (running && !released && (ev = xcb_wait_for_event(con))) {
-		switch (ev->response_type & 0x7f) {
+		switch (XCB_EVENT_RESPONSE_TYPE(ev)) {
 			case XCB_MOTION_NOTIFY:
 				e = (xcb_motion_notify_event_t *)ev;
 				if (e->time - last < 1000 / 60) {
@@ -520,7 +520,7 @@ static void mousemotion_resizet(Client *c, Client *prev, int idx, int mx, int my
 	int first = 1, ow = c->w, ox = c->x;
 
 	while (running && !released && (ev = xcb_wait_for_event(con))) {
-		switch (ev->response_type & 0x7f) {
+		switch (XCB_EVENT_RESPONSE_TYPE(ev)) {
 			case XCB_MOTION_NOTIFY:
 				e = (xcb_motion_notify_event_t *)ev;
 				if (e->time - last < 1000 / 60) {
@@ -558,7 +558,7 @@ static void mousemotion_resizetinv(Client *c, Client *prev, int idx, int mx, int
 	int first = 1, ow = c->w, ox = c->x;
 
 	while (running && !released && (ev = xcb_wait_for_event(con))) {
-		switch (ev->response_type & 0x7f) {
+		switch (XCB_EVENT_RESPONSE_TYPE(ev)) {
 			case XCB_MOTION_NOTIFY:
 				e = (xcb_motion_notify_event_t *)ev;
 				if (e->time - last < 1000 / 60) {

@@ -2042,7 +2042,7 @@ void setfullscreen(Client *c, int fullscreen)
 		c->old_bw = c->bw;
 		c->bw = 0;
 		if (VISIBLE(c)) {
-			needsrefresh = 1;
+			needsrefresh = refresh();
 		}
 	} else if (!fullscreen && STATE(c, FULLSCREEN)) {
 		setnetstate(c->win, 0);
@@ -2050,7 +2050,7 @@ void setfullscreen(Client *c, int fullscreen)
 		c->bw = c->old_bw;
 		c->x = c->old_x, c->y = c->old_y, c->w = c->old_w, c->h = c->old_h;
 		if (VISIBLE(c)) {
-			needsrefresh = 1;
+			needsrefresh = refresh();
 		}
 	}
 }

@@ -9,7 +9,7 @@
 int parsebool(char *arg);
 Client *parseclient(char *arg, int *ebadwin);
 void parsecmd(char *buf);
-int parsecolour(char *arg, unsigned int *result);
+int parsecolour(char *arg, uint32_t *result);
 int parsecoord(char *arg, char type, int *i, int *rel, int *grav);
 float parsefloat(char *arg, int *rel);
 int parseint(char *arg, int *rel, int allowzero);

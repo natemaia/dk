@@ -9,6 +9,7 @@
 #include <regex.h>
 #include <err.h>
 
+#include <string.h>
 #include <xcb/randr.h>
 #include <xcb/xcb_util.h>
 #include <xcb/xcb_icccm.h>
@@ -92,21 +93,30 @@ void clientmessage(xcb_generic_event_t *ev)
 	uint32_t *d = e->data.data32;
 
 #ifdef DEBUG
-	xcb_generic_error_t *er;
-	xcb_get_atom_name_reply_t *n;
-	if ((n = xcb_get_atom_name_reply(con, xcb_get_atom_name(con, e->type), &er))) {
-		DBG("clientmessage: %#08x -- e->type = %d (%s)", e->window, e->type, xcb_get_atom_name_name(n))
-	}
+#define DBGPRNT(s)                                                                                                     \
+		xcb_generic_error_t *er;                                                                                       \
+		xcb_get_atom_name_reply_t *n;                                                                                  \
+		if ((n = xcb_get_atom_name_reply(con, xcb_get_atom_name(con, e->type), &er))) {                                \
+			DBG("clientmessage: %#08x %s -- e->type = %d (%s) %s",                                                     \
+				c->win, c->title, e->type, xcb_get_atom_name_name(n), s)                                               \
+		}
+#else
+#define DBGPRNT(s)
 #endif
 
 	if (e->window == root && e->type == netatom[NET_DESK_CUR]) {
+		if (starting) {
+			return;
+		}
+		DBG("clientmessage: %#08x -- e->type = %d (_NET_CURRENT_DESKTOP)", e->window, e->type)
 		unfocus(selws->sel, 1);
 		cmdview(itows(d[0]));
 	} else if (e->type == netatom[NET_CLOSE]) {
+		DBG("clientmessage: %#08x -- e->type = %d (_NET_CLOSE_WINDOW)", e->window, e->type)
 		unmanage(e->window, 1);
 	} else if ((c = wintoclient(e->window))) {
-		DBG("clientmessage: managed window: %s", c->title)
 		if (e->type == netatom[NET_WM_DESK]) {
+			DBGPRNT("")
 			if (!(ws = itows(d[0]))) {
 				warnx("invalid workspace index: %d", d[0]);
 				return;
@@ -115,6 +125,7 @@ void clientmessage(xcb_generic_event_t *ev)
 			wschange = winchange = needsrefresh = 1;
 		} else if (e->type == netatom[NET_WM_STATE]) {
 			if (d[1] == netatom[NET_STATE_FULL] || d[2] == netatom[NET_STATE_FULL]) {
+				DBGPRNT("(_NET_WM_STATE_FULLSCREEN)")
 				int full = (d[0] == 1 || (d[0] == 2 && !STATE(c, FULLSCREEN)));
 				if (VISIBLE(c)) {
 					setfullscreen(c, full);
@@ -122,6 +133,7 @@ void clientmessage(xcb_generic_event_t *ev)
 					xcb_aux_sync(con);
 				}
 			} else if (d[1] == netatom[NET_STATE_ABOVE] || d[2] == netatom[NET_STATE_ABOVE]) {
+				DBGPRNT("(_NET_WM_STATE_ABOVE)")
 				int above = d[0] == 1 || (d[0] == 2 && !STATE(c, ABOVE));
 				if (above && !STATE(c, ABOVE)) {
 					c->state |= STATE_ABOVE | STATE_FLOATING;
@@ -132,9 +144,17 @@ void clientmessage(xcb_generic_event_t *ev)
 				}
 			} else if ((d[1] == netatom[NET_STATE_DEMANDATT] || d[2] == netatom[NET_STATE_DEMANDATT]) &&
 					   c != selws->sel) {
+				if (starting) {
+					return;
+				}
+				DBGPRNT("(_NET_WM_STATE_DEMANDS_ATTENTION)")
 				goto activate;
 			}
 		} else if (e->type == netatom[NET_ACTIVE] && c != selws->sel) {
+			if (starting) {
+				return;
+			}
+			DBGPRNT("")
 activate:
 			if (globalcfg[GLB_FOCUS_URGENT].val && !STATE(c, IGNOREMSG) && !STATE(c, SCRATCH)) {
 				if (grabbing && !released) {
@@ -153,9 +173,10 @@ activate:
 				seturgent(c, 1);
 				clientborder(c, 0);
 			}
-			needsrefresh = 1;
+			needsrefresh = refresh();
 		}
 	}
+	xcb_flush(con);
 }
 
 void confignotify(xcb_generic_event_t *ev)
@@ -279,7 +300,8 @@ void enternotify(xcb_generic_event_t *ev)
 	Workspace *ws;
 	xcb_enter_notify_event_t *e = (xcb_enter_notify_event_t *)ev;
 
-	if (e->event != root && (e->mode != XCB_NOTIFY_MODE_NORMAL || e->detail == XCB_NOTIFY_DETAIL_INFERIOR)) {
+	if (e->event != root &&
+		(starting || e->mode != XCB_NOTIFY_MODE_NORMAL || e->detail == XCB_NOTIFY_DETAIL_INFERIOR)) {
 		return;
 	}
 	DBG("enternotify: %#08x", e->event)
@@ -508,7 +530,7 @@ static void mousemotion_resize(Client *c, int mx, int my)
 	} else if (selws->layout->func(selws) < 0) {                                                             \
 		selws->layout->func(selws);                                                                          \
 	}                                                                                                        \
-	xcb_aux_sync(con)
+	xcb_flush(con)
 
 /* layouts that support resize with standard tiling direction */
 static void mousemotion_resizet(Client *c, Client *prev, int idx, int mx, int my, int isend, int nearend)
@@ -630,7 +652,8 @@ void propertynotify(xcb_generic_event_t *ev)
 		xcb_generic_error_t *er;
 		xcb_get_atom_name_reply_t *n;
 		if ((n = xcb_get_atom_name_reply(con, xcb_get_atom_name(con, e->atom), &er))) {
-			DBG("clientmessage: %#08x -- e->type = %d (%s)", e->window, e->atom, xcb_get_atom_name_name(n))
+			DBG("propertynotify: %#08x %s -- e->type = %d (%s)",
+				c->win, c->title, e->atom, xcb_get_atom_name_name(n))
 		}
 #endif
 		switch (e->atom) {

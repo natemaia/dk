@@ -80,8 +80,9 @@
 		*(listptr) = v->next;                                                                                \
 	} while (0)
 
-#define PROP(mode, win, atom, type, membsize, nmemb, value)                                                  \
-	xcb_change_property(con, XCB_PROP_MODE_##mode, win, atom, type, (membsize), (nmemb), (const void *)value)
+#define PROP(mode, win, atom, type, membsize, nmemb, value)                                                    \
+	xcb_change_property(con, XCB_PROP_MODE_##mode, win, atom, type, (membsize), (nmemb), (const void *)value); \
+	xcb_flush(con)
 
 #define GET(win, val, error, type, functtype)                                                                \
 	do {                                                                                                     \
@@ -327,7 +328,7 @@ extern FILE *cmdresp;
 extern uint32_t lockmask;
 extern char *argv0, **environ;
 extern int scr_h, scr_w, randrbase, cmdusemon, winchange, wschange, lytchange;
-extern int running, restart, needsrefresh, status_usingcmdresp, depth;
+extern int starting, running, restart, needsrefresh, status_usingcmdresp, depth;
 
 extern Desk *desks;
 extern Rule *rules;
@@ -400,11 +401,12 @@ Client *nexttiled(Client *c);
 void popfloat(Client *c);
 void printstatus(Status *s, int freeable);
 void quadrant(Client *c, int *x, int *y, const int *w, const int *h);
+int refresh(void);
 void relocate(Client *c, Monitor *mon, Monitor *old);
 void resize(Client *c, int x, int y, int w, int h, int bw);
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, int mouse);
 void sendconfigure(Client *c);
-int sendwmproto(Client *c, int wmproto);
+int sendwmproto(Client *c, xcb_atom_t proto);
 void setfullscreen(Client *c, int fullscreen);
 void setinputfocus(Client *c);
 void setnetstate(xcb_window_t win, uint32_t state);

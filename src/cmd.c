@@ -415,7 +415,7 @@ int cmdgappx(char **argv)
 
 int cmdkill(__attribute__((unused)) char **argv)
 {
-	if (!sendwmproto(cmdc, WM_DELETE)) {
+	if (!sendwmproto(cmdc, wmatom[WM_DELETE])) {
 		xcb_grab_server(con);
 		xcb_set_close_down_mode(con, XCB_CLOSE_DOWN_DESTROY_ALL);
 		xcb_kill_client(con, cmdc->win);
@@ -935,7 +935,6 @@ push:
 			if (!FLOATING(c)) {
 				Monitor *m = MON(c);
 				c->state |= STATE_FLOATING;
-
 				resizehint(c, m->wx + m->ww / 3, m->wy, m->ww / 3, m->wh / 3, c->bw, 0, 0);
 			}
 			c->state |= STATE_SCRATCH | STATE_HIDDEN | STATE_FLOATING;

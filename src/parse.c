@@ -34,7 +34,7 @@ int parsebool(char *arg)
 Client *parseclient(char *arg, int *ebadwin)
 {
 	char *end;
-	unsigned int i;
+	uint32_t i;
 	Client *c = NULL;
 
 	if (arg && arg[0] && (arg[0] == '#' || (arg[0] == '0' && arg[1] == 'x')) &&
@@ -105,7 +105,7 @@ void parsecmd(char *buf)
 
 	if (n) {
 		int j = n;
-		unsigned int i;
+		uint32_t i;
 		while (j > 0 && *argv) {
 			for (i = 0, match = 0; keywords[i].str; i++) {
 				if ((match = !strcmp(keywords[i].str, *argv))) {
@@ -133,17 +133,17 @@ end:
 	free(save);
 }
 
-int parsecolour(char *arg, unsigned int *result)
+int parsecolour(char *arg, uint32_t *result)
 {
 	char *end;
-	unsigned int argb, len, orig = *result;
+	uint32_t argb, len, orig = *result;
 
 	if ((len = strlen(arg)) < 6 || len > 10) {
 		return -1;
 	}
 	len -= arg[0] == '#' ? 1 : (arg[0] == '0' && arg[1] == 'x') ? 2 : 0;
 	if ((argb = strtoul(arg[0] == '#' ? arg + 1 : arg, &end, 16)) <= 0xffffffff && *end == '\0') {
-		unsigned short a, r, g, b;
+		uint8_t a, r, g, b;
 		if (len == 6) {
 			*result = (argb | 0xff000000);
 		} else if ((a = ((argb & 0xff000000) >> 24)) && a != 0xff) {

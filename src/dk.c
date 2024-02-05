@@ -167,8 +167,16 @@ int main(int argc, char *argv[])
 	/* setup basics */
 	argv0 = argv[0];
 	randrbase = -1;
-	running = starting = needsrefresh = 1;
-	depth = sockfd = restart = cmdusemon = winchange = wschange = lytchange = 0;
+	running = 1;
+	starting = 1;
+	needsrefresh = 1;
+	depth = 0;
+	sockfd = 0;
+	restart = 0;
+	cmdusemon = 0;
+	winchange = 0;
+	wschange = 0;
+	lytchange = 0;
 
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "-s")) {
@@ -569,7 +577,8 @@ void changews(Workspace *ws, int swap, int warp)
 		showhide(lastws->stack);
 	}
 	PROP(REPLACE, root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1, &ws->num);
-	needsrefresh = wschange = 1;
+	needsrefresh = 1;
+	wschange = 1;
 }
 
 void clientborder(Client *c, int focused)
@@ -1330,7 +1339,7 @@ Status *initstatus(Status *tmp)
 		case STAT_WS: wschange = 1; break;
 		case STAT_WIN: winchange = 1; break;
 		case STAT_LYT: lytchange = 1; break;
-		default: wschange = winchange = lytchange = 1; break;
+		default: wschange = 1; winchange = 1; lytchange = 1; break;
 	}
 	TAIL(tail, stats);
 	if (tail) {
@@ -1616,7 +1625,9 @@ void printstatus(Status *s, int freeable)
 				}
 				fprintf(s->file, "\nL%s\nA%s", selws->layout->name,
 						selws->sel && !STATE(selws->sel, HIDDEN) ? selws->sel->title : "");
-				winchange = lytchange = wschange = 0;
+				winchange = 0;
+				lytchange = 0;
+				wschange = 0;
 				break;
 			case STAT_FULL:
 				/* Globals */
@@ -1759,7 +1770,9 @@ void printstatus(Status *s, int freeable)
 					}
 				}
 
-				winchange = lytchange = wschange = 0;
+				winchange = 0;
+				lytchange = 0;
+				wschange = 0;
 				break;
 		}
 		fflush(s->file);
@@ -2027,14 +2040,12 @@ void setfullscreen(Client *c, int fullscreen)
 		c->state |= STATE_FULLSCREEN | STATE_FLOATING | STATE_NOBORDER;
 		c->old_bw = c->bw;
 		c->bw = 0;
+		needsrefresh = refresh();
 	} else if (!fullscreen && STATE(c, FULLSCREEN)) {
 		setnetstate(c->win, 0);
 		c->state = c->old_state;
 		c->bw = c->old_bw;
 		c->x = c->old_x, c->y = c->old_y, c->w = c->old_w, c->h = c->old_h;
-	}
-	/* chances this is called and we don't need a refresh are slim */
-	if (VISIBLE(c)) {
 		needsrefresh = refresh();
 	}
 }

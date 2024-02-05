@@ -1822,7 +1822,7 @@ int refresh(void)
 {
 	Desk *d;
 	Panel *p;
-	Client *c, *s;
+	Client *c;
 	Monitor *m;
 	int x, y, w, h;
 
@@ -1841,7 +1841,7 @@ int refresh(void)
 		}
 		FOR_EACH (c, m->ws->clients) {
 			if (FULLSCREEN(c)) {
-				MOVERESIZE(c->win, m->x, m->y, m->w, m->h, 0);
+				resize(c, m->x, m->y, m->w, m->h, 0);
 			} else if (FLOATING(c)) {
 				resizehint(c, (x = c->x), (y = c->y), (w = c->w), (h = c->h), c->bw, 0, 0);
 			}
@@ -1875,11 +1875,7 @@ int refresh(void)
 		MAP(d, desks)
 	}
 
-	/* don't take focus with a fullscreen window focused (unless also fullscreen) */
-	c = selws->sel, s = selws->stack;
-	if (!c || FULLSCREEN(s) || !FULLSCREEN(c) || c == s) {
-		focus(NULL);
-	}
+	focus(NULL);
 	if (selws->sel && FLOATING(selws->sel)) {
 		setstackmode(selws->sel->win, XCB_STACK_MODE_ABOVE);
 	}
@@ -2037,17 +2033,28 @@ void setfullscreen(Client *c, int fullscreen)
 	if (fullscreen && !STATE(c, FULLSCREEN)) {
 		setnetstate(c->win, STATE_FULLSCREEN);
 		c->old_state = c->state;
-		c->state |= STATE_FULLSCREEN | STATE_FLOATING | STATE_NOBORDER;
-		c->old_bw = c->bw;
+		c->old_x = c->x, c->old_y = c->y, c->old_w = c->w, c->old_h = c->h;
+		c->state |= STATE_FULLSCREEN | STATE_FLOATING;
+		if (c->bw || (c->state == STATE_NOBORDER))
+			c->old_bw = c->bw;
 		c->bw = 0;
-		needsrefresh = refresh();
+		if (VISIBLE(c)) {
+			resize(c, m->x, m->y, m->w, m->h, 0);
+			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+			needsrefresh = refresh();
+		}
 	} else if (!fullscreen && STATE(c, FULLSCREEN)) {
 		setnetstate(c->win, 0);
 		c->state = c->old_state;
 		c->bw = c->old_bw;
-		c->x = c->old_x, c->y = c->old_y, c->w = c->old_w, c->h = c->old_h;
-		needsrefresh = refresh();
+		if (VISIBLE(c)) {
+			resizehint(c, c->old_x, c->old_y, c->old_w, c->old_h, c->bw, 0, 0);
+			needsrefresh = refresh();
+		} else {
+			c->x = c->old_x, c->y = c->old_y, c->w = c->old_w, c->h = c->old_h;
+		}
 	}
+	xcb_flush(con);
 }
 
 void setinputfocus(Client *c)

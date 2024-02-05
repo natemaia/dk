@@ -159,7 +159,7 @@ dkcmd COMMAND
 ```
 #### WM
 
-- `quit` exit dk.
+- `exit` exit dk.
 - `restart` re-execute dk.
 
 #### Ws and Mon

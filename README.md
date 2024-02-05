@@ -39,9 +39,6 @@ libxcb-randr0-dev libxcb-util-dev libxcb-icccm4-dev libxcb-cursor-dev libxcb-key
 
 Other systems should have packages with similar names.
 
-As mentioned above dk has no keybind support so you'll need a separate  
-program like `sxhkd` to launch programs and control the window manager.
-
 
 To compile run
 ```
@@ -58,6 +55,16 @@ If at any time you want to uninstall, run
 make uninstall
 ```
 
+### Keybinds
+
+As mentioned above dk has no keybind support so you'll need a program like  
+`sxhkd`, `xbindkeys`, etc. to launch programs and control the window manager.  
+We'll install sxhkd because the example config uses it.
+
+Arch/Debian/Ubuntu/Void/etc.
+```
+sxhkd
+```
 
 ### Usage
 

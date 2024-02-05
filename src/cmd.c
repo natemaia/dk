@@ -744,9 +744,9 @@ int cmdrule(char **argv)
 	argv++, nparsed++;                                                                                       \
 	if (!argv || (j = parsebool(*argv)) < 0) goto badvalue;                                                  \
 	if (j)                                                                                                   \
-		r.state |= val;                                                                                      \
+		r.state |= (val);                                                                                      \
 	else                                                                                                     \
-		r.state &= ~val
+		r.state &= ~(val)
 
 	while (*argv) {
 		if (!strcmp(*argv, "class") || !strcmp(*argv, "match_class")) {
@@ -838,6 +838,10 @@ int cmdrule(char **argv)
 			CSTATE(STATE_IGNORECFG);
 		} else if (!strcmp(*argv, "ignore_msg")) {
 			CSTATE(STATE_IGNOREMSG);
+		} else if (!strcmp(*argv, "terminal")) {
+			CSTATE(STATE_TERMINAL);
+		} else if (!strcmp(*argv, "no_swallow")) {
+			CSTATE(STATE_NOSWALLOW);
 		} else if (!strcmp(*argv, "focus")) {
 			argv++, nparsed++;
 			if (!argv || (j = parsebool(*argv)) < 0) {

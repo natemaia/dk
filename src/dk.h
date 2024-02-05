@@ -118,6 +118,8 @@ enum States {
 	STATE_ABOVE = 1 << 12,
 	STATE_HIDDEN = 1 << 13,
 	STATE_SCRATCH = 1 << 14,
+	STATE_TERMINAL = 1 << 15,
+	STATE_NOSWALLOW = 1 << 16,
 };
 
 enum Cursors {
@@ -275,12 +277,13 @@ typedef struct Client {
 	int32_t x, y, w, h, bw, hoff, depth, old_x, old_y, old_w, old_h, old_bw;
 	int32_t max_w, max_h, min_w, min_h, base_w, base_h, inc_w, inc_h, hints;
 	int32_t has_motif;
+	pid_t pid;
 	float min_aspect, max_aspect;
 	uint32_t state, old_state;
 	xcb_window_t win;
-	struct Client *trans, *next, *snext;
 	Workspace *ws;
 	const Callback *cb;
+	struct Client *trans, *next, *snext, *swallowing;
 } Client;
 
 typedef struct Cmd {

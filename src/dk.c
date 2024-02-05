@@ -34,6 +34,8 @@
 #include <xcb/xcb_icccm.h>
 #include <xcb/xcb_cursor.h>
 #include <xcb/xcb_keysyms.h>
+#include <xcb/xcb_aux.h>
+#include <xcb/res.h>
 
 #include "dk.h"
 #include "strl.h"
@@ -135,15 +137,22 @@ const char *netatoms[] = {
 
 static void freestatus(Status *s);
 static void freews(Workspace *ws);
+static pid_t getparentprocess(pid_t p);
 static void initwm(void);
+static int isdescprocess(pid_t p, pid_t c);
 static void relocatews(Workspace *ws, Monitor *old, int wasvis);
 static int rulecmp(Client *c, Rule *r);
 static void sighandle(int sig);
+static Client *swallowingclient(xcb_window_t w);
+static Client *termforwin(const Client *c);
 static void updnetworkspaces(void);
 static xcb_get_window_attributes_reply_t *winattr(xcb_window_t win);
 static void winclass(xcb_window_t win, char *clss, char *inst, size_t len);
 static xcb_get_geometry_reply_t *wingeom(xcb_window_t win);
+static pid_t winpid(xcb_window_t w);
 static int winprop(xcb_window_t win, xcb_atom_t prop, xcb_atom_t *ret);
+static void unswallow(Client *c);
+static void swallow(Client *p, Client *c);
 
 int main(int argc, char *argv[])
 {
@@ -1108,7 +1117,7 @@ static void initatoms(xcb_atom_t *atoms, const char **names, int num)
 
 static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 {
-	Client *c;
+	Client *c, *term = NULL;
 	xcb_generic_error_t *e;
 	xcb_get_property_cookie_t pc;
 	xcb_get_property_reply_t *pr = NULL;
@@ -1121,6 +1130,7 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	c->w = c->old_w = g->width;
 	c->h = c->old_h = g->height;
 	c->bw = c->old_bw = border[BORD_WIDTH];
+	c->pid = winpid(win);
 	c->has_motif = 0;
 	c->state = STATE_NEEDSMAP;
 	c->old_state = STATE_NONE;
@@ -1154,6 +1164,10 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	sizehints(c, 1);
 
 	grabbuttons(c);
+	if (!c->trans) {
+		term = termforwin(c);
+	}
+
 	if (!FULLSCREEN(c) && (FLOATING(c) || STATE(c, FIXED))) {
 		DBG("initclient: floating or fixed: %#08x - %s", c->win, c->title)
 		if (!STATE(c, FIXED)) {
@@ -1174,6 +1188,8 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		c->cb->func(c, 0);
 	}
 	xcb_change_window_attributes(con, win, XCB_CW_EVENT_MASK, &clientmask);
+	if (term)
+		swallow(term, c);
 	wschange = c->ws->clients->next ? wschange : 1;
 }
 
@@ -2280,13 +2296,25 @@ void unmanage(xcb_window_t win, int destroyed)
 	void *ptr;
 	Workspace *ws;
 
-	if ((ptr = c = wintoclient(win))) {
+	if ((ptr = c = wintoclient(win)) || (ptr = c = swallowingclient(win))) {
 		if (c->cb && running) {
 			c->cb->func(c, 1);
 		}
 		wschange = c->ws->clients->next ? wschange : 1;
 		detach(c, 0);
 		detachstack(c);
+
+		if (c->swallowing) {
+			unswallow(c);
+			return;
+		}
+		Client *s = swallowingclient(c->win);
+		if (s) {
+			free(s->swallowing);
+			s->swallowing = NULL;
+			needsrefresh = refresh();
+			return;
+		}
 	} else if ((ptr = p = wintopanel(win))) {
 		Panel **pp = &panels;
 		DETACH(p, pp);
@@ -2330,6 +2358,45 @@ void unmanage(xcb_window_t win, int destroyed)
 		}
 		needsrefresh = refresh();
 	}
+}
+
+void swallow(Client *p, Client *c)
+{
+	if (STATE(c, NOSWALLOW) || STATE(c, TERMINAL))
+		return;
+	if (STATE(c, NOSWALLOW) && FLOATING(c))
+		return;
+
+	detach(c, 0);
+	detachstack(c);
+	setwinstate(c->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
+	clientunmap(p);
+
+	p->swallowing = c;
+	c->ws->mon = p->ws->mon;
+
+	xcb_window_t w = p->win;
+	p->win = c->win;
+	c->win = w;
+	MOVERESIZE(p->win, p->x, p->y, p->w, p->h, p->bw);
+	sendconfigure(p);
+	needsrefresh = refresh();
+	/* updateclientlist(); */
+}
+
+void unswallow(Client *c)
+{
+	c->win = c->swallowing->win;
+
+	free(c->swallowing);
+	c->swallowing = NULL;
+
+	if (FULLSCREEN(c))
+		setfullscreen(c, 0);
+	clientmap(c);
+	MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
+	setwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
+	needsrefresh = refresh();
 }
 
 static void updnetworkspaces(void)
@@ -2638,6 +2705,89 @@ xcb_window_t wintrans(xcb_window_t win)
 		return XCB_WINDOW_NONE;
 	}
 	return w;
+}
+
+pid_t winpid(xcb_window_t w)
+{
+
+	pid_t result = 0;
+
+	xcb_res_client_id_spec_t spec = {0};
+	spec.client = w;
+	spec.mask = XCB_RES_CLIENT_ID_MASK_LOCAL_CLIENT_PID;
+
+	xcb_generic_error_t *e = NULL;
+	xcb_res_query_client_ids_cookie_t c = xcb_res_query_client_ids(con, 1, &spec);
+	xcb_res_query_client_ids_reply_t *r = xcb_res_query_client_ids_reply(con, c, &e);
+
+	if (!r) {
+		return (pid_t)0;
+	}
+	xcb_res_client_id_value_iterator_t i = xcb_res_query_client_ids_ids_iterator(r);
+	for (; i.rem; xcb_res_client_id_value_next(&i)) {
+		spec = i.data->spec;
+		if (spec.mask & XCB_RES_CLIENT_ID_MASK_LOCAL_CLIENT_PID) {
+			uint32_t *t = xcb_res_client_id_value_value(i.data);
+			result = *t;
+			break;
+		}
+	}
+	free(r);
+	if (result == (pid_t)-1) {
+		result = 0;
+	}
+	return result;
+}
+
+pid_t getparentprocess(pid_t p)
+{
+	FILE *f;
+	char buf[256];
+	unsigned int v = 0;
+
+	snprintf(buf, sizeof(buf) - 1, "/proc/%u/stat", (unsigned)p);
+	if (!(f = fopen(buf, "r"))) {
+		return 0;
+	}
+	fscanf(f, "%*u %*s %*c %u", &v);
+	fclose(f);
+	return (pid_t)v;
+}
+
+int isdescprocess(pid_t p, pid_t c)
+{
+	while (p != c && c != 0)
+		c = getparentprocess(c);
+	return (int)c;
+}
+
+Client *termforwin(const Client *w)
+{
+	Client *c;
+	Workspace *ws;
+
+	if (!w->pid || STATE(w, TERMINAL))
+		return NULL;
+
+	FOR_CLIENTS(c, ws) {
+		if (STATE(c, TERMINAL) && !c->swallowing && c->pid && isdescprocess(c->pid, w->pid)) {
+			return c;
+		}
+	}
+	return NULL;
+}
+
+Client *swallowingclient(xcb_window_t w)
+{
+	Client *c;
+	Workspace *ws;
+
+	FOR_CLIENTS(c, ws) {
+		if (c->swallowing && c->swallowing->win == w) {
+			return c;
+		}
+	}
+	return NULL;
 }
 
 #ifdef FUNCDEBUG

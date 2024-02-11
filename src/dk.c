@@ -145,6 +145,7 @@ static void initwm(void);
 static pid_t parentproc(pid_t p);
 static void relocatews(Workspace *ws, Monitor *old, int wasvis);
 static int rulecmp(Client *c, Rule *r);
+static void savestate(int restore);
 static void sighandle(int sig);
 static Client *termforwin(const Client *c);
 static void updatenetclients(void);
@@ -283,6 +284,7 @@ int main(int argc, char *argv[])
 	FOR (ws, workspaces) {
 		showhide(ws->stack);
 	}
+	savestate(1);
 
 	confd = xcb_get_file_descriptor(con);
 	while (running) {
@@ -323,7 +325,6 @@ int main(int argc, char *argv[])
 		if (needsrefresh) {
 			needsrefresh = refresh();
 		}
-
 		/* handle dead status' and print existing ones if needed */
 		Status *s = stats, *next;
 		while (s) {
@@ -425,7 +426,7 @@ static void applyrule(Client *c, Rule *r, xcb_atom_t curws, int nofocus)
 		}
 	}
 
-	if (ws + 1 > globalcfg[GLB_NUM_WS].val && ws <= 99) {
+	if (ws + 1 > globalcfg[GLB_NUM_WS].val && ws <= 256) {
 		updworkspaces(ws + 1);
 	}
 	setworkspace(c, itows(MIN(ws, globalcfg[GLB_NUM_WS].val)), nofocus);
@@ -615,7 +616,7 @@ void changews(Workspace *ws, int swap, int warp)
 	PROP(REPLACE, root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1, &ws->num);
 	needsrefresh = 1;
 	wschange = 1;
-	xcb_aux_sync(con);
+	xcb_flush(con);
 }
 
 void clientborder(Client *c, int focused)
@@ -755,7 +756,7 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 
 	if (c->trans) {
 		curws = c->trans->ws->num;
-	} else if (!winprop(c->win, netatom[NET_WM_DESK], &curws) || curws > 99) {
+	} else if (!winprop(c->win, netatom[NET_WM_DESK], &curws) || curws > 256) {
 		curws = selws->num;
 	}
 	winprop(c->win, netatom[NET_WM_TYPE], &type);
@@ -771,7 +772,6 @@ void clientrule(Client *c, Rule *wr, int nofocus)
 		applyrule(c, r, curws, nofocus);
 		return;
 	}
-
 	applyrule(c, NULL, curws, nofocus);
 }
 
@@ -841,14 +841,6 @@ Monitor *coordtomon(int x, int y)
 	return NULL;
 }
 
-static int discreteproc(pid_t p, pid_t c)
-{
-	while (p != c && c != 0) {
-		c = parentproc(c);
-	}
-	return c;
-}
-
 void desorb(Client *c)
 {
 	DBG("desorb: %#08x %s -- c->win = %#08x %s", c->win, c->title, c->absorbed->win, c->absorbed->title)
@@ -860,6 +852,14 @@ void desorb(Client *c)
 	wschange = winchange = 1;
 	c->state |= STATE_NEEDSMAP;
 	needsrefresh = refresh();
+}
+
+static int discreteproc(pid_t p, pid_t c)
+{
+	while (p != c && c != 0) {
+		c = parentproc(c);
+	}
+	return c;
 }
 
 void detach(Client *c, int reattach)
@@ -885,19 +885,40 @@ void detachstack(Client *c)
 	}
 }
 
-static void dumpstate(void)
+static void savestate(int restore)
 {
-	Client *c;
+	Client c, *t;
 	Workspace *ws;
 	FILE *f = NULL;
 	const char *path = "/tmp/dk_state";
 
-	if (!(f = fopen(path, "w"))) {
+	if (!(f = fopen(path, restore ? "rb" : "wb"))) {
+		perror("dk: fopen");
 		return;
 	}
-#define BODY if (fwrite(c, sizeof(Client), 1, f) < sizeof(Client)) { return; }
-	FOR_CLIENTS (c, ws)
+	if (restore) {
+		/* read a client worth of data */
+		while (fread(&c, 1, sizeof(Client), f) == sizeof(Client)) {
+			DBG("savestate: read c.win = %#08x", c.win);
+			if (!(t = wintoclient(c.win)) || !(c.state & STATE_FLOATING)) {
+				DBG("savestate: %#08x is NOT an actual Client or is not floating", c.win);
+				continue;
+			}
+			DBG("savestate: %#08x is an actual floating client -- %s", c.win, t->title);
+			t->state |= STATE_FLOATING;
+			if (VISIBLE(t)) {
+				resizehint(t, c.x, c.y, c.w, c.h, c.bw, 0, 0);
+				needsrefresh = 1;
+			} else {
+				t->x = c.x, t->y = c.y, t->w = c.w, t->h = c.h; t->bw = c.bw;
+			}
+		}
+	} else {
+		/* dump client data as binary */
+#define BODY fwrite(t, sizeof(Client), 1, f);
+		FOR_CLIENTS (t, ws)
 #undef BODY
+	}
 	fclose(f);
 }
 
@@ -1034,14 +1055,16 @@ void freewm(void)
 	Workspace *ws;
 
 	if (restart) {
-		dumpstate();
+		savestate(0);
 	}
 
 	FOR (c, scratch.clients) {
 		setworkspace(c, selws, 0);
 	}
 	while ((ws = workspaces)) {
-		while (ws->stack) unmanage(ws->stack->win, 0);
+		while (ws->stack) {
+			unmanage(ws->stack->win, 0);
+		}
 		freews(ws);
 	}
 	while (panels) unmanage(panels->win, 0);
@@ -2376,7 +2399,6 @@ static Client *termforwin(const Client *w)
 	if (!w->pid || STATE(w, TERMINAL)) {
 		return NULL;
 	}
-
 #define BODY  if (STATE(c, TERMINAL) && !c->absorbed && c->pid && discreteproc(c->pid, w->pid)) { return c; }
 	FOR_CLIENTS(c, ws)
 #undef BODY
@@ -2642,8 +2664,7 @@ void updstruts(void)
 	}
 	FOR (p, panels) {
 		if (p->l || p->r || p->t || p->b) {
-			/* adjust the struts if they don't match up with the panel size and
-			 * location */
+			/* adjust the struts if they don't match up with the panel size and location */
 			if (p->l && p->l > p->w && p->x == p->mon->x) {
 				p->l = p->w;
 			}
@@ -2666,14 +2687,13 @@ void updstruts(void)
 void updworkspaces(int needed)
 {
 	int n;
-	Client *c;
 	Monitor *m;
 	Workspace *ws;
 
 	for (n = 0, m = nextmon(monitors); m; m = nextmon(m->next), n++)
 		;
-	if (n < 1 || n > 99 || needed > 99) {
-		warnx(n < 1 ? "no connected monitors" : "allocating too many workspaces: max 99");
+	if (n < 1 || n > 256 || needed > 256) {
+		warnx(n < 1 ? "no connected monitors" : "allocating too many workspaces: max 256");
 		return;
 	}
 	while (n > globalcfg[GLB_NUM_WS].val || needed > globalcfg[GLB_NUM_WS].val) {
@@ -2688,14 +2708,6 @@ void updworkspaces(int needed)
 		DBG("updworkspaces: %d:%s -> %s - visible: %d", ws->num, ws->name, m->name, ws == m->ws)
 		if (!(m = nextmon(m->next))) {
 			m = nextmon(monitors);
-		}
-	}
-
-	FOR (ws, workspaces) {
-		FOR (c, ws->clients) {
-			if (STATE(c, FULLSCREEN) && ws == ws->mon->ws) {
-				MOVERESIZE(c->win, ws->mon->x, ws->mon->y, ws->mon->w, ws->mon->h, c->bw);
-			}
 		}
 	}
 	updstruts();
@@ -2771,18 +2783,18 @@ Client *wintoclient(xcb_window_t win)
 	return NULL;
 }
 
-Panel *wintopanel(xcb_window_t win)
-{
-	Panel *p;
-
-	WINTO(FOR, win, p, panels);
-}
-
 Desk *wintodesk(xcb_window_t win)
 {
 	Desk *d;
 
 	WINTO(FOR, win, d, desks);
+}
+
+Panel *wintopanel(xcb_window_t win)
+{
+	Panel *p;
+
+	WINTO(FOR, win, p, panels);
 }
 
 xcb_window_t wintrans(xcb_window_t win)

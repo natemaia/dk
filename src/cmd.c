@@ -1101,7 +1101,7 @@ int cmdset(char **argv)
 							}
 							break;
 						case TYPE_NUMWS:
-							if (!argv || (i = parseintclamp(*argv, NULL, 1, 99)) == INT_MIN) {
+							if (!argv || (i = parseintclamp(*argv, NULL, 1, 256)) == INT_MIN) {
 								goto badvalue;
 							}
 							if (i > globalcfg[j].val) {

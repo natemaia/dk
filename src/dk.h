@@ -41,9 +41,7 @@
 #define MAX(a, b)                          ((a) > (b) ? (a) : (b))
 #define CLAMP(x, min, max)                 (MIN(MAX((x), (min)), (max)))
 #define INRECT(x, y, w, h, rx, ry, rw, rh) (x >= rx && x + w <= rx + rw && y >= ry && y + h <= ry + rh)
-
 #define ISTILE(ws)                         (ws->layout->func == ltile || ws->layout->func == rtile)
-
 #define W(c)                               (c->w + (2 * c->bw))
 #define H(c)                               (c->h + (2 * c->bw))
 #define MON(c)                             c->ws->mon
@@ -52,12 +50,13 @@
 #define FLOATING(c)                        (STATE(c, FLOATING) || !c->ws->layout->func)
 #define FULLSCREEN(c)                      (STATE(c, FULLSCREEN) && !STATE(c, FAKEFULL))
 
-#define FOR_EACH(v, list)                                                                                    \
+#define FOR(v, list)                                                                                         \
 	if (list)                                                                                                \
 		for (v = list; v; v = v->next)
+
 #define FOR_CLIENTS(c, ws)                                                                                   \
-	FOR_EACH (ws, workspaces) { FOR_EACH (c, ws->clients) { BODY } }                                         \
-	FOR_EACH (c, scratch.clients) { BODY }
+	FOR (ws, workspaces) { FOR (c, ws->clients) { BODY } }                                                   \
+	FOR (c, scratch.clients) { BODY }
 
 #define TAIL(v, list)      for (v = list; v && v->next; v = v->next)
 #define PREV(v, cur, list) for (v = list; v && v->next && v->next != cur; v = v->next)
@@ -330,8 +329,8 @@ struct Workspace {
 extern FILE *cmdresp;
 extern uint32_t lockmask;
 extern char *argv0, **environ;
+extern int running, restart, needsrefresh, status_usingcmdresp, depth;
 extern int scr_h, scr_w, randrbase, cmdusemon, winchange, wschange, lytchange;
-extern int starting, running, restart, needsrefresh, status_usingcmdresp, depth;
 
 extern Desk *desks;
 extern Rule *rules;

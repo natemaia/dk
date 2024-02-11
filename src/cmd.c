@@ -295,7 +295,7 @@ int cmdfloat(char **argv)
 	}
 	if (argv && *argv && !strcmp(*argv, "all")) {
 		nparsed++;
-		FOR_EACH (c, cmdc->ws->clients) {
+		FOR (c, cmdc->ws->clients) {
 			cmdc = c;
 			if (FLOATING(c) || STATE(c, WASFLOATING)) {
 				if (FLOATING(c)) {
@@ -771,7 +771,7 @@ int cmdrule(char **argv)
 			if ((r.ws = parseintclamp(*argv, NULL, 1, globalcfg[GLB_NUM_WS].val)) == INT_MIN) {
 				r.ws = -1;
 				match = 0;
-				FOR_EACH (ws, workspaces) {
+				FOR (ws, workspaces) {
 					if ((match = !strcmp(ws->name, *argv))) {
 						r.ws = ws->num;
 						break;
@@ -870,7 +870,7 @@ badvalue:
 		 r.w != -1 || r.h != -1 || r.bw != -1 || r.xgrav != GRAV_NONE || r.ygrav != GRAV_NONE)) {
 #define M(a, b) (a == NULL || (b && !strcmp(a, b)))
 
-		FOR_EACH (pr, rules) { /* free any existing rule that uses the same matches */
+		FOR (pr, rules) { /* free any existing rule that uses the same matches */
 			if (M(r.clss, pr->clss) && M(r.inst, pr->inst) && M(r.title, pr->title)) {
 				freerule(pr);
 				break;
@@ -880,8 +880,8 @@ badvalue:
 		if (!delete) {
 			if ((nr = initrule(&r)) && apply) {
 applyall:
-				FOR_EACH (ws, workspaces) {
-					FOR_EACH (c, ws->clients) {
+				FOR (ws, workspaces) {
+					FOR (c, ws->clients) {
 						clientrule(c, nr, 0);
 						if (c->cb) {
 							c->cb->func(c, 0);
@@ -966,8 +966,8 @@ push:
 		Client *sc = NULL;
 		/* when there are no clients in the scratch we look for recently
 		 * popped windows to push back or bring to the current workspace */
-		FOR_EACH (ws, workspaces) {
-			FOR_EACH (c, ws->clients) {
+		FOR (ws, workspaces) {
+			FOR (c, ws->clients) {
 				if ((sc->old_state & STATE_SCRATCH) && FLOATING(sc) && !FULLSCREEN(sc)) {
 					c = sc;
 					/* if the window is on our current workspace we push */
@@ -1382,7 +1382,7 @@ badvalue:
 
 	if (apply) {
 		Workspace *ws;
-		FOR_EACH (ws, workspaces) {
+		FOR (ws, workspaces) {
 			lytchange = lytchange || ws->layout != wsdef.layout;
 			ws->layout = wsdef.layout;
 			ws->gappx = wsdef.gappx;

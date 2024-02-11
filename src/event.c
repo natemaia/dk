@@ -105,9 +105,6 @@ void clientmessage(xcb_generic_event_t *ev)
 #endif
 
 	if (e->window == root && e->type == netatom[NET_DESK_CUR]) {
-		if (starting) {
-			return;
-		}
 		DBG("clientmessage: %#08x -- e->type = %d (_NET_CURRENT_DESKTOP)", e->window, e->type)
 		unfocus(selws->sel, 1);
 		cmdview(itows(d[0]));
@@ -144,16 +141,10 @@ void clientmessage(xcb_generic_event_t *ev)
 				}
 			} else if ((d[1] == netatom[NET_STATE_DEMANDATT] || d[2] == netatom[NET_STATE_DEMANDATT]) &&
 					   c != selws->sel) {
-				if (starting) {
-					return;
-				}
 				DBGPRNT("(_NET_WM_STATE_DEMANDS_ATTENTION)")
 				goto activate;
 			}
 		} else if (e->type == netatom[NET_ACTIVE] && c != selws->sel) {
-			if (starting) {
-				return;
-			}
 			DBGPRNT("")
 activate:
 			if (globalcfg[GLB_FOCUS_URGENT].val && !STATE(c, IGNOREMSG) && !STATE(c, SCRATCH)) {
@@ -301,7 +292,7 @@ void enternotify(xcb_generic_event_t *ev)
 	xcb_enter_notify_event_t *e = (xcb_enter_notify_event_t *)ev;
 
 	if (e->event != root &&
-		(starting || e->mode != XCB_NOTIFY_MODE_NORMAL || e->detail == XCB_NOTIFY_DETAIL_INFERIOR)) {
+		(e->mode != XCB_NOTIFY_MODE_NORMAL || e->detail == XCB_NOTIFY_DETAIL_INFERIOR)) {
 		return;
 	}
 	DBG("enternotify: %#08x", e->event)

@@ -266,7 +266,7 @@ Workspace *parsewsormon(char *arg, int mon)
 			}
 		}
 	} else {
-		FOR_EACH (ws, workspaces) {
+		FOR (ws, workspaces) {
 			if (!strcmp(ws->name, arg)) {
 				return ws;
 			}

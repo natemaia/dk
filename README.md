@@ -102,7 +102,6 @@ Most of your interaction with the window manager will be using `dkcmd`
 which writes one or more commands into the socket where it is then read  
 and parsed by the window manager *(see Commands section below)*.
 
-
 ### Syntax Outline
 The commands have a very basic syntax and parsing, the input is broken  
 down into smaller pieces *(tokens)* which are then passed to the matching  
@@ -305,6 +304,19 @@ rule MATCH ignore_msg=true
 If `mon` is also set it will be activated first before viewing the workspace.
 ```
 rule MATCH focus=true
+```
+---
+
+`terminal` (boolean) determine if the window should be considered a terminal for  
+absorbing other windows and not being absorbed itself.
+```
+rule MATCH terminal=true
+```
+---
+
+`no_absorb` (boolean) determine if the window should never absorb other windows.
+```
+rule MATCH no_absorb=true
 ```
 ---
 
@@ -609,6 +621,7 @@ win [CLIENT] resize x=100 y=100 w=1280 h=720 bw=1
 win [CLIENT] resize x=center y=center w=1280 h=720 bw=1
 ```
 ---
+
 #### Status
 `status` print status information to a file or stdout.
 
@@ -644,13 +657,11 @@ status [TYPE] [FILE]        # output forever
 status num=1 [TYPE] [FILE]  # output once
 ```
 
-
 ### Todo
 
 - Simplification and code quality improvement.
 - See ISSSUE.md for current problems and possible additions.
 - `grep -n 'TODO' src/*` will give some code I'm not happy with.
-
 
 ### Contributing
 
@@ -673,7 +684,6 @@ don't strip debug symbols *(for gdb, valgrind, etc.)*.
 ```
 make nostrip
 ```
-
 
 ### Credits
 

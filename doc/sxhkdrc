@@ -69,8 +69,8 @@ alt + ctrl + {h,j,k,l}
 	dkcmd win resize {w=-20,h=+20,h=-20,w=+20}
 
 # view, send, or follow to a workspace (by number)
-alt + {_,shift + ,ctrl + }{1-9,0}
-	dkcmd ws {view,send,follow} {1-9,10}
+alt + {_,shift + ,ctrl + }{1-6}
+	dkcmd ws {view,send,follow} {1-6}
 
 # view, send, or follow to the next, previous, last active,
 # next non-empty, or prev non-empty workspace

@@ -35,15 +35,15 @@ fi
 	# workspace settings
 	# ------------------------
 
-	# initialize 10 workspaces (1-10) (default: 1/monitor)
-	dkcmd set numws=10
+	# initialize 6 workspaces (1-6) (default: 1/monitor)
+	dkcmd set numws=6
 
 	# default workspace '_' values used when allocating new workspaces
 	# can be applied to all existing workspaces when passed 'apply' after ws=_
 	dkcmd set ws=_ apply layout=tile master=1 stack=3 gap=0 msplit=0.5 ssplit=0.5
 
 	# use grid layout, padding, and gaps on workspace 10
-	dkcmd set ws=10 layout=grid pad left=200 right=200 top=100 bottom=100 gap=50
+	dkcmd set ws=6 layout=grid pad left=200 right=200 top=100 bottom=100 gap=50
 
 	# change workspace names (default: number == name)
 	# dkcmd set \
@@ -53,10 +53,6 @@ fi
 	# 	ws=4  name="😠" \
 	# 	ws=5  name="5" \
 	# 	ws=6  name="6" \
-	# 	ws=7  name="7" \
-	# 	ws=8  name="8" \
-	# 	ws=9  name="9" \
-	# 	ws=10 name="10"
 
 	# enable static workspaces and assign them to monitors (only relevant for multiple monitors)
 	# aside -
@@ -70,13 +66,9 @@ fi
 	# 	ws=1  mon=$mon1 \
 	# 	ws=2  mon=$mon1 \
 	# 	ws=3  mon=$mon1 \
-	# 	ws=4  mon=$mon1 \
-	# 	ws=5  mon=$mon1 \
+	# 	ws=4  mon=$mon2 \
+	# 	ws=5  mon=$mon2 \
 	# 	ws=6  mon=$mon2 \
-	# 	ws=7  mon=$mon2 \
-	# 	ws=8  mon=$mon2 \
-	# 	ws=9  mon=$mon2 \
-	# 	ws=10 mon=$mon2
 
 
 	# global settings
@@ -143,8 +135,14 @@ fi
 	# open window(s) with a specific geometry and coordinates (floating only!)
 	dkcmd rule class="^google-chrome$" title="^open files$" float=true w=1280 h=720
 
-	# open window(s) with ignore_msg=true to avoid focus being grabbed and changing workspace.
+	# open window(s) with ignore_msg=true to avoid focus being grabbed and changing workspace
 	dkcmd rule class="^TelegramDesktop$" ignore_msg=true
+
+	# define some terminals and allow them to be absorbed by spawned windows
+	dkcmd rule class="^(st|st-256color|urxvt|kitty|alacritty|xterm|xterm-256colors)$" terminal=true
+
+	# set a window to never absorb other windows, like the xev event tester
+	dkcmd rule title="^Event Tester$" no_absorb=true
 
 	# focus window and workspace on opening
 	dkcmd rule class="^firefox$" ws=1 focus=true

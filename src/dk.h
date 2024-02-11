@@ -56,8 +56,8 @@
 	if (list)                                                                                                \
 		for (v = list; v; v = v->next)
 #define FOR_CLIENTS(c, ws)                                                                                   \
-	FOR_EACH (ws, workspaces)                                                                                \
-		FOR_EACH (c, ws->clients)
+	FOR_EACH (ws, workspaces) { FOR_EACH (c, ws->clients) { BODY } }                                         \
+	FOR_EACH (c, scratch.clients) { BODY }
 
 #define TAIL(v, list)      for (v = list; v && v->next; v = v->next)
 #define PREV(v, cur, list) for (v = list; v && v->next && v->next != cur; v = v->next)
@@ -119,7 +119,7 @@ enum States {
 	STATE_HIDDEN = 1 << 13,
 	STATE_SCRATCH = 1 << 14,
 	STATE_TERMINAL = 1 << 15,
-	STATE_NOSWALLOW = 1 << 16,
+	STATE_NOABSORB = 1 << 16,
 };
 
 enum Cursors {
@@ -283,7 +283,7 @@ typedef struct Client {
 	xcb_window_t win;
 	Workspace *ws;
 	const Callback *cb;
-	struct Client *trans, *next, *snext, *swallowing;
+	struct Client *trans, *next, *snext, *absorbed;
 } Client;
 
 typedef struct Cmd {

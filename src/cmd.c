@@ -215,6 +215,7 @@ int cmdborder(char **argv)
 				continue;
 			}
 			first = 0, nparsed++;
+#undef COLOUR
 		} else {
 			break;
 badvalue:
@@ -229,19 +230,11 @@ badvalue:
 		border[BORD_O_WIDTH] = ow;
 	}
 	border[BORD_WIDTH] = bw;
-	FOR_CLIENTS (c, ws) {
-		if (!STATE(c, NOBORDER) && c->bw == old) {
-			c->bw = bw;
-		}
-	}
-	FOR_EACH (c, scratch.clients) {
-		if (!STATE(c, NOBORDER) && c->bw == old) {
-			c->bw = bw;
-		}
-	}
-	return nparsed;
+#define BODY if (!STATE(c, NOBORDER) && c->bw == old) { c->bw = bw; }
+	FOR_CLIENTS(c, ws)
+#undef BODY
 
-#undef COLOUR
+	return nparsed;
 }
 
 int cmdcycle(__attribute__((unused)) char **argv)
@@ -840,8 +833,8 @@ int cmdrule(char **argv)
 			CSTATE(STATE_IGNOREMSG);
 		} else if (!strcmp(*argv, "terminal")) {
 			CSTATE(STATE_TERMINAL);
-		} else if (!strcmp(*argv, "no_swallow")) {
-			CSTATE(STATE_NOSWALLOW);
+		} else if (!strcmp(*argv, "no_absorb")) {
+			CSTATE(STATE_NOABSORB);
 		} else if (!strcmp(*argv, "focus")) {
 			argv++, nparsed++;
 			if (!argv || (j = parsebool(*argv)) < 0) {
@@ -887,10 +880,12 @@ badvalue:
 		if (!delete) {
 			if ((nr = initrule(&r)) && apply) {
 applyall:
-				FOR_CLIENTS (c, ws) {
-					clientrule(c, nr, 0);
-					if (c->cb) {
-						c->cb->func(c, 0);
+				FOR_EACH (ws, workspaces) {
+					FOR_EACH (c, ws->clients) {
+						clientrule(c, nr, 0);
+						if (c->cb) {
+							c->cb->func(c, 0);
+						}
 					}
 				}
 				needsrefresh = 1;
@@ -971,16 +966,18 @@ push:
 		Client *sc = NULL;
 		/* when there are no clients in the scratch we look for recently
 		 * popped windows to push back or bring to the current workspace */
-		FOR_CLIENTS (sc, ws) {
-			if ((sc->old_state & STATE_SCRATCH) && FLOATING(sc) && !FULLSCREEN(sc)) {
-				c = sc;
-				/* if the window is on our current workspace we push */
-				if (c->ws == selws) {
-					goto push;
+		FOR_EACH (ws, workspaces) {
+			FOR_EACH (c, ws->clients) {
+				if ((sc->old_state & STATE_SCRATCH) && FLOATING(sc) && !FULLSCREEN(sc)) {
+					c = sc;
+					/* if the window is on our current workspace we push */
+					if (c->ws == selws) {
+						goto push;
+					}
+					/* retain old SCRATCH state when popping from other workspace */
+					c->old_state = c->state | STATE_SCRATCH;
+					goto pop; /* on another workspace so bring it to us */
 				}
-				/* retain old SCRATCH state when popping from other workspace */
-				c->old_state = c->state | STATE_SCRATCH;
-				goto pop; /* on another workspace so bring it to us */
 			}
 		}
 		/* if all else fails we push the active window */

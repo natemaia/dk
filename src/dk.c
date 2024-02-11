@@ -885,6 +885,22 @@ void detachstack(Client *c)
 	}
 }
 
+static void dumpstate(void)
+{
+	Client *c;
+	Workspace *ws;
+	FILE *f = NULL;
+	const char *path = "/tmp/dk_state";
+
+	if (!(f = fopen(path, "w"))) {
+		return;
+	}
+#define BODY if (fwrite(c, sizeof(Client), 1, f) < sizeof(Client)) { return; }
+	FOR_CLIENTS (c, ws)
+#undef BODY
+	fclose(f);
+}
+
 void execcfg(void)
 {
 	char *cfg, *s, path[PATH_MAX];
@@ -1016,6 +1032,10 @@ void freewm(void)
 {
 	Client *c;
 	Workspace *ws;
+
+	if (restart) {
+		dumpstate();
+	}
 
 	FOR (c, scratch.clients) {
 		setworkspace(c, selws, 0);

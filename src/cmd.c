@@ -287,7 +287,7 @@ int cmdfakefull(__attribute__((unused)) char **argv)
 
 int cmdfloat(char **argv)
 {
-	int nparsed = 0;
+	int i, nparsed = 0;
 	Client *c = cmdc;
 
 	if (!c || !c->ws->layout->func) {
@@ -313,6 +313,17 @@ int cmdfloat(char **argv)
 		respond(cmdresp, "!unable to change floating state of fullscreen, "
 						 "sticky, or fixed size windows");
 		return nparsed;
+	}
+
+	if (argv && *argv) {
+		if ((i = parsebool(*argv)) < 0) {
+			respond(cmdresp, "!invalid argument for win float: %s", *argv);
+			return nparsed;
+		} else if (i == 0) {
+			c->state |= STATE_FLOATING;
+		} else {
+			c->state &= ~STATE_FLOATING;
+		}
 	}
 
 	if ((c->state ^= STATE_FLOATING) & STATE_FLOATING) {

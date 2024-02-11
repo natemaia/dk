@@ -528,6 +528,7 @@ win cycle
 `float` change the window floating state.
 ```
 win [CLIENT] float
+win [CLIENT] float=false
 ```
 ---
 

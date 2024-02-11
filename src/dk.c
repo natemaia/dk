@@ -730,14 +730,6 @@ int clientname(Client *c)
 		}
 	}
 
-#ifdef DEBUG
-	xcb_get_atom_name_reply_t *n;
-	if ((n = xcb_get_atom_name_reply(con, xcb_get_atom_name(con, r.encoding), &e))) {
-		DBG("clientname: r.name_len = %d -- r.name = \"%s\" -- r.encoding = %d (%s)", r.name_len, r.name,
-			r.encoding, xcb_get_atom_name_name(n))
-	}
-#endif
-
 	if (r.name && r.name[0] != '\0' && r.name_len > 0 &&
 		(r.encoding == wmatom[WM_UTF8STR] || r.encoding == XCB_ATOM_STRING)) {
 		strlcpy(c->title, r.name, MIN(sizeof(c->title), r.name_len + 1));
@@ -2196,30 +2188,11 @@ void setnetwsnames(void)
 
 void setstackmode(xcb_window_t win, uint32_t mode)
 {
-#ifdef DEBUG
-	Client *c = wintoclient(win);
-	if (c) {
-		DBG("setstackmode: stacking window %s: %#08x %s", mode == XCB_STACK_MODE_ABOVE ? "above" : "below",
-			c->win, c->title)
-	} else {
-		DBG("setstackmode: stacking window %s: %#08x", mode == XCB_STACK_MODE_ABOVE ? "above" : "below", win)
-	}
-#endif
 	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_STACK_MODE, &mode);
 }
 
 void setnetstate(xcb_window_t win, uint32_t state)
 {
-#ifdef DEBUG
-	Client *c = wintoclient(win);
-	if (c) {
-		DBG("setnetstate: window %#08x %s: %s", c->win, c->title,
-			(state & STATE_FULLSCREEN) ? "fullscreen" : "none")
-	} else {
-		DBG("setnetstate: window %#08x: %s", win, (state & STATE_FULLSCREEN) ? "fullscreen" : "none")
-	}
-#endif
-
 	if (state & STATE_FULLSCREEN) {
 		PROP(REPLACE, win, netatom[NET_WM_STATE], XCB_ATOM_ATOM, 32, 1, &netatom[NET_STATE_FULL]);
 	} else {
@@ -2250,20 +2223,6 @@ void seturgent(Client *c, int urg)
 
 void setwinstate(xcb_window_t win, uint32_t state)
 {
-#ifdef DEBUG
-	Client *c = wintoclient(win);
-	if (c) {
-		DBG("setwinstate: window %#08x %s: %s", c->win, c->title,
-			state == XCB_ICCCM_WM_STATE_NORMAL   ? "NORMAL"
-			: state == XCB_ICCCM_WM_STATE_ICONIC ? "ICONIC"
-												 : "WITHDRAWN")
-	} else {
-		DBG("setwinstate: window %#08x: %s", win,
-			state == XCB_ICCCM_WM_STATE_NORMAL   ? "NORMAL"
-			: state == XCB_ICCCM_WM_STATE_ICONIC ? "ICONIC"
-												 : "WITHDRAWN")
-	}
-#endif
 	uint32_t data[] = {state, XCB_ATOM_NONE};
 	PROP(REPLACE, win, wmatom[WM_STATE], wmatom[WM_STATE], 32, 2, (const void *)data);
 }

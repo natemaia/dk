@@ -92,18 +92,6 @@ void clientmessage(xcb_generic_event_t *ev)
 	xcb_client_message_event_t *e = (xcb_client_message_event_t *)ev;
 	uint32_t *d = e->data.data32;
 
-#ifdef DEBUG
-#define DBGPRNT(s)                                                                                                     \
-		xcb_generic_error_t *er;                                                                                       \
-		xcb_get_atom_name_reply_t *n;                                                                                  \
-		if ((n = xcb_get_atom_name_reply(con, xcb_get_atom_name(con, e->type), &er))) {                                \
-			DBG("clientmessage: %#08x %s -- e->type = %d (%s) %s",                                                     \
-				c->win, c->title, e->type, xcb_get_atom_name_name(n), s)                                               \
-		}
-#else
-#define DBGPRNT(s)
-#endif
-
 	if (e->window == root && e->type == netatom[NET_DESK_CUR]) {
 		DBG("clientmessage: %#08x -- e->type = %d (_NET_CURRENT_DESKTOP)", e->window, e->type)
 		unfocus(selws->sel, 1);
@@ -113,7 +101,6 @@ void clientmessage(xcb_generic_event_t *ev)
 		unmanage(e->window, 1);
 	} else if ((c = wintoclient(e->window))) {
 		if (e->type == netatom[NET_WM_DESK]) {
-			DBGPRNT("")
 			if (!(ws = itows(d[0]))) {
 				warnx("invalid workspace index: %d", d[0]);
 				return;
@@ -122,7 +109,6 @@ void clientmessage(xcb_generic_event_t *ev)
 			wschange = winchange = needsrefresh = 1;
 		} else if (e->type == netatom[NET_WM_STATE]) {
 			if (d[1] == netatom[NET_STATE_FULL] || d[2] == netatom[NET_STATE_FULL]) {
-				DBGPRNT("(_NET_WM_STATE_FULLSCREEN)")
 				int full = (d[0] == 1 || (d[0] == 2 && !STATE(c, FULLSCREEN)));
 				if (VISIBLE(c)) {
 					setfullscreen(c, full);
@@ -130,7 +116,6 @@ void clientmessage(xcb_generic_event_t *ev)
 					xcb_aux_sync(con);
 				}
 			} else if (d[1] == netatom[NET_STATE_ABOVE] || d[2] == netatom[NET_STATE_ABOVE]) {
-				DBGPRNT("(_NET_WM_STATE_ABOVE)")
 				int above = d[0] == 1 || (d[0] == 2 && !STATE(c, ABOVE));
 				if (above && !STATE(c, ABOVE)) {
 					c->state |= STATE_ABOVE | STATE_FLOATING;
@@ -141,11 +126,9 @@ void clientmessage(xcb_generic_event_t *ev)
 				}
 			} else if ((d[1] == netatom[NET_STATE_DEMANDATT] || d[2] == netatom[NET_STATE_DEMANDATT]) &&
 					   c != selws->sel) {
-				DBGPRNT("(_NET_WM_STATE_DEMANDS_ATTENTION)")
 				goto activate;
 			}
 		} else if (e->type == netatom[NET_ACTIVE] && c != selws->sel) {
-			DBGPRNT("")
 activate:
 			if (globalcfg[GLB_FOCUS_URGENT].val && !STATE(c, IGNOREMSG) && !STATE(c, SCRATCH)) {
 				if (grabbing && !released) {
@@ -333,10 +316,6 @@ void ignore(uint8_t type)
 	while (running && (ev = xcb_poll_for_event(con))) {
 		if (XCB_EVENT_RESPONSE_TYPE(ev) != type) {
 			dispatch(ev);
-#ifdef DEBUG
-		} else {
-			DBG("ignore: %s", xcb_event_get_label(XCB_EVENT_RESPONSE_TYPE(ev)))
-#endif
 		}
 		free(ev);
 	}
@@ -636,14 +615,6 @@ void propertynotify(xcb_generic_event_t *ev)
 		return;
 	}
 	if ((c = wintoclient(e->window))) {
-#ifdef DEBUG
-		xcb_generic_error_t *er;
-		xcb_get_atom_name_reply_t *n;
-		if ((n = xcb_get_atom_name_reply(con, xcb_get_atom_name(con, e->atom), &er))) {
-			DBG("propertynotify: %#08x %s -- e->type = %d (%s)",
-				c->win, c->title, e->atom, xcb_get_atom_name_name(n))
-		}
-#endif
 		switch (e->atom) {
 			case XCB_ATOM_WM_HINTS: clienthints(c); break;
 			case XCB_ATOM_WM_NORMAL_HINTS: c->hints = 0; break;

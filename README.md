@@ -34,7 +34,7 @@ libxcb-devel xcb-proto xcb-util-devel xcb-util-wm-devel xcb-util-cursor-devel xc
 
 Debian/Ubuntu
 ```
-libxcb-randr0-dev libxcb-util-dev libxcb-icccm4-dev libxcb-cursor-dev libxcb-keysyms1-dev
+libxcb-randr0-dev libxcb-util-dev libxcb-icccm4-dev libxcb-cursor-dev libxcb-keysyms1-dev libxcb-res0-dev
 ```
 
 Other systems should have packages with similar names.

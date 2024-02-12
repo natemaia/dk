@@ -442,6 +442,7 @@ int cmdlayout(char **argv)
 					;
 				setws->layout = &layouts[(i + 1) % n];
 				needsrefresh = lytchange = 1;
+				break;
 			}
 		}
 		return 1;

@@ -58,6 +58,8 @@ alt + {q,space,Tab}
 # toggle floating, sticky, or scratchpad
 alt + shift + {space,s,u}
 	dkcmd win {float,stick,scratch}
+	# alternatively to scratch a window by class "scratchpad"
+	#dkcmd win {float,stick,scratchpad scratch}
 
 # move window, signed (+/-) for relative changes, for tiled windows
 # y coord changes will move the window up/down the stack

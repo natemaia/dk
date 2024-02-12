@@ -124,8 +124,8 @@ void clientmessage(xcb_generic_event_t *ev)
 					c->state &= ~STATE_ABOVE;
 					needsrefresh = 1;
 				}
-			} else if ((d[1] == netatom[NET_STATE_DEMANDATT] || d[2] == netatom[NET_STATE_DEMANDATT]) &&
-					   c != selws->sel) {
+			} else if (d[1] == netatom[NET_STATE_DEMANDATT] || d[2] == netatom[NET_STATE_DEMANDATT]) {
+				setnetstate(c->win, c->state);
 				goto activate;
 			}
 		} else if (e->type == netatom[NET_ACTIVE] && c != selws->sel) {
@@ -140,14 +140,11 @@ activate:
 					cmdview(c->ws);
 				}
 				focus(c);
-				if (e->type == netatom[NET_WM_STATE]) {
-					setnetstate(c->win, c->state);
-				}
+				refresh();
 			} else {
 				seturgent(c, 1);
 				clientborder(c, 0);
 			}
-			needsrefresh = refresh();
 		}
 	}
 	xcb_flush(con);

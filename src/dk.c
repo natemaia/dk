@@ -145,7 +145,7 @@ static void initwm(void);
 static pid_t parentproc(pid_t p);
 static void relocatews(Workspace *ws, Monitor *old, int wasvis);
 static int rulecmp(Client *c, Rule *r);
-static void savestate(int restore);
+static int savestate(int restore);
 static void sighandle(int sig);
 static Client *termforwin(const Client *c);
 static void updatenetclients(void);
@@ -269,22 +269,11 @@ int main(int argc, char *argv[])
 	}
 	free(rt);
 
-	/* focus active window and/or move the pointer to be in the center */
-	Client *c = NULL;
-	xcb_window_t sel;
-	if (winprop(root, netatom[NET_ACTIVE], &sel) && (c = wintoclient(sel))) {
-		focus(c);
-		xcb_warp_pointer(con, root, root, 0, 0, 0, 0, c->x + (c->w / 2), c->y + (c->h / 2));
-	} else if (nextmon(monitors->next) && primary) {
-		xcb_warp_pointer(con, root, root, 0, 0, 0, 0, primary->x + (primary->w / 2),
-						 primary->y + (primary->h / 2));
+	/* restore state from restart and warp pointer to active window if needed */
+	if (savestate(1) == -1 && monitors->next) {
+		Monitor *m = primary;
+		xcb_warp_pointer(con, root, root, 0, 0, 0, 0, m->x + (m->w / 2), m->y + (m->h / 2));
 	}
-
-	Workspace *ws;
-	FOR (ws, workspaces) {
-		showhide(ws->stack);
-	}
-	savestate(1);
 
 	confd = xcb_get_file_descriptor(con);
 	while (running) {
@@ -323,7 +312,7 @@ int main(int argc, char *argv[])
 			break;
 		}
 		if (needsrefresh) {
-			needsrefresh = refresh();
+			refresh();
 		}
 		/* handle dead status' and print existing ones if needed */
 		Status *s = stats, *next;
@@ -361,7 +350,7 @@ static void absorb(Client *p, Client *c)
 	updatenetclients();
 	p->state |= STATE_NEEDSMAP;
 	wschange = winchange = 1;
-	needsrefresh = refresh();
+	refresh();
 }
 
 static Client *absorbingclient(xcb_window_t win)
@@ -430,7 +419,6 @@ static void applyrule(Client *c, Rule *r, xcb_atom_t curws, int nofocus)
 		updworkspaces(ws + 1);
 	}
 	setworkspace(c, itows(MIN(ws, globalcfg[GLB_NUM_WS].val)), nofocus);
-
 	if (!dofocus && nofocus && !globalcfg[GLB_FOCUS_URGENT].val) {
 		seturgent(c, 1);
 		clientborder(c, 0);
@@ -438,12 +426,11 @@ static void applyrule(Client *c, Rule *r, xcb_atom_t curws, int nofocus)
 	if (dofocus && c->ws != selws) {
 		cmdview(c->ws);
 	}
-	if (xgrav != GRAV_NONE || ygrav != GRAV_NONE) {
-		gravitate(c, xgrav, ygrav, 1);
-	}
 	if (r && STATE(r, FULLSCREEN)) {
 		c->state &= ~STATE_FULLSCREEN;
 		setfullscreen(c, 1);
+	} else if (xgrav != GRAV_NONE || ygrav != GRAV_NONE) {
+		gravitate(c, xgrav, ygrav, 1);
 	}
 	cmdusemon = 0;
 }
@@ -616,7 +603,6 @@ void changews(Workspace *ws, int swap, int warp)
 	PROP(REPLACE, root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1, &ws->num);
 	needsrefresh = 1;
 	wschange = 1;
-	xcb_flush(con);
 }
 
 void clientborder(Client *c, int focused)
@@ -843,7 +829,7 @@ void desorb(Client *c)
 	clientname(c); /* update the name */
 	wschange = winchange = 1;
 	c->state |= STATE_NEEDSMAP;
-	needsrefresh = refresh();
+	refresh();
 }
 
 static int discreteproc(pid_t p, pid_t c)
@@ -877,26 +863,41 @@ void detachstack(Client *c)
 	}
 }
 
-static void savestate(int restore)
+static int savestate(int restore)
 {
 	Client c, *t;
 	Workspace *ws;
 	FILE *f = NULL;
+	xcb_window_t win;
 	const char *path = "/tmp/dk_state";
 
 	if (!(f = fopen(path, restore ? "rb" : "wb"))) {
 		perror("dk: fopen");
-		return;
+		return -1;
 	}
 	if (restore) {
-		/* read a client worth of data */
+		/* restore the active window */
+		if (fread(&win, 1, sizeof(xcb_window_t), f) != sizeof(xcb_window_t)) {
+			perror("dk: fread");
+			return -1;
+		}
+		if ((t = wintoclient(win)) && VISIBLE(t)) {
+			focus(t);
+			if (monitors->next) {
+				xcb_generic_error_t *e;
+				xcb_query_pointer_reply_t *r = NULL;
+				if ((r = xcb_query_pointer_reply(con, xcb_query_pointer(con, root), &e)) &&
+					!INRECT(r->root_x, r->root_y, 2, 2, t->x, t->y, t->w, t->h)) {
+					xcb_warp_pointer(con, root, root, 0, 0, 0, 0, t->x + (t->w / 2), t->y + (t->h / 2));
+				}
+				free(r);
+			}
+		}
+		/* read a client worth of data and restore it until we're done */
 		while (fread(&c, 1, sizeof(Client), f) == sizeof(Client)) {
-			DBG("savestate: read c.win = %#08x", c.win);
 			if (!(t = wintoclient(c.win)) || !(c.state & STATE_FLOATING)) {
-				DBG("savestate: %#08x is NOT an actual Client or is not floating", c.win);
 				continue;
 			}
-			DBG("savestate: %#08x is an actual floating client -- %s", c.win, t->title);
 			t->state |= STATE_FLOATING;
 			if (VISIBLE(t)) {
 				resizehint(t, c.x, c.y, c.w, c.h, c.bw, 0, 0);
@@ -907,11 +908,17 @@ static void savestate(int restore)
 		}
 	} else {
 		/* dump client data as binary */
-#define BODY fwrite(t, sizeof(Client), 1, f);
+		win = selws->sel ? selws->sel->win : XCB_WINDOW_NONE;
+		if (fwrite(&win, 1, sizeof(xcb_window_t), f) != sizeof(xcb_window_t)) {
+			perror("dk: fwrite");
+			return -1;
+		}
+#define BODY if (fwrite(t, 1, sizeof(Client), f) != sizeof(Client)) { perror("dk: fwrite"); return -1; }
 		FOR_CLIENTS (t, ws)
 #undef BODY
 	}
 	fclose(f);
+	return 0;
 }
 
 void execcfg(void)
@@ -1049,13 +1056,13 @@ void freewm(void)
 	if (restart) {
 		savestate(0);
 	}
-
 	FOR (c, scratch.clients) {
 		setworkspace(c, selws, 0);
 	}
 	while ((ws = workspaces)) {
-		while (ws->stack) {
-			unmanage(ws->stack->win, 0);
+		while (ws->clients) {
+			TAIL(c, ws->clients);
+			unmanage(c->win, 0);
 		}
 		freews(ws);
 	}
@@ -1174,7 +1181,7 @@ void gravitate(Client *c, int xgrav, int ygrav, int matchgap)
 	DBG("gravitate: moving window: %d, %d -> %d, %d", c->x, c->y, x, y)
 	c->x = x, c->y = y;
 	if (VISIBLE(c)) {
-		MOVE(c->win, x, y);
+		resizehint(c, x, y, c->w, c->h, c->bw, 0, 0);
 	}
 }
 
@@ -1286,6 +1293,11 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	xcb_change_window_attributes(con, win, XCB_CW_EVENT_MASK, &clientmask);
 	if (term) {
 		absorb(term, c);
+	} else if (STATE(c, SCRATCH) && !STATE(c, FULLSCREEN)) {
+		cmdc = c;
+		char *arg = "push";
+		DBG("initclient: calling cmdscratch(%s) on client: %#08x %s", arg, c->win, c->title)
+		cmdscratch(&arg);
 	}
 	wschange = c->ws->clients->next ? wschange : 1;
 }
@@ -1573,7 +1585,7 @@ client:
 		initclient(win, g);
 		PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &win);
 	}
-	needsrefresh = refresh();
+	refresh();
 end:
 	free(wa);
 	free(g);
@@ -1919,7 +1931,7 @@ void quadrant(Client *c, int *x, int *y, const int *w, const int *h)
 	*y = CLAMP(*y, m->wy, m->wy + m->wh - (*h + (2 * c->bw)));
 }
 
-int refresh(void)
+void refresh(void)
 {
 	Desk *d;
 	Panel *p;
@@ -1975,6 +1987,7 @@ int refresh(void)
 	if (desks) {
 		MAP(d, desks)
 	}
+#undef MAP
 
 	focus(NULL);
 	if (selws->sel && FLOATING(selws->sel)) {
@@ -1982,8 +1995,7 @@ int refresh(void)
 	}
 	ignore(XCB_ENTER_NOTIFY);
 	xcb_aux_sync(con);
-	return 0;
-#undef MAP
+	needsrefresh = 0;
 }
 
 void relocate(Client *c, Monitor *mon, Monitor *old)
@@ -2142,7 +2154,7 @@ void setfullscreen(Client *c, int fullscreen)
 		if (VISIBLE(c)) {
 			resize(c, m->x, m->y, m->w, m->h, 0);
 			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
-			needsrefresh = refresh();
+			refresh();
 		}
 	} else if (!fullscreen && STATE(c, FULLSCREEN)) {
 		setnetstate(c->win, 0);
@@ -2150,7 +2162,7 @@ void setfullscreen(Client *c, int fullscreen)
 		c->bw = c->old_bw;
 		if (VISIBLE(c)) {
 			resizehint(c, c->old_x, c->old_y, c->old_w, c->old_h, c->bw, 0, 0);
-			needsrefresh = refresh();
+			refresh();
 		} else {
 			c->x = c->old_x, c->y = c->old_y, c->w = c->old_w, c->h = c->old_h;
 		}
@@ -2408,7 +2420,7 @@ void unmanage(xcb_window_t win, int destroyed)
 		if ((s = absorbingclient(c->win))) {
 			free(s->absorbed);
 			s->absorbed = NULL;
-			needsrefresh = refresh();
+			refresh();
 			return;
 		}
 		if (c->cb && running) {
@@ -2451,7 +2463,7 @@ void unmanage(xcb_window_t win, int destroyed)
 		free(ptr);
 		updatenetclients();
 		if (!s) {
-			needsrefresh = refresh();
+			refresh();
 		}
 	}
 }

@@ -403,7 +403,7 @@ Client *nexttiled(Client *c);
 void popfloat(Client *c);
 void printstatus(Status *s, int freeable);
 void quadrant(Client *c, int *x, int *y, const int *w, const int *h);
-int refresh(void);
+void refresh(void);
 void relocate(Client *c, Monitor *mon, Monitor *old);
 void resize(Client *c, int x, int y, int w, int h, int bw);
 void resizehint(Client *c, int x, int y, int w, int h, int bw, int usermotion, int mouse);

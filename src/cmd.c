@@ -748,7 +748,7 @@ int cmdrule(char **argv)
 	argv++, nparsed++;                                                                                       \
 	if (!argv || (j = parsebool(*argv)) < 0) goto badvalue;                                                  \
 	if (j)                                                                                                   \
-		r.state |= (val);                                                                                      \
+		r.state |= (val);                                                                                    \
 	else                                                                                                     \
 		r.state &= ~(val)
 
@@ -846,6 +846,8 @@ int cmdrule(char **argv)
 			CSTATE(STATE_TERMINAL);
 		} else if (!strcmp(*argv, "no_absorb")) {
 			CSTATE(STATE_NOABSORB);
+		} else if (!strcmp(*argv, "scratch")) {
+			CSTATE(STATE_SCRATCH);
 		} else if (!strcmp(*argv, "focus")) {
 			argv++, nparsed++;
 			if (!argv || (j = parsebool(*argv)) < 0) {
@@ -916,6 +918,7 @@ int cmdscratch(char **argv)
 	Client *c = cmdc;
 
 	if (argv && *argv) {
+		DBG("cmdscratch: got arg %s", *argv)
 		if (!strcmp("pop", *argv)) {
 			argv++, nparsed++;
 			if (!scratch.clients) {
@@ -960,7 +963,6 @@ push:
 		respond(cmdresp, "!invalid scratch command: %s\nexpected pop or push", *argv);
 		return -1;
 	} else if (cmdc_passed) {
-		/* when passed a client but no other args we do a toggle */
 		if (STATE(c, SCRATCH)) {
 			goto pop;
 		}
@@ -969,23 +971,18 @@ push:
 		}
 		goto push;
 	} else if (scratch.clients) {
-		/* when passed no arguments we first try to empty the scratch */
 		c = scratch.clients;
 		goto pop;
 	} else {
 		Workspace *ws;
 		Client *sc = NULL;
-		/* when there are no clients in the scratch we look for recently
-		 * popped windows to push back or bring to the current workspace */
 		FOR (ws, workspaces) {
 			FOR (c, ws->clients) {
 				if ((sc->old_state & STATE_SCRATCH) && FLOATING(sc) && !FULLSCREEN(sc)) {
 					c = sc;
-					/* if the window is on our current workspace we push */
 					if (c->ws == selws) {
 						goto push;
 					}
-					/* retain old SCRATCH state when popping from other workspace */
 					c->old_state = c->state | STATE_SCRATCH;
 					goto pop; /* on another workspace so bring it to us */
 				}

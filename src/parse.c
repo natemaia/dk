@@ -35,11 +35,19 @@ Client *parseclient(char *arg, int *ebadwin)
 {
 	char *end;
 	uint32_t i;
-	Client *c = NULL;
+	Client *c = NULL, *t;
 
-	if (arg && arg[0] && (arg[0] == '#' || (arg[0] == '0' && arg[1] == 'x')) &&
+	if (!arg || !arg[0]) {
+		return c;
+	}
+	if ((arg[0] == '#' || (arg[0] == '0' && arg[1] == 'x')) &&
 		(i = strtoul(*arg == '#' ? arg + 1 : arg, &end, 16)) > 0 && *end == '\0') {
 		*ebadwin = (c = wintoclient(i)) ? 0 : -1;
+	} else {
+		Workspace *ws;
+#define BODY if (!strcmp(arg, t->clss)) { return t; }
+		FOR_CLIENTS(t, ws)
+#undef BODY
 	}
 	return c;
 }

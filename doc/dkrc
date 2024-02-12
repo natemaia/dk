@@ -144,6 +144,9 @@ fi
 	# set a window to never absorb other windows, like the xev event tester
 	dkcmd rule title="^Event Tester$" no_absorb=true
 
+	# send a window to the scratchpad
+	dkcmd rule class="^scratchpad$" scratch=true
+
 	# focus window and workspace on opening
 	dkcmd rule class="^firefox$" ws=1 focus=true
 

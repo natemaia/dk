@@ -137,7 +137,7 @@ dkcmd COMMAND
 \fC\fImon\fR and \fC\fIws\fR operate on monitors and workspaces
 respectively.
 .IP \[bu] 2
-\fC\fICLIENT\fR (hex) The window id in hex to operate on, if
+\fC\fICLIENT\fR (hex/string) The window id in hex or class string, if
 unspecified the active window is used.
 .IP \[bu] 2
 \fC\fITARGET\fR (integer/string) Name or number of the workspace or
@@ -355,6 +355,14 @@ other windows.
 .nf
 \fI\fC
 rule MATCH no_absorb=true
+\fR
+.fi
+.PP
+\fI\fCscratch\fR (boolean) determine if the window should be in the scratchpad.
+.IP
+.nf
+\fI\fC
+rule MATCH scratch=true
 \fR
 .fi
 .PP
@@ -655,8 +663,8 @@ set mouse move=button1 resize=button2 mod=mod1
 .PP
 \fI\fCwin\fR operates on windows.
 .IP \[bu] 2
-\fI\fCCLIENT\fR (hex) the window id, if unspecified the current window
-is used.
+\fI\fCCLIENT\fR (hex/string) the window id in hex or class string,
+if unspecified the current window is used.
 .IP
 .nf
 \fI\fC

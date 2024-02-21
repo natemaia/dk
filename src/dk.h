@@ -140,7 +140,7 @@ enum Borders {
 	BORD_LAST = 8,
 };
 
-enum DirOpts { DIR_NEXT = 0, DIR_PREV = 1, DIR_LAST = 2, DIR_NEXTNE = 3, DIR_PREVNE = 4, DIR_END = 5 };
+enum DirOpts { DIR_NEXT, DIR_PREV, DIR_LAST, DIR_NEXTNE, DIR_PREVNE, DIR_LEFT, DIR_RIGHT, DIR_END };
 
 enum WMAtoms {
 	WM_DELETE = 0,

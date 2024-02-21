@@ -295,7 +295,7 @@ int cmdfloat(char **argv)
 	}
 	if (argv && *argv && !strcmp(*argv, "all")) {
 		nparsed++;
-		FOR (c, cmdc->ws->clients) {
+		for (c = cmdc->ws->clients; c; c = c->next) {
 			cmdc = c;
 			if (FLOATING(c) || STATE(c, WASFLOATING)) {
 				if (FLOATING(c)) {
@@ -346,7 +346,7 @@ int cmdfloat(char **argv)
 
 int cmdfocus(char **argv)
 {
-	int i = 0, nparsed = 0, opt;
+	int i = 0, nparsed = 0, opt, total;
 	Client *c = cmdc;
 
 	if (FULLSCREEN(c) || !c->ws->clients->next) {
@@ -363,8 +363,27 @@ int cmdfocus(char **argv)
 		respond(cmdresp, "!%s win focus: %s", ebadarg, *argv);
 		return -1;
 	}
+
+	if (FLOATING(c) && (opt == DIR_LEFT || opt == DIR_RIGHT)) {
+		Client *t;
+		for (total = 0, t = c->ws->clients; t; total++, t = t->next) {
+			if (t == c) {
+				i = total;
+			}
+		}
+		if (opt == DIR_LEFT) {
+			if (total <= c->ws->nmaster /* || i > */ ) {
+				return nparsed;
+			}
+		} else {
+			if (i >= c->ws->nmaster + c->ws->nstack) {
+				return nparsed;
+			}
+		}
+	}
+
 	nparsed++;
-	int direction = opt == -1 ? i : opt == DIR_NEXT ? 1 : -1;
+	int direction = opt == -1 ? i : (opt == DIR_NEXT || opt == DIR_RIGHT) ? 1 : -1;
 	while (direction) {
 		if (direction > 0) {
 			c = selws->sel->next ? selws->sel->next : selws->clients;
@@ -783,7 +802,7 @@ int cmdrule(char **argv)
 			if ((r.ws = parseintclamp(*argv, NULL, 1, globalcfg[GLB_NUM_WS].val)) == INT_MIN) {
 				r.ws = -1;
 				match = 0;
-				FOR (ws, workspaces) {
+				for (ws = workspaces; ws; ws = ws->next) {
 					if ((match = !strcmp(ws->name, *argv))) {
 						r.ws = ws->num;
 						break;
@@ -884,7 +903,7 @@ badvalue:
 		 r.w != -1 || r.h != -1 || r.bw != -1 || r.xgrav != GRAV_NONE || r.ygrav != GRAV_NONE)) {
 #define M(a, b) (a == NULL || (b && !strcmp(a, b)))
 
-		FOR (pr, rules) { /* free any existing rule that uses the same matches */
+		for (pr = rules; pr; pr = pr->next) { /* free any existing rule that uses the same matches */
 			if (M(r.clss, pr->clss) && M(r.inst, pr->inst) && M(r.title, pr->title)) {
 				freerule(pr);
 				break;
@@ -894,8 +913,8 @@ badvalue:
 		if (!delete) {
 			if ((nr = initrule(&r)) && apply) {
 applyall:
-				FOR (ws, workspaces) {
-					FOR (c, ws->clients) {
+				for (ws = workspaces; ws; ws = ws->next) {
+					for (c = ws->clients; c; c = c->next) {
 						clientrule(c, nr, 0);
 						if (c->cb) {
 							c->cb->func(c, 0);
@@ -977,8 +996,8 @@ push:
 	} else {
 		Workspace *ws;
 		Client *sc = NULL;
-		FOR (ws, workspaces) {
-			FOR (c, ws->clients) {
+		for (ws = workspaces; ws; ws = ws->next) {
+			for (c = ws->clients; c; c = c->next) {
 				if ((sc->old_state & STATE_SCRATCH) && FLOATING(sc) && !FULLSCREEN(sc)) {
 					c = sc;
 					if (c->ws == selws) {
@@ -1391,7 +1410,7 @@ badvalue:
 
 	if (apply) {
 		Workspace *ws;
-		FOR (ws, workspaces) {
+		for (ws = workspaces; ws; ws = ws->next) {
 			lytchange = lytchange || ws->layout != wsdef.layout;
 			ws->layout = wsdef.layout;
 			ws->gappx = wsdef.gappx;

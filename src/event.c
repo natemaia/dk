@@ -76,12 +76,12 @@ void buttonpress(xcb_generic_event_t *ev)
 
 void buttonrelease(int move)
 {
+	released = 1, grabbing = 0;
 	DBG("buttonrelease: ungrabbing pointer - %#08x", selws->sel->win)
 	iferr(1, "failed to ungrab pointer",
 		  xcb_request_check(con, xcb_ungrab_pointer_checked(con, XCB_CURRENT_TIME)));
 	if (!move) {
 		ignore(XCB_ENTER_NOTIFY);
-		xcb_aux_sync(con);
 	}
 }
 
@@ -131,23 +131,24 @@ void clientmessage(xcb_generic_event_t *ev)
 		} else if (e->type == netatom[NET_ACTIVE] && c != selws->sel) {
 activate:
 			if (globalcfg[GLB_FOCUS_URGENT].val && !STATE(c, IGNOREMSG) && !STATE(c, SCRATCH)) {
+				DBG("clientmessage: focusing activated window: %#08x %s", c->win, c->title)
 				if (grabbing && !released) {
-					released = 1, grabbing = 0;
 					buttonrelease(0);
 				}
 				if (c->ws != selws) {
-					unfocus(selws->sel, 1);
 					cmdview(c->ws);
 				}
 				focus(c);
-				refresh();
+				if (FLOATING(c)) {
+					setstackmode(c->win, XCB_STACK_MODE_ABOVE);
+				}
+				DBG("clientmessage: focusing activated window: %#08x %s", c->win, c->title)
 			} else {
 				seturgent(c, 1);
 				clientborder(c, 0);
 			}
 		}
 	}
-	xcb_flush(con);
 }
 
 void confignotify(xcb_generic_event_t *ev)
@@ -525,7 +526,6 @@ static void mousemotion_resizet(Client *c, Client *prev, int idx, int mx, int my
 				HEIGHT_OFFSET;
 				break;
 			case XCB_BUTTON_RELEASE:
-				grabbing = 0, released = 1;
 				buttonrelease(0);
 				break;
 			default: dispatch(ev);
@@ -562,7 +562,6 @@ static void mousemotion_resizetinv(Client *c, Client *prev, int idx, int mx, int
 				HEIGHT_OFFSET;
 				break;
 			case XCB_BUTTON_RELEASE:
-				grabbing = 0, released = 1;
 				buttonrelease(0);
 				break;
 			default: dispatch(ev);

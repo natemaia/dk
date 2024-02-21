@@ -100,7 +100,8 @@ const char *gravs[] = {
 };
 const char *dirs[] = {
 	[DIR_NEXT] = "next",     [DIR_PREV] = "prev",     [DIR_LAST] = "last",
-	[DIR_NEXTNE] = "nextne", [DIR_PREVNE] = "prevne",
+	[DIR_NEXTNE] = "nextne", [DIR_PREVNE] = "prevne", [DIR_RIGHT] = "right",
+	[DIR_LEFT] = "left"
 };
 const char *utf8 = "UTF8-STRING";
 
@@ -809,14 +810,14 @@ void clientunmap(Client *c)
 
 Monitor *coordtomon(int x, int y)
 {
-	Monitor *m;
+	Monitor *m = NULL;
 
-	FOR (m, monitors) {
+	for (m = monitors; m; m = m->next) {
 		if (m->connected && x >= m->x && x < m->x + m->w && y >= m->y && y < m->y + m->h) {
 			return m;
 		}
 	}
-	return NULL;
+	return m;
 }
 
 void desorb(Client *c)
@@ -1056,7 +1057,7 @@ void freewm(void)
 	if (restart) {
 		savestate(0);
 	}
-	FOR (c, scratch.clients) {
+	for (c = scratch.clients; c; c = c->next) {
 		setworkspace(c, selws, 0);
 	}
 	while ((ws = workspaces)) {
@@ -1647,14 +1648,14 @@ Client *nexttiled(Client *c)
 
 static Monitor *outputtomon(xcb_randr_output_t id)
 {
-	Monitor *m;
+	Monitor *m = NULL;
 
-	FOR (m, monitors) {
+	for (m = monitors; m; m = m->next) {
 		if (m->id == id) {
 			return m;
 		}
 	}
-	return NULL;
+	return m;
 }
 
 static pid_t parentproc(pid_t p)
@@ -1665,9 +1666,12 @@ static pid_t parentproc(pid_t p)
 
 	snprintf(buf, sizeof(buf) - 1, "/proc/%u/stat", p);
 	if (!(f = fopen(buf, "r"))) {
+		perror("dk: fopen");
 		return 0;
 	}
-	fscanf(f, "%*u %*s %*c %u", &v);
+	if (fscanf(f, "%*u %*s %*c %u", &v) <= 0) {
+		perror("dk: fscanf");
+	}
 	fclose(f);
 	return v;
 }
@@ -1718,7 +1722,7 @@ void printstatus(Status *s, int freeable)
 			case STAT_WS:
 				if (wschange) {
 					wschange = 0;
-					FOR (ws, workspaces) {
+					for (ws = workspaces; ws; ws = ws->next) {
 						char fmt[5] = "i%s:";
 						fmt[0] = (ws == selws) ? (ws->clients ? 'A' : 'I') : (ws->clients ? 'a' : 'i');
 						if (!ws->next) {
@@ -1730,7 +1734,7 @@ void printstatus(Status *s, int freeable)
 				break;
 			case STAT_BAR:
 				fprintf(s->file, "W");
-				FOR (ws, workspaces) {
+				for (ws = workspaces; ws; ws = ws->next) {
 					char fmt[5] = "i%s:";
 					fmt[0] = (ws == selws) ? (ws->clients ? 'A' : 'I') : (ws->clients ? 'a' : 'i');
 					if (!ws->next) {
@@ -1771,7 +1775,7 @@ void printstatus(Status *s, int freeable)
 
 				/* Workspaces */
 				fprintf(s->file, "\n\n# number:name:layout ...\nworkspaces:");
-				FOR (ws, workspaces) {
+				for (ws = workspaces; ws; ws = ws->next) {
 					fprintf(s->file, " %s%d:%s:%s", ws == selws ? "*" : "", ws->num + 1, ws->name,
 							ws->layout->name);
 				}
@@ -1779,7 +1783,7 @@ void printstatus(Status *s, int freeable)
 				/* Workspace settings */
 				fprintf(s->file, "\n\t# number:name active_window nmaster nstack "
 								 "msplit ssplit gappx smartgap padl padr padt padb");
-				FOR (ws, workspaces) {
+				for (ws = workspaces; ws; ws = ws->next) {
 					fprintf(s->file, "\n\t%d:%s %#08x %d %d %0.2f %0.2f %d %d %d %d %d %d", ws->num + 1,
 							ws->name, ws->sel ? ws->sel->win : 0, ws->nmaster, ws->nstack, ws->msplit,
 							ws->ssplit, ws->gappx, ws->smartgap && tilecount(ws) == 1, ws->padl, ws->padr,
@@ -1788,7 +1792,7 @@ void printstatus(Status *s, int freeable)
 
 				/* Monitors */
 				fprintf(s->file, "\n\n# number:name:workspace ...\nmonitors:");
-				FOR (m, monitors) {
+				for (m = monitors; m; m = m->next) {
 					if (m->connected) {
 						fprintf(s->file, " %s%d:%s:%d", m->ws == selws ? "*" : "", m->num + 1, m->name,
 								m->ws->num + 1);
@@ -1798,7 +1802,7 @@ void printstatus(Status *s, int freeable)
 				/* Monitor settings */
 				fprintf(s->file, "\n\t# number:name active_window x y width height "
 								 "wx wy wwidth wheight");
-				FOR (m, monitors) {
+				for (m = monitors; m; m = m->next) {
 					if (m->connected) {
 						fprintf(s->file, "\n\t%d:%s %#08x %d %d %d %d %d %d %d %d", m->num + 1, m->name,
 								m->ws->sel ? m->ws->sel->win : 0, m->x, m->y, m->w, m->h, m->wx, m->wy, m->ww,
@@ -1808,12 +1812,12 @@ void printstatus(Status *s, int freeable)
 
 				/* Clients */
 				fprintf(s->file, "\n\n# id:workspace ...\nwindows:");
-				FOR (ws, workspaces) {
-					FOR (c, ws->clients) {
+				for (ws = workspaces; ws; ws = ws->next) {
+					for (c = ws->clients; c; c = c->next) {
 						fprintf(s->file, " %s%#08x:%d", c == selws->sel ? "*" : "", c->win, c->ws->num + 1);
 					}
 				}
-				FOR (c, scratch.clients) {
+				for (c = scratch.clients; c; c = c->next) {
 					fprintf(s->file, " %#08x:%d", c->win, c->ws->num);
 				}
 
@@ -1839,7 +1843,7 @@ void printstatus(Status *s, int freeable)
 					fprintf(s->file, "\n\n# title class instance workspace monitor "
 									 "float full fakefull stick ignore_cfg ignore_msg "
 									 "focus callback x y width height xgrav ygrav");
-					FOR (r, rules) {
+					for (r = rules; r; r = r->next) {
 						fprintf(s->file,
 								"\nrule: \"%s\" \"%s\" \"%s\" %d %s %d %d %d %d %d %d "
 								"%d %s %d %d %d %d %s %s",
@@ -1854,14 +1858,14 @@ void printstatus(Status *s, int freeable)
 				/* Panels */
 				if (panels) {
 					fprintf(s->file, "\n\n# id:monitor ...\npanels:");
-					FOR (p, panels) {
+					for (p = panels; p; p = p->next) {
 						fprintf(s->file, " %#08x:%s", p->win, p->mon->name);
 					}
 
 					/* Panel settings */
 					fprintf(s->file, "\n\t# id class instance monitor x y width "
 									 "height left right top bottom");
-					FOR (p, panels) {
+					for (p = panels; p; p = p->next) {
 						fprintf(s->file, "\n\t%#08x \"%s\" \"%s\" %s %d %d %d %d %d %d %d %d", p->win,
 								p->clss, p->inst, p->mon->name, p->x, p->y, p->w, p->h, p->l, p->r, p->t,
 								p->b);
@@ -1871,15 +1875,14 @@ void printstatus(Status *s, int freeable)
 				/* Desks */
 				if (desks) {
 					fprintf(s->file, "\n\n# id:monitor ...\ndesks:");
-					FOR (d, desks) {
+					for (d = desks; d; d = d->next) {
 						fprintf(s->file, " %#08x:%s", d->win, d->mon->name);
 					}
 
 					/* Desk settings */
 					fprintf(s->file, "\n\t# id class instance monitor");
-					FOR (d, desks) {
-						fprintf(s->file, "\n\t%#08x \"%s\" \"%s\" %s", d->win, d->clss, d->inst,
-								d->mon->name);
+					for (d = desks; d; d = d->next) {
+						fprintf(s->file, "\n\t%#08x \"%s\" \"%s\" %s", d->win, d->clss, d->inst, d->mon->name);
 					}
 				}
 
@@ -1939,20 +1942,12 @@ void refresh(void)
 	Monitor *m;
 	int x, y, w, h;
 
-#define MAP(v, list)                                                                                         \
-	FOR (v, list)                                                                                       \
-		if (STATE(v, NEEDSMAP)) {                                                                            \
-			v->state &= ~STATE_NEEDSMAP;                                                                     \
-			setwinstate(v->win, XCB_ICCCM_WM_STATE_NORMAL);                                                  \
-			xcb_map_window(con, v->win);                                                                     \
-		}
-
-	FOR (m, monitors) {
+	for (m = monitors; m; m = m->next) {
 		DBG("refresh: workspace: %d, monitor: %s layout: %s", m->ws->num + 1, m->name, m->ws->layout->name)
 		if (m->ws->layout->func && m->ws->layout->func(m->ws) < 0) {
 			m->ws->layout->func(m->ws);
 		}
-		FOR (c, m->ws->clients) {
+		for (c = m->ws->clients; c; c = c->next) {
 			if (FULLSCREEN(c)) {
 				resize(c, m->x, m->y, m->w, m->h, 0);
 			} else if (FLOATING(c)) {
@@ -1963,7 +1958,7 @@ void refresh(void)
 				clientmap(c);
 			}
 		}
-		FOR (p, panels) {
+		for (p = panels; p; p = p->next) {
 			if (p->mon == m->ws->mon) {
 				setstackmode(p->win, XCB_STACK_MODE_BELOW);
 			}
@@ -1975,19 +1970,26 @@ void refresh(void)
 				setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 			}
 		}
-		FOR (d, desks) {
+		for (d = desks; d; d = d->next) {
 			if (d->mon == m->ws->mon) {
 				setstackmode(d->win, XCB_STACK_MODE_BELOW);
 			}
 		}
 	}
-	if (panels) {
-		MAP(p, panels)
+	for (p = panels; p; p = p->next) {
+		if (STATE(p, NEEDSMAP)) {
+			p->state &= ~STATE_NEEDSMAP;
+			setwinstate(p->win, XCB_ICCCM_WM_STATE_NORMAL);
+			xcb_map_window(con, p->win);
+		}
 	}
-	if (desks) {
-		MAP(d, desks)
+	for (d = desks; d; d = d->next) {
+		if (STATE(d, NEEDSMAP)) {
+			d->state &= ~STATE_NEEDSMAP;
+			setwinstate(d->win, XCB_ICCCM_WM_STATE_NORMAL);
+			xcb_map_window(con, d->win);
+		}
 	}
-#undef MAP
 
 	focus(NULL);
 	if (selws->sel && FLOATING(selws->sel)) {
@@ -2056,7 +2058,7 @@ static void relocatews(Workspace *ws, Monitor *old, int wasvis)
 		return;
 	}
 	DBG("relocatews: %d:%s -> %d:%s", old->ws->num + 1, old->name, mon->ws->num + 1, mon->name)
-	FOR (c, ws->clients) {
+	for (c = ws->clients; c; c = c->next) {
 		relocate(c, mon, old);
 	}
 }
@@ -2185,12 +2187,12 @@ void setnetwsnames(void)
 	Workspace *ws;
 	size_t len = 1;
 
-	FOR (ws, workspaces) {
+	for (ws = workspaces; ws; ws = ws->next) {
 		len += strlen(ws->name) + 1;
 	}
 	names = ecalloc(1, len);
 	len = 0;
-	FOR (ws, workspaces) {
+	for (ws = workspaces; ws; ws = ws->next) {
 		for (uint32_t i = 0; (names[len++] = ws->name[i]); i++)
 			;
 	}
@@ -2391,6 +2393,7 @@ void unfocus(Client *c, int focusroot)
 	if (c) {
 		DBG("unfocus: %#08x %s", c->win, c->title)
 		clientborder(c, 0);
+		xcb_ungrab_button(con, XCB_BUTTON_INDEX_ANY, c->win, XCB_BUTTON_MASK_ANY);
 	}
 	if (focusroot) {
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, root, XCB_CURRENT_TIME);
@@ -2408,7 +2411,7 @@ void unmanage(xcb_window_t win, int destroyed)
 	/* window we're handling is actually absorbed */
 	if ((c = absorbingclient(win))) {
 		DBG("unmanage: %#08x is absorbed by %#08x", win, c->absorbed->win)
-		win = c->absorbed->win;	
+		win = c->absorbed->win;
 	}
 
 	if ((ptr = c = wintoclient(win))) {
@@ -2479,10 +2482,10 @@ static void updatenetclients(void)
 #define BODY PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &c->win);
 	FOR_CLIENTS(c, ws)
 #undef BODY
-	FOR (p, panels) {
+	for (p = panels; p; p = p->next) {
 		PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &p->win);
 	}
-	FOR (d, desks) {
+	for (d = desks; d; d = d->next) {
 		PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &d->win);
 	}
 }
@@ -2497,7 +2500,7 @@ static void updnetworkspaces(void)
 	v[0] = scr_w, v[1] = scr_h;
 	PROP(REPLACE, root, netatom[NET_DESK_GEOM], XCB_ATOM_CARDINAL, 32, 2, &v);
 	PROP(REPLACE, root, netatom[NET_DESK_NUM], XCB_ATOM_CARDINAL, 32, 1, &globalcfg[GLB_NUM_WS]);
-	FOR (ws, workspaces) {
+	for (ws = workspaces; ws; ws = ws->next) {
 		if (!ws->mon) {
 			ws->mon = primary;
 		}
@@ -2539,7 +2542,7 @@ static int updoutputs(xcb_randr_output_t *outs, int nouts, xcb_timestamp_t t)
 			}
 			n = xcb_randr_get_output_info_name_length(o) + 1;
 			strlcpy(name, (char *)xcb_randr_get_output_info_name(o), MIN(sizeof(name), n));
-			FOR (m, monitors) {
+			for (m = monitors; m; m = m->next) {
 				if (outs[i] != m->id && crtc->x >= m->x && crtc->y >= m->y && crtc->x < m->x + m->w &&
 					crtc->y < m->y + m->h) {
 					DBG("updoutput: %s is a clone of %s", name, m->name)
@@ -2581,7 +2584,7 @@ next:
 		}
 		free(po);
 
-		FOR (d, desks) {
+		for (d = desks; d; d = d->next) {
 			if (!d->mon->connected) {
 				int bw = 0;
 				xcb_get_geometry_reply_t *g = NULL;
@@ -2630,10 +2633,10 @@ void updstruts(void)
 	Panel *p;
 	Monitor *m;
 
-	FOR (m, monitors) {
+	for (m = monitors; m; m = m->next) {
 		m->wx = m->x, m->wy = m->y, m->ww = m->w, m->wh = m->h;
 	}
-	FOR (p, panels) {
+	for (p = panels; p; p = p->next) {
 		if (p->l || p->r || p->t || p->b) {
 			/* adjust the struts if they don't match up with the panel size and location */
 			if (p->l && p->l > p->w && p->x == p->mon->x) {
@@ -2673,7 +2676,7 @@ void updworkspaces(int needed)
 	}
 
 	m = nextmon(monitors);
-	FOR (ws, workspaces) {
+	for (ws = workspaces; ws; ws = ws->next) {
 		m->ws = m->ws ? m->ws : ws;
 		ws->mon = m;
 		DBG("updworkspaces: %d:%s -> %s - visible: %d", ws->num, ws->name, m->name, ws == m->ws)

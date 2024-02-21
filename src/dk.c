@@ -1665,9 +1665,12 @@ static pid_t parentproc(pid_t p)
 
 	snprintf(buf, sizeof(buf) - 1, "/proc/%u/stat", p);
 	if (!(f = fopen(buf, "r"))) {
+		perror("dk: fopen");
 		return 0;
 	}
-	fscanf(f, "%*u %*s %*c %u", &v);
+	if (fscanf(f, "%*u %*s %*c %u", &v) <= 0) {
+		perror("dk: fscanf");
+	}
 	fclose(f);
 	return v;
 }

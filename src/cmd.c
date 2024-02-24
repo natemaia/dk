@@ -968,7 +968,10 @@ push:
 			if (!FLOATING(c)) {
 				Monitor *m = MON(c);
 				c->state |= STATE_FLOATING;
-				resizehint(c, m->wx + m->ww / 3, m->wy, m->ww / 3, m->wh / 3, c->bw, 0, 0);
+				c->w = m->ww / 3;
+				c->x = m->wx + c->w;
+				c->y = m->wy;
+				c->h = m->wh / 3;
 			}
 			c->state |= STATE_SCRATCH | STATE_HIDDEN | STATE_FLOATING;
 			/* setworkspace() wont work for scratch push so we do our own swap */
@@ -994,12 +997,9 @@ push:
 		c = scratch.clients;
 		goto pop;
 	} else {
-		Workspace *ws;
-		Client *sc = NULL;
-		for (ws = workspaces; ws; ws = ws->next) {
+		for (Workspace *ws = workspaces; ws; ws = ws->next) {
 			for (c = ws->clients; c; c = c->next) {
-				if ((sc->old_state & STATE_SCRATCH) && FLOATING(sc) && !FULLSCREEN(sc)) {
-					c = sc;
+				if ((c->old_state & STATE_SCRATCH) && FLOATING(c) && !FULLSCREEN(c)) {
 					if (c->ws == selws) {
 						goto push;
 					}

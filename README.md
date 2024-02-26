@@ -55,6 +55,19 @@ If at any time you want to uninstall, run
 make uninstall
 ```
 
+### Updating
+
+In order to update dk when built from source you can run
+
+``` bash
+cd dk
+git fetch
+git reset --hard HEAD
+git merge '@{u}'
+make
+sudo make install
+```
+
 ### Keybinds
 
 As mentioned above dk has no keybind support so you'll need a program like  

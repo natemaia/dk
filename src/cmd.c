@@ -947,6 +947,7 @@ int cmdscratch(char **argv)
 			}
 pop:
 			c->state &= ~(STATE_SCRATCH | STATE_HIDDEN);
+			c->old_state = c->state | STATE_SCRATCH;
 			setworkspace(c, selws, 0);
 			clientmap(c);
 			showhide(selws->stack);
@@ -988,9 +989,6 @@ push:
 	} else if (cmdc_passed) {
 		if (STATE(c, SCRATCH)) {
 			goto pop;
-		}
-		if (c->ws != selws) { /* save state when toggling from another workspace */
-			c->old_state = c->state | STATE_SCRATCH;
 		}
 		goto push;
 	} else if (scratch.clients) {
@@ -1323,7 +1321,7 @@ int cmdwin(char **argv)
 			int match = 0;
 			for (uint32_t i = 0; wincmds[i].str; i++) {
 				if ((match = !strcmp(wincmds[i].str, *argv))) {
-					if (!cmdc || (e = wincmds[i].func(argv + 1)) == -1) {
+					if ((wincmds[i].func != cmdscratch && !cmdc) || (e = wincmds[i].func(argv + 1)) == -1) {
 						return -1;
 					}
 					nparsed += e;

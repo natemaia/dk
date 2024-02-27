@@ -359,9 +359,18 @@ static Client *absorbingclient(xcb_window_t win)
 	Client *c;
 	Workspace *ws;
 
-#define BODY  if (c->absorbed && c->absorbed->win == win) { return c; }
-	FOR_CLIENTS(c, ws)
-#undef BODY
+	for (ws = workspaces; ws; ws = ws->next) {
+		for (c = ws->clients; c; c = c->next) {
+			if (c->absorbed && c->absorbed->win == win) {
+				return c;
+			}
+		}
+	}
+	for (c = scratch.clients; c; c = c->next) {
+		if (c->absorbed && c->absorbed->win == win) {
+			return c;
+		}
+	}
 	return NULL;
 }
 
@@ -685,19 +694,32 @@ void clientmotif(void)
 	Client *c;
 	Workspace *ws;
 
-#define BODY                                                                                                 \
-	if (c->has_motif) {                                                                                      \
-		if (globalcfg[GLB_OBEY_MOTIF].val) {                                                                 \
-			c->state |= STATE_NOBORDER;                                                                      \
-			c->bw = 0;                                                                                       \
-		} else {                                                                                             \
-			c->state &= ~STATE_NOBORDER;                                                                     \
-			c->bw = border[BORD_WIDTH];                                                                      \
-		}                                                                                                    \
-		clientborder(c, c == selws->sel);                                                                    \
+	for (ws = workspaces; ws; ws = ws->next) {
+		for (c = ws->clients; c; c = c->next) {
+			if (c->has_motif) {
+				if (globalcfg[GLB_OBEY_MOTIF].val) {
+					c->state |= STATE_NOBORDER;
+					c->bw = 0;
+				} else {
+					c->state &= ~STATE_NOBORDER;
+					c->bw = border[BORD_WIDTH];
+				}
+				clientborder(c, c == selws->sel);
+			}
+		}
 	}
-	FOR_CLIENTS(c, ws)
-#undef BODY
+	for (c = scratch.clients; c; c = c->next) {
+		if (c->has_motif) {
+			if (globalcfg[GLB_OBEY_MOTIF].val) {
+				c->state |= STATE_NOBORDER;
+				c->bw = 0;
+			} else {
+				c->state &= ~STATE_NOBORDER;
+				c->bw = border[BORD_WIDTH];
+			}
+			clientborder(c, c == selws->sel);
+		}
+	}
 }
 
 int clientname(Client *c)
@@ -914,9 +936,20 @@ static int savestate(int restore)
 			perror("dk: fwrite");
 			return -1;
 		}
-#define BODY if (fwrite(t, 1, sizeof(Client), f) != sizeof(Client)) { perror("dk: fwrite"); return -1; }
-		FOR_CLIENTS (t, ws)
-#undef BODY
+		for (ws = workspaces; ws; ws = ws->next) {
+			for (t = ws->clients; t; t = t->next) {
+				if (fwrite(t, 1, sizeof(Client), f) != sizeof(Client)) {
+					perror("dk: fwrite");
+					return -1;
+				}
+			}
+		}
+		for (t = scratch.clients; t; t = t->next) {
+			if (fwrite(t, 1, sizeof(Client), f) != sizeof(Client)) {
+				perror("dk: fwrite");
+				return -1;
+			}
+		}
 	}
 	fclose(f);
 	return 0;
@@ -1822,21 +1855,33 @@ void printstatus(Status *s, int freeable)
 				}
 
 				/* Client settings */
-#define BODY
-	fprintf(s->file,                                                                                         \
-			"\n\t%#08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d "                                           \
-			"%d %d %d %d %d %d %d %d %d %s %#08x",                                                           \
-			c->win, c->title, c->clss, c->inst, c->ws->num + 1, c->x, c->y, c->w, c->h, c->bw, c->hoff,      \
-			STATE(c, FLOATING) != 0, STATE(c, FULLSCREEN) != 0, STATE(c, FAKEFULL) != 0,                     \
-			STATE(c, FIXED) != 0, STATE(c, STICKY) != 0, STATE(c, URGENT) != 0, STATE(c, ABOVE) != 0,        \
-			STATE(c, HIDDEN) != 0, STATE(c, SCRATCH) != 0, c->cb ? c->cb->name : "none",                     \
-			c->trans ? c->trans->win : 0);
-
-			fprintf(s->file, "\n\t# id title class instance ws x y width height bw hoff "
+				fprintf(s->file, "\n\t# id title class instance ws x y width height bw hoff "
 							 "float full fakefull fixed stick urgent above hidden scratch "
 							 "callback trans_id");
-			FOR_CLIENTS(c, ws)
-#undef BODY
+				for (ws = workspaces; ws; ws = ws->next) {
+					for (c = ws->clients; c; c = c->next) {
+						DBG("printstatus: client %#08x %s", c->win, c->title)
+						fprintf(s->file,
+							  "\n\t%#08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d "
+							  "%d %d %d %d %d %d %d %d %d %s %#08x",
+							  c->win, c->title, c->clss, c->inst, c->ws->num + 1, c->x, c->y, c->w, c->h, c->bw, c->hoff,
+							  STATE(c, FLOATING) != 0, STATE(c, FULLSCREEN) != 0, STATE(c, FAKEFULL) != 0,
+							  STATE(c, FIXED) != 0, STATE(c, STICKY) != 0, STATE(c, URGENT) != 0, STATE(c, ABOVE) != 0,
+							  STATE(c, HIDDEN) != 0, STATE(c, SCRATCH) != 0, c->cb ? c->cb->name : "none",
+							  c->trans ? c->trans->win : 0);
+					}
+				}
+				for (c = scratch.clients; c; c = c->next) {
+					DBG("printstatus: client %#08x %s", c->win, c->title)
+					fprintf(s->file,
+						  "\n\t%#08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d "
+						  "%d %d %d %d %d %d %d %d %d %s %#08x",
+						  c->win, c->title, c->clss, c->inst, c->ws->num, c->x, c->y, c->w, c->h, c->bw, c->hoff,
+						  STATE(c, FLOATING) != 0, STATE(c, FULLSCREEN) != 0, STATE(c, FAKEFULL) != 0,
+						  STATE(c, FIXED) != 0, STATE(c, STICKY) != 0, STATE(c, URGENT) != 0, STATE(c, ABOVE) != 0,
+						  STATE(c, HIDDEN) != 0, STATE(c, SCRATCH) != 0, c->cb ? c->cb->name : "none",
+						  c->trans ? c->trans->win : 0);
+				}
 
 				/* Rules */
 				if (rules) {
@@ -2372,9 +2417,18 @@ static Client *termforwin(const Client *w)
 	if (!w->pid || STATE(w, TERMINAL)) {
 		return NULL;
 	}
-#define BODY  if (STATE(c, TERMINAL) && !c->absorbed && c->pid && discreteproc(c->pid, w->pid)) { return c; }
-	FOR_CLIENTS(c, ws)
-#undef BODY
+	for (ws = workspaces; ws; ws = ws->next) {
+		for (c = ws->clients; c; c = c->next) {
+			if (STATE(c, TERMINAL) && !c->absorbed && c->pid && discreteproc(c->pid, w->pid)) {
+				return c;
+			}
+		}
+	}
+	for (c = scratch.clients; c; c = c->next) {
+		if (STATE(c, TERMINAL) && !c->absorbed && c->pid && discreteproc(c->pid, w->pid)) {
+			return c;
+		}
+	}
 	return NULL;
 }
 
@@ -2479,9 +2533,14 @@ static void updatenetclients(void)
 	Workspace *ws;
 
 	xcb_delete_property(con, root, netatom[NET_CLIENTS]);
-#define BODY PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &c->win);
-	FOR_CLIENTS(c, ws)
-#undef BODY
+	for (ws = workspaces; ws; ws = ws->next) {
+		for (c = ws->clients; c; c = c->next) {
+			PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &c->win);
+		}
+	}
+	for (c = scratch.clients; c; c = c->next) {
+		PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &c->win);
+	}
 	for (p = panels; p; p = p->next) {
 		PROP(APPEND, root, netatom[NET_CLIENTS], XCB_ATOM_WINDOW, 32, 1, &p->win);
 	}
@@ -2695,7 +2754,12 @@ static xcb_get_window_attributes_reply_t *winattr(xcb_window_t win)
 	xcb_generic_error_t *e;
 	xcb_get_window_attributes_reply_t *wa = NULL;
 
-	GET(win, wa, e, "attributes", window_attributes);
+	if (win == XCB_WINDOW_NONE) {
+		return wa;
+	}
+	if (!(wa = xcb_get_window_attributes_reply(con, xcb_get_window_attributes(con, win), &e))) {
+		iferr(0, "unable to get window geometry reply", e);
+	}
 	return wa;
 }
 
@@ -2721,7 +2785,12 @@ static xcb_get_geometry_reply_t *wingeom(xcb_window_t win)
 	xcb_generic_error_t *e;
 	xcb_get_geometry_reply_t *g = NULL;
 
-	GET(win, g, e, "geometry", geometry);
+	if (win == XCB_WINDOW_NONE) {
+		return g;
+	}
+	if (!(g = xcb_get_geometry_reply(con, xcb_get_geometry(con, win), &e))) {
+		iferr(0, "unable to get window geometry reply", e);
+	}
 	return g;
 }
 
@@ -2748,27 +2817,45 @@ Client *wintoclient(xcb_window_t win)
 	Client *c;
 	Workspace *ws;
 
-	if (win == XCB_WINDOW_NONE || win == root) {
-		return NULL;
+	if (win != XCB_WINDOW_NONE && win != root) {
+		for (ws = workspaces; ws; ws = ws->next) {
+			for (c = ws->clients; c; c = c->next) {
+				if (c->win == win) {
+					return c;
+				}
+			}
+		}
+		for (c = scratch.clients; c; c = c->next) {
+			if (c->win == win) {
+				return c;
+			}
+		}
 	}
-#define BODY if (c->win == win) { return c; }
-	FOR_CLIENTS(c, ws)
-#undef BODY
 	return NULL;
 }
 
 Desk *wintodesk(xcb_window_t win)
 {
-	Desk *d;
-
-	WINTO(FOR, win, d, desks);
+	if (win != XCB_WINDOW_NONE && win != root) {
+		for (Desk *d = desks; d; d = d->next) {
+			if (d->win == win) {
+				return d;
+			}
+		}
+	}
+	return NULL;
 }
 
 Panel *wintopanel(xcb_window_t win)
 {
-	Panel *p;
-
-	WINTO(FOR, win, p, panels);
+	if (win != XCB_WINDOW_NONE && win != root) {
+		for (Panel *p = panels; p; p = p->next) {
+			if (p->win == win) {
+				return p;
+			}
+		}
+	}
+	return NULL;
 }
 
 xcb_window_t wintrans(xcb_window_t win)

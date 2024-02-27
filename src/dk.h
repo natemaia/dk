@@ -49,23 +49,8 @@
 #define VISIBLE(c)                         (c->ws == MON(c)->ws)
 #define FLOATING(c)                        (STATE(c, FLOATING) || !c->ws->layout->func)
 #define FULLSCREEN(c)                      (STATE(c, FULLSCREEN) && !STATE(c, FAKEFULL))
-
-#define FOR(v, list)                                                                                         \
-	if (list)                                                                                                \
-		for (v = list; v; v = v->next)
-
-#define FOR_CLIENTS(c, ws)                                                                                   \
-	FOR (ws, workspaces) { FOR (c, ws->clients) { BODY } }                                                   \
-	FOR (c, scratch.clients) { BODY }
-
-#define TAIL(v, list)      for (v = list; v && v->next; v = v->next)
-#define PREV(v, cur, list) for (v = list; v && v->next && v->next != cur; v = v->next)
-
-#define WINTO(for_macro, win, ptr, arr)                                                                      \
-	do {                                                                                                     \
-		if (win != XCB_WINDOW_NONE && win != root) for_macro(ptr, arr) if (ptr->win == win) return ptr;      \
-		return NULL;                                                                                         \
-	} while (0)
+#define TAIL(v, list)                      for (v = list; v && v->next; v = v->next)
+#define PREV(v, cur, list)                 for (v = list; v && v->next && v->next != cur; v = v->next)
 
 #define ATTACH(v, list)                                                                                      \
 	do {                                                                                                     \
@@ -82,13 +67,6 @@
 #define PROP(mode, win, atom, type, membsize, nmemb, value)                                                    \
 	xcb_change_property(con, XCB_PROP_MODE_##mode, win, atom, type, (membsize), (nmemb), (const void *)value); \
 	xcb_flush(con)
-
-#define GET(win, val, error, type, functtype)                                                                \
-	do {                                                                                                     \
-		if (win == XCB_WINDOW_NONE) return val;                                                              \
-		if (!(val = xcb_get_##functtype##_reply(con, xcb_get_##functtype(con, win), &error)))                \
-			iferr(0, "unable to get window " type " reply", error);                                          \
-	} while (0)
 
 #define MOVE(win, x, y)                                                                                      \
 	xcb_configure_window(con, win, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, (uint32_t[]){(x), (y)})

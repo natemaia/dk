@@ -327,9 +327,14 @@ void mappingnotify(xcb_generic_event_t *ev)
 
 	if (e->request == XCB_MAPPING_KEYBOARD || e->request == XCB_MAPPING_MODIFIER) {
 		xcb_refresh_keyboard_mapping(keysyms, e);
-#define BODY grabbuttons(c);
-		FOR_CLIENTS (c, ws)
-#undef BODY
+		for (ws = workspaces; ws; ws = ws->next) {
+			for (c = ws->clients; c; c = c->next) {
+				grabbuttons(c);
+			}
+		}
+		for (c = scratch.clients; c; c = c->next) {
+			grabbuttons(c);
+		}
 	}
 }
 

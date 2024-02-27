@@ -230,10 +230,19 @@ badvalue:
 		border[BORD_O_WIDTH] = ow;
 	}
 	border[BORD_WIDTH] = bw;
-#define BODY if (!STATE(c, NOBORDER) && c->bw == old) { c->bw = bw; }
-	FOR_CLIENTS(c, ws)
-#undef BODY
 
+	for (ws = workspaces; ws; ws = ws->next) {
+		for (c = ws->clients; c; c = c->next) {
+			if (!STATE(c, NOBORDER) && c->bw == old) {
+				c->bw = bw;
+			}
+		}
+	}
+	for (c = scratch.clients; c; c = c->next) {
+		if (!STATE(c, NOBORDER) && c->bw == old) {
+			c->bw = bw;
+		}
+	}
 	return nparsed;
 }
 

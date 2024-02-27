@@ -45,9 +45,18 @@ Client *parseclient(char *arg, int *ebadwin)
 		*ebadwin = (c = wintoclient(i)) ? 0 : -1;
 	} else {
 		Workspace *ws;
-#define BODY if (!strcmp(arg, t->clss)) { return t; }
-		FOR_CLIENTS(t, ws)
-#undef BODY
+		for (ws = workspaces; ws; ws = ws->next) {
+			for (t = ws->clients; t; t = t->next) {
+				if (!strcmp(arg, t->clss)) {
+					return t;
+				}
+			}
+		}
+		for (t = scratch.clients; t; t = t->next) {
+			if (!strcmp(arg, t->clss)) {
+				return t;
+			}
+		}
 	}
 	return c;
 }

@@ -100,8 +100,7 @@ const char *gravs[] = {
 };
 const char *dirs[] = {
 	[DIR_NEXT] = "next",     [DIR_PREV] = "prev",     [DIR_LAST] = "last",
-	[DIR_NEXTNE] = "nextne", [DIR_PREVNE] = "prevne", [DIR_RIGHT] = "right",
-	[DIR_LEFT] = "left"
+	[DIR_NEXTNE] = "nextne", [DIR_PREVNE] = "prevne"
 };
 const char *utf8 = "UTF8-STRING";
 

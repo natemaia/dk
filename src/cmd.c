@@ -355,13 +355,17 @@ int cmdfloat(char **argv)
 
 int cmdfocus(char **argv)
 {
-	int i = 0, nparsed = 0, opt, total;
+	int i = 0, nparsed = 0, opt;
 	Client *c = cmdc;
+	Workspace *ws = c->ws;
 
 	if (FULLSCREEN(c) || !c->ws->clients->next) {
 		return nparsed;
 	}
 	if (cmdc_passed) {
+		if (ws != selws) {
+			cmdview(c->ws);
+		}
 		focus(c);
 		if (FLOATING(c)) {
 			setstackmode(c->win, XCB_STACK_MODE_ABOVE);
@@ -373,32 +377,14 @@ int cmdfocus(char **argv)
 		return -1;
 	}
 
-	if (FLOATING(c) && (opt == DIR_LEFT || opt == DIR_RIGHT)) {
-		Client *t;
-		for (total = 0, t = c->ws->clients; t; total++, t = t->next) {
-			if (t == c) {
-				i = total;
-			}
-		}
-		if (opt == DIR_LEFT) {
-			if (total <= c->ws->nmaster /* || i > */ ) {
-				return nparsed;
-			}
-		} else {
-			if (i >= c->ws->nmaster + c->ws->nstack) {
-				return nparsed;
-			}
-		}
-	}
-
 	nparsed++;
-	int direction = opt == -1 ? i : (opt == DIR_NEXT || opt == DIR_RIGHT) ? 1 : -1;
+	int direction = opt == -1 ? i : (opt == DIR_NEXT) ? 1 : -1;
 	while (direction) {
 		if (direction > 0) {
-			c = selws->sel->next ? selws->sel->next : selws->clients;
+			c = ws->sel->next ? ws->sel->next : ws->clients;
 			direction--;
 		} else {
-			PREV(c, selws->sel, selws->clients);
+			PREV(c, ws->sel, ws->clients);
 			direction++;
 		}
 		if (c) {
@@ -414,8 +400,8 @@ int cmdfocus(char **argv)
 int cmdfollow(Workspace *ws)
 {
 	if (ws && cmdc && ws != cmdc->ws) {
-		DBG("cmdfollow: following client to workspace %d : monitor %s : %s", ws->num + 1, ws->mon->name,
-			cmdc->title)
+		DBG("cmdfollow: following client to workspace %d : monitor %s : %s",
+			ws->num + 1, ws->mon->name, cmdc->title)
 		cmdsend(ws);
 		cmdview(ws);
 	}

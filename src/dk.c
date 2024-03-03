@@ -1009,6 +1009,10 @@ void focus(Client *c)
 		c = selws ? selws->stack : NULL;
 	}
 	if (selws && selws->sel) {
+		if (c && c != selws->sel && c->win == selws->sel->win) {
+			DBG("focus: IGNORING -- %p %#08x %s", (void *)c, c->win, c->title);
+			return;
+		}
 		unfocus(selws->sel, 0);
 	}
 	if (c) {

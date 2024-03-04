@@ -500,6 +500,8 @@ int cmdmors(char **argv)
 
 int cmdmouse(char **argv)
 {
+	Client *c;
+	Workspace *ws;
 	int arg, nparsed = 0;
 	xcb_mod_mask_t oldmod = mousemod;
 	xcb_button_t oldmove = mousemove, oldresize = mouseresize;
@@ -536,8 +538,15 @@ badvalue:
 		}
 		argv++, nparsed++;
 	}
-	if (selws && selws->sel && (oldmove != mousemove || oldresize != mouseresize || oldmod != mousemod)) {
-		grabbuttons(selws->sel);
+	if (oldmove != mousemove || oldresize != mouseresize || oldmod != mousemod) {
+		for (ws = workspaces; ws; ws = ws->next) {
+			for (c = ws->clients; c; c = c->next) {
+				grabbuttons(c);
+			}
+		}
+		for (c = scratch.clients; c; c = c->next) {
+			grabbuttons(c);
+		}
 	}
 	return nparsed;
 }

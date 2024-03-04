@@ -610,8 +610,7 @@ void changews(Workspace *ws, int swap, int warp)
 		showhide(lastws->stack);
 	}
 	PROP(REPLACE, root, netatom[NET_DESK_CUR], XCB_ATOM_CARDINAL, 32, 1, &ws->num);
-	needsrefresh = 1;
-	wschange = 1;
+	needsrefresh = wschange = 1;
 }
 
 void clientborder(Client *c, int focused)
@@ -995,7 +994,6 @@ void focus(Client *c)
 		}
 		detachstack(c);
 		attachstack(c);
-		grabbuttons(c);
 		clientborder(c, 1);
 		setinputfocus(c);
 		selws->sel = c;
@@ -1275,7 +1273,6 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	clienttype(c);
 	clienthints(c);
 	sizehints(c, 1);
-
 	grabbuttons(c);
 	if (!c->trans) {
 		term = termforwin(c);
@@ -2283,8 +2280,6 @@ void setworkspace(Client *c, Workspace *ws, int stacktail)
 void showhide(Client *c)
 {
 	if (!c) {
-		ignore(XCB_ENTER_NOTIFY);
-		xcb_aux_sync(con);
 		return;
 	}
 	if (VISIBLE(c)) {
@@ -2413,7 +2408,6 @@ void unfocus(Client *c, int focusroot)
 	if (c) {
 		DBG("unfocus: %#08x %s", c->win, c->title)
 		clientborder(c, 0);
-		xcb_ungrab_button(con, XCB_BUTTON_INDEX_ANY, c->win, XCB_BUTTON_MASK_ANY);
 	}
 	if (focusroot) {
 		xcb_set_input_focus(con, XCB_INPUT_FOCUS_POINTER_ROOT, root, XCB_CURRENT_TIME);
@@ -2640,12 +2634,10 @@ int updrandr(int init)
 		} else {
 			changed = updoutputs(xcb_randr_get_screen_resources_outputs(r), n, r->config_timestamp);
 		}
-
 		if (!init) {
 			uint32_t rm = monitors->next ? (rootmask | XCB_EVENT_MASK_POINTER_MOTION) : rootmask;
 			xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &rm);
 		}
-
 		free(r);
 	} else {
 		iferr(0, "unable to get screen resources", e);

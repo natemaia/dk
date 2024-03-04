@@ -347,18 +347,16 @@ extern WsCmd wscmds[];
 extern Workspace wsdef;
 
 int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermotion, int mouse);
+int assignws(Workspace *ws, Monitor *mon);
 void attach(Client *c, int tohead);
 void attachstack(Client *c);
-int assignws(Workspace *ws, Monitor *mon);
 void changews(Workspace *ws, int swap, int warp);
 void clientborder(Client *c, int focused);
 void clienthints(Client *c);
-void clientmap(Client *c);
 void clientmotif(void);
 int clientname(Client *c);
 void clientrule(Client *c, Rule *wr, int nofocus);
 void clienttype(Client *c);
-void clientunmap(Client *c);
 Monitor *coordtomon(int x, int y);
 void detach(Client *c, int reattach);
 void detachstack(Client *c);
@@ -403,10 +401,12 @@ void unmanage(xcb_window_t win, int destroyed);
 int updrandr(int init);
 void updstruts(void);
 void updworkspaces(int needed);
+void winmap(xcb_window_t win, uint32_t *state);
 Client *wintoclient(xcb_window_t win);
 Desk *wintodesk(xcb_window_t win);
 Panel *wintopanel(xcb_window_t win);
 xcb_window_t wintrans(xcb_window_t win);
+void winunmap(xcb_window_t win);
 
 #ifdef FUNCDEBUG
 void __cyg_profile_func_enter(void *fn, void *caller) __attribute__((no_instrument_function));

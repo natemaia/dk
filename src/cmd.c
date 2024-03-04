@@ -944,7 +944,7 @@ pop:
 			c->state &= ~(STATE_SCRATCH | STATE_HIDDEN);
 			c->old_state = c->state | STATE_SCRATCH;
 			setworkspace(c, selws, 0);
-			clientmap(c);
+			winmap(c->win, &c->state);
 			showhide(selws->stack);
 			goto end;
 		} else if (!strcmp("push", *argv)) {
@@ -976,7 +976,7 @@ push:
 			c->ws = &scratch;
 			attach(c, 1);
 			attachstack(c);
-			clientunmap(c);
+			winunmap(c->win);
 			goto end;
 		}
 		respond(cmdresp, "!invalid scratch command: %s\nexpected pop or push", *argv);

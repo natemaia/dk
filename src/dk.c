@@ -679,15 +679,6 @@ void clienthints(Client *c)
 	}
 }
 
-void clientmap(Client *c)
-{
-	DBG("clientmap: %#08x %s", c->win, c->title)
-	setwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
-	xcb_map_window(con, c->win);
-	c->state &= ~STATE_NEEDSMAP;
-	xcb_aux_sync(con);
-}
-
 void clientmotif(void)
 {
 	Client *c;
@@ -809,24 +800,6 @@ void clienttype(Client *c)
 		c->trans || (c->trans = wintoclient(wintrans(c->win)))) {
 		c->state |= STATE_FLOATING;
 	}
-}
-
-void clientunmap(Client *c)
-{
-	DBG("clientunmap: %#08x %s", c->win, c->title)
-	xcb_get_window_attributes_reply_t *ra = winattr(root), *ca = winattr(c->win);
-	uint32_t rm = (ra->your_event_mask & ~XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY);
-	uint32_t cm = (ca->your_event_mask & ~XCB_EVENT_MASK_STRUCTURE_NOTIFY);
-
-	xcb_grab_server(con);
-	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &rm);
-	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &cm);
-	xcb_unmap_window(con, c->win);
-	setwinstate(c->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
-	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &ra->your_event_mask);
-	xcb_change_window_attributes(con, c->win, XCB_CW_EVENT_MASK, &ca->your_event_mask);
-	xcb_aux_sync(con);
-	xcb_ungrab_server(con);
 }
 
 Monitor *coordtomon(int x, int y)
@@ -2002,12 +1975,10 @@ void refresh(void)
 				resizehint(c, (x = c->x), (y = c->y), (w = c->w), (h = c->h), c->bw, 0, 0);
 			}
 			/* map last to avoid resizing while visible */
-			if (STATE(c, NEEDSMAP)) {
-				clientmap(c);
-			}
+			winmap(c->win, &c->state);
 		}
 		for (p = panels; p; p = p->next) {
-			if (p->mon == m->ws->mon) {
+			if (p->mon == m) {
 				setstackmode(p->win, XCB_STACK_MODE_BELOW);
 			}
 		}
@@ -2019,24 +1990,16 @@ void refresh(void)
 			}
 		}
 		for (d = desks; d; d = d->next) {
-			if (d->mon == m->ws->mon) {
+			if (d->mon == m) {
 				setstackmode(d->win, XCB_STACK_MODE_BELOW);
 			}
 		}
 	}
 	for (p = panels; p; p = p->next) {
-		if (STATE(p, NEEDSMAP)) {
-			p->state &= ~STATE_NEEDSMAP;
-			setwinstate(p->win, XCB_ICCCM_WM_STATE_NORMAL);
-			xcb_map_window(con, p->win);
-		}
+		winmap(p->win, &p->state);
 	}
 	for (d = desks; d; d = d->next) {
-		if (STATE(d, NEEDSMAP)) {
-			d->state &= ~STATE_NEEDSMAP;
-			setwinstate(d->win, XCB_ICCCM_WM_STATE_NORMAL);
-			xcb_map_window(con, d->win);
-		}
+		winmap(d->win, &d->state);
 	}
 
 	focus(NULL);
@@ -2797,6 +2760,43 @@ static xcb_get_geometry_reply_t *wingeom(xcb_window_t win)
 	return g;
 }
 
+void winmap(xcb_window_t win, uint32_t *state)
+{
+	if ((*state & STATE_NEEDSMAP)) {
+		DBG("winmap: %#08x", win)
+		setwinstate(win, XCB_ICCCM_WM_STATE_NORMAL);
+		xcb_map_window(con, win);
+		*state &= ~STATE_NEEDSMAP;
+		xcb_aux_sync(con);
+	}
+}
+
+pid_t winpid(xcb_window_t win)
+{
+	pid_t result = 0;
+	xcb_generic_error_t *e = NULL;
+	xcb_res_query_client_ids_reply_t *r;
+	xcb_res_client_id_value_iterator_t i;
+	xcb_res_client_id_spec_t spec = {
+		.client = win,
+		.mask = XCB_RES_CLIENT_ID_MASK_LOCAL_CLIENT_PID,
+	};
+
+	if (!(r = xcb_res_query_client_ids_reply(con, xcb_res_query_client_ids(con, 1, &spec), &e))) {
+		iferr(0, "unable to get client ids", e);
+		return 0;
+	}
+	for (i = xcb_res_query_client_ids_ids_iterator(r); i.rem; xcb_res_client_id_value_next(&i)) {
+		if (i.data->spec.mask & XCB_RES_CLIENT_ID_MASK_LOCAL_CLIENT_PID) {
+			uint32_t *t = xcb_res_client_id_value_value(i.data);
+			result = *t;
+			break;
+		}
+	}
+	free(r);
+	return result == -1 ? 0 : result;
+}
+
 static int winprop(xcb_window_t win, xcb_atom_t prop, xcb_atom_t *ret)
 {
 	xcb_generic_error_t *e;
@@ -2873,30 +2873,22 @@ xcb_window_t wintrans(xcb_window_t win)
 	return w;
 }
 
-pid_t winpid(xcb_window_t win)
+void winunmap(xcb_window_t win)
 {
-	pid_t result = 0;
-	xcb_generic_error_t *e = NULL;
-	xcb_res_query_client_ids_reply_t *r;
-	xcb_res_client_id_value_iterator_t i;
-	xcb_res_client_id_spec_t spec = {
-		.client = win,
-		.mask = XCB_RES_CLIENT_ID_MASK_LOCAL_CLIENT_PID,
-	};
+	DBG("winunmap: %#08x", win)
+	xcb_get_window_attributes_reply_t *ra = winattr(root), *ca = winattr(win);
+	uint32_t rm = (ra->your_event_mask & ~XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY);
+	uint32_t cm = (ca->your_event_mask & ~XCB_EVENT_MASK_STRUCTURE_NOTIFY);
 
-	if (!(r = xcb_res_query_client_ids_reply(con, xcb_res_query_client_ids(con, 1, &spec), &e))) {
-		iferr(0, "unable to get client ids", e);
-		return 0;
-	}
-	for (i = xcb_res_query_client_ids_ids_iterator(r); i.rem; xcb_res_client_id_value_next(&i)) {
-		if (i.data->spec.mask & XCB_RES_CLIENT_ID_MASK_LOCAL_CLIENT_PID) {
-			uint32_t *t = xcb_res_client_id_value_value(i.data);
-			result = *t;
-			break;
-		}
-	}
-	free(r);
-	return result == -1 ? 0 : result;
+	xcb_grab_server(con);
+	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &rm);
+	xcb_change_window_attributes(con, win, XCB_CW_EVENT_MASK, &cm);
+	xcb_unmap_window(con, win);
+	setwinstate(win, XCB_ICCCM_WM_STATE_WITHDRAWN);
+	xcb_change_window_attributes(con, root, XCB_CW_EVENT_MASK, &ra->your_event_mask);
+	xcb_change_window_attributes(con, win, XCB_CW_EVENT_MASK, &ca->your_event_mask);
+	xcb_aux_sync(con);
+	xcb_ungrab_server(con);
 }
 
 #ifdef FUNCDEBUG

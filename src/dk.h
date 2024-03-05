@@ -32,7 +32,7 @@
 #endif
 
 #ifndef VERSION
-#define VERSION "1.9"
+#define VERSION "2.0"
 #endif
 
 #define NAN                                (0.0f / 0.0f)

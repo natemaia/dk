@@ -1,0 +1,23 @@
+# example for using conky with dk - show the time and rotating arrows
+
+conky.config = {
+own_window = true,
+own_window_type = 'desktop',
+own_window_transparent = true,
+gap_x = 10,
+gap_y = 10,
+border_width = 0,
+minimum_height = 10,
+use_xft = true,
+font = 'DejaVu Sans:size=20',
+double_buffer = true,
+update_interval = 1,
+};
+
+conky.text = [[
+${time %H:%M }\
+${if_match ${exec echo $(( $(date +%S | sed 's/^0\([0-9]\)$/\1/') % 4 ))} == 0} ^ ${endif}\
+${if_match ${exec echo $(( $(date +%S | sed 's/^0\([0-9]\)$/\1/') % 4 ))} == 1} > ${endif}\
+${if_match ${exec echo $(( $(date +%S | sed 's/^0\([0-9]\)$/\1/') % 4 ))} == 2} v ${endif}\
+${if_match ${exec echo $(( $(date +%S | sed 's/^0\([0-9]\)$/\1/') % 4 ))} == 3} < ${endif}
+]];

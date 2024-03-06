@@ -4,14 +4,13 @@
 # written by Nathaniel Maia, 2021
 
 # example usage bind with sxhkd
-# alt + {_,shift + ,ctrl + }{1-9,0}
-#	 /path/to/script ws {view,send,follow} {1-9,10}
+# alt + {_,shift + ,ctrl + }{1-6}
+#	 /path/to/script ws {view,send,follow} {1-6}
 
 if (( $# == 0 )); then
 	echo "usage: $0 [action] <gap_width>"
 	exit 2
 fi
-
 
 currentws()
 {

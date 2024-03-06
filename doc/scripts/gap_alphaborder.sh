@@ -5,7 +5,7 @@
 
 # example usage bind with sxhkd
 # alt + {equal,minus,apostrophe}
-#	 /path/to/script {+5,-5,reset}
+#	 /path/to/script {+5,-5}
 
 # first runs `dkcmd set gap width $1`, then checks to see what the current
 # gap setting is if it's >=threshold we add slight border transparency

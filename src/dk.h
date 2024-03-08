@@ -376,6 +376,7 @@ void manage(xcb_window_t win, int scan);
 void movestack(int direction);
 Monitor *nextmon(Monitor *m);
 Client *nexttiled(Client *c);
+void numlockmask(void);
 void popfloat(Client *c);
 void printstatus(Status *s, int freeable);
 void quadrant(Client *c, int *x, int *y, const int *w, const int *h);

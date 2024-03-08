@@ -327,6 +327,7 @@ void mappingnotify(xcb_generic_event_t *ev)
 
 	if (e->request == XCB_MAPPING_KEYBOARD || e->request == XCB_MAPPING_MODIFIER) {
 		xcb_refresh_keyboard_mapping(keysyms, e);
+		numlockmask();
 		for (ws = workspaces; ws; ws = ws->next) {
 			for (c = ws->clients; c; c = c->next) {
 				grabbuttons(c);

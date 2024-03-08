@@ -1121,28 +1121,6 @@ static void freews(Workspace *ws)
 
 void grabbuttons(Client *c)
 {
-	xcb_generic_error_t *e;
-	xcb_get_modifier_mapping_reply_t *m = NULL;
-
-	lockmask = 0;
-	if ((m = xcb_get_modifier_mapping_reply(con, xcb_get_modifier_mapping(con), &e))) {
-		xcb_keycode_t *k, *t = NULL;
-		if ((t = xcb_key_symbols_get_keycode(keysyms, 0xff7f)) &&
-			(k = xcb_get_modifier_mapping_keycodes(m))) {
-			for (uint32_t i = 0; i < 8; i++) {
-				for (uint32_t j = 0; j < m->keycodes_per_modifier; j++) {
-					if (k[i * m->keycodes_per_modifier + j] == *t) {
-						lockmask = (1 << i);
-					}
-				}
-			}
-		}
-		free(t);
-	} else {
-		iferr(0, "unable to get modifier mapping for numlock", e);
-	}
-	free(m);
-
 	xcb_ungrab_button(con, XCB_BUTTON_INDEX_ANY, c->win, XCB_BUTTON_MASK_ANY);
 	xcb_grab_button(con, 0, c->win, XCB_EVENT_MASK_BUTTON_PRESS, XCB_GRAB_MODE_SYNC, XCB_GRAB_MODE_SYNC,
 					XCB_NONE, XCB_NONE, XCB_BUTTON_INDEX_ANY, XCB_BUTTON_MASK_ANY);
@@ -1510,6 +1488,7 @@ static void initwm(void)
 	if (!(keysyms = xcb_key_symbols_alloc(con))) {
 		err(1, "unable to get keysyms from X connection");
 	}
+	numlockmask();
 }
 
 static Workspace *initws(int num)
@@ -1650,6 +1629,30 @@ Client *nexttiled(Client *c)
 		c = c->next;
 	}
 	return c;
+}
+
+void numlockmask(void)
+{
+	xcb_generic_error_t *e;
+	xcb_get_modifier_mapping_reply_t *m = NULL;
+
+	if ((m = xcb_get_modifier_mapping_reply(con, xcb_get_modifier_mapping(con), &e))) {
+		xcb_keycode_t *k, *t = NULL;
+		if ((t = xcb_key_symbols_get_keycode(keysyms, 0xff7f)) &&
+			(k = xcb_get_modifier_mapping_keycodes(m))) {
+			for (uint32_t i = 0; i < 8; i++) {
+				for (uint32_t j = 0; j < m->keycodes_per_modifier; j++) {
+					if (k[i * m->keycodes_per_modifier + j] == *t) {
+						lockmask = (1 << i);
+					}
+				}
+			}
+		}
+		free(t);
+	} else {
+		iferr(0, "unable to get modifier mapping for numlock", e);
+	}
+	free(m);
 }
 
 static Monitor *outputtomon(xcb_randr_output_t id)

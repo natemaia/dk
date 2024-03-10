@@ -1276,7 +1276,7 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		c->cb->func(c, 0);
 	}
 	xcb_change_window_attributes(con, win, XCB_CW_EVENT_MASK, &clientmask);
-	if (term) {
+	if (term && term->win != win) {
 		absorb(term, c);
 	} else if (STATE(c, SCRATCH) && !STATE(c, FULLSCREEN)) {
 		cmdc = c;
@@ -2426,7 +2426,7 @@ void unmanage(xcb_window_t win, int destroyed)
 	void *ptr;
 
 	/* window we're handling is actually absorbed */
-	if ((c = absorbingclient(win))) {
+	if ((c = absorbingclient(win)) && win != c->absorbed->win) {
 		DBG("unmanage: %#08x is absorbed by %#08x", win, c->absorbed->win)
 		win = c->absorbed->win;
 	}

@@ -952,6 +952,7 @@ int cmdscratch(char **argv)
 pop:
 			c->state &= ~(STATE_SCRATCH | STATE_HIDDEN);
 			c->old_state = c->state | STATE_SCRATCH;
+			c->state |= STATE_NEEDSMAP;
 			setworkspace(c, selws, 0);
 			winmap(c->win, &c->state);
 			showhide(selws->stack);

@@ -309,6 +309,7 @@ int main(int argc, char *argv[])
 			}
 		}
 		if (xcb_connection_has_error(con)) {
+			DBG("main: X connection has error -- %s", "bailing")
 			break;
 		}
 		if (needsrefresh) {
@@ -341,8 +342,7 @@ static void absorb(Client *p, Client *c)
 	DBG("absorb: c: %#08x %s - absorbing - p: %#08x %s", c->win, c->clss, p->win, p->clss)
 	detach(c, 0);
 	detachstack(c);
-	setwinstate(c->win, XCB_ICCCM_WM_STATE_WITHDRAWN);
-	xcb_unmap_window(con, w); /* using clientunmap() is unnecessary here */
+	winunmap(w);
 	p->absorbed = c;
 	p->win = c->win;
 	c->win = w;
@@ -1276,7 +1276,7 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 		c->cb->func(c, 0);
 	}
 	xcb_change_window_attributes(con, win, XCB_CW_EVENT_MASK, &clientmask);
-	if (term && term->win != win) {
+	if (term && term->win != win && term->ws == c->ws) {
 		absorb(term, c);
 	} else if (STATE(c, SCRATCH) && !STATE(c, FULLSCREEN)) {
 		cmdc = c;

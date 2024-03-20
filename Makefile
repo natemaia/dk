@@ -15,7 +15,7 @@ else
 endif
 
 # source and object files
-SRC  = dk.c cmd.c event.c layout.c parse.c strl.c util.c
+SRC  = dk.c cmd.c event.c layout.c parse.c status.c strl.c util.c
 OBJ  = ${SRC:.c=.o}
 CSRC = dkcmd.c strl.c util.c
 COBJ = ${CSRC:.c=.o}

@@ -39,6 +39,7 @@
 #include "util.h"
 #include "strl.h"
 #include "parse.h"
+#include "status.h"
 #include "event.h"
 #include "layout.h"
 
@@ -153,7 +154,7 @@ int adjustwsormon(char **argv)
 		DBG("adjustwsormon: using workspace %d : monitor %s", ws->num + 1, ws->mon->name)
 		nparsed++;
 		if ((cmdc && ws != cmdc->ws) || ws != selws || selws->mon != ws->mon) {
-			DBG("adjustwsormon: %s client: %#08x %s",
+			DBG("adjustwsormon: %s client: 0x%08x %s",
 				fn == cmdsend     ? "sending"
 				: fn == cmdfollow ? "following"
 								  : "viewing",
@@ -1029,18 +1030,18 @@ int cmdsend(Workspace *ws)
 	Client *c = cmdc;
 
 	if (ws && c && ws != c->ws) {
-		DBG("cmdsend: sending client: %#08x %s -- to workspace %d monitor %s", c->win, c->title, ws->num + 1,
+		DBG("cmdsend: sending client: 0x%08x %s -- to workspace %d monitor %s", c->win, c->title, ws->num + 1,
 			ws->mon->name)
 		Monitor *old = MON(c);
 		unfocus(c, 1);
 		setworkspace(c, ws, c != c->ws->sel);
 		if (ws->mon != old && ws->mon->ws == ws) {
-			DBG("cmdsend: relocating window: %#08x %s -- from %s to %s", c->win, c->title, old->name,
+			DBG("cmdsend: relocating window: 0x%08x %s -- from %s to %s", c->win, c->title, old->name,
 				ws->mon->name)
 			relocate(c, ws->mon, old);
 		}
 		if (FLOATING(c)) {
-			DBG("cmdsend: resizing floating window: %#08x %s x=%d, y=%d, "
+			DBG("cmdsend: resizing floating window: 0x%08x %s x=%d, y=%d, "
 				"w=%d, h=%d",
 				c->win, c->title, c->x, c->y, c->w, c->h)
 			MOVERESIZE(c->win, c->x, c->y, c->w, c->h, c->bw);
@@ -1200,6 +1201,8 @@ int cmdstatus(char **argv)
 				s.type = STAT_WIN, winchange = 1;
 			} else if (!strcmp("full", *argv)) {
 				s.type = STAT_FULL;
+			} else if (!strcmp("json", *argv)) {
+				s.type = STAT_JSON;
 			} else if (!strcmp("layout", *argv)) {
 				s.type = STAT_LYT, lytchange = 1;
 			} else {

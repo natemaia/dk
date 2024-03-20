@@ -659,6 +659,7 @@ status [TYPE] [FILE] [NUM]
 - `layout` output current workspace layout name.
 - `bar` output simple info for use in bars *(win, layout, and ws combined)*.
 - `full` output the full wm and managed client state.
+- `json` same as full but output in JSON format.
 
 ``` bash
 status type=ws [FILE] [NUM]

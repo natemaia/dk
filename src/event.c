@@ -58,7 +58,7 @@ void buttonpress(xcb_generic_event_t *ev)
 		if (FULLSCREEN(c) || (STATE(c, FIXED) && e->detail != mousemove)) {
 			return;
 		}
-		DBG("buttonpress: %s - %#08x", e->detail == mousemove ? "move" : "resize", e->event)
+		DBG("buttonpress: %s - 0x%08x", e->detail == mousemove ? "move" : "resize", e->event)
 		xcb_grab_pointer_reply_t *p;
 		pc = xcb_grab_pointer(con, 0, root,
 							  XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_BUTTON_MOTION |
@@ -77,7 +77,7 @@ void buttonpress(xcb_generic_event_t *ev)
 void buttonrelease(int move)
 {
 	released = 1, grabbing = 0;
-	DBG("buttonrelease: ungrabbing pointer - %#08x", selws->sel->win)
+	DBG("buttonrelease: ungrabbing pointer - 0x%08x", selws->sel->win)
 	iferr(1, "failed to ungrab pointer",
 		  xcb_request_check(con, xcb_ungrab_pointer_checked(con, XCB_CURRENT_TIME)));
 	if (!move) {
@@ -93,11 +93,11 @@ void clientmessage(xcb_generic_event_t *ev)
 	uint32_t *d = e->data.data32;
 
 	if (e->window == root && e->type == netatom[NET_DESK_CUR]) {
-		DBG("clientmessage: %#08x -- e->type = %d (_NET_CURRENT_DESKTOP)", e->window, e->type)
+		DBG("clientmessage: 0x%08x -- e->type = %d (_NET_CURRENT_DESKTOP)", e->window, e->type)
 		unfocus(selws->sel, 1);
 		cmdview(itows(d[0]));
 	} else if (e->type == netatom[NET_CLOSE]) {
-		DBG("clientmessage: %#08x -- e->type = %d (_NET_CLOSE_WINDOW)", e->window, e->type)
+		DBG("clientmessage: 0x%08x -- e->type = %d (_NET_CLOSE_WINDOW)", e->window, e->type)
 		unmanage(e->window, 1);
 	} else if ((c = wintoclient(e->window))) {
 		if (e->type == netatom[NET_WM_DESK]) {
@@ -131,7 +131,7 @@ void clientmessage(xcb_generic_event_t *ev)
 		} else if (e->type == netatom[NET_ACTIVE] && c != selws->sel) {
 activate:
 			if (globalcfg[GLB_FOCUS_URGENT].val && !STATE(c, IGNOREMSG) && !STATE(c, SCRATCH)) {
-				DBG("clientmessage: focusing activated window: %#08x %s", c->win, c->title)
+				DBG("clientmessage: focusing activated window: 0x%08x %s", c->win, c->title)
 				if (grabbing && !released) {
 					buttonrelease(0);
 				}
@@ -142,7 +142,7 @@ activate:
 				if (FLOATING(c)) {
 					setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 				}
-				DBG("clientmessage: focusing activated window: %#08x %s", c->win, c->title)
+				DBG("clientmessage: focusing activated window: 0x%08x %s", c->win, c->title)
 			} else {
 				seturgent(c, 1);
 				clientborder(c, 0);
@@ -174,7 +174,7 @@ void configrequest(xcb_generic_event_t *ev)
 			if (!VISIBLE(c) || STATE(c, IGNORECFG) ||
 				((e->value_mask & XCB_CONFIG_WINDOW_X) &&
 				 (e->x == W(c) * -2 || c->x + 1 <= e->x || c->x + 1 >= e->x))) {
-				DBG("configrequest: %#08x: floating - ignoring hidden window or small shift", c->win)
+				DBG("configrequest: 0x%08x: floating - ignoring hidden window or small shift", c->win)
 				return;
 			}
 			m = MON(c);
@@ -222,7 +222,7 @@ void configrequest(xcb_generic_event_t *ev)
 
 void destroynotify(xcb_generic_event_t *ev)
 {
-	DBG("destroynotify: %#08x", ((xcb_destroy_notify_event_t *)ev)->window)
+	DBG("destroynotify: 0x%08x", ((xcb_destroy_notify_event_t *)ev)->window)
 	unmanage(((xcb_destroy_notify_event_t *)ev)->window, 1);
 }
 
@@ -276,7 +276,7 @@ void enternotify(xcb_generic_event_t *ev)
 		(e->mode != XCB_NOTIFY_MODE_NORMAL || e->detail == XCB_NOTIFY_DETAIL_INFERIOR)) {
 		return;
 	}
-	DBG("enternotify: %#08x", e->event)
+	DBG("enternotify: 0x%08x", e->event)
 	ws = selws;
 	if ((c = wintoclient(e->event))) {
 		ws = c->ws;
@@ -301,7 +301,7 @@ void focusin(xcb_generic_event_t *ev)
 		return;
 	}
 	if (selws->sel && e->event != selws->sel->win) {
-		DBG("focusin: %#08x", e->event)
+		DBG("focusin: 0x%08x", e->event)
 		setinputfocus(selws->sel);
 	}
 }
@@ -350,7 +350,7 @@ void motionnotify(xcb_generic_event_t *ev)
 	xcb_motion_notify_event_t *e = (xcb_motion_notify_event_t *)ev;
 
 	if (e->event == root && (m = coordtomon(e->root_x, e->root_y)) && m->ws != selws) {
-		DBG("motionnotify: updating active monitor - %#08x", e->event)
+		DBG("motionnotify: updating active monitor - 0x%08x", e->event)
 		changews(m->ws, 0, 0);
 		focus(NULL);
 	}
@@ -654,7 +654,7 @@ void unmapnotify(xcb_generic_event_t *ev)
 			free(er);
 			return;
 		}
-		DBG("unmapnotify: un-managing window: %#08x", e->window)
+		DBG("unmapnotify: un-managing window: 0x%08x", e->window)
 		unmanage(e->window, 0);
 	}
 }

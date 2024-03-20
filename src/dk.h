@@ -174,6 +174,7 @@ enum StatusType {
 	STAT_WIN = 2,
 	STAT_BAR = 3,
 	STAT_FULL = 4,
+	STAT_JSON = 5,
 };
 
 enum CfgType {
@@ -318,9 +319,8 @@ extern Client *cmdc;
 extern Monitor *monitors, *primary, *selmon, *lastmon;
 extern Workspace *workspaces, *setws, *selws, *lastws, scratch;
 
-/* extern xcb_screen_t *scr; */
-extern xcb_connection_t *con;
 extern xcb_window_t root;
+extern xcb_connection_t *con;
 extern xcb_key_symbols_t *keysyms;
 extern xcb_cursor_t cursor[CURS_LAST];
 extern xcb_atom_t wmatom[WM_LAST], netatom[NET_LAST];
@@ -364,6 +364,7 @@ void execcfg(void);
 void fillstruts(Panel *p);
 void focus(Client *c);
 void freerule(Rule *r);
+void freestatus(Status *s);
 void freewm(void);
 void grabbuttons(Client *c);
 void gravitate(Client *c, int horz, int vert, int matchgap);
@@ -378,7 +379,6 @@ Monitor *nextmon(Monitor *m);
 Client *nexttiled(Client *c);
 void numlockmask(void);
 void popfloat(Client *c);
-void printstatus(Status *s, int freeable);
 void quadrant(Client *c, int *x, int *y, const int *w, const int *h);
 void refresh(void);
 void relocate(Client *c, Monitor *mon, Monitor *old);

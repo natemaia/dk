@@ -45,6 +45,7 @@
 #include "event.h"
 #include "cmd.h"
 #include "config.h"
+#include "status.h"
 
 FILE *cmdresp;
 char *argv0, sock[256];
@@ -139,7 +140,6 @@ static void absorb(Client *p, Client *c);
 static Client *absorbingclient(xcb_window_t win);
 static void desorb(Client *c);
 static int discreteproc(pid_t p, pid_t c);
-static void freestatus(Status *s);
 static void freews(Workspace *ws);
 static void initwm(void);
 static pid_t parentproc(pid_t p);
@@ -336,10 +336,10 @@ static void absorb(Client *p, Client *c)
 	xcb_window_t w = p->win;
 
 	if (STATE(c, NOABSORB) || STATE(c, TERMINAL) || FLOATING(c)) {
-		DBG("absorb: c: %#08x %s -- is not eligible to absorb windows", c->win, c->title)
+		DBG("absorb: c: 0x%08x %s -- is not eligible to absorb windows", c->win, c->title)
 		return;
 	}
-	DBG("absorb: c: %#08x %s - absorbing - p: %#08x %s", c->win, c->clss, p->win, p->clss)
+	DBG("absorb: c: 0x%08x %s - absorbing - p: 0x%08x %s", c->win, c->clss, p->win, p->clss)
 	detach(c, 0);
 	detachstack(c);
 	winunmap(w);
@@ -622,7 +622,7 @@ void clientborder(Client *c, int focused)
 	uint32_t o = border[BORD_O_WIDTH];
 	uint32_t in = border[focused ? BORD_FOCUS : STATE(c, URGENT) ? BORD_URGENT : BORD_UNFOCUS];
 
-	DBG("clientborder: %s - %#08x %s, width=%d, outer_width=%d", focused ? "focus" : "unfocus", c->win,
+	DBG("clientborder: %s - 0x%08x %s, width=%d, outer_width=%d", focused ? "focus" : "unfocus", c->win,
 		c->title, b, o)
 
 	if (b - o > 0) {
@@ -815,7 +815,7 @@ Monitor *coordtomon(int x, int y)
 
 void desorb(Client *c)
 {
-	DBG("desorb: %#08x %s -- c->win = %#08x %s", c->win, c->title, c->absorbed->win, c->absorbed->title)
+	DBG("desorb: 0x%08x %s -- c->win = 0x%08x %s", c->win, c->title, c->absorbed->win, c->absorbed->title)
 	c->win = c->absorbed->win;
 	free(c->absorbed);
 	c->absorbed = NULL;
@@ -982,13 +982,13 @@ void focus(Client *c)
 	}
 	if (selws && selws->sel) {
 		if (c && c != selws->sel && c->win == selws->sel->win) {
-			DBG("focus: IGNORING -- %p %#08x %s", (void *)c, c->win, c->title);
+			DBG("focus: IGNORING -- %p 0x%08x %s", (void *)c, c->win, c->title);
 			return;
 		}
 		unfocus(selws->sel, 0);
 	}
 	if (c) {
-		DBG("focus: %#08x %s", c->win, c->title)
+		DBG("focus: 0x%08x %s", c->win, c->title)
 		if (STATE(c, URGENT)) {
 			seturgent(c, 0);
 		}
@@ -1042,7 +1042,7 @@ void freerule(Rule *r)
 	free(r);
 }
 
-static void freestatus(Status *s)
+void freestatus(Status *s)
 {
 	Status **ss = &stats;
 
@@ -1226,7 +1226,7 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	c->trans = wintoclient(wintrans(win));
 	winclass(win, c->clss, c->inst, sizeof(c->clss));
 	clientname(c);
-	DBG("initclient: %#08x - %s", c->win, c->title)
+	DBG("initclient: 0x%08x - %s", c->win, c->title)
 
 	pc = xcb_get_property(con, 0, c->win, wmatom[WM_MOTIF], wmatom[WM_MOTIF], 0, 5);
 	if ((pr = xcb_get_property_reply(con, pc, &e)) && xcb_get_property_value_length(pr) >= 3) {
@@ -1245,7 +1245,7 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	/* apply rules and set the client's workspace, when config focus_open=false
 	 * the new client is attached to the end of the stack, otherwise the head.
 	 * later in refresh(), focus(NULL) is called to focus the correct client */
-	DBG("initclient: rule setting: %#08x - %s", c->win, c->title)
+	DBG("initclient: rule setting: 0x%08x - %s", c->win, c->title)
 	clientrule(c, NULL, !globalcfg[GLB_FOCUS_OPEN].val);
 	clientstate(c); /* state MUST be after rule to ensure c->ws is set */
 	clienttype(c);
@@ -1257,7 +1257,7 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	}
 
 	if (!FULLSCREEN(c) && (FLOATING(c) || STATE(c, FIXED))) {
-		DBG("initclient: floating or fixed: %#08x - %s", c->win, c->title)
+		DBG("initclient: floating or fixed: 0x%08x - %s", c->win, c->title)
 		if (!STATE(c, FIXED)) {
 			c->w = CLAMP(c->w, globalcfg[GLB_MIN_WH].val, MON(c)->ww);
 			c->h = CLAMP(c->h, globalcfg[GLB_MIN_WH].val, MON(c)->wh);
@@ -1281,7 +1281,7 @@ static void initclient(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	} else if (STATE(c, SCRATCH) && !STATE(c, FULLSCREEN)) {
 		cmdc = c;
 		char *arg = "push";
-		DBG("initclient: calling cmdscratch(%s) on client: %#08x %s", arg, c->win, c->title)
+		DBG("initclient: calling cmdscratch(%s) on client: 0x%08x %s", arg, c->win, c->title)
 		cmdscratch(&arg);
 	}
 	wschange = c->ws->clients->next ? wschange : 1;
@@ -1299,7 +1299,7 @@ static void initdesk(xcb_window_t win, xcb_get_geometry_reply_t *g)
 	}
 	d->state |= STATE_NEEDSMAP;
 	winclass(win, d->clss, d->inst, sizeof(d->clss));
-	DBG("initdesk: %#08x - %s", d->win, d->clss)
+	DBG("initdesk: 0x%08x - %s", d->win, d->clss)
 	ATTACH(d, desks);
 	MOVERESIZE(win, d->mon->x, d->mon->y, d->mon->w, d->mon->h, g->border_width);
 	setstackmode(d->win, XCB_STACK_MODE_BELOW);
@@ -1549,9 +1549,9 @@ void manage(xcb_window_t win, int scan)
 	if (!(wa = winattr(win)) || !(g = wingeom(win))) {
 		goto end;
 	}
-	DBG("manage: %#08x - %d,%d @ %dx%d", win, g->x, g->y, g->width, g->height)
+	DBG("manage: 0x%08x - %d,%d @ %dx%d", win, g->x, g->y, g->width, g->height)
 	if (winprop(win, netatom[NET_WM_TYPE], &type)) {
-		DBG("manage: %#08x has NET_WM_TYPE", win);
+		DBG("manage: 0x%08x has NET_WM_TYPE", win);
 		if (type == netatom[NET_TYPE_DOCK]) {
 			initpanel(win, g);
 		} else if (type == netatom[NET_TYPE_DESK]) {
@@ -1698,232 +1698,6 @@ void popfloat(Client *c)
 	setstackmode(c->win, XCB_STACK_MODE_ABOVE);
 }
 
-void printstatus(Status *s, int freeable)
-{
-	Rule *r;
-	Panel *p;
-	Desk *d;
-	Client *c;
-	Monitor *m;
-	Status *next;
-	Workspace *ws;
-	int single = 1;
-
-	if (!s) {
-		s = stats;
-		single = 0;
-	}
-	while (s) {
-		next = s->next;
-		switch (s->type) {
-			case STAT_WIN:
-				if (winchange) {
-					winchange = 0;
-					fprintf(s->file, "%s", selws->sel ? selws->sel->title : "");
-				}
-				break;
-			case STAT_LYT:
-				if (lytchange) {
-					lytchange = 0;
-					fprintf(s->file, "%s", selws->layout->name);
-				}
-				break;
-			case STAT_WS:
-				if (wschange) {
-					wschange = 0;
-					for (ws = workspaces; ws; ws = ws->next) {
-						char fmt[5] = "i%s:";
-						fmt[0] = (ws == selws) ? (ws->clients ? 'A' : 'I') : (ws->clients ? 'a' : 'i');
-						if (!ws->next) {
-							fmt[3] = '\0';
-						}
-						fprintf(s->file, fmt, ws->name);
-					}
-				}
-				break;
-			case STAT_BAR:
-				fprintf(s->file, "W");
-				for (ws = workspaces; ws; ws = ws->next) {
-					char fmt[5] = "i%s:";
-					fmt[0] = (ws == selws) ? (ws->clients ? 'A' : 'I') : (ws->clients ? 'a' : 'i');
-					if (!ws->next) {
-						fmt[3] = '\0';
-					}
-					fprintf(s->file, fmt, ws->name);
-				}
-				fprintf(s->file, "\nL%s\nA%s", selws->layout->name,
-						selws->sel && !STATE(selws->sel, HIDDEN) ? selws->sel->title : "");
-				winchange = 0;
-				lytchange = 0;
-				wschange = 0;
-				break;
-			case STAT_FULL:
-				/* Globals */
-				fprintf(s->file, "# globals - key: value ...\n");
-				for (uint32_t i = 0; i < LEN(globalcfg); i++) {
-					fprintf(s->file, "%s: %d\n", globalcfg[i].str, globalcfg[i].val);
-				}
-				fprintf(s->file, "active_window: %#08x\n", selws->sel ? selws->sel->win : 0);
-				fprintf(s->file, "layouts:");
-				for (Layout *l = layouts; l && l->name; l++) {
-					fprintf(s->file, " %s", l->name);
-				}
-				fprintf(s->file, "\ncallbacks:");
-				for (Callback *cb = callbacks; cb && cb->name; cb++) {
-					fprintf(s->file, " %s", cb->name);
-				}
-
-				/* Borders */
-				fprintf(s->file,
-						"\n\n# width outer_width focus urgent unfocus outer_focus "
-						"outer_urgent outer_unfocus\n"
-						"border: %u %u %#08x %#08x %#08x %#08x %#08x %#08x",
-						border[BORD_WIDTH], border[BORD_O_WIDTH], border[BORD_FOCUS], border[BORD_URGENT],
-						border[BORD_UNFOCUS], border[BORD_O_FOCUS], border[BORD_O_URGENT],
-						border[BORD_O_UNFOCUS]);
-
-				/* Workspaces */
-				fprintf(s->file, "\n\n# number:name:layout ...\nworkspaces:");
-				for (ws = workspaces; ws; ws = ws->next) {
-					fprintf(s->file, " %s%d:%s:%s", ws == selws ? "*" : "", ws->num + 1, ws->name,
-							ws->layout->name);
-				}
-
-				/* Workspace settings */
-				fprintf(s->file, "\n\t# number:name active_window nmaster nstack "
-								 "msplit ssplit gappx smartgap padl padr padt padb");
-				for (ws = workspaces; ws; ws = ws->next) {
-					fprintf(s->file, "\n\t%d:%s %#08x %d %d %0.2f %0.2f %d %d %d %d %d %d", ws->num + 1,
-							ws->name, ws->sel ? ws->sel->win : 0, ws->nmaster, ws->nstack, ws->msplit,
-							ws->ssplit, ws->gappx, ws->smartgap && tilecount(ws) == 1, ws->padl, ws->padr,
-							ws->padt, ws->padb);
-				}
-
-				/* Monitors */
-				fprintf(s->file, "\n\n# number:name:workspace ...\nmonitors:");
-				for (m = monitors; m; m = m->next) {
-					if (m->connected) {
-						fprintf(s->file, " %s%d:%s:%d", m->ws == selws ? "*" : "", m->num + 1, m->name,
-								m->ws->num + 1);
-					}
-				}
-
-				/* Monitor settings */
-				fprintf(s->file, "\n\t# number:name active_window x y width height "
-								 "wx wy wwidth wheight");
-				for (m = monitors; m; m = m->next) {
-					if (m->connected) {
-						fprintf(s->file, "\n\t%d:%s %#08x %d %d %d %d %d %d %d %d", m->num + 1, m->name,
-								m->ws->sel ? m->ws->sel->win : 0, m->x, m->y, m->w, m->h, m->wx, m->wy, m->ww,
-								m->wh);
-					}
-				}
-
-				/* Clients */
-				fprintf(s->file, "\n\n# id:workspace ...\nwindows:");
-				for (ws = workspaces; ws; ws = ws->next) {
-					for (c = ws->clients; c; c = c->next) {
-						fprintf(s->file, " %s%#08x:%d", c == selws->sel ? "*" : "", c->win, c->ws->num + 1);
-					}
-				}
-				for (c = scratch.clients; c; c = c->next) {
-					fprintf(s->file, " %#08x:%d", c->win, c->ws->num);
-				}
-
-				/* Client settings */
-				fprintf(s->file, "\n\t# id title class instance ws x y width height bw hoff "
-							 "float full fakefull fixed stick urgent above hidden scratch "
-							 "callback trans_id");
-				for (ws = workspaces; ws; ws = ws->next) {
-					for (c = ws->clients; c; c = c->next) {
-						DBG("printstatus: client %#08x %s", c->win, c->title)
-						fprintf(s->file,
-							  "\n\t%#08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d "
-							  "%d %d %d %d %d %d %d %d %d %s %#08x",
-							  c->win, c->title, c->clss, c->inst, c->ws->num + 1, c->x, c->y, c->w, c->h, c->bw, c->hoff,
-							  STATE(c, FLOATING) != 0, STATE(c, FULLSCREEN) != 0, STATE(c, FAKEFULL) != 0,
-							  STATE(c, FIXED) != 0, STATE(c, STICKY) != 0, STATE(c, URGENT) != 0, STATE(c, ABOVE) != 0,
-							  STATE(c, HIDDEN) != 0, STATE(c, SCRATCH) != 0, c->cb ? c->cb->name : "none",
-							  c->trans ? c->trans->win : 0);
-					}
-				}
-				for (c = scratch.clients; c; c = c->next) {
-					DBG("printstatus: client %#08x %s", c->win, c->title)
-					fprintf(s->file,
-						  "\n\t%#08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d "
-						  "%d %d %d %d %d %d %d %d %d %s %#08x",
-						  c->win, c->title, c->clss, c->inst, c->ws->num, c->x, c->y, c->w, c->h, c->bw, c->hoff,
-						  STATE(c, FLOATING) != 0, STATE(c, FULLSCREEN) != 0, STATE(c, FAKEFULL) != 0,
-						  STATE(c, FIXED) != 0, STATE(c, STICKY) != 0, STATE(c, URGENT) != 0, STATE(c, ABOVE) != 0,
-						  STATE(c, HIDDEN) != 0, STATE(c, SCRATCH) != 0, c->cb ? c->cb->name : "none",
-						  c->trans ? c->trans->win : 0);
-				}
-
-				/* Rules */
-				if (rules) {
-					fprintf(s->file, "\n\n# title class instance workspace monitor "
-									 "float full fakefull stick ignore_cfg ignore_msg "
-									 "focus callback x y width height xgrav ygrav");
-					for (r = rules; r; r = r->next) {
-						fprintf(s->file,
-								"\nrule: \"%s\" \"%s\" \"%s\" %d %s %d %d %d %d %d %d "
-								"%d %s %d %d %d %d %s %s",
-								r->title, r->clss, r->inst, r->ws, r->mon, STATE(r, FLOATING) != 0,
-								STATE(r, FULLSCREEN) != 0, STATE(r, FAKEFULL) != 0, STATE(r, STICKY) != 0,
-								STATE(r, IGNORECFG) != 0, STATE(r, IGNOREMSG) != 0, r->focus,
-								r->cb ? r->cb->name : "", r->x, r->y, r->w, r->h, gravs[r->xgrav],
-								gravs[r->ygrav]);
-					}
-				}
-
-				/* Panels */
-				if (panels) {
-					fprintf(s->file, "\n\n# id:monitor ...\npanels:");
-					for (p = panels; p; p = p->next) {
-						fprintf(s->file, " %#08x:%s", p->win, p->mon->name);
-					}
-
-					/* Panel settings */
-					fprintf(s->file, "\n\t# id class instance monitor x y width "
-									 "height left right top bottom");
-					for (p = panels; p; p = p->next) {
-						fprintf(s->file, "\n\t%#08x \"%s\" \"%s\" %s %d %d %d %d %d %d %d %d", p->win,
-								p->clss, p->inst, p->mon->name, p->x, p->y, p->w, p->h, p->l, p->r, p->t,
-								p->b);
-					}
-				}
-
-				/* Desks */
-				if (desks) {
-					fprintf(s->file, "\n\n# id:monitor ...\ndesks:");
-					for (d = desks; d; d = d->next) {
-						fprintf(s->file, " %#08x:%s", d->win, d->mon->name);
-					}
-
-					/* Desk settings */
-					fprintf(s->file, "\n\t# id class instance monitor");
-					for (d = desks; d; d = d->next) {
-						fprintf(s->file, "\n\t%#08x \"%s\" \"%s\" %s", d->win, d->clss, d->inst, d->mon->name);
-					}
-				}
-
-				winchange = 0;
-				lytchange = 0;
-				wschange = 0;
-				break;
-		}
-		fflush(s->file);
-		/* one-shot status prints have no allocations so aren't free-able */
-		if (freeable && !(s->num -= s->num > 0 ? 1 : 0)) {
-			freestatus(s);
-		}
-		if (single) {
-			break;
-		}
-		s = next;
-	}
-}
-
 void quadrant(Client *c, int *x, int *y, const int *w, const int *h)
 {
 	Monitor *m = MON(c);
@@ -2023,11 +1797,11 @@ void relocate(Client *c, Monitor *mon, Monitor *old)
 		return;
 	}
 
-	DBG("relocate: window: %#08x %s -- from %s to %s -- x: %d - y: %d - w: %d - h: %d", c->win, c->title,
+	DBG("relocate: window: 0x%08x %s -- from %s to %s -- x: %d - y: %d - w: %d - h: %d", c->win, c->title,
 		old->name, mon->name, c->x, c->y, c->w, c->h)
 
 	if (STATE(c, FULLSCREEN) && c->w == old->w && c->h == old->h) {
-		DBG("relocate: fullscreen window: %#08x %s -- x: %d -> %d - y: %d -> %d - w: "
+		DBG("relocate: fullscreen window: 0x%08x %s -- x: %d -> %d - y: %d -> %d - w: "
 			"%d -> %d - h: %d -> %d",
 			c->win, c->title, c->x, mon->x, c->y, mon->y, c->w, mon->w, c->h, mon->h)
 		c->x = mon->x, c->y = mon->y, c->w = mon->w, c->h = mon->h;
@@ -2056,7 +1830,7 @@ void relocate(Client *c, Monitor *mon, Monitor *old)
 	if (!corner && c->x == mon->x && c->y == mon->y) {
 		gravitate(c, GRAV_CENTER, GRAV_CENTER, 1);
 	}
-	DBG("relocate: finale size/location of window: %#08x %s -- x: %d - y: %d - w: %d - h: %d", c->win,
+	DBG("relocate: finale size/location of window: 0x%08x %s -- x: %d - y: %d - w: %d - h: %d", c->win,
 		c->title, c->x, c->y, c->w, c->h)
 }
 
@@ -2259,7 +2033,7 @@ void setworkspace(Client *c, Workspace *ws, int stacktail)
 	if (ws == c->ws) {
 		return;
 	}
-	DBG("setworkspace: %#08x %s -> %d", c->win, c->title, ws->num + 1)
+	DBG("setworkspace: 0x%08x %s -> %d", c->win, c->title, ws->num + 1)
 	if (c->ws) {
 		detach(c, 0);
 		detachstack(c);
@@ -2287,7 +2061,7 @@ void showhide(Client *c)
 	}
 	if (VISIBLE(c)) {
 		Monitor *m = MON(c);
-		DBG("showhide: ws: %d - showing window: %#08x %s", c->ws->num + 1, c->win, c->title)
+		DBG("showhide: ws: %d - showing window: 0x%08x %s", c->ws->num + 1, c->win, c->title)
 		setwinstate(c->win, XCB_ICCCM_WM_STATE_NORMAL);
 		if (FULLSCREEN(c)) {
 			MOVERESIZE(c->win, m->x, m->y, m->w, m->h, 0);
@@ -2300,11 +2074,11 @@ void showhide(Client *c)
 	} else {
 		showhide(c->snext);
 		if (!STATE(c, STICKY)) {
-			DBG("showhide: ws: %d - hiding window: %#08x %s", c->ws->num + 1, c->win, c->title)
+			DBG("showhide: ws: %d - hiding window: 0x%08x %s", c->ws->num + 1, c->win, c->title)
 			setwinstate(c->win, XCB_ICCCM_WM_STATE_ICONIC);
 			MOVE(c->win, W(c) * -2, c->y);
 		} else if (c->ws != selws && MON(c) == selws->mon) {
-			DBG("showhide: ws: %d -- not hiding sticky window: %#08x %s", c->ws->num + 1, c->win, c->title)
+			DBG("showhide: ws: %d -- not hiding sticky window: 0x%08x %s", c->ws->num + 1, c->win, c->title)
 			Client *sel = lastws->sel == c ? c : selws->sel;
 			setworkspace(c, selws, 0);
 			focus(sel);
@@ -2329,7 +2103,7 @@ void sizehints(Client *c, int uss)
 	xcb_generic_error_t *e;
 	xcb_get_property_cookie_t pc;
 
-	DBG("sizehints: client: %#08x %s", c->win, c->title)
+	DBG("sizehints: client: 0x%08x %s", c->win, c->title)
 	pc = xcb_icccm_get_wm_normal_hints(con, c->win);
 	c->inc_w = c->inc_h = 0;
 	c->max_aspect = c->min_aspect = 0.0;
@@ -2364,10 +2138,10 @@ void sizehints(Client *c, int uss)
 	} else {
 		iferr(0, "unable to get wm normal hints", e);
 	}
-	DBG("sizehints: client: %#08x %s -- max_w = %d, max_h = %d, min_w = %d, min_h = %d", c->win, c->title,
+	DBG("sizehints: client: 0x%08x %s -- max_w = %d, max_h = %d, min_w = %d, min_h = %d", c->win, c->title,
 		c->max_w, c->max_h, c->min_w, c->min_h)
 	if (c->max_w && c->max_w == c->min_w && c->max_h && c->max_h == c->min_h) {
-		DBG("sizehints: FIXED client: %#08x %s", c->win, c->title)
+		DBG("sizehints: FIXED client: 0x%08x %s", c->win, c->title)
 		c->state |= (STATE_FIXED | STATE_FLOATING);
 	}
 	c->hints = 1;
@@ -2409,7 +2183,7 @@ int tilecount(Workspace *ws)
 void unfocus(Client *c, int focusroot)
 {
 	if (c) {
-		DBG("unfocus: %#08x %s", c->win, c->title)
+		DBG("unfocus: 0x%08x %s", c->win, c->title)
 		clientborder(c, 0);
 	}
 	if (focusroot) {
@@ -2427,12 +2201,12 @@ void unmanage(xcb_window_t win, int destroyed)
 
 	/* window we're handling is actually absorbed */
 	if ((c = absorbingclient(win)) && win != c->absorbed->win) {
-		DBG("unmanage: %#08x is absorbed by %#08x", win, c->absorbed->win)
+		DBG("unmanage: 0x%08x is absorbed by 0x%08x", win, c->absorbed->win)
 		win = c->absorbed->win;
 	}
 
 	if ((ptr = c = wintoclient(win))) {
-		DBG("unmanage: client: %#08x %s", c->win, c->title)
+		DBG("unmanage: client: 0x%08x %s", c->win, c->title)
 		if (c->absorbed) {
 			desorb(c);
 			return;
@@ -2450,18 +2224,18 @@ void unmanage(xcb_window_t win, int destroyed)
 		detach(c, 0);
 		detachstack(c);
 	} else if ((ptr = p = wintopanel(win))) {
-		DBG("unmanage: panel: %#08x %s", p->win, p->clss)
+		DBG("unmanage: panel: 0x%08x %s", p->win, p->clss)
 		Panel **pp = &panels;
 		DETACH(p, pp);
 		updstruts();
 	} else if ((ptr = d = wintodesk(win))) {
-		DBG("unmanage: desktop: %#08x %s", d->win, d->clss)
+		DBG("unmanage: desktop: 0x%08x %s", d->win, d->clss)
 		Desk **dd = &desks;
 		DETACH(d, dd);
 	}
 
 	if (!destroyed) {
-		DBG("unmanage: %#08x was NOT destroyed", win)
+		DBG("unmanage: 0x%08x was NOT destroyed", win)
 		xcb_grab_server(con);
 		if (c) {
 			xcb_configure_window(con, c->win, XCB_CONFIG_WINDOW_BORDER_WIDTH, &c->old_bw);
@@ -2475,7 +2249,7 @@ void unmanage(xcb_window_t win, int destroyed)
 		xcb_aux_sync(con);
 		xcb_ungrab_server(con);
 	} else {
-		DBG("unmanage: %#08x was destroyed", win)
+		DBG("unmanage: 0x%08x was destroyed", win)
 		xcb_flush(con);
 	}
 
@@ -2758,7 +2532,7 @@ static xcb_get_geometry_reply_t *wingeom(xcb_window_t win)
 void winmap(xcb_window_t win, uint32_t *state)
 {
 	if ((*state & STATE_NEEDSMAP)) {
-		DBG("winmap: %#08x", win)
+		DBG("winmap: 0x%08x", win)
 		setwinstate(win, XCB_ICCCM_WM_STATE_NORMAL);
 		xcb_map_window(con, win);
 		*state &= ~STATE_NEEDSMAP;
@@ -2870,7 +2644,7 @@ xcb_window_t wintrans(xcb_window_t win)
 
 void winunmap(xcb_window_t win)
 {
-	DBG("winunmap: %#08x", win)
+	DBG("winunmap: 0x%08x", win)
 	xcb_get_window_attributes_reply_t *ra = winattr(root), *ca = winattr(win);
 	uint32_t rm = (ra->your_event_mask & ~XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY);
 	uint32_t cm = (ca->your_event_mask & ~XCB_EVENT_MASK_STRUCTURE_NOTIFY);

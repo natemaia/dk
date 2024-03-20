@@ -14,7 +14,7 @@
 static void _client(Client *c, FILE *f);
 static void _clients(FILE *f);
 static void _desks(FILE *f);
-static void _globals(FILE *f);
+static void _global(FILE *f);
 static void _monitor(Monitor *m, FILE *f);
 static void _monitors(FILE *f);
 static void _panels(FILE *f);
@@ -25,11 +25,11 @@ static void _workspaces(FILE *f);
 static void _client(Client *c, FILE *f)
 {
 	fprintf(f, "\"id\":\"0x%08x\",", c->win);
-	fprintf(f, "\"active\":%s,", c == selws->sel ? "true" : "false");
 	fprintf(f, "\"title\":\"%s\",", c->title);
 	fprintf(f, "\"class\":\"%s\",", c->clss);
 	fprintf(f, "\"instance\":\"%s\",", c->inst);
 	fprintf(f, "\"workspace\":%d,", c->ws->num + !STATE(c, SCRATCH));
+	fprintf(f, "\"focused\":%s,", c == selws->sel ? "true" : "false");
 	fprintf(f, "\"x\":%d,", c->x);
 	fprintf(f, "\"y\":%d,", c->y);
 	fprintf(f, "\"w\":%d,", c->w);
@@ -45,7 +45,7 @@ static void _client(Client *c, FILE *f)
 	fprintf(f, "\"hidden\":%s,", STOB(c, HIDDEN));
 	fprintf(f, "\"scratch\":%s,", STOB(c, SCRATCH));
 	fprintf(f, "\"callback\":\"%s\",", c->cb ? c->cb->name : "");
-	fprintf(f, "\"tans_id\":\"0x%08x\"", c->trans ? c->trans->win : 0);
+	fprintf(f, "\"trans_id\":\"0x%08x\"", c->trans ? c->trans->win : 0);
 }
 
 static void _clients(FILE *f)
@@ -57,7 +57,7 @@ static void _clients(FILE *f)
 	fprintf(f, "\"clients\":{");
 	for (ws = workspaces; ws; ws = ws->next) {
 		for (c = ws->clients; c; c = c->next) {
-			fprintf(f, "\"%d\":{", i++);
+			fprintf(f, "\"_%d\":{", i++);
 			_client(c, f);
 			fprintf(f, "}%s", c->next ? "," : "");
 		}
@@ -68,7 +68,7 @@ static void _clients(FILE *f)
 	if (scratch.clients) {
 		fprintf(f, ",");
 		for (c = scratch.clients; c; c = c->next) {
-			fprintf(f, "\"%d\":{", i++);
+			fprintf(f, "\"_%d\":{", i++);
 			_client(c, f);
 			fprintf(f, "}%s", c->next ? "," : "");
 		}
@@ -83,7 +83,7 @@ static void _desks(FILE *f)
 
 	fprintf(f, "\"desks\":{");
 	for (d = desks; d; d = d->next) {
-		fprintf(f, "\"%d\":{", i++);
+		fprintf(f, "\"_%d\":{", i++);
 		fprintf(f, "\"id\":\"0x%08x\",", d->win);
 		fprintf(f, "\"class\":\"%s\",", d->clss);
 		fprintf(f, "\"instance\":\"%s\",", d->inst);
@@ -93,9 +93,9 @@ static void _desks(FILE *f)
 	fprintf(f, "}");
 }
 
-static void _globals(FILE *f)
+static void _global(FILE *f)
 {
-	fprintf(f, "\"globals\":{");
+	fprintf(f, "\"global\":{");
 	for (uint32_t i = 0; i < LEN(globalcfg); i++) {
 		fprintf(f, "\"%s\":%d,", globalcfg[i].str, globalcfg[i].val);
 	}
@@ -127,7 +127,7 @@ static void _globals(FILE *f)
 	fprintf(f, "\"outer_urgent\":\"0x%08x\",", border[BORD_O_URGENT]);
 	fprintf(f, "\"outer_unfocus\":\"0x%08x\"", border[BORD_O_UNFOCUS]);
 	fprintf(f, "},");
-	fprintf(f, "\"active_monitor\":{");
+	fprintf(f, "\"focused\":{");
 	_monitor(selmon, f);
 	fprintf(f, "}}");
 }
@@ -136,7 +136,7 @@ static void _monitor(Monitor *m, FILE *f)
 {
 	fprintf(f, "\"name\":\"%s\",", m->name);
 	fprintf(f, "\"number\":%d,", m->num + 1);
-	fprintf(f, "\"active\":%s,", m->ws == selws ? "true" : "false");
+	fprintf(f, "\"focused\":%s,", m->ws == selws ? "true" : "false");
 	fprintf(f, "\"x\":%d,", m->x);
 	fprintf(f, "\"y\":%d,", m->y);
 	fprintf(f, "\"w\":%d,", m->w);
@@ -157,7 +157,7 @@ static void _monitors(FILE *f)
 	fprintf(f, "\"monitors\":{");
 	for (m = monitors; m; m = m->next) {
 		if (m->connected) {
-			fprintf(f, "\"%d\":{", m->num + 1);
+			fprintf(f, "\"_%d\":{", m->num + 1);
 			_monitor(m, f);
 			fprintf(f, "}%s", m->next ? "," : "");
 		}
@@ -172,7 +172,7 @@ static void _panels(FILE *f)
 
 	fprintf(f, "\"panels\":{");
 	for (p = panels; p; p = p->next) {
-		fprintf(f, "\"%d\":{", i++);
+		fprintf(f, "\"_%d\":{", i++);
 		fprintf(f, "\"id\":\"0x%08x\",", p->win);
 		fprintf(f, "\"class\":\"%s\",", p->clss);
 		fprintf(f, "\"instance\":\"%s\",", p->inst);
@@ -198,12 +198,16 @@ static void _rules(FILE *f)
 
 	fprintf(f, "\"rules\":{");
 	for (r = rules; r; r = r->next) {
-		fprintf(f, "\"%d\":{", i++);
+		fprintf(f, "\"_%d\":{", i++);
 		fprintf(f, "\"title\":\"%s\",", r->title ? r->title : "");
 		fprintf(f, "\"class\":\"%s\",", r->clss ? r->clss : "");
 		fprintf(f, "\"instance\":\"%s\",", r->inst ? r->inst : "");
 		fprintf(f, "\"workspace\":%d,", r->ws);
 		fprintf(f, "\"monitor\":\"%s\",", r->mon ? r->mon : "");
+		fprintf(f, "\"x\":%d,", r->x);
+		fprintf(f, "\"y\":%d,", r->y);
+		fprintf(f, "\"w\":%d,", r->w);
+		fprintf(f, "\"h\":%d,", r->h);
 		fprintf(f, "\"float\":%s,", STOB(r, FLOATING));
 		fprintf(f, "\"full\":%s,", STOB(r, FULLSCREEN));
 		fprintf(f, "\"fakefull\":%s,", STOB(r, FAKEFULL));
@@ -212,10 +216,6 @@ static void _rules(FILE *f)
 		fprintf(f, "\"ignore_cfg\":%s,", STOB(r, URGENT));
 		fprintf(f, "\"ignore_msg\":%s,", STOB(r, ABOVE));
 		fprintf(f, "\"callback\":\"%s\",", r->cb ? r->cb->name : "");
-		fprintf(f, "\"x\":%d,", r->x);
-		fprintf(f, "\"y\":%d,", r->y);
-		fprintf(f, "\"w\":%d,", r->w);
-		fprintf(f, "\"h\":%d,", r->h);
 		fprintf(f, "\"xgrav\":\"%s\",", r->xgrav != GRAV_NONE ? gravs[r->xgrav] : "");
 		fprintf(f, "\"ygrav\":\"%s\"", r->ygrav != GRAV_NONE ? gravs[r->ygrav] : "");
 		fprintf(f, "}%s", r->next ? "," : "");
@@ -227,19 +227,20 @@ static void _workspace(Workspace *ws, FILE *f)
 {
 	fprintf(f, "\"name\":\"%s\",", ws->name);
 	fprintf(f, "\"number\":%d,", ws->num + 1);
-	fprintf(f, "\"active\":%s,", ws == selws ? "true" : "false");
+	fprintf(f, "\"focused\":%s,", ws == selws ? "true" : "false");
 	fprintf(f, "\"monitor\":\"%s\",", ws->mon->name);
-	fprintf(f, "\"nmaster\":%d,", ws->nmaster);
-	fprintf(f, "\"nstack\":%d,", ws->nstack);
+	fprintf(f, "\"layout\":\"%s\",", ws->layout->name);
+	fprintf(f, "\"master\":%d,", ws->nmaster);
+	fprintf(f, "\"stack\":%d,", ws->nstack);
 	fprintf(f, "\"msplit\":%0.2f,", ws->msplit);
 	fprintf(f, "\"ssplit\":%0.2f,", ws->ssplit);
-	fprintf(f, "\"gappx\":%d,", ws->gappx);
-	fprintf(f, "\"smartgap\":%d,", ws->smartgap && tilecount(ws) == 1);
+	fprintf(f, "\"gap\":%d,", ws->gappx);
+	fprintf(f, "\"smart_gap\":%d,", ws->smartgap && tilecount(ws) == 1);
 	fprintf(f, "\"pad_l\":%d,", ws->padl);
 	fprintf(f, "\"pad_r\":%d,", ws->padr);
 	fprintf(f, "\"pad_t\":%d,", ws->padt);
 	fprintf(f, "\"pad_b\":%d,", ws->padb);
-	fprintf(f, "\"active_window\":{");
+	fprintf(f, "\"window\":{");
 	if (ws->sel) {
 		_client(ws->sel, f);
 	}
@@ -252,7 +253,7 @@ static void _workspaces(FILE *f)
 
 	fprintf(f, "\"workspaces\":{");
 	for (ws = workspaces; ws; ws = ws->next) {
-		fprintf(f, "\"%d\":{", ws->num + 1);
+		fprintf(f, "\"_%d\":{", ws->num + 1);
 		_workspace(ws, f);
 		fprintf(f, "}%s", ws->next ? "," : "");
 	}
@@ -313,7 +314,7 @@ void printstatus(Status *s, int freeable)
 				break;
 			case STAT_JSON:
 				fprintf(s->file, "{");
-				_globals(s->file);
+				_global(s->file);
 				fprintf(s->file, ",");
 				fflush(s->file);
 				_workspaces(s->file);
@@ -336,11 +337,11 @@ void printstatus(Status *s, int freeable)
 				winchange = lytchange = wschange = 0;
 				break;
 			case STAT_FULL:
-				fprintf(s->file, "# globals - key: value ...\n");
+				fprintf(s->file, "# global - key: value ...\n");
 				for (uint32_t i = 0; i < LEN(globalcfg); i++) {
 					fprintf(s->file, "%s: %d\n", globalcfg[i].str, globalcfg[i].val);
 				}
-				fprintf(s->file, "active_window: 0x%08x\n", selws->sel ? selws->sel->win : 0);
+				fprintf(s->file, "window: 0x%08x\n", selws->sel ? selws->sel->win : 0);
 				fprintf(s->file, "layouts:");
 				for (Layout *l = layouts; l && l->name; l++) {
 					fprintf(s->file, " %s", l->name);
@@ -362,8 +363,8 @@ void printstatus(Status *s, int freeable)
 					fprintf(s->file, " %s%d:%s:%s", ws == selws ? "*" : "", ws->num + 1, ws->name,
 						ws->layout->name);
 				}
-				fprintf(s->file, "\n\t# number:name active_window nmaster nstack "
-					"msplit ssplit gappx smartgap padl padr padt padb");
+				fprintf(s->file, "\n\t# number:name window master stack "
+					"msplit ssplit gappx smart_gap padl padr padt padb");
 				for (ws = workspaces; ws; ws = ws->next) {
 					fprintf(s->file, "\n\t%d:%s 0x%08x %d %d %0.2f %0.2f %d %d %d %d %d %d", ws->num + 1,
 						ws->name, ws->sel ? ws->sel->win : 0, ws->nmaster, ws->nstack, ws->msplit,
@@ -378,7 +379,7 @@ void printstatus(Status *s, int freeable)
 							m->ws->num + 1);
 					}
 				}
-				fprintf(s->file, "\n\t# number:name active_window x y width height wx wy wwidth wheight");
+				fprintf(s->file, "\n\t# number:name window x y width height wx wy wwidth wheight");
 				for (m = monitors; m; m = m->next) {
 					if (m->connected) {
 						fprintf(s->file, "\n\t%d:%s 0x%08x %d %d %d %d %d %d %d %d", m->num + 1, m->name,

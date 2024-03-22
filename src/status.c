@@ -46,6 +46,7 @@ static void _client(Client *c, FILE *f)
 	fprintf(f, "\"scratch\":%s,", STOB(c, SCRATCH));
 	fprintf(f, "\"callback\":\"%s\",", c->cb ? c->cb->name : "");
 	fprintf(f, "\"trans_id\":\"0x%08x\"", c->trans ? c->trans->win : 0);
+	fflush(f);
 }
 
 static void _clients(FILE *f)
@@ -97,7 +98,11 @@ static void _global(FILE *f)
 {
 	fprintf(f, "\"global\":{");
 	for (uint32_t i = 0; i < LEN(globalcfg); i++) {
-		fprintf(f, "\"%s\":%d,", globalcfg[i].str, globalcfg[i].val);
+		if (globalcfg[i].type == TYPE_BOOL) {
+			fprintf(f, "\"%s\":%s,", globalcfg[i].str, globalcfg[i].val ? "true" : "false");
+		} else {
+			fprintf(f, "\"%s\":%d,", globalcfg[i].str, globalcfg[i].val);
+		}
 	}
 	fprintf(f, "\"layouts\":[");
 	for (Layout *l = layouts; l && l->name; ) {
@@ -225,6 +230,9 @@ static void _rules(FILE *f)
 
 static void _workspace(Workspace *ws, FILE *f)
 {
+	int i;
+	Client *c;
+
 	fprintf(f, "\"name\":\"%s\",", ws->name);
 	fprintf(f, "\"number\":%d,", ws->num + 1);
 	fprintf(f, "\"focused\":%s,", ws == selws ? "true" : "false");
@@ -235,25 +243,35 @@ static void _workspace(Workspace *ws, FILE *f)
 	fprintf(f, "\"msplit\":%0.2f,", ws->msplit);
 	fprintf(f, "\"ssplit\":%0.2f,", ws->ssplit);
 	fprintf(f, "\"gap\":%d,", ws->gappx);
-	fprintf(f, "\"smart_gap\":%d,", ws->smartgap && tilecount(ws) == 1);
+	fprintf(f, "\"smart_gap\":%s,", (ws->smartgap && tilecount(ws) == 1) ? "true" : "false");
 	fprintf(f, "\"pad_l\":%d,", ws->padl);
 	fprintf(f, "\"pad_r\":%d,", ws->padr);
 	fprintf(f, "\"pad_t\":%d,", ws->padt);
 	fprintf(f, "\"pad_b\":%d,", ws->padb);
-	fprintf(f, "\"window\":{");
-	if (ws->sel) {
-		_client(ws->sel, f);
+	fprintf(f, "\"clients\":{");
+	for (c = ws->clients, i = 0; c; c = c->next) {
+		fprintf(f, "\"_%d\":{", i++);
+		_client(c, f);
+		fprintf(f, "}%s", c->next ? "," : "");
+	}
+	fprintf(f, "},");
+	fprintf(f, "\"focus_stack\":{");
+	for (c = ws->stack, i = 0; c; c = c->snext) {
+		fprintf(f, "\"_%d\":{", i++);
+		_client(c, f);
+		fprintf(f, "}%s", c->snext ? "," : "");
 	}
 	fprintf(f, "}");
 }
 
 static void _workspaces(FILE *f)
 {
+	int i = 0;
 	Workspace *ws;
 
 	fprintf(f, "\"workspaces\":{");
 	for (ws = workspaces; ws; ws = ws->next) {
-		fprintf(f, "\"_%d\":{", ws->num + 1);
+		fprintf(f, "\"_%d\":{", i++);
 		_workspace(ws, f);
 		fprintf(f, "}%s", ws->next ? "," : "");
 	}

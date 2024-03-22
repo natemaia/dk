@@ -51,14 +51,13 @@ static void _client(Client *c, FILE *f)
 
 static void _clients(FILE *f)
 {
-	int i = 0;
 	Client *c;
 	Workspace *ws;
 
-	fprintf(f, "\"clients\":{");
+	fprintf(f, "\"clients\":[");
 	for (ws = workspaces; ws; ws = ws->next) {
 		for (c = ws->clients; c; c = c->next) {
-			fprintf(f, "\"_%d\":{", i++);
+			fprintf(f, "{");
 			_client(c, f);
 			fprintf(f, "}%s", c->next ? "," : "");
 		}
@@ -69,29 +68,28 @@ static void _clients(FILE *f)
 	if (scratch.clients) {
 		fprintf(f, ",");
 		for (c = scratch.clients; c; c = c->next) {
-			fprintf(f, "\"_%d\":{", i++);
+			fprintf(f, "{");
 			_client(c, f);
 			fprintf(f, "}%s", c->next ? "," : "");
 		}
 	}
-	fprintf(f, "}");
+	fprintf(f, "]");
 }
 
 static void _desks(FILE *f)
 {
 	Desk *d;
-	int i = 0;
 
-	fprintf(f, "\"desks\":{");
+	fprintf(f, "\"desks\":[");
 	for (d = desks; d; d = d->next) {
-		fprintf(f, "\"_%d\":{", i++);
+		fprintf(f, "{");
 		fprintf(f, "\"id\":\"0x%08x\",", d->win);
 		fprintf(f, "\"class\":\"%s\",", d->clss);
 		fprintf(f, "\"instance\":\"%s\",", d->inst);
 		fprintf(f, "\"monitor\":\"%s\"", d->mon->name);
 		fprintf(f, "}%s", d->next ? "," : "");
 	}
-	fprintf(f, "}");
+	fprintf(f, "]");
 }
 
 static void _global(FILE *f)
@@ -159,25 +157,24 @@ static void _monitors(FILE *f)
 {
 	Monitor *m;
 
-	fprintf(f, "\"monitors\":{");
+	fprintf(f, "\"monitors\":[");
 	for (m = monitors; m; m = m->next) {
 		if (m->connected) {
-			fprintf(f, "\"_%d\":{", m->num + 1);
+			fprintf(f, "{");
 			_monitor(m, f);
 			fprintf(f, "}%s", m->next ? "," : "");
 		}
 	}
-	fprintf(f, "}");
+	fprintf(f, "]");
 }
 
 static void _panels(FILE *f)
 {
 	Panel *p;
-	int i = 0;
 
-	fprintf(f, "\"panels\":{");
+	fprintf(f, "\"panels\":[");
 	for (p = panels; p; p = p->next) {
-		fprintf(f, "\"_%d\":{", i++);
+		fprintf(f, "{");
 		fprintf(f, "\"id\":\"0x%08x\",", p->win);
 		fprintf(f, "\"class\":\"%s\",", p->clss);
 		fprintf(f, "\"instance\":\"%s\",", p->inst);
@@ -193,17 +190,16 @@ static void _panels(FILE *f)
 		_monitor(p->mon, f);
 		fprintf(f, "}}%s", p->next ? "," : "");
 	}
-	fprintf(f, "}");
+	fprintf(f, "]");
 }
 
 static void _rules(FILE *f)
 {
 	Rule *r;
-	int i = 0;
 
-	fprintf(f, "\"rules\":{");
+	fprintf(f, "\"rules\":[");
 	for (r = rules; r; r = r->next) {
-		fprintf(f, "\"_%d\":{", i++);
+		fprintf(f, "{");
 		fprintf(f, "\"title\":\"%s\",", r->title ? r->title : "");
 		fprintf(f, "\"class\":\"%s\",", r->clss ? r->clss : "");
 		fprintf(f, "\"instance\":\"%s\",", r->inst ? r->inst : "");
@@ -225,12 +221,11 @@ static void _rules(FILE *f)
 		fprintf(f, "\"ygrav\":\"%s\"", r->ygrav != GRAV_NONE ? gravs[r->ygrav] : "");
 		fprintf(f, "}%s", r->next ? "," : "");
 	}
-	fprintf(f, "}");
+	fprintf(f, "]");
 }
 
 static void _workspace(Workspace *ws, FILE *f)
 {
-	int i;
 	Client *c;
 
 	fprintf(f, "\"name\":\"%s\",", ws->name);
@@ -248,34 +243,33 @@ static void _workspace(Workspace *ws, FILE *f)
 	fprintf(f, "\"pad_r\":%d,", ws->padr);
 	fprintf(f, "\"pad_t\":%d,", ws->padt);
 	fprintf(f, "\"pad_b\":%d,", ws->padb);
-	fprintf(f, "\"clients\":{");
-	for (c = ws->clients, i = 0; c; c = c->next) {
-		fprintf(f, "\"_%d\":{", i++);
+	fprintf(f, "\"clients\":[");
+	for (c = ws->clients; c; c = c->next) {
+		fprintf(f, "{");
 		_client(c, f);
 		fprintf(f, "}%s", c->next ? "," : "");
 	}
-	fprintf(f, "},");
-	fprintf(f, "\"focus_stack\":{");
-	for (c = ws->stack, i = 0; c; c = c->snext) {
-		fprintf(f, "\"_%d\":{", i++);
+	fprintf(f, "],");
+	fprintf(f, "\"focus_stack\":[");
+	for (c = ws->stack; c; c = c->snext) {
+		fprintf(f, "{");
 		_client(c, f);
 		fprintf(f, "}%s", c->snext ? "," : "");
 	}
-	fprintf(f, "}");
+	fprintf(f, "]");
 }
 
 static void _workspaces(FILE *f)
 {
-	int i = 0;
 	Workspace *ws;
 
-	fprintf(f, "\"workspaces\":{");
+	fprintf(f, "\"workspaces\":[");
 	for (ws = workspaces; ws; ws = ws->next) {
-		fprintf(f, "\"_%d\":{", i++);
+		fprintf(f, "{");
 		_workspace(ws, f);
 		fprintf(f, "}%s", ws->next ? "," : "");
 	}
-	fprintf(f, "}");
+	fprintf(f, "]");
 }
 
 void printstatus(Status *s, int freeable)

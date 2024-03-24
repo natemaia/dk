@@ -19,13 +19,14 @@ static void _monitor(Monitor *m, FILE *f);
 static void _monitors(FILE *f);
 static void _panels(FILE *f);
 static void _rules(FILE *f);
+static char *_title(Client *c);
 static void _workspace(Workspace *ws, FILE *f);
 static void _workspaces(FILE *f);
 
 static void _client(Client *c, FILE *f)
 {
 	fprintf(f, "\"id\":\"0x%08x\",", c->win);
-	fprintf(f, "\"title\":\"%s\",", c->title);
+	fprintf(f, "\"title\":\"%s\",", _title(c));
 	fprintf(f, "\"class\":\"%s\",", c->clss);
 	fprintf(f, "\"instance\":\"%s\",", c->inst);
 	fprintf(f, "\"workspace\":%d,", c->ws->num + !STATE(c, SCRATCH));
@@ -224,6 +225,22 @@ static void _rules(FILE *f)
 	fprintf(f, "]");
 }
 
+static char *_title(Client *c)
+{
+	int idx = 0;
+	static char title[512];
+
+	for (uint32_t i = 0; i < sizeof(title) && c->title[i]; i++) {
+		if (c->title[i] == '"')	{
+			title[idx++] = '\\';
+		}
+		title[idx++] = c->title[i];
+	}
+	title[idx] = '\0';
+
+	return title;
+}
+
 static void _workspace(Workspace *ws, FILE *f)
 {
 	Client *c;
@@ -412,11 +429,11 @@ void printstatus(Status *s, int freeable)
 					"float full fakefull fixed stick urgent above hidden scratch callback trans_id");
 				for (ws = workspaces; ws; ws = ws->next) {
 					for (c = ws->clients; c; c = c->next) {
-						DBG("printstatus: client 0x%08x %s", c->win, c->title)
+						DBG("printstatus: client 0x%08x %s", c->win, _title(c))
 						fprintf(s->file,
 							"\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d "
 							"%d %d %d %d %d %d %d %d %d %s 0x%08x",
-							c->win, c->title, c->clss, c->inst, c->ws->num + 1, c->x, c->y, c->w, c->h, c->bw, c->hoff,
+							c->win, _title(c), c->clss, c->inst, c->ws->num + 1, c->x, c->y, c->w, c->h, c->bw, c->hoff,
 							STATE(c, FLOATING) != 0, STATE(c, FULLSCREEN) != 0, STATE(c, FAKEFULL) != 0,
 							STATE(c, FIXED) != 0, STATE(c, STICKY) != 0, STATE(c, URGENT) != 0, STATE(c, ABOVE) != 0,
 							STATE(c, HIDDEN) != 0, STATE(c, SCRATCH) != 0, c->cb ? c->cb->name : "none",
@@ -424,11 +441,11 @@ void printstatus(Status *s, int freeable)
 					}
 				}
 				for (c = scratch.clients; c; c = c->next) {
-					DBG("printstatus: client 0x%08x %s", c->win, c->title)
+					DBG("printstatus: client 0x%08x %s", c->win, _title(c))
 					fprintf(s->file,
 						"\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d "
 						"%d %d %d %d %d %d %d %d %d %s 0x%08x",
-						c->win, c->title, c->clss, c->inst, c->ws->num, c->x, c->y, c->w, c->h, c->bw, c->hoff,
+						c->win, _title(c), c->clss, c->inst, c->ws->num, c->x, c->y, c->w, c->h, c->bw, c->hoff,
 						STATE(c, FLOATING) != 0, STATE(c, FULLSCREEN) != 0, STATE(c, FAKEFULL) != 0,
 						STATE(c, FIXED) != 0, STATE(c, STICKY) != 0, STATE(c, URGENT) != 0, STATE(c, ABOVE) != 0,
 						STATE(c, HIDDEN) != 0, STATE(c, SCRATCH) != 0, c->cb ? c->cb->name : "none",

@@ -26,6 +26,7 @@ static void _workspaces(FILE *f);
 static void _client(Client *c, FILE *f)
 {
 	fprintf(f, "\"id\":\"0x%08x\",", c->win);
+	fprintf(f, "\"pid\":%d,", c->pid);
 	fprintf(f, "\"title\":\"%s\",", _title(c));
 	fprintf(f, "\"class\":\"%s\",", c->clss);
 	fprintf(f, "\"instance\":\"%s\",", c->inst);

@@ -350,6 +350,8 @@ static void absorb(Client *p, Client *c)
 	/* TODO: this is excessive, find a better way to update client title and class */
 	clientname(p);
 	clientname(c);
+	p->pid = winpid(p->win);
+	c->pid = winpid(c->win);
 	winclass(p->win, p->clss, p->inst, sizeof(p->clss));
 	winclass(c->win, c->clss, c->inst, sizeof(c->clss));
 
@@ -827,6 +829,7 @@ void desorb(Client *c)
 	c->absorbed = NULL;
 	setfullscreen(c, 0);
 	clientname(c);
+	c->pid = winpid(c->win);
 	winclass(c->win, c->clss, c->inst, sizeof(c->clss));
 	wschange = winchange = 1;
 	c->state |= STATE_NEEDSMAP;

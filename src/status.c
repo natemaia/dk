@@ -311,25 +311,35 @@ void printstatus(Status *s, int freeable)
 			case STAT_WIN:
 				if (winchange) {
 					winchange = 0;
-					fprintf(s->file, "%s", selws->sel ? selws->sel->title : "");
+					fprintf(s->file, "{\"focused\":\"%s\"}\n", selws->sel ? selws->sel->title : "");
+					/* fprintf(s->file, "%s", selws->sel ? selws->sel->title : ""); */
 				}
 				break;
 			case STAT_LYT:
 				if (lytchange) {
 					lytchange = 0;
-					fprintf(s->file, "%s", selws->layout->name);
+					fprintf(s->file, "{\"layout\":\"%s\"}\n", selws->layout->name);
+					/* fprintf(s->file, "%s", selws->layout->name); */
 				}
 				break;
 			case STAT_WS:
 				if (wschange) {
 					wschange = 0;
 					for (ws = workspaces; ws; ws = ws->next) {
-						char fmt[5] = "i%s:";
-						fmt[0] = (ws == selws) ? (ws->clients ? 'A' : 'I') : (ws->clients ? 'a' : 'i');
-						if (!ws->next) {
-							fmt[3] = '\0';
-						}
-						fprintf(s->file, fmt, ws->name);
+						fprintf(s->file, "{");
+						fprintf(s->file, "\"name\":\"%s\",", ws->name);
+						fprintf(s->file, "\"number\":%d,", ws->num + 1);
+						fprintf(s->file, "\"focused\":%s,", ws == selws ? "true" : "false");
+						fprintf(s->file, "\"active\":%s,", ws->clients ? "true" : "false");
+						fprintf(s->file, "\"monitor\":\"%s\",", ws->mon->name);
+						fprintf(s->file, "\"layout\":\"%s\",", ws->layout->name);
+						fprintf(s->file, "}");
+						/* char fmt[5] = "i%s:"; */
+						/* fmt[0] = (ws == selws) ? (ws->clients ? 'A' : 'I') : (ws->clients ? 'a' : 'i'); */
+						/* if (!ws->next) { */
+						/* 	fmt[3] = '\0'; */
+						/* } */
+						/* fprintf(s->file, fmt, ws->name); */
 					}
 				}
 				break;

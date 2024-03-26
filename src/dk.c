@@ -346,7 +346,13 @@ static void absorb(Client *p, Client *c)
 	p->absorbed = c;
 	p->win = c->win;
 	c->win = w;
+
+	/* TODO: this is excessive, find a better way to update client title and class */
 	clientname(p);
+	clientname(c);
+	winclass(p->win, p->clss, p->inst, sizeof(p->clss));
+	winclass(c->win, c->clss, c->inst, sizeof(c->clss));
+
 	updatenetclients();
 	p->state |= STATE_NEEDSMAP;
 	wschange = winchange = 1;
@@ -820,7 +826,8 @@ void desorb(Client *c)
 	free(c->absorbed);
 	c->absorbed = NULL;
 	setfullscreen(c, 0);
-	clientname(c); /* update the name */
+	clientname(c);
+	winclass(c->win, c->clss, c->inst, sizeof(c->clss));
 	wschange = winchange = 1;
 	c->state |= STATE_NEEDSMAP;
 	refresh();

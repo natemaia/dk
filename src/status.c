@@ -47,7 +47,12 @@ static void _client(Client *c, FILE *f)
 	fprintf(f, "\"hidden\":%s,", STOB(c, HIDDEN));
 	fprintf(f, "\"scratch\":%s,", STOB(c, SCRATCH));
 	fprintf(f, "\"callback\":\"%s\",", c->cb ? c->cb->name : "");
-	fprintf(f, "\"trans_id\":\"0x%08x\"", c->trans ? c->trans->win : 0);
+	fprintf(f, "\"trans_id\":\"0x%08x\",", c->trans ? c->trans->win : 0);
+	fprintf(f, "\"absorbed\":{");
+	if (c->absorbed) {
+		_client(c->absorbed, f);
+	}
+	fprintf(f, "}");
 	fflush(f);
 }
 

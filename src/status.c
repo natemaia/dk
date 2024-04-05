@@ -42,11 +42,13 @@ static void _client(Client *c, FILE *f)
 	fprintf(f, "\"float\":%s,", STOB(c, FLOATING));
 	fprintf(f, "\"full\":%s,", STOB(c, FULLSCREEN));
 	fprintf(f, "\"fakefull\":%s,", STOB(c, FAKEFULL));
+	fprintf(f, "\"fixed\":%s,", STOB(c, FIXED));
 	fprintf(f, "\"sticky\":%s,", STOB(c, STICKY));
 	fprintf(f, "\"urgent\":%s,", STOB(c, URGENT));
 	fprintf(f, "\"above\":%s,", STOB(c, ABOVE));
 	fprintf(f, "\"hidden\":%s,", STOB(c, HIDDEN));
 	fprintf(f, "\"scratch\":%s,", STOB(c, SCRATCH));
+	fprintf(f, "\"no_absorb\":%s,", STOB(c, NOABSORB));
 	fprintf(f, "\"callback\":\"%s\",", c->cb ? c->cb->name : "");
 	fprintf(f, "\"transient\":{");
 	if (c->trans) {
@@ -215,7 +217,7 @@ static void _rules(FILE *f)
 		fprintf(f, "\"title\":\"%s\",", r->title ? r->title : "");
 		fprintf(f, "\"class\":\"%s\",", r->clss ? r->clss : "");
 		fprintf(f, "\"instance\":\"%s\",", r->inst ? r->inst : "");
-		fprintf(f, "\"workspace\":%d,", r->ws);
+		fprintf(f, "\"workspace\":%d,", r->ws + !STATE(r, SCRATCH));
 		fprintf(f, "\"monitor\":\"%s\",", r->mon ? r->mon : "");
 		fprintf(f, "\"x\":%d,", r->x);
 		fprintf(f, "\"y\":%d,", r->y);
@@ -225,9 +227,11 @@ static void _rules(FILE *f)
 		fprintf(f, "\"full\":%s,", STOB(r, FULLSCREEN));
 		fprintf(f, "\"fakefull\":%s,", STOB(r, FAKEFULL));
 		fprintf(f, "\"sticky\":%s,", STOB(r, STICKY));
-		fprintf(f, "\"focus\":%s,", STOB(r, HIDDEN));
-		fprintf(f, "\"ignore_cfg\":%s,", STOB(r, URGENT));
-		fprintf(f, "\"ignore_msg\":%s,", STOB(r, ABOVE));
+		fprintf(f, "\"scratch\":%s,", STOB(r, SCRATCH));
+		fprintf(f, "\"focus\":%s,", r->focus ? "true" : "false");
+		fprintf(f, "\"ignore_cfg\":%s,", STOB(r, IGNORECFG));
+		fprintf(f, "\"ignore_msg\":%s,", STOB(r, IGNOREMSG));
+		fprintf(f, "\"no_absorb\":%s,", STOB(r, NOABSORB));
 		fprintf(f, "\"callback\":\"%s\",", r->cb ? r->cb->name : "");
 		fprintf(f, "\"xgrav\":\"%s\",", r->xgrav != GRAV_NONE ? gravs[r->xgrav] : "");
 		fprintf(f, "\"ygrav\":\"%s\"", r->ygrav != GRAV_NONE ? gravs[r->ygrav] : "");

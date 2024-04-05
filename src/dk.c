@@ -910,6 +910,9 @@ static int savestate(int restore)
 				t->x = c.x, t->y = c.y, t->w = c.w, t->h = c.h; t->bw = c.bw;
 			}
 		}
+		for (ws = workspaces; ws; ws = ws->next) {
+			ws->sel = !ws->sel && ws->stack ? ws->stack : NULL;
+		}
 	} else {
 		/* dump client data as binary */
 		win = selws->sel ? selws->sel->win : XCB_WINDOW_NONE;

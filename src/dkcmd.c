@@ -7,12 +7,12 @@
 #include <sys/un.h>
 #include <sys/socket.h>
 
+#include <err.h>
 #include <poll.h>
-#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <err.h>
+#include <unistd.h>
 
 #include "strl.h"
 #include "util.h"
@@ -21,8 +21,104 @@
 #define VERSION "2.1"
 #endif
 
+#ifndef INDENT
+#define INDENT 2
+#endif
+
+static int json_pretty(int argc, char *argv[])
+{
+	size_t len = 0;
+	FILE *f = stdin;
+	char p, n, *c, *line = NULL;
+	int lvl = 1, inkey = 0, instr = 0, first = 1;
+
+	if (argc && *argv && !(f = fopen(*argv, "r"))) {
+		perror("open");
+		return 1;
+	}
+
+	while (getline(&line, &len, f) != -1 && (c = line)) {
+		if (first) {
+			first = 0;
+			printf("%c\n", *c);
+			p = *c++;
+		}
+		while (*c) {
+			if (instr && (*c != '"' || *(c - 1) == '\\')) {
+				printf("%c", *c++);
+				continue;
+			}
+			n = *(c + 1);
+			switch (*c) {
+				case ',':
+					printf("%c\n", *c);
+					p = *c;
+					break;
+				case ':':
+					printf("%c ", *c);
+					inkey = 0;
+					p = *c;
+					break;
+				case '"':
+					if (instr) {
+						instr = 0;
+						printf("%c%s", *c, (n == '}' || n == ']') ? "\n" : "");
+					} else if (!instr && !inkey && (p == ',' || p == '{' || p == '[')) {
+						inkey = 1;
+						printf("%*s%c", lvl * INDENT, lvl ? " " : "", *c);
+					} else if (!instr && !inkey && p == ':') {
+						instr = 1;
+						printf("%c", *c);
+					} else {
+						printf("%c", *c);
+					}
+					p = *c;
+					break;
+				case '{':
+				case '[':
+					if (n == (*c) + 2) {
+						printf("%c%c%s", *c, (*c) + 2, *(c + 2) == ',' || *(c + 2) != (*c) + 2 ? "" : "\n");
+						c++;
+						p = *c;
+					} else if (p == ':') {
+						printf("%c\n", *c);
+						lvl++;
+						p = *c;
+					} else {
+						printf("%*s%c%s", lvl * INDENT, lvl ? " " : "", *c, n != (*c) + 2 ? "\n" : "");
+						lvl++;
+						p = *c;
+					}
+					break;
+				case '}':
+				case ']':
+					lvl--;
+					printf("%*s%c%s", lvl * INDENT, lvl ? " " : "", *c, (n != ',' && (n == '}' || n == ']')) ? "\n" : "");
+					p = *c;
+					break;
+				default:
+					printf("%c", *c);
+					break;
+			}
+			c++;
+		}
+		fflush(stdout);
+	}
+	free(line);
+	fclose(f);
+	return 0;
+}
+
 int main(int argc, char *argv[])
 {
+	if (argc == 1) {
+		return usage(argv[0], VERSION, 1, 'h', "[-hv] <COMMAND>");
+	} else if (!strcmp(argv[1], "-v") || !strcmp(argv[1], "-h")) {
+		return usage(argv[0], VERSION, 0, argv[1][1], "[-hv] <COMMAND>");
+	} else if (!strcmp(argv[1], "-p")) {
+		return json_pretty(argc - 2, argv + 2);
+	}
+
 	size_t j = 0, n = 0;
 	int i, fd, ret = 0, offs = 1;
 	char *sock, *equal = NULL, *space = NULL, buf[BUFSIZ], resp[BUFSIZ];
@@ -31,12 +127,6 @@ int main(int argc, char *argv[])
 		{-1,            POLLIN,  0},
 		{STDOUT_FILENO, POLLHUP, 0},
 	};
-
-	if (argc == 1) {
-		return usage(argv[0], VERSION, 1, 'h', "[-hv] <COMMAND>");
-	} else if (!strcmp(argv[1], "-v") || !strcmp(argv[1], "-h")) {
-		return usage(argv[0], VERSION, 0, argv[1][1], "[-hv] <COMMAND>");
-	}
 
 	if (!(sock = getenv("DKSOCK"))) {
 		err(1, "unable to get socket path from environment");

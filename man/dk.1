@@ -4,6 +4,9 @@ dk \- A tiling window manager in the vein of dwm, bspwm, and xmonad.
 .SH SYNOPSIS
 .B dk
 .RB [ \-vh ]
+.PP
+.B dkcmd
+.RB [ \-vh ]\ [ \-p\ [ FILE ] ]\ [ COMMAND ]
 .SH DESCRIPTION
 .PP
 Windows are managed in various layouts, and are grouped by workspaces.
@@ -41,6 +44,9 @@ Prints usage information to stdout and exits.
 .TP
 .B \-v
 Prints version information to stdout and exits.
+.TP
+.B \-p
+Pretty format JSON input from FILE or STDIN and print on STDOUT.
 .SH CUSTOMIZATION
 For basic changes dk can be customized by running commands through the
 .B dkcmd
@@ -814,7 +820,7 @@ win [CLIENT] resize x=center y=center w=1280 h=720 bw=1
 \l'60'
 .SS Status
 .PP
-\fI\fCstatus\fR operates on windows.
+\fI\fCstatus\fR print status information as JSON to a file or stdout.
 .IP
 .nf
 \fI\fC
@@ -823,19 +829,17 @@ status [TYPE] [FILE] [NUM]
 .fi
 .SS Settings
 .PP
-\fI\fCtype\fR the type of status to output.
+\fI\fCtype\fR the type of status to output and when to trigger.
 .IP \[bu] 2
-\fI\fCws\fR output workspace info.
+\fI\fCws\fR output full workspace info - triggers on workspace change.
 .IP \[bu] 2
-\fI\fCwin\fR output current window title.
+\fI\fCwin\fR output current window title - triggers on window or title change.
 .IP \[bu] 2
-\fI\fClayout\fR output current workspace layout name.
+\fI\fClayout\fR output current layout name - triggers on layout change.
 .IP \[bu] 2
-\fI\fCbar\fR output simple info for use in bars (win, layout, and ws combined).
+\fI\fCbar\fR identical output to `ws` except - triggers on all changes.
 .IP \[bu] 2
-\fI\fCfull\fR output the full wm and managed client state.
-.IP \[bu] 2
-\fI\fCjson\fR same as full but output in JSON format.
+\fI\fCfull\fR output full wm and client state - triggers on all changes.
 .IP
 .nf
 \fI\fC

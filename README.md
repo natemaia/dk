@@ -116,6 +116,17 @@ Most of your interaction with the window manager will be using `dkcmd`
 which writes one or more commands into the socket where it is then read  
 and parsed by the window manager *(see Commands section below)*.
 
+dkcmd accepts one flag with an optional file argument
+- `-p` Pretty format JSON input from passed file or STDIN and print on STDOUT.
+
+
+```bash
+dkcmd status type=bar num=1 | dkcmd -p
+
+# or
+dkcmd -p output.json
+```
+
 ### Syntax Outline
 The commands have a very basic syntax and parsing, the input is broken  
 down into smaller pieces *(tokens)* which are then passed to the matching  
@@ -645,21 +656,20 @@ win [CLIENT] resize x=center y=center w=1280 h=720 bw=1
 ---
 
 #### Status
-`status` print status information to a file or stdout.
+`status` print status information as JSON to a file or stdout.
 
 ``` bash
 status [TYPE] [FILE] [NUM]
 ```
 
 ###### Subcommands
-`type` (string) the type of status info to output.
+`type` (string) the type of status info to output and when to trigger.
 
-- `ws` output workspace info.
-- `win` output current window title.
-- `layout` output current workspace layout name.
-- `bar` output simple info for use in bars *(win, layout, and ws combined)*.
-- `full` output the full wm and managed client state.
-- `json` same as full but output in JSON format.
+- `ws` output full workspace info - triggers on workspace change.
+- `win` output current window title - triggers on window or title change.
+- `layout` output current layout name - triggers on layout change.
+- `bar` identical output to `ws` except - triggers on all changes.
+- `full` output full wm and client state - triggers on all changes.
 
 ``` bash
 status type=ws [FILE] [NUM]

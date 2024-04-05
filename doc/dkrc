@@ -14,6 +14,11 @@ if hash sxhkd >/dev/null 2>&1; then
 	sxhkd -c "$HOME/.config/dk/sxhkdrc" &
 fi
 
+# spawn a scratchpad terminal if not already (see sxhkdrc and rules for bind and setup)
+# if ! pgrep -f "st -c scratchpad" >/dev/null 2>&1; then
+# 	st -c scratchpad &
+# fi
+
 # adjust border widths based on the DPI of the monitor
 px=$(xrandr | grep ' connected' | tail -n1 | grep -o '[0-9]\+x[0-9]\+' | cut -d'x' -f2)
 mm=$(xrandr | grep ' connected' | tail -n1 | grep -o '[0-9]\+mm' | tail -n1 | sed 's/mm//')

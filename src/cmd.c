@@ -1193,18 +1193,16 @@ int cmdstatus(char **argv)
 	while (*argv) {
 		if (!strcmp("type", *argv)) {
 			argv++, nparsed++;
-			if (!strcmp("ws", *argv)) {
-				s.type = STAT_WS, wschange = 1;
-			} else if (!strcmp("bar", *argv)) {
+			if (!strcmp("bar", *argv)) {
 				s.type = STAT_BAR;
 			} else if (!strcmp("win", *argv)) {
 				s.type = STAT_WIN, winchange = 1;
-			} else if (!strcmp("full", *argv)) {
-				s.type = STAT_FULL;
-			} else if (!strcmp("json", *argv)) {
-				s.type = STAT_JSON;
+			} else if (!strcmp("ws", *argv)) {
+				s.type = STAT_WS, wschange = 1;
 			} else if (!strcmp("layout", *argv)) {
 				s.type = STAT_LYT, lytchange = 1;
+			} else if (!strcmp("full", *argv)) {
+				s.type = STAT_FULL;
 			} else {
 				goto badvalue;
 			}
@@ -1223,7 +1221,7 @@ int cmdstatus(char **argv)
 		} else {
 			break;
 badvalue:
-			respond(cmdresp, "!status: invalid value for %s: %s", *(argv - 1), *argv);
+			respond(cmdresp, "!status: invalid or missing value for %s: %s", *(argv - 1), *argv);
 			return -1;
 		}
 		argv++, nparsed++;

@@ -9,7 +9,7 @@
 #include "dk.h"
 #include "status.h"
 
-#define STOB(c, state) STATE(c, state) ? "true" : "false"
+#define STOB(v, s) STATE(v, s) ? "true" : "false"
 
 static void _client(Client *c, FILE *f);
 static void _clients(FILE *f);
@@ -20,8 +20,9 @@ static void _monitors(FILE *f);
 static void _panels(FILE *f);
 static void _rules(FILE *f);
 static char *_title(Client *c);
-static void _workspace(Workspace *ws, FILE *f);
 static void _workspaces(FILE *f);
+static void _workspace_win(Workspace *ws, FILE *f);
+static void _workspace(Workspace *ws, FILE *f);
 
 static void _client(Client *c, FILE *f)
 {
@@ -47,7 +48,11 @@ static void _client(Client *c, FILE *f)
 	fprintf(f, "\"hidden\":%s,", STOB(c, HIDDEN));
 	fprintf(f, "\"scratch\":%s,", STOB(c, SCRATCH));
 	fprintf(f, "\"callback\":\"%s\",", c->cb ? c->cb->name : "");
-	fprintf(f, "\"trans_id\":\"0x%08x\",", c->trans ? c->trans->win : 0);
+	fprintf(f, "\"transient\":{");
+	if (c->trans) {
+		_client(c->trans, f);
+	}
+	fprintf(f, "},");
 	fprintf(f, "\"absorbed\":{");
 	if (c->absorbed) {
 		_client(c->absorbed, f);
@@ -282,6 +287,17 @@ static void _workspace(Workspace *ws, FILE *f)
 	fprintf(f, "]");
 }
 
+static void _workspace_win(Workspace *ws, FILE *f)
+{
+	if (ws->sel && !STATE(ws->sel, HIDDEN)) {
+		fprintf(f, "\"title\":\"%s\",", _title(ws->sel));
+		fprintf(f, "\"id\":\"0x%08x\"", ws->sel->win);
+	} else {
+		fprintf(f, "\"title\":\"\",");
+		fprintf(f, "\"id\":\"\"");
+	}
+}
+
 static void _workspaces(FILE *f)
 {
 	Workspace *ws;
@@ -311,53 +327,40 @@ void printstatus(Status *s, int freeable)
 			case STAT_WIN:
 				if (winchange) {
 					winchange = 0;
-					fprintf(s->file, "{\"focused\":\"%s\"}\n", selws->sel ? selws->sel->title : "");
-					/* fprintf(s->file, "%s", selws->sel ? selws->sel->title : ""); */
+					fprintf(s->file, "{\"focused\":\"%s\"}", selws->sel ? _title(selws->sel) : "");
 				}
 				break;
 			case STAT_LYT:
 				if (lytchange) {
 					lytchange = 0;
-					fprintf(s->file, "{\"layout\":\"%s\"}\n", selws->layout->name);
-					/* fprintf(s->file, "%s", selws->layout->name); */
+					fprintf(s->file, "{\"layout\":\"%s\"}", selws->layout->name);
 				}
 				break;
 			case STAT_WS:
-				if (wschange) {
-					wschange = 0;
-					for (ws = workspaces; ws; ws = ws->next) {
-						fprintf(s->file, "{");
-						fprintf(s->file, "\"name\":\"%s\",", ws->name);
-						fprintf(s->file, "\"number\":%d,", ws->num + 1);
-						fprintf(s->file, "\"focused\":%s,", ws == selws ? "true" : "false");
-						fprintf(s->file, "\"active\":%s,", ws->clients ? "true" : "false");
-						fprintf(s->file, "\"monitor\":\"%s\",", ws->mon->name);
-						fprintf(s->file, "\"layout\":\"%s\",", ws->layout->name);
-						fprintf(s->file, "}");
-						/* char fmt[5] = "i%s:"; */
-						/* fmt[0] = (ws == selws) ? (ws->clients ? 'A' : 'I') : (ws->clients ? 'a' : 'i'); */
-						/* if (!ws->next) { */
-						/* 	fmt[3] = '\0'; */
-						/* } */
-						/* fprintf(s->file, fmt, ws->name); */
-					}
+				if (!wschange) {
+					break;
 				}
-				break;
+				wschange = 0;
+				/* FALL THROUGH */
 			case STAT_BAR:
-				fprintf(s->file, "W");
-				for (ws = workspaces; ws; ws = ws->next) {
-					char fmt[5] = "i%s:";
-					fmt[0] = (ws == selws) ? (ws->clients ? 'A' : 'I') : (ws->clients ? 'a' : 'i');
-					if (!ws->next) {
-						fmt[3] = '\0';
-					}
-					fprintf(s->file, fmt, ws->name);
+				if (s->type == STAT_BAR) {
+					winchange = lytchange = wschange = 0;
 				}
-				fprintf(s->file, "\nL%s\nA%s", selws->layout->name,
-					selws->sel && !STATE(selws->sel, HIDDEN) ? selws->sel->title : "");
-				winchange = lytchange = wschange = 0;
+				fprintf(s->file, "{\"workspaces\":[");
+				for (ws = workspaces; ws; ws = ws->next) {
+					fprintf(s->file, "{");
+					fprintf(s->file, "\"name\":\"%s\",", ws->name);
+					fprintf(s->file, "\"number\":%d,", ws->num + 1);
+					fprintf(s->file, "\"focused\":%s,", ws == selws ? "true" : "false");
+					fprintf(s->file, "\"active\":%s,", ws->clients ? "true" : "false");
+					fprintf(s->file, "\"monitor\":\"%s\",", ws->mon->name);
+					fprintf(s->file, "\"layout\":\"%s\",", ws->layout->name);
+					_workspace_win(ws, s->file);
+					fprintf(s->file, "}%s", ws->next ? "," : "");
+				}
+				fprintf(s->file, "]}");
 				break;
-			case STAT_JSON:
+			case STAT_FULL:
 				fprintf(s->file, "{");
 				_global(s->file);
 				fprintf(s->file, ",");
@@ -378,134 +381,7 @@ void printstatus(Status *s, int freeable)
 				fprintf(s->file, ",");
 				fflush(s->file);
 				_desks(s->file);
-				fprintf(s->file, "}\n");
-				winchange = lytchange = wschange = 0;
-				break;
-			case STAT_FULL:
-				fprintf(s->file, "# global - key: value ...\n");
-				for (uint32_t i = 0; i < LEN(globalcfg); i++) {
-					fprintf(s->file, "%s: %d\n", globalcfg[i].str, globalcfg[i].val);
-				}
-				fprintf(s->file, "window: 0x%08x\n", selws->sel ? selws->sel->win : 0);
-				fprintf(s->file, "layouts:");
-				for (Layout *l = layouts; l && l->name; l++) {
-					fprintf(s->file, " %s", l->name);
-				}
-				fprintf(s->file, "\ncallbacks:");
-				for (Callback *cb = callbacks; cb && cb->name; cb++) {
-					fprintf(s->file, " %s", cb->name);
-				}
-				fprintf(s->file,
-					"\n\n# width outer_width focus urgent unfocus outer_focus "
-					"outer_urgent outer_unfocus\n"
-					"border: %u %u 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x",
-					border[BORD_WIDTH], border[BORD_O_WIDTH], border[BORD_FOCUS], border[BORD_URGENT],
-					border[BORD_UNFOCUS], border[BORD_O_FOCUS], border[BORD_O_URGENT],
-					border[BORD_O_UNFOCUS]);
-				Workspace *ws;
-				fprintf(s->file, "\n\n# number:name:layout ...\nworkspaces:");
-				for (ws = workspaces; ws; ws = ws->next) {
-					fprintf(s->file, " %s%d:%s:%s", ws == selws ? "*" : "", ws->num + 1, ws->name,
-						ws->layout->name);
-				}
-				fprintf(s->file, "\n\t# number:name window master stack "
-					"msplit ssplit gappx smart_gap padl padr padt padb");
-				for (ws = workspaces; ws; ws = ws->next) {
-					fprintf(s->file, "\n\t%d:%s 0x%08x %d %d %0.2f %0.2f %d %d %d %d %d %d", ws->num + 1,
-						ws->name, ws->sel ? ws->sel->win : 0, ws->nmaster, ws->nstack, ws->msplit,
-						ws->ssplit, ws->gappx, ws->smartgap && tilecount(ws) == 1, ws->padl, ws->padr,
-						ws->padt, ws->padb);
-				}
-				Monitor *m;
-				fprintf(s->file, "\n\n# number:name:workspace ...\nmonitors:");
-				for (m = monitors; m; m = m->next) {
-					if (m->connected) {
-						fprintf(s->file, " %s%d:%s:%d", m->ws == selws ? "*" : "", m->num + 1, m->name,
-							m->ws->num + 1);
-					}
-				}
-				fprintf(s->file, "\n\t# number:name window x y width height wx wy wwidth wheight");
-				for (m = monitors; m; m = m->next) {
-					if (m->connected) {
-						fprintf(s->file, "\n\t%d:%s 0x%08x %d %d %d %d %d %d %d %d", m->num + 1, m->name,
-							m->ws->sel ? m->ws->sel->win : 0, m->x, m->y, m->w, m->h, m->wx, m->wy, m->ww, m->wh);
-					}
-				}
-				Client *c;
-				fprintf(s->file, "\n\n# id:workspace ...\nwindows:");
-				for (ws = workspaces; ws; ws = ws->next) {
-					for (c = ws->clients; c; c = c->next) {
-						fprintf(s->file, " %s0x%08x:%d", c == selws->sel ? "*" : "", c->win, c->ws->num + 1);
-					}
-				}
-				for (c = scratch.clients; c; c = c->next) {
-					fprintf(s->file, " 0x%08x:%d", c->win, c->ws->num);
-				}
-				fprintf(s->file, "\n\t# id title class instance ws x y width height bw hoff "
-					"float full fakefull fixed stick urgent above hidden scratch callback trans_id");
-				for (ws = workspaces; ws; ws = ws->next) {
-					for (c = ws->clients; c; c = c->next) {
-						DBG("printstatus: client 0x%08x %s", c->win, _title(c))
-						fprintf(s->file,
-							"\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d "
-							"%d %d %d %d %d %d %d %d %d %s 0x%08x",
-							c->win, _title(c), c->clss, c->inst, c->ws->num + 1, c->x, c->y, c->w, c->h, c->bw, c->hoff,
-							STATE(c, FLOATING) != 0, STATE(c, FULLSCREEN) != 0, STATE(c, FAKEFULL) != 0,
-							STATE(c, FIXED) != 0, STATE(c, STICKY) != 0, STATE(c, URGENT) != 0, STATE(c, ABOVE) != 0,
-							STATE(c, HIDDEN) != 0, STATE(c, SCRATCH) != 0, c->cb ? c->cb->name : "none",
-							c->trans ? c->trans->win : 0);
-					}
-				}
-				for (c = scratch.clients; c; c = c->next) {
-					DBG("printstatus: client 0x%08x %s", c->win, _title(c))
-					fprintf(s->file,
-						"\n\t0x%08x \"%s\" \"%s\" \"%s\" %d %d %d %d %d %d %d "
-						"%d %d %d %d %d %d %d %d %d %s 0x%08x",
-						c->win, _title(c), c->clss, c->inst, c->ws->num, c->x, c->y, c->w, c->h, c->bw, c->hoff,
-						STATE(c, FLOATING) != 0, STATE(c, FULLSCREEN) != 0, STATE(c, FAKEFULL) != 0,
-						STATE(c, FIXED) != 0, STATE(c, STICKY) != 0, STATE(c, URGENT) != 0, STATE(c, ABOVE) != 0,
-						STATE(c, HIDDEN) != 0, STATE(c, SCRATCH) != 0, c->cb ? c->cb->name : "none",
-						c->trans ? c->trans->win : 0);
-				}
-				if (rules) {
-					Rule *r;
-					fprintf(s->file, "\n\n# title class instance workspace monitor "
-									 "float full fakefull stick ignore_cfg ignore_msg "
-									 "focus callback x y width height xgrav ygrav");
-					for (r = rules; r; r = r->next) {
-						fprintf(s->file,
-							"\nrule: \"%s\" \"%s\" \"%s\" %d %s %d %d %d %d %d %d "
-							"%d %s %d %d %d %d %s %s",
-							r->title, r->clss, r->inst, r->ws, r->mon, STATE(r, FLOATING) != 0,
-							STATE(r, FULLSCREEN) != 0, STATE(r, FAKEFULL) != 0, STATE(r, STICKY) != 0,
-							STATE(r, IGNORECFG) != 0, STATE(r, IGNOREMSG) != 0, r->focus,
-							r->cb ? r->cb->name : "", r->x, r->y, r->w, r->h, gravs[r->xgrav],
-							gravs[r->ygrav]);
-					}
-				}
-				if (panels) {
-					Panel *p;
-					fprintf(s->file, "\n\n# id:monitor ...\npanels:");
-					for (p = panels; p; p = p->next) {
-						fprintf(s->file, " 0x%08x:%s", p->win, p->mon->name);
-					}
-					fprintf(s->file, "\n\t# id class instance monitor x y width height left right top bottom");
-					for (p = panels; p; p = p->next) {
-						fprintf(s->file, "\n\t0x%08x \"%s\" \"%s\" %s %d %d %d %d %d %d %d %d", p->win,
-							p->clss, p->inst, p->mon->name, p->x, p->y, p->w, p->h, p->l, p->r, p->t, p->b);
-					}
-				}
-				if (desks) {
-					Desk *d;
-					fprintf(s->file, "\n\n# id:monitor ...\ndesks:");
-					for (d = desks; d; d = d->next) {
-						fprintf(s->file, " 0x%08x:%s", d->win, d->mon->name);
-					}
-					fprintf(s->file, "\n\t# id class instance monitor");
-					for (d = desks; d; d = d->next) {
-						fprintf(s->file, "\n\t0x%08x \"%s\" \"%s\" %s", d->win, d->clss, d->inst, d->mon->name);
-					}
-				}
+				fprintf(s->file, "}");
 				winchange = lytchange = wschange = 0;
 				break;
 		}

@@ -45,7 +45,7 @@
 #define W(c)                               (c->w + (2 * c->bw))
 #define H(c)                               (c->h + (2 * c->bw))
 #define MON(c)                             c->ws->mon
-#define STATE(c, s)                        (c->state & STATE_##s)
+#define STATE(v, s)                        ((v)->state & STATE_##s)
 #define VISIBLE(c)                         (c->ws == MON(c)->ws)
 #define FLOATING(c)                        (STATE(c, FLOATING) || !c->ws->layout->func)
 #define FULLSCREEN(c)                      (STATE(c, FULLSCREEN) && !STATE(c, FAKEFULL))
@@ -174,7 +174,6 @@ enum StatusType {
 	STAT_WIN = 2,
 	STAT_BAR = 3,
 	STAT_FULL = 4,
-	STAT_JSON = 5,
 };
 
 enum CfgType {

@@ -5,7 +5,6 @@
  */
 
 #include <stdio.h>
-#include <ctype.h>
 
 #include "dk.h"
 #include "status.h"
@@ -247,8 +246,8 @@ static char *_title(Client *c)
 	static char title[512];
 
 	for (uint32_t i = 0; i < sizeof(title) && c->title[i]; i++) {
-		if (!iscntrl(c->title[i])) {
-			if (c->title[i] == '"')	{
+		if (c->title[i] >= ' ') {
+			if (c->title[i] == '"' || c->title[i] == '\\')	{
 				title[idx++] = '\\';
 			}
 			title[idx++] = c->title[i];

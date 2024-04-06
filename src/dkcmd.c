@@ -30,7 +30,7 @@ static int json_pretty(int argc, char *argv[])
 	size_t len = 0;
 	FILE *f = stdin;
 	char p, n, *c, *line = NULL;
-	int lvl = 1, inkey = 0, instr = 0, first = 1;
+	int lvl = 1, inkey = 0, instr = 0, inarr = 0, first = 1;
 
 	if (argc && *argv && !(f = fopen(*argv, "r"))) {
 		perror("open");
@@ -64,7 +64,11 @@ static int json_pretty(int argc, char *argv[])
 						instr = 0;
 						printf("%c%s", *c, (n == '}' || n == ']') ? "\n" : "");
 					} else if (!instr && !inkey && (p == ',' || p == '{' || p == '[')) {
-						inkey = 1;
+						if (inarr) {
+							instr = 1;
+						} else {
+							inkey = 1;
+						}
 						printf("%*s%c", lvl * INDENT, lvl ? " " : "", *c);
 					} else if (!instr && !inkey && p == ':') {
 						instr = 1;
@@ -76,8 +80,12 @@ static int json_pretty(int argc, char *argv[])
 					break;
 				case '{':
 				case '[':
+					if (*c != '{') {
+						inarr = 1;
+					}
 					if (n == (*c) + 2) {
-						printf("%c%c%s", *c, (*c) + 2, *(c + 2) == ',' || *(c + 2) != (*c) + 2 ? "" : "\n");
+						char nn = *(c + 2);
+						printf("%c%c%s", *c, (*c) + 2, nn == ',' || (nn != ']' && nn != '}') ? "" : "\n");
 						c++;
 						p = *c;
 					} else if (p == ':') {
@@ -92,12 +100,22 @@ static int json_pretty(int argc, char *argv[])
 					break;
 				case '}':
 				case ']':
+					if (*c != '}') {
+						inarr = 0;
+					}
 					lvl--;
-					printf("%*s%c%s", lvl * INDENT, lvl ? " " : "", *c, (n != ',' && (n == '}' || n == ']')) ? "\n" : "");
+					printf("%*s%c%s", lvl * INDENT, lvl ? " " : "", *c, n != ',' && (n == '}' || n == ']') ? "\n" : "");
 					p = *c;
 					break;
 				default:
-					printf("%c", *c);
+					/* handle array items that aren't strings or objects (booleans and numbers) */
+					if (inarr && (p == ',' || p == '[')) {
+						printf("%*s%c%s", lvl * INDENT, lvl ? " " : "", *c, n == ']' ? "\n" : "");
+					} else if (inarr && n == ']') {
+						printf("%c\n", *c);
+					} else {
+						printf("%c", *c);
+					}
 					break;
 			}
 			c++;

@@ -14,21 +14,7 @@ fi
 
 currentws()
 {
-	awk '{
-		if (!s && $1 == "workspaces:") {
-			for (i = 1; i <= NF; i++) {
-				if ($i ~ "*") {
-					sub(/\*/, "");
-					gsub(/:[a-z]* /, " ");
-					s = $i;
-				}
-			}
-		} else if (s && $1 == s) {
-			sub(/:.*/, "");
-			print $0;
-			exit;
-		}
-	}' <(dkcmd status type=full num=1)
+	dkcmd status type=ws num=1 | jq '.workspaces | .[] | select(.focused==true) | .number'
 }
 
 if [[ $1 =~ (view|send|follow) ]]; then
@@ -42,7 +28,7 @@ fi
 (( $1 == $(currentws) )) && exit 0
 
 case "$1" in
-	[1-5])
+	[1-3])
 		typeset -A col=(
 		[f]='#6699cc'
 		[u]='#ee5555'
@@ -52,7 +38,7 @@ case "$1" in
 		[ouf]='#222222'
 		)
 		;;
-	[6-9]|10)
+	[4-6])
 		typeset -A col=(
 		[f]='#ee5555'
 		[u]='#6699cc'

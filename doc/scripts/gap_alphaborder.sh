@@ -32,6 +32,11 @@ typeset -A col=(
 	[ouf]='#222222'
 )
 
+if ! hash jq >/dev/null 2>&1; then
+	echo "error: $0 requires 'jq' installed"
+	exit 2
+fi
+
 if (( $# == 0 )); then
 	echo "usage: $0 <gap_width>"
 	exit 2
@@ -40,20 +45,7 @@ fi
 
 currentwsgap()
 {
-	awk '{
-		if (!s && $1 == "workspaces:") {
-			for (i = 1; i <= NF; i++) {
-				if ($i ~ "*") {
-					sub(/\*/, "");
-					gsub(/:[a-z]* /, " ");
-					s = $i;
-				}
-			}
-		} else if (s && $1 == s) {
-			print $7;
-			exit;
-		}
-	}' <(dkcmd status type=full num=1)
+	dkcmd status type=full num=1 | jq '.workspaces | .[] | select(.focused==true) | .gap'
 }
 
 # store the gap width before and after changing

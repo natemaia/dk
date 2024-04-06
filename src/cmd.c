@@ -1193,7 +1193,9 @@ int cmdstatus(char **argv)
 	while (*argv) {
 		if (!strcmp("type", *argv)) {
 			argv++, nparsed++;
-			if (!strcmp("bar", *argv)) {
+			if (!*argv) {
+				goto badvalue;
+			} else if (!strcmp("bar", *argv)) {
 				s.type = STAT_BAR;
 			} else if (!strcmp("win", *argv)) {
 				s.type = STAT_WIN, winchange = 1;

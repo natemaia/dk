@@ -111,7 +111,7 @@ static int json_pretty(int argc, char *argv[])
 					/* handle array items that aren't strings or objects (booleans and numbers) */
 					if (inarr && (p == ',' || p == '[')) {
 						printf("%*s%c%s", lvl * INDENT, lvl ? " " : "", *c, n == ']' ? "\n" : "");
-					} else if (inarr && n == ']') {
+					} else if (n == '}' || (inarr && n == ']')) {
 						printf("%c\n", *c);
 					} else {
 						printf("%c", *c);

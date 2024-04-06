@@ -21,7 +21,6 @@ static void _panels(FILE *f);
 static void _rules(FILE *f);
 static char *_title(Client *c);
 static void _workspaces(FILE *f);
-static void _workspace_win(Workspace *ws, FILE *f);
 static void _workspace(Workspace *ws, FILE *f);
 
 static void _client(Client *c, FILE *f)
@@ -293,17 +292,6 @@ static void _workspace(Workspace *ws, FILE *f)
 	fprintf(f, "]");
 }
 
-static void _workspace_win(Workspace *ws, FILE *f)
-{
-	if (ws->sel && !STATE(ws->sel, HIDDEN)) {
-		fprintf(f, "\"title\":\"%s\",", _title(ws->sel));
-		fprintf(f, "\"id\":\"0x%08x\"", ws->sel->win);
-	} else {
-		fprintf(f, "\"title\":\"\",");
-		fprintf(f, "\"id\":\"\"");
-	}
-}
-
 static void _workspaces(FILE *f)
 {
 	Workspace *ws;
@@ -361,7 +349,13 @@ void printstatus(Status *s, int freeable)
 					fprintf(s->file, "\"active\":%s,", ws->clients ? "true" : "false");
 					fprintf(s->file, "\"monitor\":\"%s\",", ws->mon->name);
 					fprintf(s->file, "\"layout\":\"%s\",", ws->layout->name);
-					_workspace_win(ws, s->file);
+					if (ws->sel && !STATE(ws->sel, HIDDEN)) {
+						fprintf(s->file, "\"title\":\"%s\",", _title(ws->sel));
+						fprintf(s->file, "\"id\":\"0x%08x\"", ws->sel->win);
+					} else {
+						fprintf(s->file, "\"title\":\"\",");
+						fprintf(s->file, "\"id\":\"\"");
+					}
 					fprintf(s->file, "}%s", ws->next ? "," : "");
 				}
 				fprintf(s->file, "]}");

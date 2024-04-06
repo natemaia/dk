@@ -66,6 +66,7 @@ static void _clients(FILE *f)
 {
 	Client *c;
 	Workspace *ws;
+	int hasprev = 0;
 
 	fprintf(f, "\"clients\":[");
 	for (ws = workspaces; ws; ws = ws->next) {
@@ -73,13 +74,16 @@ static void _clients(FILE *f)
 			fprintf(f, "{");
 			_client(c, f);
 			fprintf(f, "}%s", c->next ? "," : "");
+			hasprev = 1;
 		}
-		if (ws->next && ws->next->clients) {
+		if (hasprev && ws->next && ws->next->clients) {
 			fprintf(f, ",");
 		}
 	}
 	if (scratch.clients) {
-		fprintf(f, ",");
+		if (hasprev) {
+			fprintf(f, ",");
+		}
 		for (c = scratch.clients; c; c = c->next) {
 			fprintf(f, "{");
 			_client(c, f);

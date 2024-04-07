@@ -92,7 +92,7 @@ volume()
 			vol="$(pamixer --get-volume-human)"
 			if [[ $lastv != "$vol" ]]; then
 				lastv=$vol
-				printf 'V%s\n' "%{A1:$1:} Vol: $vol %{A}${sep}"
+				printf 'V%s\n' "%{A1:$1:} vol: $vol %{A}${sep}"
 			fi
 			sleep 1
 		done
@@ -101,7 +101,7 @@ volume()
 			vol="$(pamixer --get-volume-human)"
 			if [[ $lastv != "$vol" ]]; then
 				lastv=${vol}
-				printf 'V%s\n' " Vol: ${vol} ${sep}"
+				printf 'V%s\n' " vol: ${vol} ${sep}"
 			fi
 			sleep 1
 		done
@@ -152,10 +152,9 @@ workspaces()
 	typeset name="" title="" layout="" focused=false active=false
 
 	WS=""
-	OFS=$IFS
-	while IFS=$'\n' read -r ws; do
-		if [[ $ws ]]; then
-			eval "$ws"
+	while IFS=$'\n' read -r l; do
+		eval "$l"
+		if [[ $l == title=* ]]; then
 			# default foreground, background, and underline colours
 			# changing the foreground and underline based on
 			# the active and focused state
@@ -172,11 +171,8 @@ workspaces()
 		fi
 		# turn the dk JSON output into lines that can be `eval`ed one by one,
 		# filling out the following fields: name, focused, active, layout, title
-	done < <(sed 's/.*:\[\|\].*\|},\?\|$(.*)//g;
-	s/{/\n/g;
-	s/,"/ "/g;
-	s/"\([a-zA-Z0-9_]*\)":/\1=/g' <<< "$1")
-	IFS=$OFS
+	done < <(dkcmd -p <<< "$1" | sed '/.*\[\|]/d; /[{}],\?/d; s/^\s*\|,$//g; /"monitor":\|"number":\|"id":/d; s/"\(.*\)": /\1=/')
+
 	WS="$WS $sep $lyt"
 }
 

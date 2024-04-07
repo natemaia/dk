@@ -18,7 +18,7 @@
 #include "util.h"
 
 #ifndef VERSION
-#define VERSION "2.1"
+#define VERSION "2.2"
 #endif
 
 #ifndef INDENT

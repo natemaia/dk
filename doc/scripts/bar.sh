@@ -152,9 +152,9 @@ workspaces()
 	typeset name="" title="" layout="" focused=false active=false
 
 	WS=""
-	while IFS=$'\n' read -r l; do
+	while read -r l; do
 		eval "$l"
-		if [[ $l == title=* ]]; then
+		if [[ $l =~ ^title=* ]]; then
 			# default foreground, background, and underline colours
 			# changing the foreground and underline based on
 			# the active and focused state
@@ -171,8 +171,7 @@ workspaces()
 		fi
 		# turn the dk JSON output into lines that can be `eval`ed one by one,
 		# filling out the following fields: name, focused, active, layout, title
-	done < <(dkcmd -p <<< "$1" | sed '/.*\[\|]/d; /[{}],\?/d; s/^\s*\|,$//g; /"monitor":\|"number":\|"id":/d; s/"\(.*\)": /\1=/')
-
+	done < <(dkcmd -p <<< "$1" | sed '/.*\[\|]/d; /[{}],\?/d; s/^\s*\|,$//g; /"monitor":\|"number":\|"id":/d; s/"\(.*\)": /\1=/; s/\$(/\\\$(/g')
 	WS="$WS $sep $lyt"
 }
 

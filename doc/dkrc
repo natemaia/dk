@@ -124,24 +124,24 @@ fi
 	# rule class, instance, and title regexes (*ALWAYS* CASE INSENSITIVE)
 
 	# open window(s) on a specific workspace (assigned monitor)
-	dkcmd rule class="^gimp$" ws=2
+	# dkcmd rule class="^gimp$" ws=2
 
 	# open window(s) on a monitor by number or name (active workspace on monitor)
-	dkcmd rule class="^chromium$" mon="HDMI-A-0"
+	# dkcmd rule class="^chromium$" mon="HDMI-A-0"
 
 	# open window(s) and use a callback function (user defined in config.h)
 	# we also ignore_cfg=true to stop the window from being resized on it's own from events
 	# eg. mpv --x11-name=albumart /path/to/media
-	dkcmd rule class="^mpv$" instance="^albumart$" float=true ignore_cfg=true callback=albumart bw=0
+	# dkcmd rule class="^mpv$" instance="^albumart$" float=true ignore_cfg=true callback=albumart bw=0
 
 	# open window(s) in a floating state
 	dkcmd rule class="^(pavucontrol|transmission-gtk|steam|lxappearance)$" float=true
 
 	# open window(s) with a specific geometry and coordinates (floating only!)
-	dkcmd rule class="^google-chrome$" title="^open files$" float=true w=1280 h=720
+	# dkcmd rule class="^google-chrome$" title="^open files$" float=true w=1280 h=720
 
 	# open window(s) with ignore_msg=true to avoid focus being grabbed and changing workspace
-	dkcmd rule class="^TelegramDesktop$" ignore_msg=true
+	# dkcmd rule class="^TelegramDesktop$" ignore_msg=true
 
 	# define some terminals and allow them to be absorbed by spawned windows
 	dkcmd rule class="^(st|st-256color|urxvt|kitty|alacritty|xterm|xterm-256colors)$" terminal=true
@@ -153,11 +153,11 @@ fi
 	dkcmd rule class="^scratchpad$" scratch=true
 
 	# focus window and workspace on opening
-	dkcmd rule class="^firefox$" ws=1 focus=true
+	# dkcmd rule class="^firefox$" ws=1 focus=true
 
 	# update or remove an existing rule with the same match patterns
-	dkcmd rule class="^firefox$" mon="HDMI-A-0"
-	dkcmd rule remove class="^firefox$"
+	# dkcmd rule class="^firefox$" mon="HDMI-A-0"
+	# dkcmd rule remove class="^firefox$"
 
 	# apply current rule set to all existing windows (used mainly for WM restart)
 	dkcmd rule apply '*'

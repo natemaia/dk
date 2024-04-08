@@ -39,21 +39,26 @@ typeset -A layouts=(
 
 clock()
 {
+	if [[ $1 ]]; then
+		date +"T%%{A1:$1:} %a %H:%M $sep%%{A}"
+	else
+		date +"T %a %H:%M $sep"
+	fi
+
 	# sync up the clock to the minute mark
-	now="$(date +"T %a %H:%M ")"
-	printf "%s\n" "$now"
-	while [[ $(date +"T %a %H:%M ") != "$now" ]]; do
+	min=$(date +"%M")
+	while [[ $(date +"%M") == "$min" ]]; do
 		sleep 1
 	done
 
 	if [[ $1 ]]; then
 		while :; do
-			date +"T%%{A1:$1:} %a %H:%M %%{A}"
+			date +"T%%{A1:$1:} %a %H:%M $sep%%{A}"
 			sleep 60
 		done
 	else
 		while :; do
-			date +"T %a %H:%M "
+			date +"T %a %H:%M $sep"
 			sleep 60
 		done
 	fi
@@ -190,7 +195,7 @@ parsefifo()
 			N*) net="${line#?}" ;;
 			'{'*) workspaces "$line" ;;
 		esac
-		printf "%s\n" "%{l}${WS}%{c}${WIN}%{r}${net}${bat}${vol}${time}"
+		printf "%s\n" "%{l}$sep ${WS}%{c}${WIN}%{r}${net}${bat}${vol}${time}"
 	done
 }
 

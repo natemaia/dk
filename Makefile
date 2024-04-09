@@ -11,7 +11,7 @@ SES    ?= /usr/share/xsessions
 ifeq ($(PREFIX),/usr/local)
 	VERSION = $(shell git describe --tags | sed 's+-+.r+' | tr - . | cut -c2-)
 else
-	VERSION = 2.1
+	VERSION = 2.2
 endif
 
 # source and object files

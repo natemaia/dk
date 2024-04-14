@@ -1143,10 +1143,15 @@ int cmdset(char **argv)
 			if (!match) {
 				for (j = 0; setcmds[j].str; j++) {
 					if ((match = !strcmp(setcmds[j].str, *argv))) {
-						if ((i = setcmds[j].func(argv + 1)) == -1) {
+						argv++, nparsed++;
+						if (!argv || !*argv) {
+							respond(cmdresp, "!missing next argument for %s", *(argv - 1));
 							return -1;
 						}
-						argv += i + 1, nparsed += i + 1;
+						if ((i = setcmds[j].func(argv)) == -1) {
+							return -1;
+						}
+						argv += i, nparsed += i;
 						break;
 					}
 				}

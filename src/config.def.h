@@ -222,18 +222,22 @@ Cmd wincmds[] = {
 };
 
 Layout layouts[] = {
-	/* command, function, implements_resize, invert_split_direction */
-	{"tile",    ltile,   1, 0}, /* first is default */
-	{"rtile",   rtile,   1, 0},
-	{"mono",    mono,    0, 0},
-	{"grid",    grid,    0, 0},
-	{"spiral",  spiral,  1, 0},
-	{"dwindle", dwindle, 1, 0},
-	{"none",    NULL,    1, 0}, /* NULL layout function is floating */
-	{"tstack",  tstack,  1, 1},
-    {"dyntile", dyntile, 1, 0},
+	/* we keep two copies of the string for the command and name
+	 * this allows us to update the display name without changing the command
+	 * see in dyntile above where the current layout is modified */
+
+	/* name,    command,  function, implements_resize, invert_split_direction */
+	{"tile",    "tile",    ltile,   1, 0}, /* first is default */
+	{"rtile",   "rtile",   rtile,   1, 0},
+	{"mono",    "mono",    mono,    0, 0},
+	{"grid",    "grid",    grid,    0, 0},
+	{"spiral",  "spiral",  spiral,  1, 0},
+	{"dwindle", "dwindle", dwindle, 1, 0},
+	{"none",    "none",    NULL,    1, 0}, /* NULL layout function is floating */
+	{"tstack",  "tstack",  tstack,  1, 1},
+    {"dyntile", "dyntile", dyntile, 1, 0},
 	/* don't add below the terminating null */
-	{NULL,      NULL,    0, 0}
+	{NULL,       NULL,     NULL,    0, 0}
 };
 
 WsCmd wscmds[] = {

@@ -176,7 +176,7 @@ workspaces()
 		fi
 		# turn the dk JSON output into lines that can be `eval`ed one by one,
 		# filling out the following fields: name, focused, active, layout, title
-	done < <(dkcmd -p <<< "$1" | sed '/.*\[\|]/d; /[{}],\?/d; s/^\s*\|,$//g; /"monitor":\|"number":\|"id":/d; s/"\(.*\)": /\1=/; s/\$(/\\\$(/g')
+	done < <(dkcmd -p <<< "$1" | sed '/.*\[\|]/d; /[{}],\?/d; s/^\s*\|,$//g; /"monitor":\|"number":\|"id":/d; s/"\(.*\)": /\1=/; s/\$(/\\\$(/g; s/`/\\`/g')
 	WS="$WS $sep $lyt"
 }
 

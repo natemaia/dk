@@ -141,6 +141,24 @@ int tstack(Workspace *ws)
 	return 1;
 }
 
+int dyntile(Workspace *ws)
+{
+	/*
+	 * basic example of a new user-defined layout
+	 *
+	 * will switch to grid when the number of tiled clients on a workspace == 4
+	 *
+	 */
+	if (tilecount(ws) == 4) {
+		ws->layout->implements_resize = 0;
+		ws->layout->name = "grid";
+		return grid(ws);
+	}
+	ws->layout->implements_resize = 1;
+	ws->layout->name = "tile";
+	return ltile(ws);
+}
+
 /* New commands and callbacks must be added to the below arrays in order to
  * use them */
 
@@ -204,7 +222,7 @@ Cmd wincmds[] = {
 };
 
 Layout layouts[] = {
-  /* command,   function,  implements_resize,  invert_split_direction */
+	/* command, function, implements_resize, invert_split_direction */
 	{"tile",    ltile,   1, 0}, /* first is default */
 	{"rtile",   rtile,   1, 0},
 	{"mono",    mono,    0, 0},
@@ -213,8 +231,8 @@ Layout layouts[] = {
 	{"dwindle", dwindle, 1, 0},
 	{"none",    NULL,    1, 0}, /* NULL layout function is floating */
 	{"tstack",  tstack,  1, 1},
-
- /* don't add below the terminating null */
+    {"dyntile", dyntile, 1, 0},
+	/* don't add below the terminating null */
 	{NULL,      NULL,    0, 0}
 };
 

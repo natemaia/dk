@@ -295,7 +295,7 @@ struct Workspace {
 	int nmaster, nstack, gappx, smartgap;
 	int padr, padl, padt, padb;
 	float msplit, ssplit;
-	const Layout *layout;
+	Layout *layout;
 	int num;
 	char name[64];
 	Monitor *mon;

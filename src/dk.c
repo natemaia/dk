@@ -61,24 +61,26 @@ Client *cmdc;
 Monitor *monitors, *primary, *selmon, *lastmon;
 Workspace *workspaces, *setws, *selws, *lastws;
 
-Workspace scratch = {.nmaster = 0,
-					 .nstack = 0,
-					 .gappx = 0,
-					 .smartgap = 0,
-					 .num = -1,
-					 .padl = 0,
-					 .padr = 0,
-					 .padt = 0,
-					 .padb = 0,
-					 .msplit = 0,
-					 .ssplit = 0,
-					 .layout = &layouts[0],
-					 .name = "scratch",
-					 .mon = NULL,
-					 .next = NULL,
-					 .sel = NULL,
-					 .stack = NULL,
-					 .clients = NULL};
+Workspace scratch = {
+	.nmaster = 0,
+	.nstack = 0,
+	.gappx = 0,
+	.smartgap = 0,
+	.num = -1,
+	.padl = 0,
+	.padr = 0,
+	.padt = 0,
+	.padb = 0,
+	.msplit = 0,
+	.ssplit = 0,
+	.layout = &layouts[0],
+	.name = "scratch",
+	.mon = NULL,
+	.next = NULL,
+	.sel = NULL,
+	.stack = NULL,
+	.clients = NULL
+};
 
 xcb_screen_t *scr;
 xcb_connection_t *con;

@@ -275,7 +275,6 @@ typedef struct WsCmd {
 
 typedef struct Layout {
 	const char *name;
-	const char *command;
 	int (*func)(Workspace *);
 	int implements_resize;
 	int invert_split_direction;
@@ -332,6 +331,7 @@ extern const char *netatoms[NET_LAST];
 extern const char *cursors[CURS_LAST];
 extern const char *dirs[DIR_END];
 extern const char *gravs[GRAV_LAST];
+extern const char *slayouts[];
 
 /* config.h values */
 extern uint32_t border[BORD_LAST];

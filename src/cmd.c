@@ -463,8 +463,9 @@ int cmdlayout(char **argv)
 		return 1;
 	}
 
-	for (uint32_t i = 0; layouts[i].command; i++) {
-		if (!strcmp(layouts[i].command, *argv)) {
+	/* slayouts and layouts.name are 1-1 mapped so we can do this */
+	for (uint32_t i = 0; slayouts[i]; i++) {
+		if (!strcmp(slayouts[i], *argv)) {
 			if (&layouts[i] != setws->layout) {
 				setws->layout = &layouts[i];
 				needsrefresh = lytchange = 1;

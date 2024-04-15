@@ -5,7 +5,7 @@
  * vim:ft=c:fdm=syntax:ts=4:sts=4:sw=4
  */
 
-#define _XOPEN_SOURCE   700
+#define _XOPEN_SOURCE   700L
 #define _POSIX_C_SOURCE 200112L
 
 #ifdef FUNCDEBUG
@@ -137,6 +137,8 @@ const char *netatoms[] = {
 	[NET_WM_STRUT] = "_NET_WM_STRUT",
 	[NET_WM_TYPE] = "_NET_WM_WINDOW_TYPE",
 };
+
+const char *slayouts[LEN(layouts)];
 
 static void absorb(Client *p, Client *c);
 static Client *absorbingclient(xcb_window_t win);
@@ -1113,7 +1115,9 @@ void freewm(void)
 		fcntl(sockfd, F_SETFD, ~FD_CLOEXEC & fcntl(sockfd, F_GETFD));
 		char fdstr[64];
 		if (!itoa(sockfd, fdstr)) {
-			itoa(-1, fdstr);
+			fdstr[0] = '-';
+			fdstr[1] = '1';
+			fdstr[2] = '\0';
 		}
 		char *const arg[] = {argv0, "-s", fdstr, NULL};
 		execvp(arg[0], arg);
@@ -1460,6 +1464,10 @@ static void initwm(void)
 	uint32_t i;
 	xcb_cursor_context_t *ctx;
 	const xcb_query_extension_reply_t *ext;
+
+	for (i = 0;	i < LEN(layouts); i++) {
+		slayouts[i] = layouts[i].name;
+	}
 
 	check(xcb_cursor_context_new(con, scr, &ctx), "unable to create cursor context");
 	for (i = 0; i < LEN(cursors); i++) {

@@ -151,10 +151,12 @@ int dyntile(Workspace *ws)
 	 */
 	if (tilecount(ws) == 4) {
 		ws->layout->implements_resize = 0;
+		ws->layout->tile_resize = 0;
 		ws->layout->name = "grid";
 		return grid(ws);
 	}
 	ws->layout->implements_resize = 1;
+	ws->layout->tile_resize = 1;
 	ws->layout->name = "tile";
 	return ltile(ws);
 }
@@ -222,18 +224,18 @@ Cmd wincmds[] = {
 };
 
 Layout layouts[] = {
-	/* name, function, implements_resize, invert_split_direction */
-	{"tile",    ltile,   1, 0}, /* first is default */
-	{"rtile",   rtile,   1, 0},
-	{"mono",    mono,    0, 0},
-	{"grid",    grid,    0, 0},
-	{"spiral",  spiral,  1, 0},
-	{"dwindle", dwindle, 1, 0},
-	{"none",    NULL,    1, 0}, /* NULL layout function is floating */
-	{"tstack",  tstack,  1, 1},
-    {"dyntile", dyntile, 1, 0},
+	/* name, function, implements_resize, invert_split_direction, tile_resize */
+	{"tile",    ltile,   1, 0, 1}, /* first is default */
+	{"rtile",   rtile,   1, 1, 1},
+	{"mono",    mono,    0, 0, 0},
+	{"grid",    grid,    0, 0, 0},
+	{"spiral",  spiral,  1, 0, 0},
+	{"dwindle", dwindle, 1, 0, 0},
+	{"none",    NULL,    1, 0, 0}, /* NULL layout function is floating */
+	{"tstack",  tstack,  1, 1, 0},
+    {"dyntile", dyntile, 1, 0, 1},
 	/* don't add below the terminating null */
-	{NULL,      NULL,    0, 0}
+	{NULL,      NULL,    0, 0, 0}
 };
 
 WsCmd wscmds[] = {

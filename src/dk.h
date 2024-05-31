@@ -41,7 +41,6 @@
 #define MAX(a, b)                          ((a) > (b) ? (a) : (b))
 #define CLAMP(x, min, max)                 (MIN(MAX((x), (min)), (max)))
 #define INRECT(x, y, w, h, rx, ry, rw, rh) (x >= rx && x + w <= rx + rw && y >= ry && y + h <= ry + rh)
-#define ISTILE(ws)                         (ws->layout->func == ltile || ws->layout->func == rtile)
 #define W(c)                               (c->w + (2 * c->bw))
 #define H(c)                               (c->h + (2 * c->bw))
 #define MON(c)                             c->ws->mon
@@ -278,6 +277,7 @@ typedef struct Layout {
 	int (*func)(Workspace *);
 	int implements_resize;
 	int invert_split_direction;
+	int tile_resize;
 } Layout;
 
 typedef struct GlobalCfg {

@@ -684,7 +684,7 @@ badvalue:
 		if (xgrav != GRAV_NONE || ygrav != GRAV_NONE) {
 			gravitate(c, xgrav, ygrav, 1);
 		}
-	} else if (ISTILE(ws)) {
+	} else if (ws->layout->tile_resize) {
 		if (w != INT_MIN) {
 			if (ws->layout->func == rtile) {
 				w += w * -2;

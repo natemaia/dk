@@ -481,8 +481,8 @@ int applysizehints(Client *c, int *x, int *y, int *w, int *h, int bw, int usermo
 		*x = CLAMP(*x, (*w - min) * -1, scr_w - (min + bw));
 		*y = CLAMP(*y, (*h - min) * -1, scr_h - (min + bw));
 	} else {
-		*w = CLAMP(*w, globalcfg[GLB_MIN_WH].val, m->ww - (2 * bw));
-		*h = CLAMP(*h, globalcfg[GLB_MIN_WH].val, m->wh - (2 * bw));
+		/* *w = CLAMP(*w, globalcfg[GLB_MIN_WH].val, m->ww - (2 * bw)); */
+		/* *h = CLAMP(*h, globalcfg[GLB_MIN_WH].val, m->wh - (2 * bw)); */
 		*x = CLAMP(*x, m->wx, m->wx + m->ww - (*w + bw));
 		*y = CLAMP(*y, m->wy, m->wy + m->wh - (*h + bw));
 	}

@@ -385,22 +385,6 @@ static Client *absorbingclient(xcb_window_t win)
 	return NULL;
 }
 
-static void applypanelstrut(Panel *p)
-{
-	if (p->mon->x + p->l > p->mon->wx) {
-		p->mon->wx = p->mon->x + p->l;
-	}
-	if (p->mon->y + p->t > p->mon->wy) {
-		p->mon->wy = p->mon->y + p->t;
-	}
-	if (p->mon->wx + p->mon->ww > (p->mon->x + p->mon->w) - (p->r + (p->mon->wy - p->mon->y))) {
-		p->mon->ww = p->mon->w - p->r - (p->mon->wx - p->mon->x);
-	}
-	if (p->mon->wy + p->mon->wh > (p->mon->y + p->mon->h) - (p->b + (p->mon->wy - p->mon->y))) {
-		p->mon->wh = p->mon->h - p->b - (p->mon->wy - p->mon->y);
-	}
-}
-
 static void applyrule(Client *c, Rule *r, xcb_atom_t curws, int nofocus)
 {
 	int ws = curws, dofocus = 0, xgrav = GRAV_NONE, ygrav = GRAV_NONE;
@@ -2470,7 +2454,10 @@ void updstruts(void)
 			if (p->b && p->b > p->h && p->y + p->h == p->mon->y + p->mon->h) {
 				p->b = p->h;
 			}
-			applypanelstrut(p);
+			p->mon->wx += p->l;
+			p->mon->wy += p->t;
+			p->mon->ww -= p->r + p->l;
+			p->mon->wh -= p->b + p->t;
 		}
 	}
 	updnetworkspaces();

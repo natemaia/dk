@@ -1,23 +1,18 @@
 #!/bin/sh
 
-# example dkrc to show some basic command usage and error reporting
+# example dkrc to provide a close-to-default setup and 
+# show some basic command usage with error reporting
 
 # determine where to place the log file
 logfile="$HOME/.dkrc.log"
 [ -d "$HOME/.local/share/xorg" ] && logfile="$HOME/.local/share/xorg/dkrc.log"
 : > "$logfile"
 
+# load sxhkd for keybinds
+pgrep sxhkd || sxhkd -c "$HOME/.config/dk/sxhkdrc" &
 
-# (re)load sxhkd for keybinds
-if hash sxhkd >/dev/null 2>&1; then
-	pkill sxhkd
-	sxhkd -c "$HOME/.config/dk/sxhkdrc" &
-fi
-
-# spawn a scratchpad terminal if not already (see sxhkdrc and rules for bind and setup)
-# if ! pgrep -f "st -c scratchpad" >/dev/null 2>&1; then
-# 	st -c scratchpad &
-# fi
+# spawn a scratchpad terminal if not already (see sxhkdrc and rules for binds/setup)
+# pgrep -f "st -c scratchpad" || st -c scratchpad &
 
 # adjust border widths based on the DPI of the monitor
 px=$(xrandr | grep ' connected' | tail -n1 | grep -o '[0-9]\+x[0-9]\+' | cut -d'x' -f2)
@@ -50,7 +45,7 @@ fi
 	# use grid layout, padding, and gaps on last workspace
 	dkcmd set ws=6 layout=grid pad left=200 right=200 top=100 bottom=100 gap=50
 
-	# change workspace names (default: number == name)
+	# change workspace names (default: number == name -> 1:1, 2:2, 3:3....)
 	# dkcmd set \
 	# 	ws=1  name="edit" \
 	# 	ws=2  name="web" \
@@ -59,11 +54,12 @@ fi
 	# 	ws=5  name="5" \
 	# 	ws=6  name="6" \
 
-	# enable static workspaces and assign them to monitors (only relevant for multiple monitors)
-	# aside -
-	#       many that come from other workspace models tried dk and requested this feature
-	#       try embracing the default behaviour and allow access to any workspace from any monitor
-	#       you might end up liking it :)
+	# enable static workspaces assigned to monitors (relevant for multiple monitors)
+	#   aside -
+	#     If you come from this workspace model, try embracing the default behaviour
+	#     and access to all workspaces from any monitor, you might end up liking it :)
+	#
+	# this could be done in the names section above if being used
 	#
 	# mon1='DisplayPort-0'
 	# mon2='HDMI-A-0'
@@ -121,7 +117,7 @@ fi
 	# window rules
 	# --------------
 
-	# rule class, instance, and title regexes (*ALWAYS* CASE INSENSITIVE)
+	# rule class, instance, and title regex are *always* case INSENSITIVE
 
 	# open window(s) on a specific workspace (assigned monitor)
 	# dkcmd rule class="^gimp$" ws=2
@@ -144,7 +140,7 @@ fi
 	# dkcmd rule class="^TelegramDesktop$" ignore_msg=true
 
 	# define some terminals and allow them to be absorbed by spawned windows
-	dkcmd rule class="^(st|st-256color|urxvt|kitty|alacritty|xterm|xterm-256colors)$" terminal=true
+	dkcmd rule class="^(st|st-256color|urxvt|kitty|alacritty|xterm|xterm-256color)$" terminal=true
 
 	# set a window to never absorb other windows, like the xev event tester
 	dkcmd rule title="^Event Tester$" no_absorb=true

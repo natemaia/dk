@@ -1744,9 +1744,19 @@ void refresh(void)
 	Panel *p;
 	Client *c;
 	Monitor *m;
+	Layout *l = NULL;
 	int x, y, w, h;
 
 	for (m = monitors; m; m = m->next) {
+
+		for (uint32_t i = 0; layouts[i].name; i++) {
+			if (&layouts[i] == m->ws->layout) {
+				l = &layouts[i];
+				break;
+			}
+		}
+		m->ws->layout = l ? l : layouts;
+
 		DBG("refresh: workspace: %d, monitor: %s layout: %s", m->ws->num + 1, m->name, m->ws->layout->name)
 		if (m->ws->layout->func && m->ws->layout->func(m->ws) < 0) {
 			m->ws->layout->func(m->ws);

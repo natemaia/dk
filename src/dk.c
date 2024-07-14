@@ -2215,7 +2215,7 @@ void unmanage(xcb_window_t win, int destroyed)
 {
 	Desk *d;
 	Panel *p;
-	Client *c, *s = NULL;
+	Client *c, *s;
 	void *ptr;
 
 	/* window we're handling is actually absorbed */
@@ -2233,7 +2233,9 @@ void unmanage(xcb_window_t win, int destroyed)
 		if ((s = absorbingclient(c->win))) {
 			free(s->absorbed);
 			s->absorbed = NULL;
-			refresh();
+			if (running) {
+				refresh();
+			}
 			return;
 		}
 		if (c->cb && running) {
@@ -2246,7 +2248,9 @@ void unmanage(xcb_window_t win, int destroyed)
 		DBG("unmanage: panel: 0x%08x %s", p->win, p->clss)
 		Panel **pp = &panels;
 		DETACH(p, pp);
-		updstruts();
+		if (running) {
+			updstruts();
+		}
 	} else if ((ptr = d = wintodesk(win))) {
 		DBG("unmanage: desktop: 0x%08x %s", d->win, d->clss)
 		Desk **dd = &desks;
@@ -2275,7 +2279,7 @@ void unmanage(xcb_window_t win, int destroyed)
 	if (ptr) {
 		free(ptr);
 		updatenetclients();
-		if (!s) {
+		if (running) {
 			refresh();
 		}
 	}

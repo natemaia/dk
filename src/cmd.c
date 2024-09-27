@@ -952,6 +952,9 @@ int cmdscratch(char **argv)
 				return nparsed;
 			}
 pop:
+			if (!STATE(c, SCRATCH)) {
+				c = scratch.clients;
+			}
 			c->state &= ~(STATE_SCRATCH | STATE_HIDDEN);
 			c->old_state = c->state | STATE_SCRATCH;
 			c->state |= STATE_NEEDSMAP;
@@ -999,7 +1002,6 @@ push:
 		}
 		goto push;
 	} else if (scratch.clients) {
-		c = scratch.clients;
 		goto pop;
 	} else {
 		for (Workspace *ws = workspaces; ws; ws = ws->next) {
